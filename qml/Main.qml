@@ -9,13 +9,7 @@ ApplicationWindow {
     height: 720
     visible: true
     title: "QTmux"
-    color: "#1e1f29"
-
-    readonly property color bgSidebar: "#16171f"
-    readonly property color bgMain:    "#1e1f29"
-    readonly property color accent:    "#5b8cff"
-    readonly property color textDim:   "#8a8d9a"
-    readonly property color textBright:"#e6e7ee"
+    color: Theme.bgMain
 
     property int currentRow: -1
 
@@ -24,9 +18,82 @@ ApplicationWindow {
     function newSession() {
         currentRow = sessions.createShellSession()
     }
+    function closeCurrent() {
+        if (currentRow < 0) return
+        sessions.closeSession(currentRow)
+        currentRow = Math.min(currentRow, sessions.count - 1)
+    }
 
-    // Beim Start eine erste Shell öffnen.
     Component.onCompleted: newSession()
+
+    // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
+    Action {
+        id: actNewSession
+        text: qsTr("Neue Session")
+        shortcut: "Ctrl+T"
+        onTriggered: window.newSession()
+    }
+    Action {
+        id: actCloseSession
+        text: qsTr("Session schließen")
+        shortcut: "Ctrl+W"
+        enabled: window.currentRow >= 0
+        onTriggered: window.closeCurrent()
+    }
+    Action {
+        id: actToggleTheme
+        text: Theme.dark ? qsTr("Helles Design") : qsTr("Dunkles Design")
+        shortcut: "Ctrl+D"
+        onTriggered: Theme.toggle()
+    }
+    Action {
+        id: actQuit
+        text: qsTr("Beenden")
+        shortcut: "Ctrl+Q"
+        onTriggered: Qt.quit()
+    }
+
+    // --- Menüleiste: bietet alle Oberflächen-Befehle ------------------------
+    menuBar: MenuBar {
+        Menu {
+            title: qsTr("Datei")
+            MenuItem { action: actNewSession }
+            MenuItem { action: actCloseSession }
+            MenuSeparator {}
+            MenuItem { action: actQuit }
+        }
+        Menu {
+            title: qsTr("Ansicht")
+            MenuItem { action: actToggleTheme }
+        }
+        Menu {
+            title: qsTr("Sprache")
+            Repeater {
+                model: App.languageCodes()
+                MenuItem {
+                    required property string modelData
+                    text: App.languageName(modelData)
+                    checkable: true
+                    checked: App.language === modelData
+                    onTriggered: App.language = modelData
+                }
+            }
+        }
+        Menu {
+            title: qsTr("Agent")
+            MenuItem {
+                text: qsTr("Neue Agent-Session …")
+                onTriggered: window.newSession()
+            }
+        }
+        Menu {
+            title: qsTr("Hilfe")
+            MenuItem {
+                text: qsTr("Über QTmux")
+                onTriggered: aboutDialog.open()
+            }
+        }
+    }
 
     RowLayout {
         anchors.fill: parent
@@ -36,7 +103,7 @@ ApplicationWindow {
         Rectangle {
             Layout.preferredWidth: 240
             Layout.fillHeight: true
-            color: window.bgSidebar
+            color: Theme.bgSidebar
 
             ColumnLayout {
                 anchors.fill: parent
@@ -45,7 +112,7 @@ ApplicationWindow {
 
                 Text {
                     text: "QTmux"
-                    color: window.textBright
+                    color: Theme.textBright
                     font.pixelSize: 18
                     font.bold: true
                     Layout.bottomMargin: 8
@@ -63,11 +130,12 @@ ApplicationWindow {
                         required property int index
                         required property string title
                         required property int runState
+                        required property string agentId
                         width: ListView.view.width
                         height: 48
                         radius: 8
-                        color: index === window.currentRow ? "#2b2e42"
-                             : hover.hovered ? "#262838" : "transparent"
+                        color: index === window.currentRow ? Theme.sidebarSelected
+                             : hover.hovered ? Theme.sidebarHover : "transparent"
 
                         HoverHandler { id: hover }
                         TapHandler { onTapped: window.currentRow = index }
@@ -85,24 +153,51 @@ ApplicationWindow {
                                      : runState === 2 ? "#f5c451"
                                      : runState === 3 ? "#e5534b"
                                      : runState === 4 ? "#5a5d6a"
-                                     : window.textDim
+                                     : Theme.textDim
                             }
-                            Text {
-                                text: title
-                                color: window.textBright
-                                font.pixelSize: 13
-                                elide: Text.ElideRight
+                            ColumnLayout {
+                                spacing: 1
                                 Layout.fillWidth: true
+                                Text {
+                                    text: title
+                                    color: Theme.textBright
+                                    font.pixelSize: 13
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    visible: agentId.length > 0
+                                    text: qsTr("Agent: %1").arg(agentId)
+                                    color: Theme.accent
+                                    font.pixelSize: 10
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
                             }
                         }
                     }
                 }
 
                 Button {
-                    text: "+  Neue Session"
+                    id: newBtn
+                    text: qsTr("+  Neue Session")
                     Layout.fillWidth: true
-                    flat: true
+                    Layout.preferredHeight: 40
                     onClicked: window.newSession()
+                    background: Rectangle {
+                        radius: 8
+                        color: newBtn.down ? Theme.sidebarSelected
+                             : newBtn.hovered ? Theme.sidebarHover : Theme.bgElevated
+                        border.color: Theme.border
+                        border.width: 1
+                    }
+                    contentItem: Text {
+                        text: newBtn.text
+                        color: Theme.textBright
+                        font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
             }
         }
@@ -111,7 +206,7 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: window.bgMain
+            color: Theme.bgMain
 
             TerminalItem {
                 id: terminal
@@ -121,6 +216,19 @@ ApplicationWindow {
                 pointSize: 13
                 session: window.currentRow >= 0 ? sessions.sessionAt(window.currentRow) : null
             }
+        }
+    }
+
+    // --- Über-Dialog --------------------------------------------------------
+    Dialog {
+        id: aboutDialog
+        anchors.centerIn: parent
+        modal: true
+        title: qsTr("Über QTmux")
+        standardButtons: Dialog.Ok
+        Text {
+            color: Theme.textBright
+            text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nQt %1").arg(Qt.application.version || "0.1")
         }
     }
 }

@@ -13,7 +13,7 @@ set(CMAKE_AUTORCC ON)
 option(QTMUX_BUILD_TESTS "Build unit tests" ON)
 
 # Qt6 ------------------------------------------------------------------------
-find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2)
+find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 LinguistTools)
 if(QTMUX_BUILD_TESTS)
     find_package(Qt6 6.6 REQUIRED COMPONENTS Test)
 endif()
@@ -51,6 +51,8 @@ add_library(qtmux_core STATIC
     src/core/VtScreen.cpp
     src/core/Session.h
     src/core/Session.cpp
+    src/core/AgentRegistry.h
+    src/core/AgentRegistry.cpp
 )
 target_include_directories(qtmux_core PUBLIC src/core)
 target_link_libraries(qtmux_core PUBLIC Qt6::Core PRIVATE vterm::vterm)
@@ -70,6 +72,10 @@ qt_add_qml_module(qtmux
         src/terminal/TerminalItem.cpp
         src/viewmodels/SessionModel.h
         src/viewmodels/SessionModel.cpp
+        src/viewmodels/Theme.h
+        src/viewmodels/Theme.cpp
+        src/viewmodels/AppController.h
+        src/viewmodels/AppController.cpp
 )
 target_include_directories(qtmux PRIVATE src/terminal src/viewmodels)
 
@@ -80,6 +86,14 @@ target_link_libraries(qtmux PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
+)
+
+# Übersetzungen (i18n) — .qm werden unter :/i18n/ eingebettet ----------------
+qt_add_translations(qtmux
+    TS_FILES
+        i18n/qtmux_de.ts
+        i18n/qtmux_en.ts
+    RESOURCE_PREFIX "/i18n"
 )
 
 # macOS App-Bundle

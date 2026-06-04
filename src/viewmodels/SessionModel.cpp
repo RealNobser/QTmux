@@ -17,6 +17,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case TitleRole:   return s->title();
     case StateRole:   return s->stateInt();
     case TypeRole:    return static_cast<int>(s->type());
+    case AgentRole:   return s->agentId();
     case SessionRole: return QVariant::fromValue(static_cast<QObject *>(s));
     default:          return {};
     }
@@ -27,6 +28,7 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
         {TitleRole,   "title"},
         {StateRole,   "runState"},
         {TypeRole,    "sessionType"},
+        {AgentRole,   "agentId"},
         {SessionRole, "session"},
     };
 }
@@ -37,11 +39,12 @@ void SessionModel::wireSession(Session *s, int row) {
         const int r = static_cast<int>(m_sessions.indexOf(s));
         if (r >= 0) {
             const QModelIndex idx = index(r);
-            emit dataChanged(idx, idx, {TitleRole, StateRole});
+            emit dataChanged(idx, idx, {TitleRole, StateRole, AgentRole});
         }
     };
     connect(s, &Session::titleChanged, this, refresh);
     connect(s, &Session::stateChanged, this, refresh);
+    connect(s, &Session::agentChanged, this, refresh);
     Q_UNUSED(row);
 }
 

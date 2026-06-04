@@ -1,5 +1,6 @@
 #include "Session.h"
 #include "VtScreen.h"
+#include "AgentRegistry.h"
 
 namespace qtmux {
 
@@ -40,7 +41,33 @@ void Session::start(int cols, int rows) {
 }
 
 void Session::write(const QByteArray &data) {
+    observeInput(data);
     if (m_backend) m_backend->write(data);
+}
+
+void Session::observeInput(const QByteArray &data) {
+    // Rekonstruiert die getippte Zeile zeichenweise und erkennt beim Enter
+    // ein bekanntes Agenten-Kommando (z. B. "agy" -> AntiGravity).
+    for (char ch : data) {
+        if (ch == '\r' || ch == '\n') {
+            if (const AgentInfo *agent = AgentRegistry::detect(m_inputLine)) {
+                if (m_agentId != agent->id) {
+                    m_agentId = agent->id;
+                    emit agentChanged();
+                }
+                m_titleFromAgent = true;
+                setTitle(agent->displayName);
+            }
+            m_inputLine.clear();
+        } else if (ch == '\x7f' || ch == '\b') {  // Backspace
+            m_inputLine.chop(1);
+        } else if (static_cast<unsigned char>(ch) >= 0x20) {
+            m_inputLine.append(QChar::fromLatin1(ch));
+        } else {
+            // Steuerzeichen (Ctrl-C, Pfeiltasten-Escapes …) verwerfen die Zeilenannahme.
+            m_inputLine.clear();
+        }
+    }
 }
 
 void Session::resize(int cols, int rows) {

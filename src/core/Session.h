@@ -16,6 +16,7 @@ class Session : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(int state READ stateInt NOTIFY stateChanged)
+    Q_PROPERTY(QString agentId READ agentId NOTIFY agentChanged)
 public:
     enum class Type { Shell, Ssh, Serial, App };
     Q_ENUM(Type)
@@ -28,6 +29,7 @@ public:
 
     Type type() const { return m_type; }
     QString title() const { return m_title; }
+    QString agentId() const { return m_agentId; }
     BackendState state() const { return m_backend ? m_backend->state() : BackendState::Closed; }
     int stateInt() const { return static_cast<int>(state()); }
 
@@ -40,15 +42,20 @@ public:
 signals:
     void titleChanged(const QString &title);
     void stateChanged();
+    void agentChanged();
     void bell();
 
 private:
     void setTitle(const QString &t);
+    void observeInput(const QByteArray &data);  // erkennt getippte Agenten-Kommandos
 
     std::unique_ptr<ITerminalBackend> m_backend;
     std::unique_ptr<VtScreen> m_screen;
     Type m_type = Type::Shell;
     QString m_title = QStringLiteral("Shell");
+    QString m_agentId;
+    QString m_inputLine;       // Puffer der aktuell getippten Zeile
+    bool m_titleFromAgent = false;
     int m_cols = 80;
     int m_rows = 24;
 };

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="en_US">
+<context>
+    <name>Main</name>
+    <message><source>Neue Session</source><translation>New Session</translation></message>
+    <message><source>Session schließen</source><translation>Close Session</translation></message>
+    <message><source>Helles Design</source><translation>Light Theme</translation></message>
+    <message><source>Dunkles Design</source><translation>Dark Theme</translation></message>
+    <message><source>Beenden</source><translation>Quit</translation></message>
+    <message><source>Datei</source><translation>File</translation></message>
+    <message><source>Ansicht</source><translation>View</translation></message>
+    <message><source>Sprache</source><translation>Language</translation></message>
+    <message><source>Agent</source><translation>Agent</translation></message>
+    <message><source>Neue Agent-Session …</source><translation>New Agent Session …</translation></message>
+    <message><source>Hilfe</source><translation>Help</translation></message>
+    <message><source>Über QTmux</source><translation>About QTmux</translation></message>
+    <message><source>Agent: %1</source><translation>Agent: %1</translation></message>
+    <message><source>+  Neue Session</source><translation>+  New Session</translation></message>
+    <message><source>QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.
+Qt %1</source><translation>QTmux — cross-platform multi-AI-agent terminal.
+Qt %1</translation></message>
+</context>
+</TS>

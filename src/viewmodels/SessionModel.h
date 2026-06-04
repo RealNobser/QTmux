@@ -19,6 +19,7 @@ public:
         TitleRole = Qt::UserRole + 1,
         StateRole,
         TypeRole,
+        AgentRole,
         SessionRole,
     };
     Q_ENUM(Roles)

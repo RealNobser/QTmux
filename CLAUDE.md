@@ -59,6 +59,10 @@ weil alles über `ITerminalBackend` läuft.
 | `src/core/VtScreen.{h,cpp}` | libvterm-Wrapper; `Cell` = Qt-freundliche Zelle |
 | `src/core/Session.{h,cpp}` | Bündelt Backend + VtScreen; UI spricht nur mit Session |
 | `src/viewmodels/SessionModel.{h,cpp}` | QAbstractListModel für die Sidebar; `sessionAt()` bindet an `TerminalItem.session` |
+| `src/viewmodels/Theme.{h,cpp}` | QML-Singleton `Theme.*`: Dark/Light-Palette, via QSettings persistiert |
+| `src/viewmodels/AppController.{h,cpp}` | QML-Singleton `App.*`: UI-Sprache; Translator-Wechsel in `main.cpp` |
+| `src/core/AgentRegistry.{h,cpp}` | Bekannte Agenten-CLIs (claude, codex, gemini, **agy**=AntiGravity, …); `detect()` |
+| `i18n/qtmux_{de,en}.ts` | Übersetzungen; via `qt_add_translations` zu `:/i18n/*.qm` kompiliert/eingebettet |
 | `src/terminal/TerminalItem.{h,cpp}` | QML-`TerminalItem`; rendert zugewiesene `Session` (besitzt sie nicht) |
 | `qml/Main.qml` | App-Shell: datengetriebene Sidebar + Terminal der aktuellen Session |
 | `tests/` | QtTest: `tst_pty`, `tst_vtscreen`, `tst_session` (E2E) |
@@ -85,7 +89,11 @@ Markdown-Links. Commit-Trailer: `Co-Authored-By: Claude …`.
 - ✅ **Phase 1** — Terminal-Kern: PTY + libvterm + TerminalItem; 3 Tests grün; läuft auf macOS
 - ⬜ **Phase 1 (Windows)** — ConPTY in `WindowsPty.cpp` implementieren & testen
 - 🟡 **Phase 2** — Session + SessionModel + datengetriebene Sidebar + Session-Wechsel: FERTIG.
-  Offen: **Split-Panes** (SplitView mit mehreren TerminalItems), Session schließen aus UI, Reorder
+  Offen: **Split-Panes** (SplitView mit mehreren TerminalItems), Reorder
+- ✅ **UI-Basis** — Dark/Light-Theme (`Theme`, Ctrl+D), MenuBar mit allen Befehlen,
+  i18n DE/EN (`App`-Singleton + `qt_add_translations`, Laufzeit-Umschaltung), Agent-Erkennung
+  (`AgentRegistry.detect()` über getipptes Kommando; `agy`→AntiGravity). 5 Tests grün.
+- 🟡 **Phase 3** — Agent-Erkennung via getipptem Kommando steht; OSC 133/9 Shell-Integration offen
 - ⬜ **Phase 3** — Agent-Awareness (OSC 133/9, Status-Ringe, Notifications)
 - ⬜ **Phase 4** — SSH (libssh2) + Serial (QtSerialPort) + Connection-Manager
 - ⬜ **Phase 5** — Plugin-System (QPluginLoader), MacPCAN-Integration
