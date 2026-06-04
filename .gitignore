@@ -12,6 +12,10 @@ cmake-build-*/
 *.user
 .DS_Store
 
+# Geheimnisse / Credentials (niemals committen)
+Credential-*.txt
+*.secret
+
 # CMake
 CMakeCache.txt
 CMakeFiles/

@@ -83,13 +83,31 @@ Konventionen: deutsche Kommentare/Kommunikation; `qtmux_core` bleibt **Gui-frei*
 (nur Qt6::Core) → Farben als `quint32` 0xRRGGBB, nicht `QRgb`. Code-Referenzen als
 Markdown-Links. Commit-Trailer: `Co-Authored-By: Claude …`.
 
-## Status (Stand: 2026-06-04)
+## Projekt-Dokumentation (Confluence)
+
+Im internen Confluence (Space **QTMUX**, `https://confluence.intern.example`):
+- **QTmux Home** (Space-Homepage, id `<seiten-id>`) — Projektbeschreibung + Unterseiten-Liste.
+- **Benutzerdokumentation** (id `<seiten-id>`) — Unterseite von Home.
+- **Entwicklerdokumentation** (id `<seiten-id>`) — Unterseite von Home.
+
+**Aktualisieren (REST-API, on-prem Confluence Server/DC):** Bearer-Token + Verbindungsdaten
+in `Credential-Confluence.txt` (Repo-Wurzel, **git-ignoriert**, niemals committen; `verify_ssl=false`
+→ `curl -k`). Token nur einlesen, nie ausgeben. Muster:
+`curl -k -H "Authorization: Bearer <token>" $BASE/rest/api/content/<id>?expand=version`
+(Update via `PUT` mit `version.number+1`; neue Seite via `POST /rest/api/content` mit
+`ancestors:[{id: <seiten-id>}]`, `body.storage` = XHTML-Storage-Format).
+Bei `/feierabend` diese Seiten mitpflegen.
+
+## Status (Stand: 2026-06-05)
 
 - ✅ **Phase 0** — Gerüst (CMake/Presets/vcpkg, Qt-Quick-Shell, .vscode)
 - ✅ **Phase 1** — Terminal-Kern: PTY + libvterm + TerminalItem; 3 Tests grün; läuft auf macOS
 - ⬜ **Phase 1 (Windows)** — ConPTY in `WindowsPty.cpp` implementieren & testen
 - 🟡 **Phase 2** — Session + SessionModel + datengetriebene Sidebar + Session-Wechsel: FERTIG.
-  Offen: **Split-Panes** (SplitView mit mehreren TerminalItems), Reorder
+  Sidebar-**Split-Button** „+ &lt;Typ&gt;" mit ▾-Dropdown (Shell/SSH/Seriell, gemerkt via Settings).
+  Offen: **Split-Panes** (SplitView mit mehreren TerminalItems), Reorder.
+  **Layout-Lektion:** verschachtelte `RowLayout` mit `fillHeight`-Kindern braucht
+  `Layout.maximumHeight`/`fillHeight:false`, sonst wuchert sie in der `ColumnLayout`.
 - ✅ **UI-Basis** — Theme `System/Hell/Dunkel` (`Theme.mode`, System folgt OS via
   `QStyleHints::colorScheme`, Ctrl+D), Terminal-Farben folgen dem Theme
   (`TerminalItem.background/foregroundColor` ← `Theme.terminalBg/Fg`), MenuBar mit allen
