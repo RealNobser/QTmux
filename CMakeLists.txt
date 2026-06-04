@@ -13,7 +13,7 @@ set(CMAKE_AUTORCC ON)
 option(QTMUX_BUILD_TESTS "Build unit tests" ON)
 
 # Qt6 ------------------------------------------------------------------------
-find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 LinguistTools)
+find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 SerialPort LinguistTools)
 if(QTMUX_BUILD_TESTS)
     find_package(Qt6 6.6 REQUIRED COMPONENTS Test)
 endif()
@@ -53,9 +53,11 @@ add_library(qtmux_core STATIC
     src/core/Session.cpp
     src/core/AgentRegistry.h
     src/core/AgentRegistry.cpp
+    src/core/SerialBackend.h
+    src/core/SerialBackend.cpp
 )
 target_include_directories(qtmux_core PUBLIC src/core)
-target_link_libraries(qtmux_core PUBLIC Qt6::Core PRIVATE vterm::vterm)
+target_link_libraries(qtmux_core PUBLIC Qt6::Core Qt6::SerialPort PRIVATE vterm::vterm)
 
 # Anwendungs-Target ----------------------------------------------------------
 qt_add_executable(qtmux

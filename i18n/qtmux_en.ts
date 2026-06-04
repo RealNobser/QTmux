@@ -11,6 +11,11 @@
     <message><source>Design: Wie System</source><translation>Theme: Follow System</translation></message>
     <message><source>Design: Hell</source><translation>Theme: Light</translation></message>
     <message><source>Design: Dunkel</source><translation>Theme: Dark</translation></message>
+    <message><source>Neue serielle Verbindung …</source><translation>New Serial Connection …</translation></message>
+    <message><source>Serielle Verbindung</source><translation>Serial Connection</translation></message>
+    <message><source>Port</source><translation>Port</translation></message>
+    <message><source>Baudrate</source><translation>Baud Rate</translation></message>
+    <message><source>Keine seriellen Ports gefunden.</source><translation>No serial ports found.</translation></message>
     <message><source>Datei</source><translation>File</translation></message>
     <message><source>Ansicht</source><translation>View</translation></message>
     <message><source>Sprache</source><translation>Language</translation></message>

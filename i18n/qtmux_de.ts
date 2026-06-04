@@ -11,6 +11,11 @@
     <message><source>Design: Wie System</source><translation type="unfinished">Design: Wie System</translation></message>
     <message><source>Design: Hell</source><translation type="unfinished">Design: Hell</translation></message>
     <message><source>Design: Dunkel</source><translation type="unfinished">Design: Dunkel</translation></message>
+    <message><source>Neue serielle Verbindung …</source><translation type="unfinished">Neue serielle Verbindung …</translation></message>
+    <message><source>Serielle Verbindung</source><translation type="unfinished">Serielle Verbindung</translation></message>
+    <message><source>Port</source><translation type="unfinished">Port</translation></message>
+    <message><source>Baudrate</source><translation type="unfinished">Baudrate</translation></message>
+    <message><source>Keine seriellen Ports gefunden.</source><translation type="unfinished">Keine seriellen Ports gefunden.</translation></message>
     <message><source>Datei</source><translation type="unfinished">Datei</translation></message>
     <message><source>Ansicht</source><translation type="unfinished">Ansicht</translation></message>
     <message><source>Sprache</source><translation type="unfinished">Sprache</translation></message>

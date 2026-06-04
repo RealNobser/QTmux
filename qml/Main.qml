@@ -76,6 +76,10 @@ ApplicationWindow {
         Menu {
             title: qsTr("Datei")
             MenuItem { action: actNewSession }
+            MenuItem {
+                text: qsTr("Neue serielle Verbindung …")
+                onTriggered: serialDialog.openDialog()
+            }
             MenuItem { action: actCloseSession }
             MenuSeparator {}
             MenuItem { action: actQuit }
@@ -287,6 +291,52 @@ ApplicationWindow {
                 backgroundColor: Theme.terminalBg
                 foregroundColor: Theme.terminalFg
                 session: window.currentRow >= 0 ? sessions.sessionAt(window.currentRow) : null
+            }
+        }
+    }
+
+    // --- Serielle Verbindung öffnen ----------------------------------------
+    Dialog {
+        id: serialDialog
+        anchors.centerIn: parent
+        width: 420
+        modal: true
+        title: qsTr("Serielle Verbindung")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        function openDialog() {
+            portCombo.model = sessions.availableSerialPorts()
+            open()
+        }
+        onAccepted: {
+            if (portCombo.currentText.length > 0) {
+                window.currentRow = sessions.createSerialSession(
+                    portCombo.currentText, parseInt(baudCombo.currentText))
+            }
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+            Text { text: qsTr("Port"); color: Theme.textBright }
+            ComboBox {
+                id: portCombo
+                Layout.fillWidth: true
+                model: []
+            }
+            Text { text: qsTr("Baudrate"); color: Theme.textBright }
+            ComboBox {
+                id: baudCombo
+                Layout.fillWidth: true
+                editable: true
+                model: ["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"]
+                currentIndex: 4
+            }
+            Text {
+                visible: portCombo.model.length === 0
+                text: qsTr("Keine seriellen Ports gefunden.")
+                color: Theme.textDim
+                font.pixelSize: 11
             }
         }
     }

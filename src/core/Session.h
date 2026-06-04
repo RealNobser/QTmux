@@ -45,6 +45,9 @@ public:
     /// Markiert die Session als aktiv (sichtbar/fokussiert). Aktivieren löscht
     /// einen anstehenden Aufmerksamkeits-Hinweis.
     void setActive(bool active);
+
+    /// Setzt den Anzeigetitel (z. B. Portname für serielle Sessions).
+    void setTitle(const QString &t);
     BackendState state() const { return m_backend ? m_backend->state() : BackendState::Closed; }
     int stateInt() const { return static_cast<int>(state()); }
 
@@ -64,7 +67,6 @@ signals:
     void bell();
 
 private:
-    void setTitle(const QString &t);
     void setActivity(Activity a);
     void raiseAttention();                      // setzt needsAttention (wenn inaktiv)
     void observeInput(const QByteArray &data);  // erkennt getippte Agenten-Kommandos

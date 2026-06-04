@@ -36,6 +36,10 @@ public:
 
     /// Erzeugt eine lokale Shell-Session und gibt deren Zeilenindex zurück.
     Q_INVOKABLE int createShellSession();
+    /// Erzeugt eine serielle Session (Port + Baudrate) und gibt deren Zeilenindex zurück.
+    Q_INVOKABLE int createSerialSession(const QString &portName, int baud);
+    /// Verfügbare serielle Ports (z. B. "/dev/cu.usbserial-XYZ").
+    Q_INVOKABLE QStringList availableSerialPorts() const;
     /// Session-Objekt einer Zeile (für Binding an TerminalItem.session).
     Q_INVOKABLE QObject *sessionAt(int row) const;
     Q_INVOKABLE void closeSession(int row);

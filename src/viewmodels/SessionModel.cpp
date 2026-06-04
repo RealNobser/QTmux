@@ -1,6 +1,9 @@
 #include "SessionModel.h"
 #include "Session.h"
 #include "PtyBackend.h"
+#include "SerialBackend.h"
+
+#include <QSerialPortInfo>
 
 namespace qtmux {
 
@@ -89,6 +92,32 @@ int SessionModel::createShellSession() {
     s->start(80, 24);
     emit countChanged();
     return row;
+}
+
+int SessionModel::createSerialSession(const QString &portName, int baud) {
+    auto *s = new Session(this);
+    auto *serial = new SerialBackend();
+    serial->setPortName(portName);
+    serial->setBaudRate(baud);
+    s->attachBackend(serial, Session::Type::Serial, 80, 24);
+    s->setTitle(portName);
+
+    const int row = count();
+    beginInsertRows({}, row, row);
+    m_sessions.append(s);
+    endInsertRows();
+
+    wireSession(s, row);
+    s->start(80, 24);
+    emit countChanged();
+    return row;
+}
+
+QStringList SessionModel::availableSerialPorts() const {
+    QStringList ports;
+    const auto infos = QSerialPortInfo::availablePorts();
+    for (const QSerialPortInfo &info : infos) ports << info.portName();
+    return ports;
 }
 
 QObject *SessionModel::sessionAt(int row) const {
