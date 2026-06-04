@@ -16,6 +16,12 @@
     <message><source>Port</source><translation type="unfinished">Port</translation></message>
     <message><source>Baudrate</source><translation type="unfinished">Baudrate</translation></message>
     <message><source>Keine seriellen Ports gefunden.</source><translation type="unfinished">Keine seriellen Ports gefunden.</translation></message>
+    <message><source>Neue SSH-Verbindung …</source><translation type="unfinished">Neue SSH-Verbindung …</translation></message>
+    <message><source>SSH-Verbindung</source><translation type="unfinished">SSH-Verbindung</translation></message>
+    <message><source>Host</source><translation type="unfinished">Host</translation></message>
+    <message><source>Benutzer</source><translation type="unfinished">Benutzer</translation></message>
+    <message><source>Identity-Datei</source><translation type="unfinished">Identity-Datei</translation></message>
+    <message><source>Passwort/Schlüssel werden im Terminal abgefragt (System-ssh).</source><translation type="unfinished">Passwort/Schlüssel werden im Terminal abgefragt (System-ssh).</translation></message>
     <message><source>Agent-Steuerung</source><translation type="unfinished">Agent-Steuerung</translation></message>
     <message><source>MCP-Server: an (127.0.0.1:%1)</source><translation type="unfinished">MCP-Server: an (127.0.0.1:%1)</translation></message>
     <message><source>MCP-Server: aus</source><translation type="unfinished">MCP-Server: aus</translation></message>

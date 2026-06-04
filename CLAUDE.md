@@ -110,8 +110,11 @@ Markdown-Links. Commit-Trailer: `Co-Authored-By: Claude …`.
     (nicht `m_backend->state()`), da das Signal während der Backend-Zerstörung feuert.
   - 9 Tests grün (test_pty/vtscreen/session/agent).
 - ⬜ **Phase 3** — Agent-Awareness (OSC 133/9, Status-Ringe, Notifications)
-- 🟡 **Phase 4** — Serial (QtSerialPort) FERTIG (`SerialBackend` + Verbindungsdialog).
-  Offen: SSH (libssh2), Connection-Manager/Profile.
+- ✅ **Phase 4** — Serial (`SerialBackend`) + **SSH** (`SshBackend`) FERTIG.
+  SSH läuft über den **System-`ssh`-Client im PTY** (Passwort/Key/known_hosts/ssh-config/
+  Agent-Forwarding „funktionieren einfach"); `SshBackend : PtyBackend` baut die ssh-Argumente.
+  Dialoge für beide unter „Datei". Persistenz inkl. host/port/user/identity. MCP
+  `create_session type=ssh`. Offen: Connection-Manager/Profile, libssh2-Variante (SFTP).
 - ✅ **MCP-Schnittstelle** — `src/server/McpServer.{h,cpp}`: eingebetteter MCP-Server
   (HTTP/JSON-RPC 2.0) auf `127.0.0.1:7345`, Menü „Agent-Steuerung". Tools: list/create/
   close/focus_session, send_text, read_screen, set_theme. Session hat stabile `id()` +

@@ -55,6 +55,8 @@ add_library(qtmux_core STATIC
     src/core/AgentRegistry.cpp
     src/core/SerialBackend.h
     src/core/SerialBackend.cpp
+    src/core/SshBackend.h
+    src/core/SshBackend.cpp
 )
 target_include_directories(qtmux_core PUBLIC src/core)
 target_link_libraries(qtmux_core PUBLIC Qt6::Core Qt6::SerialPort PRIVATE vterm::vterm)

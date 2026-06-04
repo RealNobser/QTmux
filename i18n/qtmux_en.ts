@@ -16,6 +16,12 @@
     <message><source>Port</source><translation>Port</translation></message>
     <message><source>Baudrate</source><translation>Baud Rate</translation></message>
     <message><source>Keine seriellen Ports gefunden.</source><translation>No serial ports found.</translation></message>
+    <message><source>Neue SSH-Verbindung …</source><translation>New SSH Connection …</translation></message>
+    <message><source>SSH-Verbindung</source><translation>SSH Connection</translation></message>
+    <message><source>Host</source><translation>Host</translation></message>
+    <message><source>Benutzer</source><translation>User</translation></message>
+    <message><source>Identity-Datei</source><translation>Identity File</translation></message>
+    <message><source>Passwort/Schlüssel werden im Terminal abgefragt (System-ssh).</source><translation>Password/key will be requested in the terminal (system ssh).</translation></message>
     <message><source>Agent-Steuerung</source><translation>Agent Control</translation></message>
     <message><source>MCP-Server: an (127.0.0.1:%1)</source><translation>MCP Server: on (127.0.0.1:%1)</translation></message>
     <message><source>MCP-Server: aus</source><translation>MCP Server: off</translation></message>

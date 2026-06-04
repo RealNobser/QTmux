@@ -38,6 +38,9 @@ public:
     Q_INVOKABLE int createShellSession(const QString &workingDir = {});
     /// Erzeugt eine serielle Session (Port + Baudrate) und gibt deren Zeilenindex zurück.
     Q_INVOKABLE int createSerialSession(const QString &portName, int baud);
+    /// Erzeugt eine SSH-Session (System-ssh) und gibt deren Zeilenindex zurück.
+    Q_INVOKABLE int createSshSession(const QString &host, int port,
+                                     const QString &user, const QString &identityFile = {});
     /// Verfügbare serielle Ports (z. B. "/dev/cu.usbserial-XYZ").
     Q_INVOKABLE QStringList availableSerialPorts() const;
     /// Session-Objekt einer Zeile (für Binding an TerminalItem.session).
@@ -71,6 +74,10 @@ private:
         QString serialPort;  // nur bei Seriell
         int baud = 115200;   // nur bei Seriell
         QString workingDir;  // letztes Arbeitsverzeichnis (Shell), live in saveState() erfasst
+        QString host;        // SSH
+        int sshPort = 22;    // SSH
+        QString user;        // SSH
+        QString identity;    // SSH (Identity-Datei, optional)
     };
 
     QList<Session *> m_sessions;

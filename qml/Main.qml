@@ -107,6 +107,10 @@ ApplicationWindow {
             title: qsTr("Datei")
             MenuItem { action: actNewSession }
             MenuItem {
+                text: qsTr("Neue SSH-Verbindung …")
+                onTriggered: sshDialog.open()
+            }
+            MenuItem {
                 text: qsTr("Neue serielle Verbindung …")
                 onTriggered: serialDialog.openDialog()
             }
@@ -331,6 +335,49 @@ ApplicationWindow {
                 backgroundColor: Theme.terminalBg
                 foregroundColor: Theme.terminalFg
                 session: window.currentRow >= 0 ? sessions.sessionAt(window.currentRow) : null
+            }
+        }
+    }
+
+    // --- SSH-Verbindung öffnen ---------------------------------------------
+    Dialog {
+        id: sshDialog
+        anchors.centerIn: parent
+        width: 420
+        modal: true
+        title: qsTr("SSH-Verbindung")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        onAccepted: {
+            if (sshHost.text.length > 0) {
+                window.currentRow = sessions.createSshSession(
+                    sshHost.text, parseInt(sshPort.text) || 22, sshUser.text, sshIdentity.text)
+            }
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+            GridLayout {
+                columns: 2
+                columnSpacing: 10
+                rowSpacing: 8
+                Layout.fillWidth: true
+                Text { text: qsTr("Host"); color: Theme.textBright }
+                TextField { id: sshHost; Layout.fillWidth: true; placeholderText: "example.com" }
+                Text { text: qsTr("Benutzer"); color: Theme.textBright }
+                TextField { id: sshUser; Layout.fillWidth: true; placeholderText: Qt.platform.os; text: "" }
+                Text { text: qsTr("Port"); color: Theme.textBright }
+                TextField { id: sshPort; Layout.fillWidth: true; text: "22" }
+                Text { text: qsTr("Identity-Datei"); color: Theme.textBright }
+                TextField { id: sshIdentity; Layout.fillWidth: true; placeholderText: "~/.ssh/id_ed25519 (optional)" }
+            }
+            Text {
+                text: qsTr("Passwort/Schlüssel werden im Terminal abgefragt (System-ssh).")
+                color: Theme.textDim
+                font.pixelSize: 11
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
             }
         }
     }

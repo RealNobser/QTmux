@@ -2,6 +2,7 @@
 #include "Session.h"
 #include "PtyBackend.h"
 #include "SerialBackend.h"
+#include "SshBackend.h"
 
 #include <QSerialPortInfo>
 #include <QSettings>
@@ -119,6 +120,36 @@ int SessionModel::createSerialSession(const QString &portName, int baud) {
     return row;
 }
 
+int SessionModel::createSshSession(const QString &host, int port,
+                                   const QString &user, const QString &identityFile) {
+    auto *s = new Session(this);
+    auto *ssh = new SshBackend();
+    ssh->setHost(host);
+    ssh->setPort(port > 0 ? port : 22);
+    ssh->setUser(user);
+    ssh->setIdentityFile(identityFile);
+    s->attachBackend(ssh, Session::Type::Ssh, 80, 24);
+    s->setTitle(ssh->target());
+
+    const int row = count();
+    beginInsertRows({}, row, row);
+    m_sessions.append(s);
+    SessionConfig cfg;
+    cfg.type = static_cast<int>(Session::Type::Ssh);
+    cfg.host = host;
+    cfg.sshPort = port > 0 ? port : 22;
+    cfg.user = user;
+    cfg.identity = identityFile;
+    m_configs.append(cfg);
+    endInsertRows();
+
+    wireSession(s, row);
+    s->start(80, 24);
+    emit countChanged();
+    saveState();
+    return row;
+}
+
 QStringList SessionModel::availableSerialPorts() const {
     QStringList ports;
     const auto infos = QSerialPortInfo::availablePorts();
@@ -175,6 +206,10 @@ void SessionModel::saveState() const {
         s.setValue(QStringLiteral("type"), cfg.type);
         s.setValue(QStringLiteral("serialPort"), cfg.serialPort);
         s.setValue(QStringLiteral("baud"), cfg.baud);
+        s.setValue(QStringLiteral("host"), cfg.host);
+        s.setValue(QStringLiteral("sshPort"), cfg.sshPort);
+        s.setValue(QStringLiteral("user"), cfg.user);
+        s.setValue(QStringLiteral("identity"), cfg.identity);
         // Aktuelles Arbeitsverzeichnis live abfragen (Shell), sonst gespeichertes verwenden.
         QString dir = cfg.workingDir;
         if (cfg.type == static_cast<int>(Session::Type::Shell) && i < m_sessions.size()) {
@@ -197,6 +232,11 @@ int SessionModel::restoreState() {
         if (type == static_cast<int>(Session::Type::Serial)) {
             createSerialSession(s.value(QStringLiteral("serialPort")).toString(),
                                 s.value(QStringLiteral("baud"), 115200).toInt());
+        } else if (type == static_cast<int>(Session::Type::Ssh)) {
+            createSshSession(s.value(QStringLiteral("host")).toString(),
+                             s.value(QStringLiteral("sshPort"), 22).toInt(),
+                             s.value(QStringLiteral("user")).toString(),
+                             s.value(QStringLiteral("identity")).toString());
         } else {
             createShellSession(s.value(QStringLiteral("workingDir")).toString());
         }

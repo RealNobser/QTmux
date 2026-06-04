@@ -263,6 +263,11 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         if (type == "serial") {
             row = m_sessions->createSerialSession(args.value("port").toString(),
                                                   args.value("baud").toInt(115200));
+        } else if (type == "ssh") {
+            row = m_sessions->createSshSession(args.value("host").toString(),
+                                               args.value("port").toInt(22),
+                                               args.value("user").toString(),
+                                               args.value("identity").toString());
         } else {
             row = m_sessions->createShellSession(args.value("cwd").toString());
         }

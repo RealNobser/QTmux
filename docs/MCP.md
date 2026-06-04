@@ -14,7 +14,7 @@ externer KI-Agent die Anwendung fernsteuern kann — inklusive der einzelnen Ses
 | Tool | Argumente | Zweck |
 |---|---|---|
 | `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification) |
-| `create_session` | `type` ("shell"/"serial"), `program?`, `cwd?`, `port?`, `baud?` | Session anlegen → gibt neue **id** zurück |
+| `create_session` | `type` ("shell"/"serial"/"ssh"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?` | Session anlegen → gibt neue **id** zurück |
 | `close_session` | `id` | Session schließen |
 | `focus_session` | `id` | Session sichtbar/fokussiert machen |
 | `send_text` | `id`, `text`, `enter?` (Standard true) | Text in die Session tippen |
