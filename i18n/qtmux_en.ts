@@ -16,6 +16,11 @@
     <message><source>Port</source><translation>Port</translation></message>
     <message><source>Baudrate</source><translation>Baud Rate</translation></message>
     <message><source>Keine seriellen Ports gefunden.</source><translation>No serial ports found.</translation></message>
+    <message><source>Shell</source><translation>Shell</translation></message>
+    <message><source>SSH</source><translation>SSH</translation></message>
+    <message><source>Seriell</source><translation>Serial</translation></message>
+    <message><source>SSH …</source><translation>SSH …</translation></message>
+    <message><source>Seriell …</source><translation>Serial …</translation></message>
     <message><source>Neue SSH-Verbindung …</source><translation>New SSH Connection …</translation></message>
     <message><source>SSH-Verbindung</source><translation>SSH Connection</translation></message>
     <message><source>Host</source><translation>Host</translation></message>

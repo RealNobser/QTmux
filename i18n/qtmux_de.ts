@@ -16,6 +16,11 @@
     <message><source>Port</source><translation type="unfinished">Port</translation></message>
     <message><source>Baudrate</source><translation type="unfinished">Baudrate</translation></message>
     <message><source>Keine seriellen Ports gefunden.</source><translation type="unfinished">Keine seriellen Ports gefunden.</translation></message>
+    <message><source>Shell</source><translation type="unfinished">Shell</translation></message>
+    <message><source>SSH</source><translation type="unfinished">SSH</translation></message>
+    <message><source>Seriell</source><translation type="unfinished">Seriell</translation></message>
+    <message><source>SSH …</source><translation type="unfinished">SSH …</translation></message>
+    <message><source>Seriell …</source><translation type="unfinished">Seriell …</translation></message>
     <message><source>Neue SSH-Verbindung …</source><translation type="unfinished">Neue SSH-Verbindung …</translation></message>
     <message><source>SSH-Verbindung</source><translation type="unfinished">SSH-Verbindung</translation></message>
     <message><source>Host</source><translation type="unfinished">Host</translation></message>

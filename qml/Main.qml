@@ -44,6 +44,9 @@ ApplicationWindow {
         }
     }
 
+    // Vom Split-Button gewählter Standardtyp (0=Shell, 1=SSH, 2=Seriell), persistiert.
+    property int newSessionType: 0
+
     function newSession() {
         currentRow = sessions.createShellSession()
     }
@@ -51,6 +54,14 @@ ApplicationWindow {
         if (currentRow < 0) return
         sessions.closeSession(currentRow)
         currentRow = Math.min(currentRow, sessions.count - 1)
+    }
+    function typeLabel(t) {
+        return t === 1 ? qsTr("SSH") : t === 2 ? qsTr("Seriell") : qsTr("Shell")
+    }
+    function openNewSession(t) {
+        if (t === 1) sshDialog.open()
+        else if (t === 2) serialDialog.openDialog()
+        else newSession()
     }
 
     // Beim Start die persistierten Sessions wiederherstellen; sonst eine neue öffnen.
@@ -65,13 +76,14 @@ ApplicationWindow {
     // Beim Schließen den finalen Zustand sichern (u. a. aktuelles Arbeitsverzeichnis).
     onClosing: sessions.saveState()
 
-    // Fenstergeometrie über Neustarts erhalten.
+    // Fenstergeometrie + gewählter Session-Typ über Neustarts erhalten.
     Settings {
         category: "window"
         property alias x: window.x
         property alias y: window.y
         property alias width: window.width
         property alias height: window.height
+        property alias newSessionType: window.newSessionType
     }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
@@ -296,25 +308,92 @@ ApplicationWindow {
                     }
                 }
 
-                Button {
-                    id: newBtn
-                    text: qsTr("+  Neue Session")
+                // Split-Button: "+ <Typ>" öffnet den gewählten Typ; Caret "▾" wählt den Typ.
+                RowLayout {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 40
-                    onClicked: window.newSession()
-                    background: Rectangle {
-                        radius: 8
-                        color: newBtn.down ? Theme.sidebarSelected
-                             : newBtn.hovered ? Theme.sidebarHover : Theme.bgElevated
-                        border.color: Theme.border
-                        border.width: 1
+                    spacing: 1
+
+                    Button {
+                        id: newBtn
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        text: "+  " + window.typeLabel(window.newSessionType)
+                        onClicked: window.openNewSession(window.newSessionType)
+                        background: Rectangle {
+                            // links abgerundet, rechts eckig (verschmilzt mit dem Caret).
+                            radius: 8
+                            color: newBtn.down ? Theme.sidebarSelected
+                                 : newBtn.hovered ? Theme.sidebarHover : Theme.bgElevated
+                            border.color: Theme.border
+                            border.width: 1
+                            Rectangle {
+                                anchors.right: parent.right
+                                width: parent.radius; height: parent.height
+                                color: parent.color
+                                border.color: parent.border.color
+                                border.width: parent.border.width
+                            }
+                        }
+                        contentItem: Text {
+                            text: newBtn.text
+                            color: Theme.textBright
+                            font.pixelSize: 13
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
                     }
-                    contentItem: Text {
-                        text: newBtn.text
-                        color: Theme.textBright
-                        font.pixelSize: 13
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+
+                    Button {
+                        id: caretBtn
+                        Layout.preferredWidth: 32
+                        Layout.fillHeight: true
+                        text: "▾"
+                        onClicked: typeMenu.popup()
+                        background: Rectangle {
+                            // rechts abgerundet, links eckig.
+                            radius: 8
+                            color: caretBtn.down ? Theme.sidebarSelected
+                                 : caretBtn.hovered ? Theme.sidebarHover : Theme.bgElevated
+                            border.color: Theme.border
+                            border.width: 1
+                            Rectangle {
+                                anchors.left: parent.left
+                                width: parent.radius; height: parent.height
+                                color: parent.color
+                                border.color: parent.border.color
+                                border.width: parent.border.width
+                            }
+                        }
+                        contentItem: Text {
+                            text: caretBtn.text
+                            color: Theme.textBright
+                            font.pixelSize: 13
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
+                        Menu {
+                            id: typeMenu
+                            MenuItem {
+                                text: qsTr("Shell")
+                                checkable: true
+                                checked: window.newSessionType === 0
+                                onTriggered: window.newSessionType = 0
+                            }
+                            MenuItem {
+                                text: qsTr("SSH …")
+                                checkable: true
+                                checked: window.newSessionType === 1
+                                onTriggered: window.newSessionType = 1
+                            }
+                            MenuItem {
+                                text: qsTr("Seriell …")
+                                checkable: true
+                                checked: window.newSessionType === 2
+                                onTriggered: window.newSessionType = 2
+                            }
+                        }
                     }
                 }
             }
