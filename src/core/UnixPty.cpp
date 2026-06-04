@@ -35,7 +35,8 @@ Pty::~Pty() {
 }
 
 bool Pty::start(const QString &program, const QStringList &args,
-                int cols, int rows, const QStringList &env) {
+                int cols, int rows, const QStringList &env,
+                const QString &workingDir) {
     if (m_running) {
         m_lastError = QStringLiteral("PTY läuft bereits");
         return false;
@@ -54,7 +55,12 @@ bool Pty::start(const QString &program, const QStringList &args,
     }
 
     if (pid == 0) {
-        // --- Child: Umgebung setzen und Shell exec'en ---
+        // --- Child: Startverzeichnis, Umgebung setzen und Shell exec'en ---
+        if (!workingDir.isEmpty()) {
+            if (::chdir(workingDir.toLocal8Bit().constData()) != 0) {
+                // Fehlschlag ist nicht fatal — dann startet die Shell im geerbten Verzeichnis.
+            }
+        }
         for (const QString &kv : env) {
             const int eq = kv.indexOf('=');
             if (eq > 0) {

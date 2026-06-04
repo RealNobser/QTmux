@@ -23,8 +23,10 @@ public:
 
     /// Startet `program` mit `args` in einem PTY der Groesse cols x rows.
     /// `env` ergaenzt/ueberschreibt Umgebungsvariablen (Form: "KEY=VALUE").
+    /// `workingDir` ist das Startverzeichnis (leer = vom Elternprozess erben).
     bool start(const QString &program, const QStringList &args,
-               int cols, int rows, const QStringList &env = {});
+               int cols, int rows, const QStringList &env = {},
+               const QString &workingDir = {});
 
     qint64 write(const QByteArray &data);
     void resize(int cols, int rows);

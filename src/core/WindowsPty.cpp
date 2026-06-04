@@ -21,7 +21,7 @@ struct Pty::Private {};
 Pty::Pty(QObject *parent) : QObject(parent), d(nullptr) {}
 Pty::~Pty() {}
 
-bool Pty::start(const QString &, const QStringList &, int, int, const QStringList &) {
+bool Pty::start(const QString &, const QStringList &, int, int, const QStringList &, const QString &) {
     m_lastError = QStringLiteral("ConPTY-Backend ist noch nicht implementiert (Windows).");
     return false;
 }

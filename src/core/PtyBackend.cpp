@@ -1,6 +1,7 @@
 #include "PtyBackend.h"
 
 #include <QProcessEnvironment>
+#include <QDir>
 
 namespace qtmux {
 
@@ -30,8 +31,11 @@ bool PtyBackend::start(int cols, int rows) {
     QStringList env = m_env;
     env << QStringLiteral("TERM=xterm-256color");
 
+    // Leeres Startverzeichnis => Home-Verzeichnis des Nutzers.
+    const QString workingDir = m_workingDir.isEmpty() ? QDir::homePath() : m_workingDir;
+
     setState(BackendState::Starting);
-    if (!m_pty.start(program, m_args, cols, rows, env)) {
+    if (!m_pty.start(program, m_args, cols, rows, env, workingDir)) {
         setState(BackendState::Error);
         return false;
     }

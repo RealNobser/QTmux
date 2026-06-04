@@ -19,6 +19,8 @@ public:
     void setProgram(const QString &program) { m_program = program; }
     void setArguments(const QStringList &args) { m_args = args; }
     void setExtraEnv(const QStringList &env) { m_env = env; }
+    /// Startverzeichnis (leer = Home-Verzeichnis des Nutzers).
+    void setWorkingDirectory(const QString &dir) { m_workingDir = dir; }
 
     bool start(int cols, int rows) override;
     void write(const QByteArray &data) override;
@@ -30,6 +32,7 @@ private:
     QString m_program;
     QStringList m_args;
     QStringList m_env;
+    QString m_workingDir;   // leer => Home (siehe start())
 };
 
 } // namespace qtmux
