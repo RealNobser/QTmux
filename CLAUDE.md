@@ -96,10 +96,19 @@ Markdown-Links. Commit-Trailer: `Co-Authored-By: Claude …`.
   Befehlen, i18n DE/EN (`App`-Singleton + `qt_add_translations`, Laufzeit-Umschaltung),
   Agent-Erkennung (`AgentRegistry.detect()`; `agy`→AntiGravity). 5 Tests grün.
   Sessions werden bei Shell-Ende automatisch entfernt (SessionModel) + „×" pro Sidebar-Zeile.
-- 🟡 **Phase 3** — Agent-Erkennung via getipptem Kommando steht; **Aufmerksamkeit via Terminal-Bell**
-  (`Session::needsAttention`, gesetzt bei BEL einer inaktiven Session; blauer pulsierender
-  Sidebar-Ring; `setActiveRow()` löscht ihn beim Fokus). Offen: OSC 9/777 Notifications +
-  OSC 133 Prompt-Marker für präzises WaitingInput; Dock-/Fenster-Alert.
+- ✅ **Phase 3 (Agent-Awareness)** — vollständige OSC-Erkennung:
+  - `VtScreen` fängt unbekannte OSC via `vterm_screen_set_unrecognised_fallbacks` ab →
+    Signale `notify()` (OSC 9 / 777) und `promptMarker(kind,exit)` (OSC 133).
+  - `Session`: `Activity`-Zustand (Running/Error/Closed, Sidebar-Ring) aus OSC 133;
+    `lastNotification` aus OSC 9/777; `needsAttention` (blau, pulsierend) aus Bell,
+    Notification oder Befehls-Ende (OSC 133;D) einer inaktiven Session.
+  - `SessionModel`: `attentionRaised(row)` → `window.alert()` (Dock/Taskbar) wenn QTmux
+    nicht im Vordergrund. Sidebar zeigt Notification-Text.
+  - Shell-Integration: `shell-integration/qtmux.{bash,zsh}` (OSC 133 Marker + `qtmux-notify`).
+  - **Wichtige Lektion (Bugfix):** Backend wird NUR vom `unique_ptr` besessen (kein
+    `setParent`); stateChanged-Handler nimmt den `BackendState` aus dem Signal-Argument
+    (nicht `m_backend->state()`), da das Signal während der Backend-Zerstörung feuert.
+  - 9 Tests grün (test_pty/vtscreen/session/agent).
 - ⬜ **Phase 3** — Agent-Awareness (OSC 133/9, Status-Ringe, Notifications)
 - ⬜ **Phase 4** — SSH (libssh2) + Serial (QtSerialPort) + Connection-Manager
 - ⬜ **Phase 5** — Plugin-System (QPluginLoader), MacPCAN-Integration

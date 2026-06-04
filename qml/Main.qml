@@ -27,6 +27,10 @@ ApplicationWindow {
             else if (window.currentRow >= first)
                 window.currentRow = Math.min(first, sessions.count - 1)
         }
+        // Fenster-Alert (Dock-Hüpfen/Taskbar-Blinken), wenn QTmux nicht im Vordergrund ist.
+        function onAttentionRaised(row) {
+            if (!window.active) window.alert(0)
+        }
     }
 
     function newSession() {
@@ -165,6 +169,7 @@ ApplicationWindow {
                         required property int runState
                         required property string agentId
                         required property bool needsAttention
+                        required property string lastNotification
                         width: ListView.view.width
                         height: 48
                         radius: 8
@@ -210,10 +215,13 @@ ApplicationWindow {
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
                                 }
+                                // Untertitel: Notification (Vorrang) oder erkannter Agent.
                                 Text {
-                                    visible: agentId.length > 0
-                                    text: qsTr("Agent: %1").arg(agentId)
-                                    color: Theme.accent
+                                    visible: lastNotification.length > 0 || agentId.length > 0
+                                    text: lastNotification.length > 0
+                                          ? lastNotification
+                                          : qsTr("Agent: %1").arg(agentId)
+                                    color: needsAttention ? Theme.accent : Theme.textDim
                                     font.pixelSize: 10
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true

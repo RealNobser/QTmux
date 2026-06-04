@@ -11,8 +11,8 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
     m_type = type;
     m_cols = cols;
     m_rows = rows;
+    // Besitz liegt beim unique_ptr — KEIN setParent(this) (würde Double-Free verursachen).
     m_backend.reset(backend);
-    m_backend->setParent(this);
 
     m_screen = std::make_unique<VtScreen>(rows, cols);
 
@@ -22,8 +22,15 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
             m_backend.get(), &ITerminalBackend::write);
     connect(m_screen.get(), &VtScreen::titleChanged, this, &Session::setTitle);
     connect(m_screen.get(), &VtScreen::bell, this, &Session::onBell);
-    connect(m_backend.get(), &ITerminalBackend::stateChanged,
-            this, &Session::stateChanged);
+    connect(m_screen.get(), &VtScreen::notify, this, &Session::onNotify);
+    connect(m_screen.get(), &VtScreen::promptMarker, this, &Session::onPromptMarker);
+    // Zustand aus dem Signal-Argument nehmen (NICHT m_backend dereferenzieren — das
+    // Signal kann während der Zerstörung des Backends feuern).
+    connect(m_backend.get(), &ITerminalBackend::stateChanged, this,
+            [this](BackendState st) {
+                emit stateChanged();
+                if (st == BackendState::Closed) setActivity(Activity::Closed);
+            });
 }
 
 void Session::setActive(bool active) {
@@ -34,12 +41,51 @@ void Session::setActive(bool active) {
     }
 }
 
-void Session::onBell() {
-    emit bell();
-    // Bell einer nicht-fokussierten Session = "braucht Aufmerksamkeit".
+void Session::raiseAttention() {
     if (!m_active && !m_needsAttention) {
         m_needsAttention = true;
         emit attentionChanged();
+    }
+}
+
+void Session::setActivity(Activity a) {
+    if (a == m_activity) return;
+    m_activity = a;
+    emit activityChanged();
+}
+
+void Session::onBell() {
+    emit bell();
+    raiseAttention();   // Bell einer nicht-fokussierten Session = Aufmerksamkeit
+}
+
+void Session::onNotify(const QString &text) {
+    // OSC 9/777: Notification-Text merken (Sidebar) und Aufmerksamkeit anfordern.
+    m_lastNotification = text;
+    emit notificationChanged();
+    raiseAttention();
+}
+
+void Session::onPromptMarker(char kind, int exitCode) {
+    // OSC 133 (FinalTerm/Shell-Integration): Befehls-Lebenszyklus verfolgen.
+    switch (kind) {
+    case 'C':                       // Befehl beginnt Ausgabe
+        m_commandRunning = true;
+        setActivity(Activity::Running);
+        break;
+    case 'D':                       // Befehl beendet (exitCode)
+        setActivity(exitCode > 0 ? Activity::Error : Activity::Running);
+        if (m_commandRunning) {     // echtes Kommando lief -> bei Inaktivität melden
+            m_commandRunning = false;
+            raiseAttention();
+        }
+        break;
+    case 'A':                       // neue Prompt
+    case 'B':                       // Prompt bereit für Eingabe
+        if (m_activity == Activity::Error) setActivity(Activity::Running);
+        break;
+    default:
+        break;
     }
 }
 

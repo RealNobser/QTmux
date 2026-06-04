@@ -13,6 +13,8 @@ private slots:
     void shellInputEcho();
     void bellRaisesAttentionWhenInactive();
     void activeSessionIgnoresBell();
+    void oscNotificationReachesSession();
+    void osc133NonZeroExitSetsError();
 };
 
 static QString rowText(const VtScreen &vt, int row) {
@@ -88,6 +90,37 @@ void TestSession::activeSessionIgnoresBell() {
     sess.start(80, 24);
     QTest::qWait(500);
     QVERIFY(!sess.needsAttention());
+}
+
+// OSC 9 durch die ganze Kette: PTY -> VtScreen -> Session.lastNotification + Attention.
+void TestSession::oscNotificationReachesSession() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    pty->setProgram(QStringLiteral("/usr/bin/printf"));
+    pty->setArguments({QStringLiteral("\\033]9;BuildOK\\007")});
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.setActive(false);
+    sess.start(80, 24);
+
+    QTRY_VERIFY_WITH_TIMEOUT(sess.lastNotification() == QStringLiteral("BuildOK"), 5000);
+    QVERIFY(sess.needsAttention());
+}
+
+// OSC 133;D mit Exit != 0 setzt die Aktivität auf Error.
+// Prozess bleibt am Leben (sleep), damit der Error-Zustand nicht von Closed überschrieben wird.
+void TestSession::osc133NonZeroExitSetsError() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    pty->setProgram(QStringLiteral("/bin/sh"));
+    pty->setArguments({QStringLiteral("-c"),
+                       QStringLiteral("printf '\\033]133;D;2\\007'; sleep 5")});
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.setActive(true);
+    sess.start(80, 24);
+
+    QTRY_COMPARE_WITH_TIMEOUT(sess.activityInt(),
+                              static_cast<int>(Session::Activity::Error), 5000);
+    sess.write("\x03");  // ^C, aufräumen
 }
 
 QTEST_MAIN(TestSession)

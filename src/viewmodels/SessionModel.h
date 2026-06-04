@@ -21,6 +21,7 @@ public:
         TypeRole,
         AgentRole,
         AttentionRole,
+        NotificationRole,
         SessionRole,
     };
     Q_ENUM(Roles)
@@ -43,6 +44,8 @@ public:
 
 signals:
     void countChanged();
+    /// Eine (nicht-fokussierte) Session fordert Aufmerksamkeit — für Fenster-Alert.
+    void attentionRaised(int row);
 
 private:
     void wireSession(Session *s, int row);

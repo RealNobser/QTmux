@@ -14,6 +14,8 @@ private slots:
     void plainText();
     void ansiColor();
     void cursorAndDamage();
+    void oscNotification();
+    void oscPromptMarkers();
 };
 
 // Einfacher Text landet 1:1 in den Zellen.
@@ -42,6 +44,30 @@ void TestVtScreen::cursorAndDamage() {
     vt.inputWrite("abc");
     QVERIFY(damageSpy.count() >= 1);
     QCOMPARE(vt.cursor(), QPoint(3, 0)); // Cursor hinter "abc"
+}
+
+// OSC 9 (Notification) wird geparst und als notify() ausgegeben.
+void TestVtScreen::oscNotification() {
+    VtScreen vt(24, 80);
+    QString got;
+    QObject::connect(&vt, &VtScreen::notify, [&](const QString &t) { got = t; });
+    vt.inputWrite("\x1b]9;Build fertig\x07");
+    QCOMPARE(got, QStringLiteral("Build fertig"));
+}
+
+// OSC 133 Prompt-Marker (C = Befehl läuft, D;exit = beendet).
+void TestVtScreen::oscPromptMarkers() {
+    VtScreen vt(24, 80);
+    char kind = 0;
+    int exitCode = -99;
+    QObject::connect(&vt, &VtScreen::promptMarker, [&](char k, int e) { kind = k; exitCode = e; });
+
+    vt.inputWrite("\x1b]133;C\x07");
+    QCOMPARE(kind, 'C');
+
+    vt.inputWrite("\x1b]133;D;1\x07");
+    QCOMPARE(kind, 'D');
+    QCOMPARE(exitCode, 1);
 }
 
 QTEST_MAIN(TestVtScreen)

@@ -61,6 +61,11 @@ signals:
     void titleChanged(const QString &title);
     /// Antworten des Terminals (z. B. Device-Status), die zurück ins Backend müssen.
     void outputToPty(const QByteArray &data);
+    /// Desktop-/App-Notification (OSC 9 bzw. OSC 777).
+    void notify(const QString &text);
+    /// Shell-Integrations-Prompt-Marker (OSC 133): kind 'A'/'B'/'C'/'D'.
+    /// exitCode gilt nur für 'D' (sonst -1).
+    void promptMarker(char kind, int exitCode);
 
 public:
     // Interne Handler — von den C-Callbacks in VtScreen.cpp aufgerufen.
@@ -72,6 +77,8 @@ public:
     void cbSetTitle(const QString &title);
     void cbPushScrollback(std::vector<Cell> &&line);
     void cbOutput(const QByteArray &data);
+    /// Sammelt OSC-Fragmente (libvterm liefert sie ggf. stückweise) und parst sie.
+    void cbOsc(int command, const char *str, int len, bool initial, bool final);
 
 private:
     VTerm *m_vt = nullptr;
@@ -84,6 +91,9 @@ private:
 
     std::deque<std::vector<Cell>> m_scrollback;
     static constexpr int kMaxScrollback = 10000;
+
+    int m_oscCommand = -1;     // aktuell gesammelte OSC-Nummer
+    QByteArray m_oscBuffer;    // akkumulierte OSC-Fragmente bis 'final'
 };
 
 } // namespace qtmux

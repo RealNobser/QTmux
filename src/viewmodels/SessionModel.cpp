@@ -15,10 +15,11 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     Session *s = m_sessions.at(index.row());
     switch (role) {
     case TitleRole:   return s->title();
-    case StateRole:   return s->stateInt();
+    case StateRole:   return s->activityInt();   // Sidebar-Ring folgt der Aktivität
     case TypeRole:    return static_cast<int>(s->type());
     case AgentRole:   return s->agentId();
     case AttentionRole: return s->needsAttention();
+    case NotificationRole: return s->lastNotification();
     case SessionRole: return QVariant::fromValue(static_cast<QObject *>(s));
     default:          return {};
     }
@@ -31,6 +32,7 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
         {TypeRole,    "sessionType"},
         {AgentRole,   "agentId"},
         {AttentionRole, "needsAttention"},
+        {NotificationRole, "lastNotification"},
         {SessionRole, "session"},
     };
 }
@@ -41,13 +43,24 @@ void SessionModel::wireSession(Session *s, int row) {
         const int r = static_cast<int>(m_sessions.indexOf(s));
         if (r >= 0) {
             const QModelIndex idx = index(r);
-            emit dataChanged(idx, idx, {TitleRole, StateRole, AgentRole, AttentionRole});
+            emit dataChanged(idx, idx,
+                {TitleRole, StateRole, AgentRole, AttentionRole, NotificationRole});
         }
     };
     connect(s, &Session::titleChanged, this, refresh);
     connect(s, &Session::stateChanged, this, refresh);
     connect(s, &Session::agentChanged, this, refresh);
+    connect(s, &Session::activityChanged, this, refresh);
+    connect(s, &Session::notificationChanged, this, refresh);
     connect(s, &Session::attentionChanged, this, refresh);
+
+    // Steigt die Aufmerksamkeit, das Fenster informieren (Dock-/Taskbar-Alert).
+    connect(s, &Session::attentionChanged, this, [this, s]() {
+        if (s->needsAttention()) {
+            const int r = static_cast<int>(m_sessions.indexOf(s));
+            if (r >= 0) emit attentionRaised(r);
+        }
+    });
 
     // Endet die zugrundeliegende Shell/Verbindung, die Session automatisch entfernen.
     // Verzögert (QueuedConnection), um nicht während der Signalauslösung zu löschen.

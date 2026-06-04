@@ -88,6 +88,23 @@ void cbOutput(const char *s, size_t len, void *user) {
     static_cast<VtScreen *>(user)->cbOutput(QByteArray(s, static_cast<int>(len)));
 }
 
+// Unbekannte OSC-Sequenzen (9 = Notification, 777 = notify, 133 = Prompt-Marker).
+int cbOscFallback(int command, VTermStringFragment frag, void *user) {
+    static_cast<VtScreen *>(user)->cbOsc(command, frag.str, static_cast<int>(frag.len),
+                                         frag.initial, frag.final);
+    return 1;
+}
+
+const VTermStateFallbacks kStateFallbacks = {
+    /* control */ nullptr,
+    /* csi     */ nullptr,
+    /* osc     */ cbOscFallback,
+    /* dcs     */ nullptr,
+    /* apc     */ nullptr,
+    /* pm      */ nullptr,
+    /* sos     */ nullptr,
+};
+
 const VTermScreenCallbacks kScreenCallbacks = {
     /* damage      */ cbDamage,
     /* moverect    */ nullptr,
@@ -110,6 +127,7 @@ VtScreen::VtScreen(int rows, int cols, QObject *parent)
 
     m_screen = vterm_obtain_screen(m_vt);
     vterm_screen_set_callbacks(m_screen, &kScreenCallbacks, this);
+    vterm_screen_set_unrecognised_fallbacks(m_screen, &kStateFallbacks, this);
     vterm_screen_reset(m_screen, 1);
 }
 
@@ -171,5 +189,51 @@ void VtScreen::cbPushScrollback(std::vector<Cell> &&line) {
 }
 
 void VtScreen::cbOutput(const QByteArray &data) { emit outputToPty(data); }
+
+void VtScreen::cbOsc(int command, const char *str, int len, bool initial, bool final) {
+    if (initial) {
+        m_oscBuffer.clear();
+        m_oscCommand = command;
+    }
+    if (str && len > 0) m_oscBuffer.append(str, len);
+    if (!final) return;
+
+    const QByteArray data = m_oscBuffer;
+    const int cmd = m_oscCommand;
+    m_oscBuffer.clear();
+    m_oscCommand = -1;
+
+    switch (cmd) {
+    case 9: {  // OSC 9 ; <text>  (Desktop-Notification)
+        emit notify(QString::fromUtf8(data));
+        break;
+    }
+    case 777: {  // OSC 777 ; notify ; <title> ; <body>
+        const QList<QByteArray> parts = data.split(';');
+        if (!parts.isEmpty() && parts.first() == "notify") {
+            QString text;
+            for (int i = 1; i < parts.size(); ++i) {
+                if (!text.isEmpty()) text += QStringLiteral(": ");
+                text += QString::fromUtf8(parts.at(i));
+            }
+            emit notify(text);
+        }
+        break;
+    }
+    case 133: {  // OSC 133 ; A|B|C|D[;exit]   (Shell-Integration / FinalTerm)
+        if (data.isEmpty()) break;
+        const char kind = data.at(0);
+        int exitCode = -1;
+        if (kind == 'D') {
+            const int semi = data.indexOf(';');
+            if (semi >= 0) exitCode = data.mid(semi + 1).toInt();
+        }
+        emit promptMarker(kind, exitCode);
+        break;
+    }
+    default:
+        break;
+    }
+}
 
 } // namespace qtmux

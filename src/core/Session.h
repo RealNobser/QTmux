@@ -18,9 +18,15 @@ class Session : public QObject {
     Q_PROPERTY(int state READ stateInt NOTIFY stateChanged)
     Q_PROPERTY(QString agentId READ agentId NOTIFY agentChanged)
     Q_PROPERTY(bool needsAttention READ needsAttention NOTIFY attentionChanged)
+    Q_PROPERTY(int activity READ activityInt NOTIFY activityChanged)
+    Q_PROPERTY(QString lastNotification READ lastNotification NOTIFY notificationChanged)
 public:
     enum class Type { Shell, Ssh, Serial, App };
     Q_ENUM(Type)
+
+    // Werte bewusst kompatibel mit der Sidebar-Ring-Logik (1=grün, 2=gelb, 3=rot, 4=grau).
+    enum class Activity { Idle = 0, Running = 1, Waiting = 2, Error = 3, Closed = 4 };
+    Q_ENUM(Activity)
 
     explicit Session(QObject *parent = nullptr);
     ~Session() override;
@@ -32,6 +38,9 @@ public:
     QString title() const { return m_title; }
     QString agentId() const { return m_agentId; }
     bool needsAttention() const { return m_needsAttention; }
+    Activity activity() const { return m_activity; }
+    int activityInt() const { return static_cast<int>(m_activity); }
+    QString lastNotification() const { return m_lastNotification; }
 
     /// Markiert die Session als aktiv (sichtbar/fokussiert). Aktivieren löscht
     /// einen anstehenden Aufmerksamkeits-Hinweis.
@@ -50,12 +59,18 @@ signals:
     void stateChanged();
     void agentChanged();
     void attentionChanged();
+    void activityChanged();
+    void notificationChanged();
     void bell();
 
 private:
     void setTitle(const QString &t);
+    void setActivity(Activity a);
+    void raiseAttention();                      // setzt needsAttention (wenn inaktiv)
     void observeInput(const QByteArray &data);  // erkennt getippte Agenten-Kommandos
     void onBell();                              // Bell -> Aufmerksamkeit, wenn inaktiv
+    void onNotify(const QString &text);         // OSC 9/777
+    void onPromptMarker(char kind, int exitCode); // OSC 133
 
     std::unique_ptr<ITerminalBackend> m_backend;
     std::unique_ptr<VtScreen> m_screen;
@@ -66,6 +81,9 @@ private:
     bool m_titleFromAgent = false;
     bool m_active = false;
     bool m_needsAttention = false;
+    Activity m_activity = Activity::Running;
+    QString m_lastNotification;
+    bool m_commandRunning = false;   // zwischen OSC 133;C und ;D
     int m_cols = 80;
     int m_rows = 24;
 };
