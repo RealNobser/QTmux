@@ -12,6 +12,8 @@ ApplicationWindow {
     color: Theme.bgMain
 
     property int currentRow: -1
+    // Aktive (fokussierte) Session ans Model melden -> löscht deren Aufmerksamkeits-Hinweis.
+    onCurrentRowChanged: sessions.setActiveRow(currentRow)
 
     SessionModel { id: sessions }
 
@@ -162,6 +164,7 @@ ApplicationWindow {
                         required property string title
                         required property int runState
                         required property string agentId
+                        required property bool needsAttention
                         width: ListView.view.width
                         height: 48
                         radius: 8
@@ -177,14 +180,25 @@ ApplicationWindow {
                             anchors.rightMargin: 10
                             spacing: 10
 
-                            // Status-Ring: 0=Starting 1=Running 2=WaitingInput 3=Error 4=Closed
+                            // Status-Ring. Aufmerksamkeit (blau, pulsierend) hat Vorrang,
+                            // sonst: 0=Starting 1=Running 2=WaitingInput 3=Error 4=Closed
                             Rectangle {
+                                id: statusRing
                                 width: 10; height: 10; radius: 5
-                                color: runState === 1 ? "#46d369"
+                                color: needsAttention ? Theme.accent
+                                     : runState === 1 ? "#46d369"
                                      : runState === 2 ? "#f5c451"
                                      : runState === 3 ? "#e5534b"
                                      : runState === 4 ? "#5a5d6a"
                                      : Theme.textDim
+                                SequentialAnimation on opacity {
+                                    running: needsAttention
+                                    loops: Animation.Infinite
+                                    alwaysRunToEnd: true
+                                    NumberAnimation { to: 0.3; duration: 600 }
+                                    NumberAnimation { to: 1.0; duration: 600 }
+                                    onStopped: statusRing.opacity = 1.0
+                                }
                             }
                             ColumnLayout {
                                 spacing: 1

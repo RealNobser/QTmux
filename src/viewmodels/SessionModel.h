@@ -20,6 +20,7 @@ public:
         StateRole,
         TypeRole,
         AgentRole,
+        AttentionRole,
         SessionRole,
     };
     Q_ENUM(Roles)
@@ -37,6 +38,8 @@ public:
     /// Session-Objekt einer Zeile (für Binding an TerminalItem.session).
     Q_INVOKABLE QObject *sessionAt(int row) const;
     Q_INVOKABLE void closeSession(int row);
+    /// Markiert die Zeile als aktiv/fokussiert (alle anderen inaktiv) — löscht deren Attention.
+    Q_INVOKABLE void setActiveRow(int row);
 
 signals:
     void countChanged();

@@ -96,7 +96,10 @@ Markdown-Links. Commit-Trailer: `Co-Authored-By: Claude …`.
   Befehlen, i18n DE/EN (`App`-Singleton + `qt_add_translations`, Laufzeit-Umschaltung),
   Agent-Erkennung (`AgentRegistry.detect()`; `agy`→AntiGravity). 5 Tests grün.
   Sessions werden bei Shell-Ende automatisch entfernt (SessionModel) + „×" pro Sidebar-Zeile.
-- 🟡 **Phase 3** — Agent-Erkennung via getipptem Kommando steht; OSC 133/9 Shell-Integration offen
+- 🟡 **Phase 3** — Agent-Erkennung via getipptem Kommando steht; **Aufmerksamkeit via Terminal-Bell**
+  (`Session::needsAttention`, gesetzt bei BEL einer inaktiven Session; blauer pulsierender
+  Sidebar-Ring; `setActiveRow()` löscht ihn beim Fokus). Offen: OSC 9/777 Notifications +
+  OSC 133 Prompt-Marker für präzises WaitingInput; Dock-/Fenster-Alert.
 - ⬜ **Phase 3** — Agent-Awareness (OSC 133/9, Status-Ringe, Notifications)
 - ⬜ **Phase 4** — SSH (libssh2) + Serial (QtSerialPort) + Connection-Manager
 - ⬜ **Phase 5** — Plugin-System (QPluginLoader), MacPCAN-Integration

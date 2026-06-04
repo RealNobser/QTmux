@@ -17,6 +17,7 @@ class Session : public QObject {
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(int state READ stateInt NOTIFY stateChanged)
     Q_PROPERTY(QString agentId READ agentId NOTIFY agentChanged)
+    Q_PROPERTY(bool needsAttention READ needsAttention NOTIFY attentionChanged)
 public:
     enum class Type { Shell, Ssh, Serial, App };
     Q_ENUM(Type)
@@ -30,6 +31,11 @@ public:
     Type type() const { return m_type; }
     QString title() const { return m_title; }
     QString agentId() const { return m_agentId; }
+    bool needsAttention() const { return m_needsAttention; }
+
+    /// Markiert die Session als aktiv (sichtbar/fokussiert). Aktivieren löscht
+    /// einen anstehenden Aufmerksamkeits-Hinweis.
+    void setActive(bool active);
     BackendState state() const { return m_backend ? m_backend->state() : BackendState::Closed; }
     int stateInt() const { return static_cast<int>(state()); }
 
@@ -43,11 +49,13 @@ signals:
     void titleChanged(const QString &title);
     void stateChanged();
     void agentChanged();
+    void attentionChanged();
     void bell();
 
 private:
     void setTitle(const QString &t);
     void observeInput(const QByteArray &data);  // erkennt getippte Agenten-Kommandos
+    void onBell();                              // Bell -> Aufmerksamkeit, wenn inaktiv
 
     std::unique_ptr<ITerminalBackend> m_backend;
     std::unique_ptr<VtScreen> m_screen;
@@ -56,6 +64,8 @@ private:
     QString m_agentId;
     QString m_inputLine;       // Puffer der aktuell getippten Zeile
     bool m_titleFromAgent = false;
+    bool m_active = false;
+    bool m_needsAttention = false;
     int m_cols = 80;
     int m_rows = 24;
 };

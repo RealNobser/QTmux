@@ -18,6 +18,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case StateRole:   return s->stateInt();
     case TypeRole:    return static_cast<int>(s->type());
     case AgentRole:   return s->agentId();
+    case AttentionRole: return s->needsAttention();
     case SessionRole: return QVariant::fromValue(static_cast<QObject *>(s));
     default:          return {};
     }
@@ -29,6 +30,7 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
         {StateRole,   "runState"},
         {TypeRole,    "sessionType"},
         {AgentRole,   "agentId"},
+        {AttentionRole, "needsAttention"},
         {SessionRole, "session"},
     };
 }
@@ -39,12 +41,13 @@ void SessionModel::wireSession(Session *s, int row) {
         const int r = static_cast<int>(m_sessions.indexOf(s));
         if (r >= 0) {
             const QModelIndex idx = index(r);
-            emit dataChanged(idx, idx, {TitleRole, StateRole, AgentRole});
+            emit dataChanged(idx, idx, {TitleRole, StateRole, AgentRole, AttentionRole});
         }
     };
     connect(s, &Session::titleChanged, this, refresh);
     connect(s, &Session::stateChanged, this, refresh);
     connect(s, &Session::agentChanged, this, refresh);
+    connect(s, &Session::attentionChanged, this, refresh);
 
     // Endet die zugrundeliegende Shell/Verbindung, die Session automatisch entfernen.
     // Verzögert (QueuedConnection), um nicht während der Signalauslösung zu löschen.
@@ -78,6 +81,12 @@ int SessionModel::createShellSession() {
 QObject *SessionModel::sessionAt(int row) const {
     if (row < 0 || row >= count()) return nullptr;
     return m_sessions.at(row);
+}
+
+void SessionModel::setActiveRow(int row) {
+    for (int i = 0; i < count(); ++i) {
+        m_sessions.at(i)->setActive(i == row);
+    }
 }
 
 void SessionModel::closeSession(int row) {

@@ -21,9 +21,26 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
     connect(m_screen.get(), &VtScreen::outputToPty,
             m_backend.get(), &ITerminalBackend::write);
     connect(m_screen.get(), &VtScreen::titleChanged, this, &Session::setTitle);
-    connect(m_screen.get(), &VtScreen::bell, this, &Session::bell);
+    connect(m_screen.get(), &VtScreen::bell, this, &Session::onBell);
     connect(m_backend.get(), &ITerminalBackend::stateChanged,
             this, &Session::stateChanged);
+}
+
+void Session::setActive(bool active) {
+    m_active = active;
+    if (active && m_needsAttention) {
+        m_needsAttention = false;
+        emit attentionChanged();
+    }
+}
+
+void Session::onBell() {
+    emit bell();
+    // Bell einer nicht-fokussierten Session = "braucht Aufmerksamkeit".
+    if (!m_active && !m_needsAttention) {
+        m_needsAttention = true;
+        emit attentionChanged();
+    }
 }
 
 void Session::setTitle(const QString &t) {
