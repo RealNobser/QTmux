@@ -57,8 +57,10 @@ weil alles über `ITerminalBackend` läuft.
 | `src/core/WindowsPty.cpp` | ConPTY-Skeleton (Windows) — **noch zu vervollständigen** |
 | `src/core/PtyBackend.{h,cpp}` | Lokale Shell/Agenten über PTY |
 | `src/core/VtScreen.{h,cpp}` | libvterm-Wrapper; `Cell` = Qt-freundliche Zelle |
-| `src/terminal/TerminalItem.{h,cpp}` | QML-`TerminalItem`, registriert via `QML_ELEMENT` |
-| `qml/Main.qml` | App-Shell (Sidebar + Terminal) |
+| `src/core/Session.{h,cpp}` | Bündelt Backend + VtScreen; UI spricht nur mit Session |
+| `src/viewmodels/SessionModel.{h,cpp}` | QAbstractListModel für die Sidebar; `sessionAt()` bindet an `TerminalItem.session` |
+| `src/terminal/TerminalItem.{h,cpp}` | QML-`TerminalItem`; rendert zugewiesene `Session` (besitzt sie nicht) |
+| `qml/Main.qml` | App-Shell: datengetriebene Sidebar + Terminal der aktuellen Session |
 | `tests/` | QtTest: `tst_pty`, `tst_vtscreen`, `tst_session` (E2E) |
 
 ## Build & Test (macOS)
@@ -82,7 +84,8 @@ Markdown-Links. Commit-Trailer: `Co-Authored-By: Claude …`.
 - ✅ **Phase 0** — Gerüst (CMake/Presets/vcpkg, Qt-Quick-Shell, .vscode)
 - ✅ **Phase 1** — Terminal-Kern: PTY + libvterm + TerminalItem; 3 Tests grün; läuft auf macOS
 - ⬜ **Phase 1 (Windows)** — ConPTY in `WindowsPty.cpp` implementieren & testen
-- ⬜ **Phase 2** — Mehrere Sessions, SessionModel, Sidebar-Verdrahtung, Split-Panes
+- 🟡 **Phase 2** — Session + SessionModel + datengetriebene Sidebar + Session-Wechsel: FERTIG.
+  Offen: **Split-Panes** (SplitView mit mehreren TerminalItems), Session schließen aus UI, Reorder
 - ⬜ **Phase 3** — Agent-Awareness (OSC 133/9, Status-Ringe, Notifications)
 - ⬜ **Phase 4** — SSH (libssh2) + Serial (QtSerialPort) + Connection-Manager
 - ⬜ **Phase 5** — Plugin-System (QPluginLoader), MacPCAN-Integration

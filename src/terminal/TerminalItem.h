@@ -3,38 +3,39 @@
 #include <QQuickPaintedItem>
 #include <QFont>
 #include <QColor>
-#include <memory>
-
-#include "ITerminalBackend.h"
+#include <QPointer>
 
 namespace qtmux {
 
+class Session;
 class VtScreen;
 
-/// QML-Item, das eine Terminal-Session darstellt.
+/// QML-Item, das eine zugewiesene Session darstellt.
 ///
-/// Verdrahtung: ITerminalBackend (PTY/SSH/…) -> VtScreen (libvterm) -> paint().
 /// Rendering vorerst über QQuickPaintedItem/QPainter (GPU-getextured, robust);
 /// eine GPU-Glyph-Atlas-Variante (QSGRenderNode) ist die spätere Performance-Stufe.
+/// Besitzt die Session NICHT — die gehört dem SessionModel (ermöglicht Split-Panes
+/// und Session-Wechsel ohne Neustart).
 class TerminalItem : public QQuickPaintedItem {
     Q_OBJECT
     QML_ELEMENT
+    Q_PROPERTY(QObject *session READ session WRITE setSession NOTIFY sessionChanged)
     Q_PROPERTY(int pointSize READ pointSize WRITE setPointSize NOTIFY fontChanged)
 public:
     explicit TerminalItem(QQuickItem *parent = nullptr);
     ~TerminalItem() override;
 
+    QObject *session() const;
+    void setSession(QObject *session);
+
     int pointSize() const { return m_pointSize; }
     void setPointSize(int s);
-
-    /// Startet eine lokale Shell-Session (Default-Backend für Phase 1).
-    Q_INVOKABLE void startShell();
 
     void paint(QPainter *painter) override;
 
 signals:
+    void sessionChanged();
     void fontChanged();
-    void titleChanged(const QString &title);
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -44,9 +45,9 @@ protected:
 private:
     void recomputeGrid();
     QByteArray encodeKey(QKeyEvent *event) const;
+    VtScreen *screen() const;
 
-    std::unique_ptr<ITerminalBackend> m_backend;
-    std::unique_ptr<VtScreen> m_screen;
+    QPointer<Session> m_session;
 
     QFont m_font;
     int m_pointSize = 13;

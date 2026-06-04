@@ -49,6 +49,8 @@ add_library(qtmux_core STATIC
     src/core/PtyBackend.cpp
     src/core/VtScreen.h
     src/core/VtScreen.cpp
+    src/core/Session.h
+    src/core/Session.cpp
 )
 target_include_directories(qtmux_core PUBLIC src/core)
 target_link_libraries(qtmux_core PUBLIC Qt6::Core PRIVATE vterm::vterm)
@@ -66,8 +68,10 @@ qt_add_qml_module(qtmux
     SOURCES
         src/terminal/TerminalItem.h
         src/terminal/TerminalItem.cpp
+        src/viewmodels/SessionModel.h
+        src/viewmodels/SessionModel.cpp
 )
-target_include_directories(qtmux PRIVATE src/terminal)
+target_include_directories(qtmux PRIVATE src/terminal src/viewmodels)
 
 target_link_libraries(qtmux PRIVATE
     qtmux_core

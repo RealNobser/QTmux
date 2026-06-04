@@ -1,5 +1,5 @@
 #include "TerminalItem.h"
-#include "PtyBackend.h"
+#include "Session.h"
 #include "VtScreen.h"
 
 #include <QPainter>
@@ -23,6 +23,32 @@ TerminalItem::TerminalItem(QQuickItem *parent) : QQuickPaintedItem(parent) {
 
 TerminalItem::~TerminalItem() = default;
 
+QObject *TerminalItem::session() const { return m_session.data(); }
+
+VtScreen *TerminalItem::screen() const {
+    return m_session ? m_session->screen() : nullptr;
+}
+
+void TerminalItem::setSession(QObject *session) {
+    auto *s = qobject_cast<Session *>(session);
+    if (s == m_session) return;
+
+    if (m_session && m_session->screen()) {
+        disconnect(m_session->screen(), nullptr, this, nullptr);
+    }
+    m_session = s;
+
+    if (VtScreen *sc = screen()) {
+        connect(sc, &VtScreen::damaged, this, [this](const QRect &) { update(); });
+        connect(sc, &VtScreen::cursorMoved, this, [this]() { update(); });
+        // Auf die aktuelle Item-Größe synchronisieren.
+        recomputeGrid();
+        forceActiveFocus();
+    }
+    emit sessionChanged();
+    update();
+}
+
 void TerminalItem::setPointSize(int s) {
     if (s == m_pointSize || s <= 0) return;
     m_pointSize = s;
@@ -44,49 +70,26 @@ void TerminalItem::recomputeGrid() {
     m_cols = std::max(cols, 1);
     m_rows = std::max(rows, 1);
 
-    if (m_backend && m_screen) {
-        m_screen->setSize(m_rows, m_cols);
-        m_backend->resize(m_cols, m_rows);
-    }
-}
-
-void TerminalItem::startShell() {
-    if (m_backend) return;
-
-    m_screen = std::make_unique<VtScreen>(m_rows, m_cols);
-    auto *pty = new PtyBackend();
-    m_backend.reset(pty);
-
-    connect(m_backend.get(), &ITerminalBackend::dataReceived,
-            m_screen.get(), &VtScreen::inputWrite);
-    connect(m_screen.get(), &VtScreen::outputToPty,
-            m_backend.get(), &ITerminalBackend::write);
-    connect(m_screen.get(), &VtScreen::damaged, this, [this](const QRect &) { update(); });
-    connect(m_screen.get(), &VtScreen::cursorMoved, this, [this]() { update(); });
-    connect(m_screen.get(), &VtScreen::titleChanged, this, &TerminalItem::titleChanged);
-
-    m_backend->start(m_cols, m_rows);
-    forceActiveFocus();
+    if (m_session) m_session->resize(m_cols, m_rows);
 }
 
 void TerminalItem::paint(QPainter *painter) {
     painter->fillRect(boundingRect(), m_defaultBg);
-    if (!m_screen) return;
+    VtScreen *sc = screen();
+    if (!sc) return;
 
     painter->setFont(m_font);
 
     for (int row = 0; row < m_rows; ++row) {
         const qreal y = row * m_cellH;
         for (int col = 0; col < m_cols; ++col) {
-            const Cell c = m_screen->cell(row, col);
+            const Cell c = sc->cell(row, col);
             const qreal x = col * m_cellW;
 
-            // Hintergrund
             if (!c.bgDefault) {
                 painter->fillRect(QRectF(x, y, m_cellW * c.width, m_cellH),
                                   QColor::fromRgb(c.bg));
             }
-            // Glyph
             if (!c.text.isEmpty() && c.text != QStringLiteral(" ")) {
                 painter->setPen(c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg));
                 if (c.bold || c.italic) {
@@ -101,9 +104,8 @@ void TerminalItem::paint(QPainter *painter) {
         }
     }
 
-    // Cursor (einfacher Block)
-    if (m_screen->cursorVisible()) {
-        const QPoint cur = m_screen->cursor();
+    if (sc->cursorVisible()) {
+        const QPoint cur = sc->cursor();
         QRectF r(cur.x() * m_cellW, cur.y() * m_cellH, m_cellW, m_cellH);
         painter->fillRect(r, QColor(0xe6, 0xe7, 0xee, 0x99));
     }
@@ -126,16 +128,15 @@ QByteArray TerminalItem::encodeKey(QKeyEvent *event) const {
     case Qt::Key_PageDown: return "\x1b[6~";
     case Qt::Key_Delete:   return "\x1b[3~";
     default:
-        // text() liefert druckbare Zeichen sowie Ctrl-Kombinationen (z. B. Ctrl+C -> 0x03).
         return event->text().toUtf8();
     }
 }
 
 void TerminalItem::keyPressEvent(QKeyEvent *event) {
-    if (!m_backend) { event->ignore(); return; }
+    if (!m_session) { event->ignore(); return; }
     const QByteArray bytes = encodeKey(event);
     if (!bytes.isEmpty()) {
-        m_backend->write(bytes);
+        m_session->write(bytes);
         event->accept();
     } else {
         QQuickPaintedItem::keyPressEvent(event);
