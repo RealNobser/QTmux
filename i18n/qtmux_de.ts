@@ -8,6 +8,9 @@
     <message><source>Helles Design</source><translation type="unfinished">Helles Design</translation></message>
     <message><source>Dunkles Design</source><translation type="unfinished">Dunkles Design</translation></message>
     <message><source>Beenden</source><translation type="unfinished">Beenden</translation></message>
+    <message><source>Design: Wie System</source><translation type="unfinished">Design: Wie System</translation></message>
+    <message><source>Design: Hell</source><translation type="unfinished">Design: Hell</translation></message>
+    <message><source>Design: Dunkel</source><translation type="unfinished">Design: Dunkel</translation></message>
     <message><source>Datei</source><translation type="unfinished">Datei</translation></message>
     <message><source>Ansicht</source><translation type="unfinished">Ansicht</translation></message>
     <message><source>Sprache</source><translation type="unfinished">Sprache</translation></message>

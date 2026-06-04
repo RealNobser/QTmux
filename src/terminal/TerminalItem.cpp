@@ -49,6 +49,21 @@ void TerminalItem::setSession(QObject *session) {
     update();
 }
 
+void TerminalItem::setBackgroundColor(const QColor &c) {
+    if (c == m_defaultBg) return;
+    m_defaultBg = c;
+    setFillColor(c);
+    emit colorsChanged();
+    update();
+}
+
+void TerminalItem::setForegroundColor(const QColor &c) {
+    if (c == m_defaultFg) return;
+    m_defaultFg = c;
+    emit colorsChanged();
+    update();
+}
+
 void TerminalItem::setPointSize(int s) {
     if (s == m_pointSize || s <= 0) return;
     m_pointSize = s;

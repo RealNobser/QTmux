@@ -45,6 +45,17 @@ void SessionModel::wireSession(Session *s, int row) {
     connect(s, &Session::titleChanged, this, refresh);
     connect(s, &Session::stateChanged, this, refresh);
     connect(s, &Session::agentChanged, this, refresh);
+
+    // Endet die zugrundeliegende Shell/Verbindung, die Session automatisch entfernen.
+    // Verzögert (QueuedConnection), um nicht während der Signalauslösung zu löschen.
+    connect(s, &Session::stateChanged, this, [this, s]() {
+        if (s->state() == BackendState::Closed) {
+            QMetaObject::invokeMethod(this, [this, s]() {
+                const int r = static_cast<int>(m_sessions.indexOf(s));
+                if (r >= 0) closeSession(r);
+            }, Qt::QueuedConnection);
+        }
+    });
     Q_UNUSED(row);
 }
 

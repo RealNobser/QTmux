@@ -6,14 +6,21 @@
 
 namespace qtmux {
 
-/// Zentrale Farbpalette mit Dark-/Light-Modus, als QML-Singleton verfügbar (`Theme.*`).
-/// Der Modus wird via QSettings persistiert. Alle Farb-Properties teilen sich das
-/// NOTIFY-Signal `changed`, sodass QML-Bindings beim Umschalten sofort aktualisieren.
+/// Zentrale Farbpalette mit Dark-/Light-/System-Modus, als QML-Singleton (`Theme.*`).
+/// `mode` (System/Light/Dark) wird via QSettings persistiert. Bei System folgt die
+/// Palette dem Betriebssystem (QStyleHints::colorScheme) und reagiert live auf Wechsel.
+/// Alle Farb-Properties teilen sich das NOTIFY-Signal `changed`.
 class Theme : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_SINGLETON
-    Q_PROPERTY(bool dark READ dark WRITE setDark NOTIFY changed)
+public:
+    enum Mode { System, Light, Dark };
+    Q_ENUM(Mode)
+
+private:
+    Q_PROPERTY(Mode mode READ mode WRITE setMode NOTIFY changed)
+    Q_PROPERTY(bool dark READ dark NOTIFY changed)  // effektiver Modus
     Q_PROPERTY(QColor bgSidebar       READ bgSidebar       NOTIFY changed)
     Q_PROPERTY(QColor bgMain          READ bgMain          NOTIFY changed)
     Q_PROPERTY(QColor bgElevated      READ bgElevated      NOTIFY changed)
@@ -23,12 +30,15 @@ class Theme : public QObject {
     Q_PROPERTY(QColor accent          READ accent          NOTIFY changed)
     Q_PROPERTY(QColor textBright      READ textBright      NOTIFY changed)
     Q_PROPERTY(QColor textDim         READ textDim         NOTIFY changed)
+    Q_PROPERTY(QColor terminalBg      READ terminalBg      NOTIFY changed)
+    Q_PROPERTY(QColor terminalFg      READ terminalFg      NOTIFY changed)
 public:
     explicit Theme(QObject *parent = nullptr);
 
-    bool dark() const { return m_dark; }
-    void setDark(bool dark);
-    Q_INVOKABLE void toggle() { setDark(!m_dark); }
+    Mode mode() const { return m_mode; }
+    void setMode(Mode mode);
+    bool dark() const;                 // löst System zu konkretem Hell/Dunkel auf
+    Q_INVOKABLE void toggle();         // schaltet explizit Hell<->Dunkel (Ctrl+D)
 
     QColor bgSidebar() const;
     QColor bgMain() const;
@@ -39,12 +49,14 @@ public:
     QColor accent() const;
     QColor textBright() const;
     QColor textDim() const;
+    QColor terminalBg() const;
+    QColor terminalFg() const;
 
 signals:
     void changed();
 
 private:
-    bool m_dark = true;
+    Mode m_mode = System;
 };
 
 } // namespace qtmux

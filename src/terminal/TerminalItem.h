@@ -21,6 +21,8 @@ class TerminalItem : public QQuickPaintedItem {
     QML_ELEMENT
     Q_PROPERTY(QObject *session READ session WRITE setSession NOTIFY sessionChanged)
     Q_PROPERTY(int pointSize READ pointSize WRITE setPointSize NOTIFY fontChanged)
+    Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY colorsChanged)
+    Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY colorsChanged)
 public:
     explicit TerminalItem(QQuickItem *parent = nullptr);
     ~TerminalItem() override;
@@ -31,11 +33,17 @@ public:
     int pointSize() const { return m_pointSize; }
     void setPointSize(int s);
 
+    QColor backgroundColor() const { return m_defaultBg; }
+    void setBackgroundColor(const QColor &c);
+    QColor foregroundColor() const { return m_defaultFg; }
+    void setForegroundColor(const QColor &c);
+
     void paint(QPainter *painter) override;
 
 signals:
     void sessionChanged();
     void fontChanged();
+    void colorsChanged();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;

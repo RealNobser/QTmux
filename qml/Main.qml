@@ -15,6 +15,18 @@ ApplicationWindow {
 
     SessionModel { id: sessions }
 
+    // Hält currentRow gültig, wenn Sessions entfernt werden (manuell oder bei Shell-Ende).
+    Connections {
+        target: sessions
+        function onRowsRemoved(parent, first, last) {
+            const removed = last - first + 1
+            if (window.currentRow > last)
+                window.currentRow -= removed
+            else if (window.currentRow >= first)
+                window.currentRow = Math.min(first, sessions.count - 1)
+        }
+    }
+
     function newSession() {
         currentRow = sessions.createShellSession()
     }
@@ -65,6 +77,25 @@ ApplicationWindow {
         Menu {
             title: qsTr("Ansicht")
             MenuItem { action: actToggleTheme }
+            MenuSeparator {}
+            MenuItem {
+                text: qsTr("Design: Wie System")
+                checkable: true
+                checked: Theme.mode === Theme.System
+                onTriggered: Theme.mode = Theme.System
+            }
+            MenuItem {
+                text: qsTr("Design: Hell")
+                checkable: true
+                checked: Theme.mode === Theme.Light
+                onTriggered: Theme.mode = Theme.Light
+            }
+            MenuItem {
+                text: qsTr("Design: Dunkel")
+                checkable: true
+                checked: Theme.mode === Theme.Dark
+                onTriggered: Theme.mode = Theme.Dark
+            }
         }
         Menu {
             title: qsTr("Sprache")
@@ -174,6 +205,23 @@ ApplicationWindow {
                                     Layout.fillWidth: true
                                 }
                             }
+
+                            // Schließen-Button (×), erscheint bei Hover oder Auswahl.
+                            Rectangle {
+                                Layout.preferredWidth: 20
+                                Layout.preferredHeight: 20
+                                radius: 4
+                                visible: hover.hovered || index === window.currentRow
+                                color: closeHover.hovered ? Theme.border : "transparent"
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "×"
+                                    color: Theme.textDim
+                                    font.pixelSize: 16
+                                }
+                                HoverHandler { id: closeHover }
+                                TapHandler { onTapped: sessions.closeSession(index) }
+                            }
                         }
                     }
                 }
@@ -214,6 +262,8 @@ ApplicationWindow {
                 anchors.margins: 6
                 focus: true
                 pointSize: 13
+                backgroundColor: Theme.terminalBg
+                foregroundColor: Theme.terminalFg
                 session: window.currentRow >= 0 ? sessions.sessionAt(window.currentRow) : null
             }
         }
@@ -223,10 +273,12 @@ ApplicationWindow {
     Dialog {
         id: aboutDialog
         anchors.centerIn: parent
+        width: 420
         modal: true
         title: qsTr("Über QTmux")
         standardButtons: Dialog.Ok
-        Text {
+        contentItem: Text {
+            wrapMode: Text.WordWrap
             color: Theme.textBright
             text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nQt %1").arg(Qt.application.version || "0.1")
         }

@@ -8,6 +8,9 @@
     <message><source>Helles Design</source><translation>Light Theme</translation></message>
     <message><source>Dunkles Design</source><translation>Dark Theme</translation></message>
     <message><source>Beenden</source><translation>Quit</translation></message>
+    <message><source>Design: Wie System</source><translation>Theme: Follow System</translation></message>
+    <message><source>Design: Hell</source><translation>Theme: Light</translation></message>
+    <message><source>Design: Dunkel</source><translation>Theme: Dark</translation></message>
     <message><source>Datei</source><translation>File</translation></message>
     <message><source>Ansicht</source><translation>View</translation></message>
     <message><source>Sprache</source><translation>Language</translation></message>

@@ -90,9 +90,12 @@ Markdown-Links. Commit-Trailer: `Co-Authored-By: Claude …`.
 - ⬜ **Phase 1 (Windows)** — ConPTY in `WindowsPty.cpp` implementieren & testen
 - 🟡 **Phase 2** — Session + SessionModel + datengetriebene Sidebar + Session-Wechsel: FERTIG.
   Offen: **Split-Panes** (SplitView mit mehreren TerminalItems), Reorder
-- ✅ **UI-Basis** — Dark/Light-Theme (`Theme`, Ctrl+D), MenuBar mit allen Befehlen,
-  i18n DE/EN (`App`-Singleton + `qt_add_translations`, Laufzeit-Umschaltung), Agent-Erkennung
-  (`AgentRegistry.detect()` über getipptes Kommando; `agy`→AntiGravity). 5 Tests grün.
+- ✅ **UI-Basis** — Theme `System/Hell/Dunkel` (`Theme.mode`, System folgt OS via
+  `QStyleHints::colorScheme`, Ctrl+D), Terminal-Farben folgen dem Theme
+  (`TerminalItem.background/foregroundColor` ← `Theme.terminalBg/Fg`), MenuBar mit allen
+  Befehlen, i18n DE/EN (`App`-Singleton + `qt_add_translations`, Laufzeit-Umschaltung),
+  Agent-Erkennung (`AgentRegistry.detect()`; `agy`→AntiGravity). 5 Tests grün.
+  Sessions werden bei Shell-Ende automatisch entfernt (SessionModel) + „×" pro Sidebar-Zeile.
 - 🟡 **Phase 3** — Agent-Erkennung via getipptem Kommando steht; OSC 133/9 Shell-Integration offen
 - ⬜ **Phase 3** — Agent-Awareness (OSC 133/9, Status-Ringe, Notifications)
 - ⬜ **Phase 4** — SSH (libssh2) + Serial (QtSerialPort) + Connection-Manager
