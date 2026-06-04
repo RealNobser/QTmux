@@ -311,7 +311,9 @@ ApplicationWindow {
                 // Split-Button: "+ <Typ>" öffnet den gewählten Typ; Caret "▾" wählt den Typ.
                 RowLayout {
                     Layout.fillWidth: true
+                    Layout.fillHeight: false
                     Layout.preferredHeight: 40
+                    Layout.maximumHeight: 40
                     spacing: 1
 
                     Button {
