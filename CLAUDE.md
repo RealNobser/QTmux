@@ -116,6 +116,10 @@ Markdown-Links. Commit-Trailer: `Co-Authored-By: Claude …`.
   (HTTP/JSON-RPC 2.0) auf `127.0.0.1:7345`, Menü „Agent-Steuerung". Tools: list/create/
   close/focus_session, send_text, read_screen, set_theme. Session hat stabile `id()` +
   `screenText()`. Doku: `docs/MCP.md`. End-to-end mit curl verifiziert.
+- ✅ **Session-Persistenz** — `SessionModel` speichert die Session-Liste (Typ, Serial-Port/
+  Baud) + aktive Zeile via QSettings bei jeder Änderung; `restoreState()` beim Start.
+  Fenstergeometrie via QML `Settings` (QtCore). Terminal-*Inhalt* ist nicht wiederherstellbar
+  (Prozesse sind weg). Shell-Sessions starten im Home (`QDir::homePath()`).
 - ⬜ **Phase 5** — Plugin-System (QPluginLoader), MacPCAN-Integration
 - ⬜ **Phase 6** — Politur & Distribution (CPack: DMG/MSI/AppImage, CI-Matrix)
 

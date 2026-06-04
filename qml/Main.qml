@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import QtCore
 import QTmux
 
 ApplicationWindow {
@@ -52,7 +53,23 @@ ApplicationWindow {
         currentRow = Math.min(currentRow, sessions.count - 1)
     }
 
-    Component.onCompleted: newSession()
+    // Beim Start die persistierten Sessions wiederherstellen; sonst eine neue öffnen.
+    Component.onCompleted: {
+        const active = sessions.restoreState()
+        if (sessions.count === 0)
+            newSession()
+        else
+            currentRow = (active >= 0 && active < sessions.count) ? active : 0
+    }
+
+    // Fenstergeometrie über Neustarts erhalten.
+    Settings {
+        category: "window"
+        property alias x: window.x
+        property alias y: window.y
+        property alias width: window.width
+        property alias height: window.height
+    }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
     Action {

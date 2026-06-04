@@ -4,6 +4,7 @@
 #include "SerialBackend.h"
 
 #include <QSerialPortInfo>
+#include <QSettings>
 
 namespace qtmux {
 
@@ -86,11 +87,13 @@ int SessionModel::createShellSession() {
     const int row = count();
     beginInsertRows({}, row, row);
     m_sessions.append(s);
+    m_configs.append({static_cast<int>(Session::Type::Shell), {}, 0});
     endInsertRows();
 
     wireSession(s, row);
     s->start(80, 24);
     emit countChanged();
+    saveState();
     return row;
 }
 
@@ -105,11 +108,13 @@ int SessionModel::createSerialSession(const QString &portName, int baud) {
     const int row = count();
     beginInsertRows({}, row, row);
     m_sessions.append(s);
+    m_configs.append({static_cast<int>(Session::Type::Serial), portName, baud});
     endInsertRows();
 
     wireSession(s, row);
     s->start(80, 24);
     emit countChanged();
+    saveState();
     return row;
 }
 
@@ -140,15 +145,59 @@ void SessionModel::setActiveRow(int row) {
     for (int i = 0; i < count(); ++i) {
         m_sessions.at(i)->setActive(i == row);
     }
+    if (row != m_activeRow) {
+        m_activeRow = row;
+        saveState();
+    }
 }
 
 void SessionModel::closeSession(int row) {
     if (row < 0 || row >= count()) return;
     beginRemoveRows({}, row, row);
     Session *s = m_sessions.takeAt(row);
+    m_configs.removeAt(row);
     endRemoveRows();
     s->deleteLater();
     emit countChanged();
+    saveState();
+}
+
+// --- Persistenz -------------------------------------------------------------
+
+void SessionModel::saveState() const {
+    if (m_restoring) return;   // während Wiederherstellung nicht zurückschreiben
+    QSettings s;
+    s.beginWriteArray(QStringLiteral("sessions"), m_configs.size());
+    for (int i = 0; i < m_configs.size(); ++i) {
+        s.setArrayIndex(i);
+        s.setValue(QStringLiteral("type"), m_configs.at(i).type);
+        s.setValue(QStringLiteral("serialPort"), m_configs.at(i).serialPort);
+        s.setValue(QStringLiteral("baud"), m_configs.at(i).baud);
+    }
+    s.endArray();
+    s.setValue(QStringLiteral("sessions/activeRow"), m_activeRow);
+}
+
+int SessionModel::restoreState() {
+    QSettings s;
+    const int n = s.beginReadArray(QStringLiteral("sessions"));
+    m_restoring = true;
+    for (int i = 0; i < n; ++i) {
+        s.setArrayIndex(i);
+        const int type = s.value(QStringLiteral("type")).toInt();
+        if (type == static_cast<int>(Session::Type::Serial)) {
+            createSerialSession(s.value(QStringLiteral("serialPort")).toString(),
+                                s.value(QStringLiteral("baud"), 115200).toInt());
+        } else {
+            createShellSession();
+        }
+    }
+    m_restoring = false;
+    s.endArray();
+
+    m_activeRow = s.value(QStringLiteral("sessions/activeRow"), n > 0 ? 0 : -1).toInt();
+    if (m_activeRow >= count()) m_activeRow = count() - 1;
+    return m_activeRow;
 }
 
 } // namespace qtmux

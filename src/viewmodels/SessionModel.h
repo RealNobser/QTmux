@@ -51,6 +51,12 @@ public:
     /// Markiert die Zeile als aktiv/fokussiert (alle anderen inaktiv) — löscht deren Attention.
     Q_INVOKABLE void setActiveRow(int row);
 
+    /// Stellt die Sessions aus den persistierten Einstellungen wieder her.
+    /// Gibt die wiederherzustellende aktive Zeile zurück (oder -1, wenn nichts gespeichert).
+    Q_INVOKABLE int restoreState();
+    /// Schreibt den aktuellen Zustand (Session-Liste + aktive Zeile) in die Einstellungen.
+    Q_INVOKABLE void saveState() const;
+
 signals:
     void countChanged();
     /// Eine (nicht-fokussierte) Session fordert Aufmerksamkeit — für Fenster-Alert.
@@ -59,7 +65,17 @@ signals:
 private:
     void wireSession(Session *s, int row);
 
+    /// Persistierbare Beschreibung einer Session (Inhalt ist nicht wiederherstellbar).
+    struct SessionConfig {
+        int type = 0;        // qtmux::Session::Type
+        QString serialPort;  // nur bei Seriell
+        int baud = 115200;   // nur bei Seriell
+    };
+
     QList<Session *> m_sessions;
+    QList<SessionConfig> m_configs;   // parallel zu m_sessions
+    int m_activeRow = -1;
+    bool m_restoring = false;         // unterdrückt Persistierung während restoreState()
 };
 
 } // namespace qtmux
