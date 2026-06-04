@@ -62,6 +62,9 @@ ApplicationWindow {
             currentRow = (active >= 0 && active < sessions.count) ? active : 0
     }
 
+    // Beim Schließen den finalen Zustand sichern (u. a. aktuelles Arbeitsverzeichnis).
+    onClosing: sessions.saveState()
+
     // Fenstergeometrie über Neustarts erhalten.
     Settings {
         category: "window"

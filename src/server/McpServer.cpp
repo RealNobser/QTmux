@@ -209,6 +209,7 @@ QJsonObject McpServer::toolsList() const {
     tools.append(tool("create_session", "Erstellt eine Session. type: 'shell' (Standard) oder 'serial'.",
                       QJsonObject{{"type", strProp("'shell' oder 'serial'")},
                                   {"program", strProp("Programm für Shell (optional)")},
+                                  {"cwd", strProp("Startverzeichnis für Shell (optional)")},
                                   {"port", strProp("serieller Port (bei type=serial)")},
                                   {"baud", intProp("Baudrate (bei type=serial)")}},
                       {}));
@@ -263,7 +264,7 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             row = m_sessions->createSerialSession(args.value("port").toString(),
                                                   args.value("baud").toInt(115200));
         } else {
-            row = m_sessions->createShellSession();
+            row = m_sessions->createShellSession(args.value("cwd").toString());
         }
         if (row < 0) { isError = true; text = QStringLiteral("Erstellung fehlgeschlagen."); return {}; }
         auto *s = static_cast<Session *>(m_sessions->sessionAt(row));

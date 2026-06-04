@@ -34,8 +34,8 @@ public:
 
     int count() const { return static_cast<int>(m_sessions.size()); }
 
-    /// Erzeugt eine lokale Shell-Session und gibt deren Zeilenindex zurück.
-    Q_INVOKABLE int createShellSession();
+    /// Erzeugt eine lokale Shell-Session (optional in `workingDir`) und gibt die Zeile zurück.
+    Q_INVOKABLE int createShellSession(const QString &workingDir = {});
     /// Erzeugt eine serielle Session (Port + Baudrate) und gibt deren Zeilenindex zurück.
     Q_INVOKABLE int createSerialSession(const QString &portName, int baud);
     /// Verfügbare serielle Ports (z. B. "/dev/cu.usbserial-XYZ").
@@ -70,6 +70,7 @@ private:
         int type = 0;        // qtmux::Session::Type
         QString serialPort;  // nur bei Seriell
         int baud = 115200;   // nur bei Seriell
+        QString workingDir;  // letztes Arbeitsverzeichnis (Shell), live in saveState() erfasst
     };
 
     QList<Session *> m_sessions;

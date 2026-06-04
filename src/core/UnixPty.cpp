@@ -20,6 +20,12 @@
 #include <cstring>
 #include <vector>
 
+#if defined(Q_OS_MACOS)
+#  include <libproc.h>
+#elif defined(Q_OS_LINUX)
+#  include <limits.h>
+#endif
+
 namespace qtmux {
 
 struct Pty::Private {
@@ -153,6 +159,26 @@ void Pty::terminate() {
     const int exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
     m_pid = 0;
     emit finished(exitCode);
+}
+
+QString Pty::currentWorkingDirectory() const {
+    if (m_pid <= 0) return {};
+#if defined(Q_OS_MACOS)
+    struct proc_vnodepathinfo vpi;
+    const int ret = ::proc_pidinfo(static_cast<int>(m_pid), PROC_PIDVNODEPATHINFO, 0,
+                                   &vpi, sizeof(vpi));
+    if (ret == static_cast<int>(sizeof(vpi)))
+        return QString::fromLocal8Bit(vpi.pvi_cdir.vip_path);
+    return {};
+#elif defined(Q_OS_LINUX)
+    char buf[PATH_MAX];
+    const QByteArray link = "/proc/" + QByteArray::number(m_pid) + "/cwd";
+    const ssize_t n = ::readlink(link.constData(), buf, sizeof(buf) - 1);
+    if (n > 0) return QString::fromLocal8Bit(buf, static_cast<int>(n));
+    return {};
+#else
+    return {};
+#endif
 }
 
 } // namespace qtmux

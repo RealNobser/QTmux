@@ -29,6 +29,7 @@ bool Pty::start(const QString &, const QStringList &, int, int, const QStringLis
 qint64 Pty::write(const QByteArray &) { return -1; }
 void Pty::resize(int, int) {}
 void Pty::terminate() {}
+QString Pty::currentWorkingDirectory() const { return {}; }
 
 } // namespace qtmux
 

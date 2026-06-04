@@ -36,6 +36,9 @@ public:
     qint64 pid() const { return m_pid; }
     QString lastError() const { return m_lastError; }
 
+    /// Aktuelles Arbeitsverzeichnis des Kindprozesses (leer, wenn nicht ermittelbar).
+    QString currentWorkingDirectory() const;
+
 signals:
     void readyRead(const QByteArray &data);
     /// Prozess wurde beendet (exitCode, ob normal beendet).

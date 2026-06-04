@@ -26,6 +26,7 @@ public:
     void write(const QByteArray &data) override;
     void resize(int cols, int rows) override;
     void terminate() override;
+    QString currentWorkingDirectory() const override { return m_pty.currentWorkingDirectory(); }
 
 private:
     Pty m_pty;

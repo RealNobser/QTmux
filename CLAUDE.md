@@ -117,9 +117,13 @@ Markdown-Links. Commit-Trailer: `Co-Authored-By: Claude …`.
   close/focus_session, send_text, read_screen, set_theme. Session hat stabile `id()` +
   `screenText()`. Doku: `docs/MCP.md`. End-to-end mit curl verifiziert.
 - ✅ **Session-Persistenz** — `SessionModel` speichert die Session-Liste (Typ, Serial-Port/
-  Baud) + aktive Zeile via QSettings bei jeder Änderung; `restoreState()` beim Start.
-  Fenstergeometrie via QML `Settings` (QtCore). Terminal-*Inhalt* ist nicht wiederherstellbar
-  (Prozesse sind weg). Shell-Sessions starten im Home (`QDir::homePath()`).
+  Baud, **Arbeitsverzeichnis**) + aktive Zeile via QSettings bei jeder Änderung + `onClosing`;
+  `restoreState()` beim Start. Fenstergeometrie via QML `Settings` (QtCore).
+  **CWD-Wiederherstellung:** `Pty::currentWorkingDirectory()` fragt das Verzeichnis des
+  Shell-Prozesses live ab (macOS `libproc`/`proc_pidinfo`, Linux `/proc/<pid>/cwd`);
+  beim Neustart startet die Shell wieder dort. Terminal-*Inhalt* bleibt nicht erhalten.
+  Shell-Sessions ohne gespeichertes Verzeichnis starten im Home (`QDir::homePath()`).
+  MCP `create_session` akzeptiert zusätzlich `cwd`.
 - ⬜ **Phase 5** — Plugin-System (QPluginLoader), MacPCAN-Integration
 - ⬜ **Phase 6** — Politur & Distribution (CPack: DMG/MSI/AppImage, CI-Matrix)
 

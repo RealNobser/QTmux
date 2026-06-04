@@ -79,15 +79,16 @@ void SessionModel::wireSession(Session *s, int row) {
     Q_UNUSED(row);
 }
 
-int SessionModel::createShellSession() {
+int SessionModel::createShellSession(const QString &workingDir) {
     auto *s = new Session(this);
     auto *pty = new PtyBackend();
+    if (!workingDir.isEmpty()) pty->setWorkingDirectory(workingDir);
     s->attachBackend(pty, Session::Type::Shell, 80, 24);
 
     const int row = count();
     beginInsertRows({}, row, row);
     m_sessions.append(s);
-    m_configs.append({static_cast<int>(Session::Type::Shell), {}, 0});
+    m_configs.append({static_cast<int>(Session::Type::Shell), {}, 0, workingDir});
     endInsertRows();
 
     wireSession(s, row);
@@ -169,10 +170,18 @@ void SessionModel::saveState() const {
     QSettings s;
     s.beginWriteArray(QStringLiteral("sessions"), m_configs.size());
     for (int i = 0; i < m_configs.size(); ++i) {
+        const SessionConfig &cfg = m_configs.at(i);
         s.setArrayIndex(i);
-        s.setValue(QStringLiteral("type"), m_configs.at(i).type);
-        s.setValue(QStringLiteral("serialPort"), m_configs.at(i).serialPort);
-        s.setValue(QStringLiteral("baud"), m_configs.at(i).baud);
+        s.setValue(QStringLiteral("type"), cfg.type);
+        s.setValue(QStringLiteral("serialPort"), cfg.serialPort);
+        s.setValue(QStringLiteral("baud"), cfg.baud);
+        // Aktuelles Arbeitsverzeichnis live abfragen (Shell), sonst gespeichertes verwenden.
+        QString dir = cfg.workingDir;
+        if (cfg.type == static_cast<int>(Session::Type::Shell) && i < m_sessions.size()) {
+            const QString live = m_sessions.at(i)->currentWorkingDirectory();
+            if (!live.isEmpty()) dir = live;
+        }
+        s.setValue(QStringLiteral("workingDir"), dir);
     }
     s.endArray();
     s.setValue(QStringLiteral("sessions/activeRow"), m_activeRow);
@@ -189,7 +198,7 @@ int SessionModel::restoreState() {
             createSerialSession(s.value(QStringLiteral("serialPort")).toString(),
                                 s.value(QStringLiteral("baud"), 115200).toInt());
         } else {
-            createShellSession();
+            createShellSession(s.value(QStringLiteral("workingDir")).toString());
         }
     }
     m_restoring = false;

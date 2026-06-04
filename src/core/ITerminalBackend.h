@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QByteArray>
+#include <QString>
 
 namespace qtmux {
 
@@ -31,6 +32,9 @@ public:
     virtual void resize(int cols, int rows) = 0;
     /// Beendet die Verbindung/den Prozess.
     virtual void terminate() = 0;
+
+    /// Aktuelles Arbeitsverzeichnis (leer, wenn nicht zutreffend/ermittelbar).
+    virtual QString currentWorkingDirectory() const { return {}; }
 
     BackendState state() const { return m_state; }
 
