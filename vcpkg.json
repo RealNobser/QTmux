@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "qtmux",
+  "version": "0.1.0",
+  "description": "Cross-platform multi-AI-agent terminal manager",
+  "homepage": "https://github.com/qtmux/qtmux",
+  "dependencies": [
+    "libvterm",
+    "libssh2"
+  ]
+}

@@ -1,0 +1,25 @@
+# Build-Verzeichnisse
+/build/
+/build-*/
+/out/
+cmake-build-*/
+
+# vcpkg
+/vcpkg_installed/
+
+# IDE
+.idea/
+*.user
+.DS_Store
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+
+# Qt
+*.qmlc
+*.jsc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
