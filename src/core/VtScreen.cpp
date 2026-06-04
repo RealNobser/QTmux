@@ -147,6 +147,22 @@ void VtScreen::setSize(int rows, int cols) {
     vterm_set_size(m_vt, rows, cols);
 }
 
+QString VtScreen::screenText() const {
+    QStringList lines;
+    lines.reserve(m_rows);
+    for (int row = 0; row < m_rows; ++row) {
+        QString line;
+        for (int col = 0; col < m_cols; ++col) {
+            const QString t = cell(row, col).text;
+            line += t.isEmpty() ? QStringLiteral(" ") : t;
+        }
+        while (line.endsWith(QChar(' '))) line.chop(1);  // rechte Leerzeichen entfernen
+        lines << line;
+    }
+    while (!lines.isEmpty() && lines.last().isEmpty()) lines.removeLast();
+    return lines.join(QChar('\n'));
+}
+
 Cell VtScreen::cell(int row, int col) const {
     VTermScreenCell vc;
     VTermPos pos{row, col};

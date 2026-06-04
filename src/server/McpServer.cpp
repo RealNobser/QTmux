@@ -1,0 +1,318 @@
+#include "McpServer.h"
+#include "SessionModel.h"
+#include "Session.h"
+
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QHostAddress>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QJsonValue>
+
+namespace qtmux {
+
+static const char *kProtocolVersion = "2024-11-05";
+
+McpServer::McpServer(QObject *parent) : QObject(parent) {}
+McpServer::~McpServer() { stop(); }
+
+bool McpServer::listening() const { return m_server && m_server->isListening(); }
+
+void McpServer::setSessions(SessionModel *m) {
+    if (m == m_sessions) return;
+    m_sessions = m;
+    emit sessionsChanged();
+}
+
+void McpServer::setPort(int p) {
+    if (p == m_port) return;
+    m_port = p;
+    emit portChanged();
+}
+
+bool McpServer::start() {
+    if (listening()) return true;
+    if (!m_server) {
+        m_server = new QTcpServer(this);
+        connect(m_server, &QTcpServer::newConnection, this, [this]() {
+            while (QTcpSocket *sock = m_server->nextPendingConnection()) {
+                m_buffers.insert(sock, QByteArray());
+                connect(sock, &QTcpSocket::readyRead, this, [this, sock]() { onReadyRead(sock); });
+                connect(sock, &QTcpSocket::disconnected, this, [this, sock]() {
+                    m_buffers.remove(sock);
+                    sock->deleteLater();
+                });
+            }
+        });
+    }
+    // Bewusst nur localhost — das ist die Sicherheitsgrenze.
+    const bool ok = m_server->listen(QHostAddress::LocalHost, static_cast<quint16>(m_port));
+    emit listeningChanged();
+    return ok;
+}
+
+void McpServer::stop() {
+    if (m_server) {
+        m_server->close();
+        emit listeningChanged();
+    }
+}
+
+void McpServer::onReadyRead(QTcpSocket *sock) {
+    QByteArray &buf = m_buffers[sock];
+    buf += sock->readAll();
+
+    const int headerEnd = buf.indexOf("\r\n\r\n");
+    if (headerEnd < 0) return;  // Header noch unvollständig
+
+    const QByteArray header = buf.left(headerEnd);
+    const bool isPost = header.startsWith("POST");
+
+    // Content-Length ermitteln.
+    int contentLength = 0;
+    for (const QByteArray &line : header.split('\n')) {
+        const QByteArray l = line.trimmed().toLower();
+        if (l.startsWith("content-length:")) {
+            contentLength = l.mid(15).trimmed().toInt();
+            break;
+        }
+    }
+
+    const int bodyStart = headerEnd + 4;
+    if (buf.size() - bodyStart < contentLength) return;  // Body noch unvollständig
+
+    const QByteArray body = buf.mid(bodyStart, contentLength);
+    buf.clear();
+
+    if (!isPost) {
+        sendHttpJson(sock, R"({"server":"QTmux MCP","transport":"streamable-http"})");
+        return;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(body);
+    if (doc.isObject()) {
+        bool isNotification = false;
+        const QJsonObject resp = handleRpc(doc.object(), isNotification);
+        if (isNotification) {
+            sendHttpJson(sock, QByteArray(), 202);  // Notification: kein Body
+        } else {
+            sendHttpJson(sock, QJsonDocument(resp).toJson(QJsonDocument::Compact));
+        }
+    } else if (doc.isArray()) {  // JSON-RPC-Batch
+        QJsonArray out;
+        for (const QJsonValue &v : doc.array()) {
+            bool isNotification = false;
+            const QJsonObject resp = handleRpc(v.toObject(), isNotification);
+            if (!isNotification) out.append(resp);
+        }
+        sendHttpJson(sock, QJsonDocument(out).toJson(QJsonDocument::Compact));
+    } else {
+        sendHttpJson(sock, R"({"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}})");
+    }
+}
+
+void McpServer::sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status) {
+    const QByteArray reason = (status == 200) ? "OK" : (status == 202) ? "Accepted" : "Bad Request";
+    QByteArray resp = "HTTP/1.1 " + QByteArray::number(status) + " " + reason + "\r\n";
+    resp += "Content-Type: application/json\r\n";
+    resp += "Content-Length: " + QByteArray::number(json.size()) + "\r\n";
+    resp += "Connection: close\r\n\r\n";
+    resp += json;
+    sock->write(resp);
+    sock->flush();
+    sock->disconnectFromHost();
+}
+
+// --- JSON-RPC / MCP ---------------------------------------------------------
+
+QJsonObject McpServer::handleRpc(const QJsonObject &req, bool &isNotification) {
+    const QString method = req.value("method").toString();
+    const QJsonObject params = req.value("params").toObject();
+    const QJsonValue id = req.value("id");
+    isNotification = id.isUndefined() || id.isNull();
+
+    bool ok = true;
+    QString errMsg;
+    const QJsonObject result = dispatchMethod(method, params, ok, errMsg);
+
+    if (isNotification) return {};
+
+    QJsonObject resp{{"jsonrpc", "2.0"}, {"id", id}};
+    if (ok) {
+        resp.insert("result", result);
+    } else {
+        resp.insert("error", QJsonObject{{"code", -32601}, {"message", errMsg}});
+    }
+    return resp;
+}
+
+QJsonObject McpServer::dispatchMethod(const QString &method, const QJsonObject &params,
+                                      bool &ok, QString &errMsg) {
+    ok = true;
+    if (method == "initialize") {
+        return QJsonObject{
+            {"protocolVersion", kProtocolVersion},
+            {"capabilities", QJsonObject{{"tools", QJsonObject{}}}},
+            {"serverInfo", QJsonObject{{"name", "QTmux"}, {"version", "0.1.0"}}},
+        };
+    }
+    if (method == "tools/list") {
+        return toolsList();
+    }
+    if (method == "tools/call") {
+        const QString name = params.value("name").toString();
+        const QJsonObject args = params.value("arguments").toObject();
+        bool isError = false;
+        QString text;
+        callTool(name, args, isError, text);
+        return QJsonObject{
+            {"content", QJsonArray{QJsonObject{{"type", "text"}, {"text", text}}}},
+            {"isError", isError},
+        };
+    }
+    if (method == "ping") {
+        return QJsonObject{};
+    }
+    ok = false;
+    errMsg = QStringLiteral("Method not found: %1").arg(method);
+    return {};
+}
+
+// Hilfs-Schema-Bausteine.
+static QJsonObject strProp(const QString &desc) {
+    return QJsonObject{{"type", "string"}, {"description", desc}};
+}
+static QJsonObject intProp(const QString &desc) {
+    return QJsonObject{{"type", "integer"}, {"description", desc}};
+}
+static QJsonObject boolProp(const QString &desc) {
+    return QJsonObject{{"type", "boolean"}, {"description", desc}};
+}
+static QJsonObject tool(const QString &name, const QString &desc,
+                        const QJsonObject &props, const QJsonArray &required) {
+    return QJsonObject{
+        {"name", name},
+        {"description", desc},
+        {"inputSchema", QJsonObject{
+            {"type", "object"},
+            {"properties", props},
+            {"required", required},
+        }},
+    };
+}
+
+QJsonObject McpServer::toolsList() const {
+    QJsonArray tools;
+    tools.append(tool("list_sessions", "Listet alle offenen Sessions mit Status.",
+                      {}, {}));
+    tools.append(tool("create_session", "Erstellt eine Session. type: 'shell' (Standard) oder 'serial'.",
+                      QJsonObject{{"type", strProp("'shell' oder 'serial'")},
+                                  {"program", strProp("Programm für Shell (optional)")},
+                                  {"port", strProp("serieller Port (bei type=serial)")},
+                                  {"baud", intProp("Baudrate (bei type=serial)")}},
+                      {}));
+    tools.append(tool("close_session", "Schließt eine Session per ID.",
+                      QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
+    tools.append(tool("focus_session", "Fokussiert eine Session (macht sie sichtbar).",
+                      QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
+    tools.append(tool("send_text", "Sendet Text an eine Session (optional mit Enter).",
+                      QJsonObject{{"id", intProp("Session-ID")},
+                                  {"text", strProp("zu sendender Text")},
+                                  {"enter", boolProp("Enter anhängen (Standard true)")}},
+                      QJsonArray{"id", "text"}));
+    tools.append(tool("read_screen", "Liest den sichtbaren Bildschirm einer Session als Text.",
+                      QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
+    tools.append(tool("set_theme", "Setzt das Design: 'system', 'light' oder 'dark'.",
+                      QJsonObject{{"mode", strProp("'system' | 'light' | 'dark'")}},
+                      QJsonArray{"mode"}));
+    return QJsonObject{{"tools", tools}};
+}
+
+QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
+                                bool &isError, QString &text) {
+    isError = false;
+    if (!m_sessions) {
+        isError = true;
+        text = QStringLiteral("Keine SessionModel-Instanz verbunden.");
+        return {};
+    }
+
+    auto sessionInfo = [](Session *s) {
+        return QJsonObject{
+            {"id", s->id()},
+            {"title", s->title()},
+            {"type", static_cast<int>(s->type())},
+            {"activity", s->activityInt()},
+            {"agentId", s->agentId()},
+            {"needsAttention", s->needsAttention()},
+            {"lastNotification", s->lastNotification()},
+        };
+    };
+
+    if (name == "list_sessions") {
+        QJsonArray arr;
+        for (Session *s : m_sessions->sessions()) arr.append(sessionInfo(s));
+        text = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+        return {};
+    }
+    if (name == "create_session") {
+        const QString type = args.value("type").toString(QStringLiteral("shell"));
+        int row = -1;
+        if (type == "serial") {
+            row = m_sessions->createSerialSession(args.value("port").toString(),
+                                                  args.value("baud").toInt(115200));
+        } else {
+            row = m_sessions->createShellSession();
+        }
+        if (row < 0) { isError = true; text = QStringLiteral("Erstellung fehlgeschlagen."); return {}; }
+        auto *s = static_cast<Session *>(m_sessions->sessionAt(row));
+        emit focusRequested(row);
+        text = QString::number(s ? s->id() : -1);
+        return {};
+    }
+
+    // Ab hier braucht's eine gültige Session-ID.
+    const int id = args.value("id").toInt();
+    Session *s = m_sessions->sessionById(id);
+    if (name == "close_session") {
+        const int row = m_sessions->rowForId(id);
+        if (row < 0) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        m_sessions->closeSession(row);
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "focus_session") {
+        const int row = m_sessions->rowForId(id);
+        if (row < 0) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        emit focusRequested(row);
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "send_text") {
+        if (!s) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        QByteArray data = args.value("text").toString().toUtf8();
+        if (args.value("enter").toBool(true)) data += '\r';
+        s->write(data);
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "read_screen") {
+        if (!s) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        text = s->screenText();
+        return {};
+    }
+    if (name == "set_theme") {
+        const QString mode = args.value("mode").toString();
+        const int m = (mode == "light") ? 1 : (mode == "dark") ? 2 : 0;
+        emit setThemeRequested(m);
+        text = QStringLiteral("ok");
+        return {};
+    }
+
+    isError = true;
+    text = QStringLiteral("Unbekanntes Tool: %1").arg(name);
+    return {};
+}
+
+} // namespace qtmux

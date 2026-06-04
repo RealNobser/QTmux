@@ -42,6 +42,11 @@ public:
     Q_INVOKABLE QStringList availableSerialPorts() const;
     /// Session-Objekt einer Zeile (für Binding an TerminalItem.session).
     Q_INVOKABLE QObject *sessionAt(int row) const;
+    /// Zeilenindex einer Session-ID, oder -1.
+    int rowForId(int id) const;
+    /// Session-Objekt zu einer stabilen ID (für externe Steuerung / MCP).
+    Session *sessionById(int id) const;
+    const QList<Session *> &sessions() const { return m_sessions; }
     Q_INVOKABLE void closeSession(int row);
     /// Markiert die Zeile als aktiv/fokussiert (alle anderen inaktiv) — löscht deren Attention.
     Q_INVOKABLE void setActiveRow(int row);

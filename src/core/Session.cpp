@@ -7,6 +7,15 @@ namespace qtmux {
 Session::Session(QObject *parent) : QObject(parent) {}
 Session::~Session() = default;
 
+int Session::nextId() {
+    static int counter = 0;
+    return ++counter;
+}
+
+QString Session::screenText() const {
+    return m_screen ? m_screen->screenText() : QString();
+}
+
 void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int rows) {
     m_type = type;
     m_cols = cols;

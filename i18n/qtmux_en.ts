@@ -16,6 +16,9 @@
     <message><source>Port</source><translation>Port</translation></message>
     <message><source>Baudrate</source><translation>Baud Rate</translation></message>
     <message><source>Keine seriellen Ports gefunden.</source><translation>No serial ports found.</translation></message>
+    <message><source>Agent-Steuerung</source><translation>Agent Control</translation></message>
+    <message><source>MCP-Server: an (127.0.0.1:%1)</source><translation>MCP Server: on (127.0.0.1:%1)</translation></message>
+    <message><source>MCP-Server: aus</source><translation>MCP Server: off</translation></message>
     <message><source>Datei</source><translation>File</translation></message>
     <message><source>Ansicht</source><translation>View</translation></message>
     <message><source>Sprache</source><translation>Language</translation></message>

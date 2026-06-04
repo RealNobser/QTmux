@@ -34,8 +34,11 @@ public:
     /// Übernimmt Besitz des Backends und verbindet es mit einem frischen VtScreen.
     void attachBackend(ITerminalBackend *backend, Type type, int cols, int rows);
 
+    int id() const { return m_id; }
     Type type() const { return m_type; }
     QString title() const { return m_title; }
+    /// Sichtbarer Bildschirm als Klartext (für externe Steuerung / MCP).
+    QString screenText() const;
     QString agentId() const { return m_agentId; }
     bool needsAttention() const { return m_needsAttention; }
     Activity activity() const { return m_activity; }
@@ -88,6 +91,8 @@ private:
     bool m_commandRunning = false;   // zwischen OSC 133;C und ;D
     int m_cols = 80;
     int m_rows = 24;
+    int m_id = nextId();
+    static int nextId();
 };
 
 } // namespace qtmux

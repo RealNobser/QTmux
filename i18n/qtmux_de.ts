@@ -16,6 +16,9 @@
     <message><source>Port</source><translation type="unfinished">Port</translation></message>
     <message><source>Baudrate</source><translation type="unfinished">Baudrate</translation></message>
     <message><source>Keine seriellen Ports gefunden.</source><translation type="unfinished">Keine seriellen Ports gefunden.</translation></message>
+    <message><source>Agent-Steuerung</source><translation type="unfinished">Agent-Steuerung</translation></message>
+    <message><source>MCP-Server: an (127.0.0.1:%1)</source><translation type="unfinished">MCP-Server: an (127.0.0.1:%1)</translation></message>
+    <message><source>MCP-Server: aus</source><translation type="unfinished">MCP-Server: aus</translation></message>
     <message><source>Datei</source><translation type="unfinished">Datei</translation></message>
     <message><source>Ansicht</source><translation type="unfinished">Ansicht</translation></message>
     <message><source>Sprache</source><translation type="unfinished">Sprache</translation></message>

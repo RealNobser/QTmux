@@ -13,7 +13,7 @@ set(CMAKE_AUTORCC ON)
 option(QTMUX_BUILD_TESTS "Build unit tests" ON)
 
 # Qt6 ------------------------------------------------------------------------
-find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 SerialPort LinguistTools)
+find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 SerialPort Network LinguistTools)
 if(QTMUX_BUILD_TESTS)
     find_package(Qt6 6.6 REQUIRED COMPONENTS Test)
 endif()
@@ -78,8 +78,11 @@ qt_add_qml_module(qtmux
         src/viewmodels/Theme.cpp
         src/viewmodels/AppController.h
         src/viewmodels/AppController.cpp
+        src/server/McpServer.h
+        src/server/McpServer.cpp
 )
-target_include_directories(qtmux PRIVATE src/terminal src/viewmodels)
+target_include_directories(qtmux PRIVATE src/terminal src/viewmodels src/server)
+target_link_libraries(qtmux PRIVATE Qt6::Network)
 
 target_link_libraries(qtmux PRIVATE
     qtmux_core

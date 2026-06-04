@@ -45,6 +45,9 @@ public:
     /// Zelle des sichtbaren Bildschirms (0-basiert).
     Cell cell(int row, int col) const;
 
+    /// Sichtbarer Bildschirm als Klartext (Zeilen mit \n, rechte Leerzeichen entfernt).
+    QString screenText() const;
+
     QPoint cursor() const { return m_cursor; }
     bool cursorVisible() const { return m_cursorVisible; }
     QString title() const { return m_title; }

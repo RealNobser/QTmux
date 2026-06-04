@@ -17,6 +17,16 @@ ApplicationWindow {
 
     SessionModel { id: sessions }
 
+    // MCP-Server: externe Agenten-Steuerung über 127.0.0.1 (nur lokal).
+    McpServer {
+        id: mcp
+        sessions: sessions
+        port: 7345
+        onFocusRequested: (row) => window.currentRow = row
+        onSetThemeRequested: (mode) => Theme.mode = mode
+        Component.onCompleted: start()
+    }
+
     // Hält currentRow gültig, wenn Sessions entfernt werden (manuell oder bei Shell-Ende).
     Connections {
         target: sessions
@@ -125,6 +135,16 @@ ApplicationWindow {
             MenuItem {
                 text: qsTr("Neue Agent-Session …")
                 onTriggered: window.newSession()
+            }
+        }
+        Menu {
+            title: qsTr("Agent-Steuerung")
+            MenuItem {
+                text: mcp.listening ? qsTr("MCP-Server: an (127.0.0.1:%1)").arg(mcp.port)
+                                    : qsTr("MCP-Server: aus")
+                checkable: true
+                checked: mcp.listening
+                onTriggered: mcp.listening ? mcp.stop() : mcp.start()
             }
         }
         Menu {

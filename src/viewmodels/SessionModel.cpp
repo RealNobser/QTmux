@@ -125,6 +125,17 @@ QObject *SessionModel::sessionAt(int row) const {
     return m_sessions.at(row);
 }
 
+int SessionModel::rowForId(int id) const {
+    for (int i = 0; i < count(); ++i)
+        if (m_sessions.at(i)->id() == id) return i;
+    return -1;
+}
+
+Session *SessionModel::sessionById(int id) const {
+    const int r = rowForId(id);
+    return r >= 0 ? m_sessions.at(r) : nullptr;
+}
+
 void SessionModel::setActiveRow(int row) {
     for (int i = 0; i < count(); ++i) {
         m_sessions.at(i)->setActive(i == row);
