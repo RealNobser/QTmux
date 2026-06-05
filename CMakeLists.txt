@@ -13,7 +13,7 @@ set(CMAKE_AUTORCC ON)
 option(QTMUX_BUILD_TESTS "Build unit tests" ON)
 
 # Qt6 ------------------------------------------------------------------------
-find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 SerialPort Network LinguistTools)
+find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 SerialPort Network Svg LinguistTools)
 if(QTMUX_BUILD_TESTS)
     find_package(Qt6 6.6 REQUIRED COMPONENTS Test)
 endif()
@@ -84,7 +84,31 @@ qt_add_qml_module(qtmux
         src/server/McpServer.cpp
 )
 target_include_directories(qtmux PRIVATE src/terminal src/viewmodels src/server)
-target_link_libraries(qtmux PRIVATE Qt6::Network)
+target_link_libraries(qtmux PRIVATE Qt6::Network Qt6::Svg)
+
+# Phosphor-Icons (SVG) unter qrc:/icons/<name>.svg einbetten. Sie werden über
+# das Qt-icon-System (icon.source + icon.color) in Toolbar UND Menüs genutzt;
+# in nativen macOS-Menüs landet das getönte Icon als auto-angepasstes Template.
+qt_add_resources(qtmux "icons"
+    PREFIX "/icons"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons"
+    FILES
+        resources/icons/plus.svg
+        resources/icons/x.svg
+        resources/icons/terminal-window.svg
+        resources/icons/plugs.svg
+        resources/icons/usb.svg
+        resources/icons/sun.svg
+        resources/icons/moon.svg
+        resources/icons/gear.svg
+        resources/icons/info.svg
+        resources/icons/broadcast.svg
+        resources/icons/translate.svg
+        resources/icons/caret-down.svg
+        resources/icons/trash.svg
+        resources/icons/robot.svg
+        resources/icons/command.svg
+)
 
 target_link_libraries(qtmux PRIVATE
     qtmux_core

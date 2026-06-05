@@ -20,7 +20,11 @@ public:
 
 private:
     Q_PROPERTY(Mode mode READ mode WRITE setMode NOTIFY changed)
-    Q_PROPERTY(bool dark READ dark NOTIFY changed)  // effektiver Modus
+    Q_PROPERTY(bool dark READ dark NOTIFY changed)  // effektiver Modus (App)
+    // Reines OS-Farbschema (unabhängig vom App-Modus). Native macOS-Menüs
+    // folgen IMMER dem System; ihre Icon-Tönung muss daher hieran hängen.
+    Q_PROPERTY(bool systemDark READ systemDark NOTIFY changed)
+    Q_PROPERTY(QColor menuIcon READ menuIcon NOTIFY changed)
     Q_PROPERTY(QColor bgSidebar       READ bgSidebar       NOTIFY changed)
     Q_PROPERTY(QColor bgMain          READ bgMain          NOTIFY changed)
     Q_PROPERTY(QColor bgElevated      READ bgElevated      NOTIFY changed)
@@ -38,6 +42,8 @@ public:
     Mode mode() const { return m_mode; }
     void setMode(Mode mode);
     bool dark() const;                 // löst System zu konkretem Hell/Dunkel auf
+    bool systemDark() const;           // reines OS-Schema (für native Menüs)
+    QColor menuIcon() const;           // Icon-Tönung für native Menüs (folgt System)
     Q_INVOKABLE void toggle();         // schaltet explizit Hell<->Dunkel (Ctrl+D)
 
     QColor bgSidebar() const;

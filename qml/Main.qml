@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import QtQuick.Effects
 import QtCore
 import QTmux
 
@@ -11,6 +12,23 @@ ApplicationWindow {
     visible: true
     title: "QTmux"
     color: Theme.bgMain
+
+    // Themengebundene Palette: alle (In-Window-)Basic-Controls — Dialoge, ComboBoxen,
+    // Textfelder, Buttons, das typeMenu-Popup — erben diese Farben automatisch.
+    palette.window: Theme.bgMain
+    palette.windowText: Theme.textBright
+    palette.base: Theme.bgElevated
+    palette.alternateBase: Theme.bgSidebar
+    palette.text: Theme.textBright
+    palette.button: Theme.bgElevated
+    palette.buttonText: Theme.textBright
+    palette.highlight: Theme.accent
+    palette.highlightedText: "#ffffff"
+    palette.mid: Theme.border
+    palette.dark: Theme.border
+    palette.placeholderText: Theme.textDim
+    palette.toolTipBase: Theme.bgElevated
+    palette.toolTipText: Theme.textBright
 
     property int currentRow: -1
     // Aktive (fokussierte) Session ans Model melden -> löscht deren Aufmerksamkeits-Hinweis.
@@ -41,6 +59,146 @@ ApplicationWindow {
         // Fenster-Alert (Dock-Hüpfen/Taskbar-Blinken), wenn QTmux nicht im Vordergrund ist.
         function onAttentionRaised(row) {
             if (!window.active) window.alert(0)
+        }
+    }
+
+    // Pfad zu einem Phosphor-SVG-Icon (eingebettet unter qrc:/icons/).
+    function icon(name) { return "qrc:/icons/" + name + ".svg" }
+
+    // --- Wiederverwendbares Icon-Steuerelement (Phosphor-SVG) ---------------
+    // Toolbar-Knopf: zeigt ein SVG-Icon; Tönung folgt Hover/aktiv/Theme.
+    component IconToolButton: ToolButton {
+        id: tb
+        property string tip: ""
+        property bool active: false        // dauerhaft hervorgehoben (z. B. Server an)
+        display: AbstractButton.IconOnly
+        icon.width: 18
+        icon.height: 18
+        icon.color: !tb.enabled ? Theme.border
+                  : (tb.down || tb.active) ? Theme.accent
+                  : tb.hovered ? Theme.textBright : Theme.textDim
+        implicitWidth: 36
+        implicitHeight: 30
+        background: Rectangle {
+            radius: 6
+            color: tb.down ? Theme.sidebarSelected
+                 : tb.hovered ? Theme.sidebarHover : "transparent"
+        }
+        ToolTip.visible: hovered && tip.length > 0
+        ToolTip.delay: 600
+        ToolTip.text: tip
+    }
+
+    // Themen-Menüeintrag (In-Window): abgerundetes Highlight, app-getöntes Icon.
+    component AppMenuItem: MenuItem {
+        id: ami
+        implicitHeight: 34
+        icon.color: Theme.textBright
+        icon.width: 16
+        icon.height: 16
+        background: Rectangle {
+            radius: 6
+            color: ami.highlighted ? Theme.sidebarHover : "transparent"
+        }
+    }
+
+    // Themen-Popup-Hintergrund (Menüs/ComboBox): abgerundet, erhoben, gerahmt.
+    component AppPopupBg: Rectangle {
+        color: Theme.bgElevated
+        border.color: Theme.border
+        border.width: 1
+        radius: 8
+    }
+
+    // Themen-ComboBox: gerahmtes Feld, Caret-Icon, abgerundetes Popup.
+    component AppComboBox: ComboBox {
+        id: cb
+        implicitHeight: 32
+        font.pixelSize: 13
+        background: Rectangle {
+            radius: 6
+            color: Theme.bgElevated
+            border.color: cb.activeFocus ? Theme.accent : Theme.border
+            border.width: 1
+        }
+        indicator: Image {
+            x: cb.width - width - 10
+            y: (cb.height - height) / 2
+            source: window.icon("caret-down")
+            sourceSize.width: 14
+            sourceSize.height: 14
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                colorization: 1.0
+                colorizationColor: Theme.textDim
+            }
+        }
+        popup: Popup {
+            y: cb.height + 4
+            width: cb.width
+            padding: 4
+            implicitHeight: Math.min(contentItem.implicitHeight + 8, 260)
+            background: AppPopupBg {}
+            contentItem: ListView {
+                clip: true
+                implicitHeight: contentHeight
+                model: cb.popup.visible ? cb.delegateModel : null
+                currentIndex: cb.highlightedIndex
+                ScrollIndicator.vertical: ScrollIndicator {}
+            }
+        }
+    }
+
+    // Themen-Dialog: abgerundete erhobene Fläche, gestylter Titel, abgedunkelter Hintergrund.
+    component AppDialog: Dialog {
+        id: dlg
+        anchors.centerIn: parent
+        modal: true
+        padding: 20
+        background: Rectangle {
+            color: Theme.bgElevated
+            radius: 12
+            border.color: Theme.border
+            border.width: 1
+        }
+        header: Label {
+            text: dlg.title
+            visible: dlg.title.length > 0
+            color: Theme.textBright
+            font.pixelSize: 16
+            font.bold: true
+            elide: Label.ElideRight
+            padding: 20
+            bottomPadding: 6
+        }
+        Overlay.modal: Rectangle { color: "#88000000" }
+    }
+
+    // Session-Typ-Auswahl für den „+"-Split-Button (Sidebar + Toolbar).
+    Menu {
+        id: typeMenu
+        padding: 4
+        background: AppPopupBg { implicitWidth: 180 }
+        AppMenuItem {
+            text: qsTr("Shell")
+            icon.source: window.icon("terminal-window")
+            checkable: true
+            checked: window.newSessionType === 0
+            onTriggered: window.newSessionType = 0
+        }
+        AppMenuItem {
+            text: qsTr("SSH …")
+            icon.source: window.icon("plugs")
+            checkable: true
+            checked: window.newSessionType === 1
+            onTriggered: window.newSessionType = 1
+        }
+        AppMenuItem {
+            text: qsTr("Seriell …")
+            icon.source: window.icon("usb")
+            checkable: true
+            checked: window.newSessionType === 2
+            onTriggered: window.newSessionType = 2
         }
     }
 
@@ -113,41 +271,127 @@ ApplicationWindow {
         onTriggered: Qt.quit()
     }
 
+    // --- Toolbar oben: Schnellzugriff mit Phosphor-Icons --------------------
+    header: ToolBar {
+        // Feste Höhe: das innen mit anchors.fill verankerte RowLayout liefert
+        // sonst keine implizite Höhe, die ToolBar würde auf 0 kollabieren.
+        height: 44
+        background: Rectangle {
+            color: Theme.bgElevated
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width; height: 1
+                color: Theme.border
+            }
+        }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
+            spacing: 3
+
+            IconToolButton {
+                icon.source: window.icon("plus")
+                tip: qsTr("Neue Session: %1").arg(window.typeLabel(window.newSessionType))
+                onClicked: window.openNewSession(window.newSessionType)
+            }
+            IconToolButton {
+                icon.source: window.icon("caret-down")
+                icon.width: 14; icon.height: 14
+                implicitWidth: 22
+                tip: qsTr("Session-Typ wählen")
+                onClicked: typeMenu.popup(this, 0, height)
+            }
+
+            ToolSeparator {}
+
+            IconToolButton {
+                icon.source: window.icon("plugs")
+                tip: qsTr("Neue SSH-Verbindung …")
+                onClicked: sshDialog.open()
+            }
+            IconToolButton {
+                icon.source: window.icon("usb")
+                tip: qsTr("Neue serielle Verbindung …")
+                onClicked: serialDialog.openDialog()
+            }
+
+            ToolSeparator {}
+
+            IconToolButton {
+                icon.source: window.icon("x")
+                tip: qsTr("Session schließen")
+                enabled: window.currentRow >= 0
+                onClicked: window.closeCurrent()
+            }
+
+            Item { Layout.fillWidth: true }   // Abstandhalter
+
+            IconToolButton {
+                icon.source: Theme.dark ? window.icon("sun") : window.icon("moon")
+                tip: Theme.dark ? qsTr("Helles Design") : qsTr("Dunkles Design")
+                onClicked: Theme.toggle()
+            }
+            IconToolButton {
+                icon.source: window.icon("broadcast")
+                active: mcp.listening
+                tip: mcp.listening ? qsTr("MCP-Server: an (127.0.0.1:%1)").arg(mcp.port)
+                                   : qsTr("MCP-Server: aus")
+                onClicked: mcp.listening ? mcp.stop() : mcp.start()
+            }
+            IconToolButton {
+                icon.source: window.icon("info")
+                tip: qsTr("Über QTmux")
+                onClicked: aboutDialog.open()
+            }
+        }
+    }
+
     // --- Menüleiste: bietet alle Oberflächen-Befehle ------------------------
     menuBar: MenuBar {
         Menu {
             title: qsTr("Datei")
-            MenuItem { action: actNewSession }
+            MenuItem { action: actNewSession; icon.source: window.icon("plus"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuItem {
                 text: qsTr("Neue SSH-Verbindung …")
+                icon.source: window.icon("plugs"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 onTriggered: sshDialog.open()
             }
             MenuItem {
                 text: qsTr("Neue serielle Verbindung …")
+                icon.source: window.icon("usb"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 onTriggered: serialDialog.openDialog()
             }
-            MenuItem { action: actCloseSession }
+            MenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
             MenuItem { action: actQuit }
         }
         Menu {
             title: qsTr("Ansicht")
-            MenuItem { action: actToggleTheme }
+            MenuItem {
+                action: actToggleTheme
+                icon.source: Theme.dark ? window.icon("sun") : window.icon("moon")
+                icon.color: Theme.menuIcon
+                icon.width: 16; icon.height: 16
+            }
             MenuSeparator {}
             MenuItem {
                 text: qsTr("Design: Wie System")
+                icon.source: window.icon("gear"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 checkable: true
                 checked: Theme.mode === Theme.System
                 onTriggered: Theme.mode = Theme.System
             }
             MenuItem {
                 text: qsTr("Design: Hell")
+                icon.source: window.icon("sun"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 checkable: true
                 checked: Theme.mode === Theme.Light
                 onTriggered: Theme.mode = Theme.Light
             }
             MenuItem {
                 text: qsTr("Design: Dunkel")
+                icon.source: window.icon("moon"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 checkable: true
                 checked: Theme.mode === Theme.Dark
                 onTriggered: Theme.mode = Theme.Dark
@@ -160,6 +404,7 @@ ApplicationWindow {
                 MenuItem {
                     required property string modelData
                     text: App.languageName(modelData)
+                    icon.source: window.icon("translate"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                     checkable: true
                     checked: App.language === modelData
                     onTriggered: App.language = modelData
@@ -170,6 +415,7 @@ ApplicationWindow {
             title: qsTr("Agent")
             MenuItem {
                 text: qsTr("Neue Agent-Session …")
+                icon.source: window.icon("robot"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 onTriggered: window.newSession()
             }
         }
@@ -178,6 +424,7 @@ ApplicationWindow {
             MenuItem {
                 text: mcp.listening ? qsTr("MCP-Server: an (127.0.0.1:%1)").arg(mcp.port)
                                     : qsTr("MCP-Server: aus")
+                icon.source: window.icon("broadcast"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 checkable: true
                 checked: mcp.listening
                 onTriggered: mcp.listening ? mcp.stop() : mcp.start()
@@ -187,6 +434,7 @@ ApplicationWindow {
             title: qsTr("Hilfe")
             MenuItem {
                 text: qsTr("Über QTmux")
+                icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 onTriggered: aboutDialog.open()
             }
         }
@@ -295,11 +543,17 @@ ApplicationWindow {
                                 radius: 4
                                 visible: hover.hovered || index === window.currentRow
                                 color: closeHover.hovered ? Theme.border : "transparent"
-                                Text {
+                                Image {
                                     anchors.centerIn: parent
-                                    text: "×"
-                                    color: Theme.textDim
-                                    font.pixelSize: 16
+                                    source: window.icon("x")
+                                    sourceSize.width: 12
+                                    sourceSize.height: 12
+                                    // SVG ist monochrom -> über MultiEffect auf Theme-Farbe tönen.
+                                    layer.enabled: true
+                                    layer.effect: MultiEffect {
+                                        colorization: 1.0
+                                        colorizationColor: Theme.textDim
+                                    }
                                 }
                                 HoverHandler { id: closeHover }
                                 TapHandler { onTapped: sessions.closeSession(index) }
@@ -320,7 +574,14 @@ ApplicationWindow {
                         id: newBtn
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        text: "+  " + window.typeLabel(window.newSessionType)
+                        text: window.typeLabel(window.newSessionType)
+                        icon.source: window.icon("plus")
+                        icon.color: Theme.textBright
+                        icon.width: 15; icon.height: 15
+                        display: AbstractButton.TextBesideIcon
+                        spacing: 6
+                        palette.buttonText: Theme.textBright
+                        font.pixelSize: 13
                         onClicked: window.openNewSession(window.newSessionType)
                         background: Rectangle {
                             // links abgerundet, rechts eckig (verschmilzt mit dem Caret).
@@ -337,21 +598,17 @@ ApplicationWindow {
                                 border.width: parent.border.width
                             }
                         }
-                        contentItem: Text {
-                            text: newBtn.text
-                            color: Theme.textBright
-                            font.pixelSize: 13
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
                     }
 
                     Button {
                         id: caretBtn
                         Layout.preferredWidth: 32
                         Layout.fillHeight: true
-                        text: "▾"
-                        onClicked: typeMenu.popup()
+                        display: AbstractButton.IconOnly
+                        icon.source: window.icon("caret-down")
+                        icon.color: Theme.textBright
+                        icon.width: 14; icon.height: 14
+                        onClicked: typeMenu.popup(caretBtn, 0, caretBtn.height)
                         background: Rectangle {
                             // rechts abgerundet, links eckig.
                             radius: 8
@@ -365,35 +622,6 @@ ApplicationWindow {
                                 color: parent.color
                                 border.color: parent.border.color
                                 border.width: parent.border.width
-                            }
-                        }
-                        contentItem: Text {
-                            text: caretBtn.text
-                            color: Theme.textBright
-                            font.pixelSize: 13
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-
-                        Menu {
-                            id: typeMenu
-                            MenuItem {
-                                text: qsTr("Shell")
-                                checkable: true
-                                checked: window.newSessionType === 0
-                                onTriggered: window.newSessionType = 0
-                            }
-                            MenuItem {
-                                text: qsTr("SSH …")
-                                checkable: true
-                                checked: window.newSessionType === 1
-                                onTriggered: window.newSessionType = 1
-                            }
-                            MenuItem {
-                                text: qsTr("Seriell …")
-                                checkable: true
-                                checked: window.newSessionType === 2
-                                onTriggered: window.newSessionType = 2
                             }
                         }
                     }
@@ -421,11 +649,9 @@ ApplicationWindow {
     }
 
     // --- SSH-Verbindung öffnen ---------------------------------------------
-    Dialog {
+    AppDialog {
         id: sshDialog
-        anchors.centerIn: parent
         width: 420
-        modal: true
         title: qsTr("SSH-Verbindung")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
@@ -464,11 +690,9 @@ ApplicationWindow {
     }
 
     // --- Serielle Verbindung öffnen ----------------------------------------
-    Dialog {
+    AppDialog {
         id: serialDialog
-        anchors.centerIn: parent
         width: 420
-        modal: true
         title: qsTr("Serielle Verbindung")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
@@ -487,13 +711,13 @@ ApplicationWindow {
             anchors.fill: parent
             spacing: 10
             Text { text: qsTr("Port"); color: Theme.textBright }
-            ComboBox {
+            AppComboBox {
                 id: portCombo
                 Layout.fillWidth: true
                 model: []
             }
             Text { text: qsTr("Baudrate"); color: Theme.textBright }
-            ComboBox {
+            AppComboBox {
                 id: baudCombo
                 Layout.fillWidth: true
                 editable: true
@@ -510,14 +734,13 @@ ApplicationWindow {
     }
 
     // --- Über-Dialog --------------------------------------------------------
-    Dialog {
+    AppDialog {
         id: aboutDialog
-        anchors.centerIn: parent
         width: 420
-        modal: true
         title: qsTr("Über QTmux")
         standardButtons: Dialog.Ok
-        contentItem: Text {
+        Label {
+            width: 380
             wrapMode: Text.WordWrap
             color: Theme.textBright
             text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nQt %1").arg(Qt.application.version || "0.1")

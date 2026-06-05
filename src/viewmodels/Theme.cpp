@@ -9,11 +9,10 @@ Theme::Theme(QObject *parent) : QObject(parent) {
     QSettings s;
     m_mode = static_cast<Mode>(s.value(QStringLiteral("ui/themeMode"), static_cast<int>(System)).toInt());
 
-    // Im System-Modus auf OS-Wechsel (hell/dunkel) live reagieren.
+    // Auf OS-Wechsel (hell/dunkel) live reagieren. Immer melden: im System-Modus
+    // ändert sich die ganze Palette, sonst zumindest systemDark/menuIcon (native Menüs).
     connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this,
-            [this](Qt::ColorScheme) {
-                if (m_mode == System) emit changed();
-            });
+            [this](Qt::ColorScheme) { emit changed(); });
 }
 
 void Theme::setMode(Mode mode) {
@@ -31,6 +30,16 @@ bool Theme::dark() const {
     default:
         return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
     }
+}
+
+bool Theme::systemDark() const {
+    return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+}
+
+// Tönung für Icons in NATIVEN Menüs: folgt dem OS-Schema, nicht dem App-Theme,
+// damit Icons auf der (immer system-gefärbten) macOS-Menüleiste sichtbar bleiben.
+QColor Theme::menuIcon() const {
+    return systemDark() ? QColor(0xEC, 0xEC, 0xEC) : QColor(0x26, 0x26, 0x26);
 }
 
 void Theme::toggle() { setMode(dark() ? Light : Dark); }

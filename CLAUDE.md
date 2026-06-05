@@ -64,7 +64,8 @@ weil alles über `ITerminalBackend` läuft.
 | `src/core/AgentRegistry.{h,cpp}` | Bekannte Agenten-CLIs (claude, codex, gemini, **agy**=AntiGravity, …); `detect()` |
 | `i18n/qtmux_{de,en}.ts` | Übersetzungen; via `qt_add_translations` zu `:/i18n/*.qm` kompiliert/eingebettet |
 | `src/terminal/TerminalItem.{h,cpp}` | QML-`TerminalItem`; rendert zugewiesene `Session` (besitzt sie nicht) |
-| `qml/Main.qml` | App-Shell: datengetriebene Sidebar + Terminal der aktuellen Session |
+| `qml/Main.qml` | App-Shell: Toolbar + datengetriebene Sidebar + Terminal der aktuellen Session |
+| `resources/icons/*.svg` | Phosphor-Icons (eingebettet als `qrc:/icons/`), via `icon.source`/`icon.color` |
 | `tests/` | QtTest: `tst_pty`, `tst_vtscreen`, `tst_session` (E2E) |
 
 ## Build & Test (macOS)
@@ -114,6 +115,30 @@ Bei `/feierabend` diese Seiten mitpflegen.
   Befehlen, i18n DE/EN (`App`-Singleton + `qt_add_translations`, Laufzeit-Umschaltung),
   Agent-Erkennung (`AgentRegistry.detect()`; `agy`→AntiGravity). 5 Tests grün.
   Sessions werden bei Shell-Ende automatisch entfernt (SessionModel) + „×" pro Sidebar-Zeile.
+- ✅ **Toolbar + Icons** — obere `ToolBar` (`ApplicationWindow.header`) mit Schnellzugriff
+  (Neu/Typ-Caret/SSH/Seriell/Schließen · rechts Theme-Toggle/MCP/Über). Icon-System:
+  **Phosphor-SVGs** unter `resources/icons/*.svg` → `qrc:/icons/<name>.svg`, eingebettet via
+  `qt_add_resources` (braucht **Qt6::Svg**). Genutzt über das Qt-`icon`-System
+  (`icon.source` + `icon.color`). Helfer `window.icon(name)` baut den qrc-Pfad;
+  Inline-Komponente `IconToolButton`. Sidebar-„×" tönt sein SVG per `MultiEffect`
+  (`QtQuick.Effects`). Tooltips/Strings in i18n.
+  **Lektion:** `header: ToolBar` mit innen `anchors.fill`-Layout braucht feste `height`,
+  sonst kollabiert die Toolbar auf 0 (zirkuläre Größenabhängigkeit).
+- ✅ **Dropdowns + Dialoge theme-gerecht** — themengebundene `palette` am
+  `ApplicationWindow` (window/base/text/button/highlight…) → alle **In-Window**-Basic-Controls
+  (Dialoge, ComboBoxen, Textfelder, Buttons, das `typeMenu`-Popup) erben die Theme-Farben.
+  Inline-Komponenten: `AppDialog` (abgerundet/erhoben/gerahmt, gestylter Titel, abgedunkelter
+  `Overlay.modal`), `AppComboBox` (gerahmtes Feld + Caret-Icon + abgerundetes Popup),
+  `AppMenuItem`/`AppPopupBg`. SSH-/Seriell-/Über-Dialog nutzen `AppDialog`.
+- 🟡 **Menü-Icons (System-Theme) → Backlog.** `Theme.systemDark`/`Theme.menuIcon` getönt
+  nach **OS-Schema** (nicht App-Theme); `AA_DontShowIconsInMenus=false` in `main.cpp`.
+  **Aber:** Qt Quick rendert in **nativen macOS-Menüs keine `icon.source`-Icons**
+  (`QQuickNativeIconLoader::toQIcon()` baut nur `QIcon::fromTheme(name, fallback)`, `image()`
+  bleibt leer — verifiziert: File-Menü zeigt keine Icons). Lösung wie **RAFTNG** (Widgets):
+  QApplication+Qt6::Widgets, C++-`PhosphorIcon` mit `QIcon::setIsMask(true)` (folgt dann
+  je Kontext System- bzw. App-Palette), native `QMenuBar`. Bewusst zurückgestellt
+  (großer Umbau, Aktionen müssten in C++ verdrahtet werden). Auf Windows/Linux ist die
+  QML-`MenuBar` In-Window und rendert die `icon.source`-Icons bereits.
 - ✅ **Phase 3 (Agent-Awareness)** — vollständige OSC-Erkennung:
   - `VtScreen` fängt unbekannte OSC via `vterm_screen_set_unrecognised_fallbacks` ab →
     Signale `notify()` (OSC 9 / 777) und `promptMarker(kind,exit)` (OSC 133).

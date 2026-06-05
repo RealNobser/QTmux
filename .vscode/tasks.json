@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Wird von launch.json als preLaunchTask verwendet. Baut über das aktive
+      // CMake-Build-Preset (in der Statusleiste gewählt), daher plattformneutral
+      // (macos/windows/linux) ohne Hardcoding.
+      "type": "cmake",
+      "label": "CMake: build",
+      "command": "build",
+      "targets": ["qtmux"],
+      "preset": "${command:cmake.activeBuildPresetName}",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"],
+      "detail": "Baut das QTmux-Target über das aktive CMake-Build-Preset"
+    }
+  ]
+}

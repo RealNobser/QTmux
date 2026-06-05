@@ -1,3 +1,4 @@
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
@@ -29,6 +30,10 @@ void applyLanguage(QGuiApplication &app, QQmlApplicationEngine &engine,
 
 int main(int argc, char *argv[])
 {
+    // macOS blendet Icons in (nativen) Menüs sonst aus -> explizit erlauben,
+    // damit unsere Phosphor-Icons auch in der nativen Menüleiste erscheinen.
+    QCoreApplication::setAttribute(Qt::AA_DontShowIconsInMenus, false);
+
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName("QTmux");
     QGuiApplication::setOrganizationName("QTmux");
