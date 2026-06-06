@@ -109,8 +109,26 @@ Beide Credential-Dateien liegen in der Repo-Wurzel und sind **git-ignoriert** (`
 Makros: Mermaid heißt on-prem `mermaid-macro`, Cloud `mermaid-cloud`). Das `children`-Makro
 funktioniert auf beiden. Bei `/feierabend` beide Seiten-Sätze mitpflegen.
 
-**Jira (Cloud):** Projekt **QTMUX**, Board `https://<cloud-instanz>.atlassian.net/jira/software/projects/QTMUX/boards/36`
-(gleiche `Credential-Atlassian.txt`-Auth, API `/rest/api/3/…`).
+## Jira (DUAL: on-prem + Cloud)
+
+Tickets werden **parallel in beiden Jira** gepflegt (Backlog/Status synchron halten). Beide
+Projekte haben den Key **`QTMUX`** und denselben Issue-Satz (QTMUX-1…13, identische Summaries
+→ Abgleich per Summary). Issue-Typ: **Task** (in beiden vorhanden).
+
+- **On-prem Jira Server/DC** — `https://jira.intern.example`, `Credential-Jira.txt`
+  (**Bearer**-PAT, `verify_ssl=false`), API `/rest/api/2/`. Projekt-ID 10201.
+- **Atlassian Cloud Jira** — `https://<cloud-instanz>.atlassian.net`, Board `…/projects/QTMUX/boards/36`,
+  `Credential-Atlassian.txt` (**Basic** `email:token`), API `/rest/api/3/`. **Achtung:** die
+  `description` braucht hier **ADF** (`{type:doc,version:1,content:[…]}`), on-prem nimmt Klartext.
+
+**Muster:** Anlegen `POST /rest/api/<2|3>/issue` mit `fields.project.key=QTMUX`,
+`issuetype.name=Task`, `labels`. Suche/Abgleich: `GET /rest/api/2/search?jql=project=QTMUX`
+(on-prem) bzw. Cloud `POST /rest/api/3/search/jql`. Idempotent: vor dem Anlegen vorhandene
+Summaries holen und Duplikate überspringen. Token nur einlesen, nie ausgeben/committen.
+
+**MCP:** Atlassian bietet einen Remote-MCP-Server, aber **nur für Cloud** und mit interaktivem
+OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
+**einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
 ## Status (Stand: 2026-06-06)
 
