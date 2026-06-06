@@ -27,6 +27,7 @@ public:
     void resize(int cols, int rows) override;
     void terminate() override;
     QString currentWorkingDirectory() const override { return m_pty.currentWorkingDirectory(); }
+    qint64 processId() const override { return m_pty.pid(); }
 
 private:
     Pty m_pty;

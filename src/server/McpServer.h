@@ -51,6 +51,9 @@ signals:
 private:
     void onReadyRead(QTcpSocket *sock);
     void sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status = 200);
+    /// Erkennt aus dem verbindenden Client-Prozess dessen QTmux-Session und
+    /// markiert sie als MCP-Controller (roter Tab). Aufruf beim initialize.
+    void detectController(quint16 clientPort);
 
     // JSON-RPC / MCP
     QJsonObject handleRpc(const QJsonObject &req, bool &isNotification);

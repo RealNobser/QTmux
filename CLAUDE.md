@@ -63,7 +63,7 @@ weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/AppController.{h,cpp}` | QML-Singleton `App.*`: UI-Sprache; Translator-Wechsel in `main.cpp` |
 | `src/core/AgentRegistry.{h,cpp}` | Bekannte Agenten-CLIs (claude, codex, gemini, **agy**=AntiGravity, …); `detect()` |
 | `i18n/qtmux_{de,en}.ts` | Übersetzungen; via `qt_add_translations` zu `:/i18n/*.qm` kompiliert/eingebettet |
-| `src/terminal/TerminalItem.{h,cpp}` | QML-`TerminalItem`; rendert zugewiesene `Session` (besitzt sie nicht) |
+| `src/terminal/TerminalItem.{h,cpp}` | QML-`TerminalItem`; rendert `Session`, Maus-Selektion + Copy/Paste (`QClipboard`) |
 | `qml/Main.qml` | App-Shell: Toolbar + datengetriebene Sidebar + Terminal der aktuellen Session |
 | `resources/icons/*.svg` | Phosphor-Icons (eingebettet als `qrc:/icons/`), via `icon.source`/`icon.color` |
 | `tests/` | QtTest: `tst_pty`, `tst_vtscreen`, `tst_session` (E2E) |
@@ -99,7 +99,7 @@ in `Credential-Confluence.txt` (Repo-Wurzel, **git-ignoriert**, niemals committe
 `ancestors:[{id: <seiten-id>}]`, `body.storage` = XHTML-Storage-Format).
 Bei `/feierabend` diese Seiten mitpflegen.
 
-## Status (Stand: 2026-06-05)
+## Status (Stand: 2026-06-06)
 
 - ✅ **Phase 0** — Gerüst (CMake/Presets/vcpkg, Qt-Quick-Shell, .vscode)
 - ✅ **Phase 1** — Terminal-Kern: PTY + libvterm + TerminalItem; 3 Tests grün; läuft auf macOS
@@ -160,8 +160,34 @@ Bei `/feierabend` diese Seiten mitpflegen.
   `create_session type=ssh`. Offen: Connection-Manager/Profile, libssh2-Variante (SFTP).
 - ✅ **MCP-Schnittstelle** — `src/server/McpServer.{h,cpp}`: eingebetteter MCP-Server
   (HTTP/JSON-RPC 2.0) auf `127.0.0.1:7345`, Menü „Agent-Steuerung". Tools: list/create/
-  close/focus_session, send_text, read_screen, set_theme. Session hat stabile `id()` +
-  `screenText()`. Doku: `docs/MCP.md`. End-to-end mit curl verifiziert.
+  close/focus_session, send_text, read_screen, **attach_controller**, set_theme. Session hat
+  stabile `id()` + `screenText()`. Doku: `docs/MCP.md`. End-to-end mit curl verifiziert.
+- ✅ **MCP-Controller-Tab (rot)** — Session, in der der steuernde MCP-Agent läuft, bekommt
+  links einen **roten Tab** (`#e5534b`) in der Sidebar. `Session::mcpController` (Property/Signal,
+  NICHT persistiert) → Rolle `McpControllerRole` → Delegate-Balken (`qml/Main.qml`).
+  - **Auto-Erkennung (Standard):** beim MCP-`initialize` ermittelt `McpServer::detectController`
+    den Client-Prozess über `procinfo::pidOfTcpClient` (TCP-Port→PID) und ordnet ihn per
+    **Vorfahrenkette** (`procinfo::ancestorPids`) der Session zu, deren `Session::processId()`
+    (= Shell-PID, via `ITerminalBackend::processId`/`PtyBackend`) in der Kette liegt.
+  - **Wichtige Lektion:** Auf aktuellem macOS liefert `KERN_PROCARGS2` **kein** Environment
+    fremder Prozesse mehr (auch `ps eww` nicht) — daher Zuordnung über die Prozesshierarchie,
+    NICHT über das Lesen von `QTMUX_SESSION_ID` aus dem Client-Env.
+  - **Manuell (Fallback):** `QTMUX_SESSION_ID` wird in jede Shell injiziert
+    (`SessionModel::createShellSession` → `PtyBackend::setExtraEnv`); Agent ruft
+    `attach_controller(id)`. Plattform-Helfer: `src/core/ProcessInfo.{h,cpp}` (macOS libproc,
+    Linux /proc, Windows-Stub).
+- ✅ **Copy & Paste im Terminal** — `TerminalItem`: Maus-**Selektion** (Press/Move/Release,
+  Strom-/Zeilen-Auswahl) mit Highlight in `paint()`; Text via `VtScreen::cell` extrahiert
+  (rechte Leerzeichen getrimmt). `copy()`/`paste()` (Q_INVOKABLE) über `QClipboard`; Paste
+  wandelt `\n`/`\r\n` → `\r`. **Shortcuts plattformkorrekt:** macOS Cmd+C/V (kapert NICHT
+  das Terminal-Ctrl+C/SIGINT, da Cmd=ControlModifier, physisches Ctrl=MetaModifier); sonst
+  Ctrl+Shift+C/V im `keyPressEvent`. Menü „Bearbeiten" (`actCopy`/`actPaste`, Shortcut nur
+  macOS via `StandardKey`) **und Rechtsklick-Kontextmenü** (`TerminalItem::contextMenuRequested`
+  → `termContextMenu.popup()`). `hasSelection`-Property für Menü-Aktivierung. E2E verifiziert.
+- ✅ **Prozess-Cleanup beim Quit** — `onClosing` ruft `saveState()` dann `SessionModel::shutdownAll()`
+  (→ `Session::shutdown` → `ITerminalBackend::terminate`). `Pty::terminate` (UnixPty) erfasst via
+  `procinfo::descendantPids` den **ganzen Prozessbaum** und beendet ihn (SIGHUP, kurze Gnadenfrist,
+  dann SIGKILL) — auch HUP-ignorierende Prozesse (`nohup`). Verifiziert.
 - ✅ **Session-Persistenz** — `SessionModel` speichert die Session-Liste (Typ, Serial-Port/
   Baud, **Arbeitsverzeichnis**) + aktive Zeile via QSettings bei jeder Änderung + `onClosing`;
   `restoreState()` beim Start. Fenstergeometrie via QML `Settings` (QtCore).

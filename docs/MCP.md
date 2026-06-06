@@ -19,10 +19,42 @@ externer KI-Agent die Anwendung fernsteuern kann — inklusive der einzelnen Ses
 | `focus_session` | `id` | Session sichtbar/fokussiert machen |
 | `send_text` | `id`, `text`, `enter?` (Standard true) | Text in die Session tippen |
 | `read_screen` | `id` | Sichtbaren Bildschirm als Klartext lesen |
+| `attach_controller` | `id` | Markiert die Session als steuernde **MCP-Controller**-Session (roter Tab) |
 | `set_theme` | `mode` ("system"/"light"/"dark") | App-Design umschalten |
 
 `activity`: 1=läuft (grün), 2=wartet, 3=Fehler (rot), 4=geschlossen.
 `type`: 0=Shell, 1=SSH, 2=Seriell, 3=App.
+`list_sessions` liefert zusätzlich `mcpController` (true = roter Controller-Tab).
+
+## Controller-Session markieren (roter Tab)
+
+Startet man **in** einer QTmux-Shell einen Agenten, der sich per MCP verbindet, um die
+*anderen* Sessions zu steuern, bekommt diese Session in der Sidebar einen **roten Tab**.
+
+**Automatisch (Standard):** Beim MCP-`initialize` ermittelt QTmux den verbindenden
+Client-Prozess (über den TCP-Port → PID) und ordnet ihn anhand seiner **Prozess-Vorfahrenkette**
+genau der Session zu, in deren Shell er läuft (Client → … → Shell-PID). Es ist **kein** Setup
+im Agenten nötig — der Connector allein genügt. (macOS/Linux; das Lesen fremder Umgebungen ist
+auf aktuellem macOS gesperrt, daher die Zuordnung über die Prozesshierarchie.)
+
+**Manuell (Fallback):** Jede Shell-Session erhält die Umgebungsvariable **`QTMUX_SESSION_ID`**.
+Ein Agent kann sich auch explizit anmelden:
+
+```bash
+# innerhalb der Agenten-Session:
+curl -s -X POST http://127.0.0.1:7345/mcp -d \
+  "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",
+    \"params\":{\"name\":\"attach_controller\",\"arguments\":{\"id\":$QTMUX_SESSION_ID}}}"
+```
+
+Die Markierung gilt für die **Lebensdauer der Session** (nicht persistiert).
+
+## Prozess-Cleanup beim Beenden
+
+Beim Schließen der Anwendung werden alle Sessions sauber beendet: QTmux erfasst je Session
+den **gesamten Prozessbaum** (Shell + Kinder, z. B. ein laufender Agent) und beendet ihn
+(SIGHUP, dann SIGKILL). So bleiben keine verwaisten Prozesse zurück — auch nicht solche, die
+das PTY-Hangup ignorieren (`nohup` o. ä.).
 
 ## Beispiel (curl)
 

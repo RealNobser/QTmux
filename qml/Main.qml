@@ -202,6 +202,15 @@ ApplicationWindow {
         }
     }
 
+    // Kontextmenü des Terminals (Rechtsklick): Kopieren/Einfügen.
+    Menu {
+        id: termContextMenu
+        padding: 4
+        background: AppPopupBg { implicitWidth: 160 }
+        AppMenuItem { action: actCopy;  icon.source: window.icon("copy") }
+        AppMenuItem { action: actPaste; icon.source: window.icon("clipboard") }
+    }
+
     // Vom Split-Button gewählter Standardtyp (0=Shell, 1=SSH, 2=Seriell), persistiert.
     property int newSessionType: 0
 
@@ -231,8 +240,12 @@ ApplicationWindow {
             currentRow = (active >= 0 && active < sessions.count) ? active : 0
     }
 
-    // Beim Schließen den finalen Zustand sichern (u. a. aktuelles Arbeitsverzeichnis).
-    onClosing: sessions.saveState()
+    // Beim Schließen erst den Zustand sichern (braucht laufende Prozesse für das
+    // aktuelle Arbeitsverzeichnis), dann alle Prozesse/Verbindungen beenden.
+    onClosing: {
+        sessions.saveState()
+        sessions.shutdownAll()
+    }
 
     // Fenstergeometrie + gewählter Session-Typ über Neustarts erhalten.
     Settings {
@@ -269,6 +282,22 @@ ApplicationWindow {
         text: qsTr("Beenden")
         shortcut: "Ctrl+Q"
         onTriggered: Qt.quit()
+    }
+    // Kopieren/Einfügen. Shortcut nur auf macOS (Cmd+C/V) — kapert dort NICHT das
+    // Terminal-Ctrl+C (SIGINT). Auf Windows/Linux handhabt das TerminalItem selbst
+    // Ctrl+Shift+C/V, damit Ctrl+C im Terminal weiter SIGINT bleibt.
+    Action {
+        id: actCopy
+        text: qsTr("Kopieren")
+        enabled: terminal.hasSelection
+        shortcut: Qt.platform.os === "osx" ? StandardKey.Copy : ""
+        onTriggered: terminal.copy()
+    }
+    Action {
+        id: actPaste
+        text: qsTr("Einfügen")
+        shortcut: Qt.platform.os === "osx" ? StandardKey.Paste : ""
+        onTriggered: terminal.paste()
     }
 
     // --- Toolbar oben: Schnellzugriff mit Phosphor-Icons --------------------
@@ -365,6 +394,11 @@ ApplicationWindow {
             MenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
             MenuItem { action: actQuit }
+        }
+        Menu {
+            title: qsTr("Bearbeiten")
+            MenuItem { action: actCopy;  icon.source: window.icon("copy");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuItem { action: actPaste; icon.source: window.icon("clipboard"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
         }
         Menu {
             title: qsTr("Ansicht")
@@ -478,6 +512,7 @@ ApplicationWindow {
                         required property string agentId
                         required property bool needsAttention
                         required property string lastNotification
+                        required property bool mcpController
                         width: ListView.view.width
                         height: 48
                         radius: 8
@@ -486,6 +521,17 @@ ApplicationWindow {
 
                         HoverHandler { id: hover }
                         TapHandler { onTapped: window.currentRow = index }
+
+                        // Roter Tab: diese Session steuert per MCP die anderen (Controller-Agent).
+                        Rectangle {
+                            visible: mcpController
+                            width: 3
+                            radius: 1.5
+                            color: "#e5534b"
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            height: parent.height - 14
+                        }
 
                         RowLayout {
                             anchors.fill: parent
@@ -644,6 +690,8 @@ ApplicationWindow {
                 backgroundColor: Theme.terminalBg
                 foregroundColor: Theme.terminalFg
                 session: window.currentRow >= 0 ? sessions.sessionAt(window.currentRow) : null
+                // Rechtsklick -> Kontextmenü (Kopieren/Einfügen) an der Mausposition.
+                onContextMenuRequested: termContextMenu.popup()
             }
         }
     }

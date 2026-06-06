@@ -22,6 +22,7 @@ public:
         AgentRole,
         AttentionRole,
         NotificationRole,
+        McpControllerRole,
         SessionRole,
     };
     Q_ENUM(Roles)
@@ -51,6 +52,9 @@ public:
     Session *sessionById(int id) const;
     const QList<Session *> &sessions() const { return m_sessions; }
     Q_INVOKABLE void closeSession(int row);
+    /// Beendet alle laufenden Prozesse/Verbindungen (beim App-Quit aufzurufen,
+    /// nach saveState()). Verhindert verwaiste Shells/Agenten.
+    Q_INVOKABLE void shutdownAll();
     /// Markiert die Zeile als aktiv/fokussiert (alle anderen inaktiv) — löscht deren Attention.
     Q_INVOKABLE void setActiveRow(int row);
 

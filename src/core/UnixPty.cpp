@@ -4,6 +4,8 @@
 
 #include <QSocketNotifier>
 
+#include "ProcessInfo.h"
+
 #if defined(Q_OS_MACOS) || defined(Q_OS_BSD4)
 #  include <util.h>          // forkpty auf macOS/BSD
 #else
@@ -146,16 +148,42 @@ void Pty::terminate() {
         d->notifier->deleteLater();
         d->notifier = nullptr;
     }
+
+    const pid_t pid = static_cast<pid_t>(m_pid);
+
+    // Nachfahren (z. B. ein gestarteter Agent) ERFASSEN, solange der Baum intakt
+    // ist — nach dem Tod der Shell reparenten sie zu init/launchd. So beenden wir
+    // auch Prozesse, die das PTY-HUP ignorieren (Agent läuft sonst verwaist weiter).
+    QList<qint64> tree;
+    if (pid > 0) tree = procinfo::descendantPids(pid);
+
+    // Höflich beenden: SIGHUP an Shell + alle Nachfahren, dann Master schließen
+    // (löst zusätzlich SIGHUP an die Vordergrund-Prozessgruppe aus).
+    if (pid > 0) ::kill(pid, SIGHUP);
+    for (qint64 p : tree) if (p > 0) ::kill(static_cast<pid_t>(p), SIGHUP);
+
     if (d->masterFd >= 0) {
         ::close(d->masterFd);
         d->masterFd = -1;
     }
 
+    // Kurze Gnadenfrist, dann hart beenden, was noch lebt.
     int status = 0;
-    if (m_pid > 0) {
-        ::kill(static_cast<pid_t>(m_pid), SIGHUP);
-        ::waitpid(static_cast<pid_t>(m_pid), &status, 0);
+    if (pid > 0) {
+        bool reaped = false;
+        for (int i = 0; i < 20; ++i) {                 // ~200 ms
+            if (::waitpid(pid, &status, WNOHANG) == pid) { reaped = true; break; }
+            ::usleep(10 * 1000);
+        }
+        if (!reaped) {
+            ::kill(pid, SIGKILL);
+            ::waitpid(pid, &status, 0);
+        }
     }
+    // Überlebende Nachfahren hart beenden (sie sind nicht unsere direkten Kinder
+    // und werden von init reaped — SIGKILL genügt).
+    for (qint64 p : tree) if (p > 0) ::kill(static_cast<pid_t>(p), SIGKILL);
+
     const int exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
     m_pid = 0;
     emit finished(exitCode);

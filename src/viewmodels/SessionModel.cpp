@@ -25,6 +25,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case AgentRole:   return s->agentId();
     case AttentionRole: return s->needsAttention();
     case NotificationRole: return s->lastNotification();
+    case McpControllerRole: return s->mcpController();
     case SessionRole: return QVariant::fromValue(static_cast<QObject *>(s));
     default:          return {};
     }
@@ -38,6 +39,7 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
         {AgentRole,   "agentId"},
         {AttentionRole, "needsAttention"},
         {NotificationRole, "lastNotification"},
+        {McpControllerRole, "mcpController"},
         {SessionRole, "session"},
     };
 }
@@ -49,7 +51,8 @@ void SessionModel::wireSession(Session *s, int row) {
         if (r >= 0) {
             const QModelIndex idx = index(r);
             emit dataChanged(idx, idx,
-                {TitleRole, StateRole, AgentRole, AttentionRole, NotificationRole});
+                {TitleRole, StateRole, AgentRole, AttentionRole, NotificationRole,
+                 McpControllerRole});
         }
     };
     connect(s, &Session::titleChanged, this, refresh);
@@ -58,6 +61,7 @@ void SessionModel::wireSession(Session *s, int row) {
     connect(s, &Session::activityChanged, this, refresh);
     connect(s, &Session::notificationChanged, this, refresh);
     connect(s, &Session::attentionChanged, this, refresh);
+    connect(s, &Session::mcpControllerChanged, this, refresh);
 
     // Steigt die Aufmerksamkeit, das Fenster informieren (Dock-/Taskbar-Alert).
     connect(s, &Session::attentionChanged, this, [this, s]() {
@@ -84,6 +88,9 @@ int SessionModel::createShellSession(const QString &workingDir) {
     auto *s = new Session(this);
     auto *pty = new PtyBackend();
     if (!workingDir.isEmpty()) pty->setWorkingDirectory(workingDir);
+    // Eigene Session-ID in die Shell-Umgebung legen: ein steuernder Agent liest
+    // $QTMUX_SESSION_ID und meldet sich per MCP-Tool attach_controller(id) an.
+    pty->setExtraEnv({QStringLiteral("QTMUX_SESSION_ID=%1").arg(s->id())});
     s->attachBackend(pty, Session::Type::Shell, 80, 24);
 
     const int row = count();
@@ -192,6 +199,11 @@ void SessionModel::closeSession(int row) {
     s->deleteLater();
     emit countChanged();
     saveState();
+}
+
+void SessionModel::shutdownAll() {
+    // Nur Prozesse beenden (keine Modelländerung) — wird beim App-Quit aufgerufen.
+    for (Session *s : m_sessions) s->shutdown();
 }
 
 // --- Persistenz -------------------------------------------------------------

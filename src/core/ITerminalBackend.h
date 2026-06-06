@@ -36,6 +36,10 @@ public:
     /// Aktuelles Arbeitsverzeichnis (leer, wenn nicht zutreffend/ermittelbar).
     virtual QString currentWorkingDirectory() const { return {}; }
 
+    /// PID des zugrundeliegenden Prozesses (z. B. der Shell), oder -1.
+    /// Dient der Zuordnung eines per MCP verbundenen Agentenprozesses zur Session.
+    virtual qint64 processId() const { return -1; }
+
     BackendState state() const { return m_state; }
 
 signals:

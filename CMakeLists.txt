@@ -44,6 +44,8 @@ add_library(qtmux_core STATIC
     src/core/Pty.h
     src/core/UnixPty.cpp
     src/core/WindowsPty.cpp
+    src/core/ProcessInfo.h
+    src/core/ProcessInfo.cpp
     src/core/ITerminalBackend.h
     src/core/PtyBackend.h
     src/core/PtyBackend.cpp
@@ -108,6 +110,8 @@ qt_add_resources(qtmux "icons"
         resources/icons/trash.svg
         resources/icons/robot.svg
         resources/icons/command.svg
+        resources/icons/copy.svg
+        resources/icons/clipboard.svg
 )
 
 target_link_libraries(qtmux PRIVATE

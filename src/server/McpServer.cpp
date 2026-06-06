@@ -1,6 +1,7 @@
 #include "McpServer.h"
 #include "SessionModel.h"
 #include "Session.h"
+#include "ProcessInfo.h"
 
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -92,6 +93,11 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
 
     const QJsonDocument doc = QJsonDocument::fromJson(body);
     if (doc.isObject()) {
+        // Den verbindenden Agentenprozess seiner Session zuordnen — beim Handshake
+        // UND bei Tool-Aufrufen (manche Clients halten/wechseln Verbindungen anders).
+        const QString m = doc.object().value("method").toString();
+        if (m == QLatin1String("initialize") || m == QLatin1String("tools/call"))
+            detectController(static_cast<quint16>(sock->peerPort()));
         bool isNotification = false;
         const QJsonObject resp = handleRpc(doc.object(), isNotification);
         if (isNotification) {
@@ -109,6 +115,23 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
         sendHttpJson(sock, QJsonDocument(out).toJson(QJsonDocument::Compact));
     } else {
         sendHttpJson(sock, R"({"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}})");
+    }
+}
+
+void McpServer::detectController(quint16 clientPort) {
+    if (!m_sessions) return;
+    // Welcher lokale Prozess hält die Verbindung zu unserem Port?
+    const qint64 pid = procinfo::pidOfTcpClient(clientPort, static_cast<quint16>(m_port));
+    if (pid <= 0) return;
+    // Den Client seiner Session zuordnen: seine Vorfahrenkette enthält die
+    // Shell-PID genau einer Session (Agent läuft als Kind dieser Shell).
+    const QList<qint64> chain = procinfo::ancestorPids(pid);
+    for (Session *s : m_sessions->sessions()) {
+        const qint64 spid = s->processId();
+        if (spid > 0 && chain.contains(spid)) {
+            s->setMcpController(true);
+            break;
+        }
     }
 }
 
@@ -217,6 +240,12 @@ QJsonObject McpServer::toolsList() const {
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
     tools.append(tool("focus_session", "Fokussiert eine Session (macht sie sichtbar).",
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
+    tools.append(tool("attach_controller",
+                      "Markiert die Session mit dieser ID als steuernde MCP-Controller-Session "
+                      "(roter Tab in der Sidebar). Üblich: der Agent liest $QTMUX_SESSION_ID "
+                      "und ruft dieses Tool mit diesem Wert auf.",
+                      QJsonObject{{"id", intProp("Session-ID des steuernden Agenten")}},
+                      QJsonArray{"id"}));
     tools.append(tool("send_text", "Sendet Text an eine Session (optional mit Enter).",
                       QJsonObject{{"id", intProp("Session-ID")},
                                   {"text", strProp("zu sendender Text")},
@@ -248,6 +277,7 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             {"agentId", s->agentId()},
             {"needsAttention", s->needsAttention()},
             {"lastNotification", s->lastNotification()},
+            {"mcpController", s->mcpController()},
         };
     };
 
@@ -292,6 +322,12 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         const int row = m_sessions->rowForId(id);
         if (row < 0) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
         emit focusRequested(row);
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "attach_controller") {
+        if (!s) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        s->setMcpController(true);   // roter Tab; gilt bis zum Schließen der Session
         text = QStringLiteral("ok");
         return {};
     }

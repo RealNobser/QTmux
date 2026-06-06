@@ -23,6 +23,7 @@ class TerminalItem : public QQuickPaintedItem {
     Q_PROPERTY(int pointSize READ pointSize WRITE setPointSize NOTIFY fontChanged)
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY colorsChanged)
+    Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
 public:
     explicit TerminalItem(QQuickItem *parent = nullptr);
     ~TerminalItem() override;
@@ -40,20 +41,35 @@ public:
 
     void paint(QPainter *painter) override;
 
+    /// Kopiert die aktuelle Maus-Selektion in die Zwischenablage (leer = nichts).
+    Q_INVOKABLE void copy();
+    /// Fügt den Zwischenablage-Text in die Session ein (Zeilenumbrüche -> CR).
+    Q_INVOKABLE void paste();
+    /// Ob aktuell etwas selektiert ist (für Menü-Aktivierung).
+    Q_INVOKABLE bool hasSelection() const { return m_hasSelection; }
+
 signals:
     void sessionChanged();
     void fontChanged();
     void colorsChanged();
+    void selectionChanged();
+    /// Rechtsklick im Terminal — QML öffnet daraufhin das Kontextmenü (Kopieren/Einfügen).
+    void contextMenuRequested();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
     void geometryChange(const QRectF &newGeo, const QRectF &oldGeo) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
     void recomputeGrid();
     QByteArray encodeKey(QKeyEvent *event) const;
     VtScreen *screen() const;
+    QPoint cellAt(const QPointF &pos) const;     // Pixel -> Zellkoordinate (col,row)
+    QString selectedText() const;
+    void clearSelection();
 
     QPointer<Session> m_session;
 
@@ -67,6 +83,12 @@ private:
 
     QColor m_defaultFg{0xe6, 0xe7, 0xee};
     QColor m_defaultBg{0x1e, 0x1f, 0x29};
+
+    // Maus-Selektion (Zellkoordinaten col=x, row=y; Strom-/Zeilen-Selektion).
+    QPoint m_selAnchor{-1, -1};
+    QPoint m_selCaret{-1, -1};
+    bool m_selecting = false;
+    bool m_hasSelection = false;
 };
 
 } // namespace qtmux

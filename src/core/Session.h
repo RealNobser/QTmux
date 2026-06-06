@@ -20,6 +20,9 @@ class Session : public QObject {
     Q_PROPERTY(bool needsAttention READ needsAttention NOTIFY attentionChanged)
     Q_PROPERTY(int activity READ activityInt NOTIFY activityChanged)
     Q_PROPERTY(QString lastNotification READ lastNotification NOTIFY notificationChanged)
+    // True, wenn in dieser Session ein Agent läuft, der sich per MCP als Controller
+    // angemeldet hat (Sidebar zeigt dann einen roten Tab). Reiner Laufzeitzustand.
+    Q_PROPERTY(bool mcpController READ mcpController NOTIFY mcpControllerChanged)
 public:
     enum class Type { Shell, Ssh, Serial, App };
     Q_ENUM(Type)
@@ -43,11 +46,20 @@ public:
     QString currentWorkingDirectory() const {
         return m_backend ? m_backend->currentWorkingDirectory() : QString();
     }
+    /// PID des zugrundeliegenden Prozesses (Shell), oder -1 — für MCP-Zuordnung.
+    qint64 processId() const { return m_backend ? m_backend->processId() : -1; }
     QString agentId() const { return m_agentId; }
     bool needsAttention() const { return m_needsAttention; }
     Activity activity() const { return m_activity; }
     int activityInt() const { return static_cast<int>(m_activity); }
     QString lastNotification() const { return m_lastNotification; }
+    bool mcpController() const { return m_mcpController; }
+
+    /// Meldet, dass in dieser Session der steuernde MCP-Agent läuft (roter Tab).
+    void setMcpController(bool on);
+
+    /// Beendet den zugrundeliegenden Prozess/die Verbindung (für sauberes App-Quit).
+    void shutdown();
 
     /// Markiert die Session als aktiv (sichtbar/fokussiert). Aktivieren löscht
     /// einen anstehenden Aufmerksamkeits-Hinweis.
@@ -71,6 +83,7 @@ signals:
     void attentionChanged();
     void activityChanged();
     void notificationChanged();
+    void mcpControllerChanged();
     void bell();
 
 private:
@@ -90,6 +103,7 @@ private:
     bool m_titleFromAgent = false;
     bool m_active = false;
     bool m_needsAttention = false;
+    bool m_mcpController = false;
     Activity m_activity = Activity::Running;
     QString m_lastNotification;
     bool m_commandRunning = false;   // zwischen OSC 133;C und ;D

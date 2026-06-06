@@ -50,6 +50,16 @@ void Session::setActive(bool active) {
     }
 }
 
+void Session::setMcpController(bool on) {
+    if (on == m_mcpController) return;
+    m_mcpController = on;
+    emit mcpControllerChanged();
+}
+
+void Session::shutdown() {
+    if (m_backend) m_backend->terminate();
+}
+
 void Session::raiseAttention() {
     if (!m_active && !m_needsAttention) {
         m_needsAttention = true;
