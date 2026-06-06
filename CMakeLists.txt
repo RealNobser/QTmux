@@ -63,6 +63,11 @@ add_library(qtmux_core STATIC
 target_include_directories(qtmux_core PUBLIC src/core)
 target_link_libraries(qtmux_core PUBLIC Qt6::Core Qt6::SerialPort PRIVATE vterm::vterm)
 
+# Windows: ConPTY (kernel32, default) + TCP-Tabelle/Sockets für ProcessInfo.
+if(WIN32)
+    target_link_libraries(qtmux_core PRIVATE iphlpapi ws2_32)
+endif()
+
 # Anwendungs-Target ----------------------------------------------------------
 qt_add_executable(qtmux
     src/app/main.cpp

@@ -16,6 +16,12 @@
 #  include <QFile>
 #  include <QFileInfo>
 #  include <dirent.h>
+#elif defined(Q_OS_WIN)
+#  include <winsock2.h>      // vor windows.h, sonst Konflikt mit winsock.h
+#  include <ws2tcpip.h>
+#  include <windows.h>
+#  include <tlhelp32.h>
+#  include <iphlpapi.h>
 #endif
 
 namespace qtmux::procinfo {
@@ -183,7 +189,76 @@ QList<qint64> descendantPids(qint64 root) {
     return out;
 }
 
-#else  // andere Plattformen (Windows): noch nicht implementiert
+#elif defined(Q_OS_WIN)
+
+// Eltern-Map (pid -> ppid) per ToolHelp-Snapshot aufbauen.
+static QHash<qint64, qint64> parentMap() {
+    QHash<qint64, qint64> parentOf;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return parentOf;
+    PROCESSENTRY32W pe {};
+    pe.dwSize = sizeof(pe);
+    if (Process32FirstW(snap, &pe)) {
+        do {
+            parentOf.insert(static_cast<qint64>(pe.th32ProcessID),
+                            static_cast<qint64>(pe.th32ParentProcessID));
+        } while (Process32NextW(snap, &pe));
+    }
+    CloseHandle(snap);
+    return parentOf;
+}
+
+qint64 pidOfTcpClient(quint16 clientPort, quint16 serverPort) {
+    ULONG size = 0;
+    GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET,
+                        TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
+    if (size == 0) return -1;
+    QByteArray buf(static_cast<int>(size), Qt::Uninitialized);
+    auto *table = reinterpret_cast<MIB_TCPTABLE_OWNER_PID *>(buf.data());
+    if (GetExtendedTcpTable(table, &size, FALSE, AF_INET,
+                            TCP_TABLE_OWNER_PID_CONNECTIONS, 0) != NO_ERROR)
+        return -1;
+    for (DWORD i = 0; i < table->dwNumEntries; ++i) {
+        const auto &row = table->table[i];
+        const quint16 lport = ntohs(static_cast<u_short>(row.dwLocalPort & 0xFFFF));
+        const quint16 rport = ntohs(static_cast<u_short>(row.dwRemotePort & 0xFFFF));
+        if (lport == clientPort && rport == serverPort)
+            return static_cast<qint64>(row.dwOwningPid);
+    }
+    return -1;
+}
+
+QList<qint64> ancestorPids(qint64 pid) {
+    const QHash<qint64, qint64> parentOf = parentMap();
+    QList<qint64> chain;
+    qint64 cur = pid;
+    for (int guard = 0; cur > 0 && guard < 64; ++guard) {
+        chain.append(cur);
+        if (!parentOf.contains(cur)) break;
+        const qint64 ppid = parentOf.value(cur);
+        if (ppid <= 0 || ppid == cur) break;
+        cur = ppid;
+    }
+    return chain;
+}
+
+QList<qint64> descendantPids(qint64 root) {
+    const QHash<qint64, qint64> parentOf = parentMap();
+    QList<qint64> out;
+    QList<qint64> stack{root};
+    while (!stack.isEmpty()) {
+        const qint64 cur = stack.takeLast();
+        for (auto it = parentOf.constBegin(); it != parentOf.constEnd(); ++it) {
+            if (it.value() == cur && it.key() != root && !out.contains(it.key())) {
+                out.append(it.key());
+                stack.append(it.key());
+            }
+        }
+    }
+    return out;
+}
+
+#else  // andere Plattformen: nicht implementiert
 
 qint64 pidOfTcpClient(quint16, quint16) { return -1; }
 QList<qint64> ancestorPids(qint64) { return {}; }

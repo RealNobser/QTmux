@@ -103,7 +103,20 @@ Bei `/feierabend` diese Seiten mitpflegen.
 
 - ✅ **Phase 0** — Gerüst (CMake/Presets/vcpkg, Qt-Quick-Shell, .vscode)
 - ✅ **Phase 1** — Terminal-Kern: PTY + libvterm + TerminalItem; 3 Tests grün; läuft auf macOS
-- ⬜ **Phase 1 (Windows)** — ConPTY in `WindowsPty.cpp` implementieren & testen
+- 🟡 **Phase 1 (Windows)** — ConPTY in `WindowsPty.cpp` **implementiert** (Code), auf
+  Windows-Hardware noch **ungetestet** (hier kein Windows verfügbar). Umsetzung:
+  CreatePipe ×2 → `CreatePseudoConsole` → `STARTUPINFOEX` mit
+  `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` → `CreateProcessW` (kein `bInheritHandles`).
+  Ausgabe via **dediziertem Reader-Thread** (blockierendes `ReadFile`), Daten per
+  `QMetaObject::invokeMethod(..., Qt::QueuedConnection)` in den GUI-Thread gemarshalt
+  (QSocketNotifier kann auf Windows keine Pipes). `resize`→`ResizePseudoConsole`;
+  `terminate` beendet den **Prozessbaum** (`procinfo::descendantPids` + `TerminateProcess`)
+  und schließt die Pseudo-Konsole (→ EOF → Reader endet, dann `join`). Env-Block (UTF-16,
+  sortiert) + Kommandozeilen-Quoting nach CommandLineToArgvW-Regeln. `ProcessInfo` auf
+  Windows nachgezogen: `descendantPids`/`ancestorPids` via ToolHelp-Snapshot,
+  `pidOfTcpClient` via `GetExtendedTcpTable` (linkt `iphlpapi`/`ws2_32`). Offen:
+  `currentWorkingDirectory()` (PEB/`NtQueryInformationProcess` — zurückgestellt, Shell
+  startet auf Windows im Home statt im letzten CWD); reale Verifikation auf Win 10/11.
 - 🟡 **Phase 2** — Session + SessionModel + datengetriebene Sidebar + Session-Wechsel: FERTIG.
   Sidebar-**Split-Button** „+ &lt;Typ&gt;" mit ▾-Dropdown (Shell/SSH/Seriell, gemerkt via Settings).
   Offen: **Split-Panes** (SplitView mit mehreren TerminalItems), Reorder.
