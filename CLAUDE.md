@@ -119,7 +119,7 @@ Bei `/feierabend` diese Seiten mitpflegen.
   startet auf Windows im Home statt im letzten CWD); reale Verifikation auf Win 10/11.
 - 🟡 **Phase 2** — Session + SessionModel + datengetriebene Sidebar + Session-Wechsel: FERTIG.
   Sidebar-**Split-Button** „+ &lt;Typ&gt;" mit ▾-Dropdown (Shell/SSH/Seriell, gemerkt via Settings).
-  Offen: **Split-Panes** (SplitView mit mehreren TerminalItems), Reorder.
+  Offen: Reorder (Drag).
   **Layout-Lektion:** verschachtelte `RowLayout` mit `fillHeight`-Kindern braucht
   `Layout.maximumHeight`/`fillHeight:false`, sonst wuchert sie in der `ColumnLayout`.
 - ✅ **UI-Basis** — Theme `System/Hell/Dunkel` (`Theme.mode`, System folgt OS via
@@ -189,6 +189,19 @@ Bei `/feierabend` diese Seiten mitpflegen.
     (`SessionModel::createShellSession` → `PtyBackend::setExtraEnv`); Agent ruft
     `attach_controller(id)`. Plattform-Helfer: `src/core/ProcessInfo.{h,cpp}` (macOS libproc,
     Linux /proc, Windows-Stub).
+- ✅ **Split-Panes** — Hauptbereich ist ein `SplitView` mit `Repeater` über `paneModel`
+  (ListModel, ein Eintrag je Pane mit `sessionRow`). `window.activePane`/`activeTerminal`
+  halten das fokussierte Pane; `currentRow` folgt dessen Session. Aktives Pane bei
+  Mehrfach-Layout durch **Akzentrahmen** markiert; Fokus (Klick/Tab) aktiviert ein Pane
+  (`TerminalItem.onActiveFocusChanged`). Aktionen `actSplitH`/`actSplitV` (Ctrl+Shift+E/O)
+  legen ein neues Pane mit **neuer Shell-Session** an (Orientierung gilt für alle Panes,
+  SplitView hat eine Achse); `actClosePane` (Ctrl+Shift+W) schließt das aktive Pane (letztes
+  → normale Session-Schließung). Sidebar-Klick lädt die Session ins **aktive** Pane
+  (`assignToActivePane`). `onRowsRemoved` führt **alle** Panes auf gültige Session-Reihen
+  nach (verschobene Indizes). Copy/Paste/Kontextmenü nutzen `window.activeTerminal`. Toolbar-
+  + „Ansicht"-Menü-Buttons mit neuen Icons `split-h`/`split-v`. E2E auf macOS verifiziert
+  (2× nebeneinander, 3× untereinander, sauberes Beenden aller Shells). Offen: rekursive
+  Misch-Layouts (H+V verschachtelt), Pane-Reorder.
 - ✅ **Copy & Paste im Terminal** — `TerminalItem`: Maus-**Selektion** (Press/Move/Release,
   Strom-/Zeilen-Auswahl) mit Highlight in `paint()`; Text via `VtScreen::cell` extrahiert
   (rechte Leerzeichen getrimmt). `copy()`/`paste()` (Q_INVOKABLE) über `QClipboard`; Paste

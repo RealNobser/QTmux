@@ -34,6 +34,14 @@ ApplicationWindow {
     // Aktive (fokussierte) Session ans Model melden -> löscht deren Aufmerksamkeits-Hinweis.
     onCurrentRowChanged: sessions.setActiveRow(currentRow)
 
+    // --- Split-Panes ---------------------------------------------------------
+    // paneModel: ein Eintrag je sichtbarem Terminal-Pane; `sessionRow` indexiert
+    // die im Pane gezeigte Session (Sidebar-Reihenfolge). `activePane` ist das
+    // fokussierte Pane; `currentRow` folgt dessen Session.
+    ListModel { id: paneModel }
+    property int activePane: 0
+    property var activeTerminal: null
+
     SessionModel { id: sessions }
 
     // MCP-Server: externe Agenten-Steuerung über 127.0.0.1 (nur lokal).
@@ -51,10 +59,15 @@ ApplicationWindow {
         target: sessions
         function onRowsRemoved(parent, first, last) {
             const removed = last - first + 1
-            if (window.currentRow > last)
-                window.currentRow -= removed
-            else if (window.currentRow >= first)
-                window.currentRow = Math.min(first, sessions.count - 1)
+            const adjust = function(r) {
+                if (r > last) return r - removed
+                if (r >= first) return Math.min(first, sessions.count - 1)
+                return r
+            }
+            window.currentRow = adjust(window.currentRow)
+            // Alle Panes auf gültige Session-Reihen nachführen (verschobene Indizes).
+            for (let i = 0; i < paneModel.count; ++i)
+                paneModel.setProperty(i, "sessionRow", adjust(paneModel.get(i).sessionRow))
         }
         // Fenster-Alert (Dock-Hüpfen/Taskbar-Blinken), wenn QTmux nicht im Vordergrund ist.
         function onAttentionRaised(row) {
@@ -231,6 +244,52 @@ ApplicationWindow {
         else newSession()
     }
 
+    // --- Pane-Steuerung ------------------------------------------------------
+    // Setzt das fokussierte Pane (+ dessen Terminal) und zieht currentRow nach.
+    function setActivePane(index, term) {
+        window.activePane = index
+        window.activeTerminal = term
+        if (index >= 0 && index < paneModel.count) {
+            const row = paneModel.get(index).sessionRow
+            if (row >= 0 && row < sessions.count) window.currentRow = row
+        }
+    }
+    // Fokus nachträglich (nach Item-Erzeugung) auf das aktive Pane legen.
+    function focusActivePane() {
+        Qt.callLater(function() {
+            const p = paneRepeater.itemAt(window.activePane)
+            if (p) { window.activeTerminal = p.term; p.term.forceActiveFocus() }
+        })
+    }
+    // Sidebar-Klick: gewählte Session ins aktive Pane laden.
+    function assignToActivePane(row) {
+        window.currentRow = row
+        if (window.activePane >= 0 && window.activePane < paneModel.count)
+            paneModel.setProperty(window.activePane, "sessionRow", row)
+        focusActivePane()
+    }
+    // Teilen: neue Shell-Session in einem neuen Pane (orientation gilt für alle Panes).
+    function splitPane(orientation) {
+        mainSplit.orientation = orientation
+        const row = sessions.createShellSession()
+        paneModel.append({ sessionRow: row })
+        window.activePane = paneModel.count - 1
+        window.currentRow = row
+        focusActivePane()
+    }
+    // Aktives Pane schließen (letztes Pane -> normale Session-Schließung).
+    function closePane() {
+        if (paneModel.count <= 1) { window.closeCurrent(); return }
+        const idx = window.activePane
+        const row = paneModel.get(idx).sessionRow
+        paneModel.remove(idx)
+        window.activePane = Math.min(idx, paneModel.count - 1)
+        sessions.closeSession(row)   // -> onRowsRemoved passt übrige Panes an
+        focusActivePane()
+        if (window.activePane < paneModel.count)
+            window.currentRow = paneModel.get(window.activePane).sessionRow
+    }
+
     // Beim Start die persistierten Sessions wiederherstellen; sonst eine neue öffnen.
     Component.onCompleted: {
         const active = sessions.restoreState()
@@ -238,6 +297,9 @@ ApplicationWindow {
             newSession()
         else
             currentRow = (active >= 0 && active < sessions.count) ? active : 0
+        // Start mit genau einem Pane, das die aktive Session zeigt.
+        paneModel.append({ sessionRow: window.currentRow })
+        window.activePane = 0
     }
 
     // Beim Schließen erst den Zustand sichern (braucht laufende Prozesse für das
@@ -289,15 +351,35 @@ ApplicationWindow {
     Action {
         id: actCopy
         text: qsTr("Kopieren")
-        enabled: terminal.hasSelection
+        enabled: window.activeTerminal && window.activeTerminal.hasSelection
         shortcut: Qt.platform.os === "osx" ? StandardKey.Copy : ""
-        onTriggered: terminal.copy()
+        onTriggered: if (window.activeTerminal) window.activeTerminal.copy()
     }
     Action {
         id: actPaste
         text: qsTr("Einfügen")
         shortcut: Qt.platform.os === "osx" ? StandardKey.Paste : ""
-        onTriggered: terminal.paste()
+        onTriggered: if (window.activeTerminal) window.activeTerminal.paste()
+    }
+    // Split-Panes: nebeneinander / untereinander teilen, aktives Pane schließen.
+    Action {
+        id: actSplitH
+        text: qsTr("Nebeneinander teilen")
+        shortcut: "Ctrl+Shift+E"
+        onTriggered: window.splitPane(Qt.Horizontal)
+    }
+    Action {
+        id: actSplitV
+        text: qsTr("Untereinander teilen")
+        shortcut: "Ctrl+Shift+O"
+        onTriggered: window.splitPane(Qt.Vertical)
+    }
+    Action {
+        id: actClosePane
+        text: qsTr("Pane schließen")
+        shortcut: "Ctrl+Shift+W"
+        enabled: paneModel.count > 1
+        onTriggered: window.closePane()
     }
 
     // --- Toolbar oben: Schnellzugriff mit Phosphor-Icons --------------------
@@ -354,6 +436,19 @@ ApplicationWindow {
                 onClicked: window.closeCurrent()
             }
 
+            ToolSeparator {}
+
+            IconToolButton {
+                icon.source: window.icon("split-h")
+                tip: qsTr("Nebeneinander teilen")
+                onClicked: window.splitPane(Qt.Horizontal)
+            }
+            IconToolButton {
+                icon.source: window.icon("split-v")
+                tip: qsTr("Untereinander teilen")
+                onClicked: window.splitPane(Qt.Vertical)
+            }
+
             Item { Layout.fillWidth: true }   // Abstandhalter
 
             IconToolButton {
@@ -402,6 +497,16 @@ ApplicationWindow {
         }
         Menu {
             title: qsTr("Ansicht")
+            MenuItem {
+                action: actSplitH
+                icon.source: window.icon("split-h"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+            }
+            MenuItem {
+                action: actSplitV
+                icon.source: window.icon("split-v"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+            }
+            MenuItem { action: actClosePane; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuSeparator {}
             MenuItem {
                 action: actToggleTheme
                 icon.source: Theme.dark ? window.icon("sun") : window.icon("moon")
@@ -520,7 +625,7 @@ ApplicationWindow {
                              : hover.hovered ? Theme.sidebarHover : "transparent"
 
                         HoverHandler { id: hover }
-                        TapHandler { onTapped: window.currentRow = index }
+                        TapHandler { onTapped: window.assignToActivePane(index) }
 
                         // Roter Tab: diese Session steuert per MCP die anderen (Controller-Agent).
                         Rectangle {
@@ -675,23 +780,65 @@ ApplicationWindow {
             }
         }
 
-        // --- Hauptbereich: Terminal der aktuellen Session -------------------
-        Rectangle {
+        // --- Hauptbereich: ein oder mehrere Terminal-Panes (Split-View) -----
+        SplitView {
+            id: mainSplit
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Theme.bgMain
+            orientation: Qt.Horizontal
 
-            TerminalItem {
-                id: terminal
-                anchors.fill: parent
-                anchors.margins: 6
-                focus: true
-                pointSize: 13
-                backgroundColor: Theme.terminalBg
-                foregroundColor: Theme.terminalFg
-                session: window.currentRow >= 0 ? sessions.sessionAt(window.currentRow) : null
-                // Rechtsklick -> Kontextmenü (Kopieren/Einfügen) an der Mausposition.
-                onContextMenuRequested: termContextMenu.popup()
+            handle: Rectangle {
+                implicitWidth: 6
+                implicitHeight: 6
+                color: SplitHandle.pressed ? Theme.accent
+                     : SplitHandle.hovered ? Theme.border : Theme.bgMain
+            }
+
+            Repeater {
+                id: paneRepeater
+                model: paneModel
+
+                delegate: Rectangle {
+                    id: pane
+                    required property int index
+                    required property int sessionRow
+                    // Terminal-Zugriff für copy/paste über paneRepeater.itemAt(...).term
+                    property alias term: paneTerm
+
+                    SplitView.fillWidth: true
+                    SplitView.fillHeight: true
+                    SplitView.minimumWidth: 140
+                    SplitView.minimumHeight: 90
+
+                    color: Theme.bgMain
+                    radius: paneModel.count > 1 ? 6 : 0
+                    // Aktives Pane bei Mehrfach-Layout durch Akzentrahmen markieren.
+                    border.width: paneModel.count > 1 && index === window.activePane ? 2 : 0
+                    border.color: Theme.accent
+
+                    TerminalItem {
+                        id: paneTerm
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        pointSize: 13
+                        backgroundColor: Theme.terminalBg
+                        foregroundColor: Theme.terminalFg
+                        session: pane.sessionRow >= 0 && pane.sessionRow < sessions.count
+                                 ? sessions.sessionAt(pane.sessionRow) : null
+                        // Fokus (Klick/Tab) macht dieses Pane aktiv.
+                        onActiveFocusChanged: if (activeFocus) window.setActivePane(pane.index, paneTerm)
+                        // Rechtsklick -> erst Pane aktivieren, dann Kontextmenü.
+                        onContextMenuRequested: {
+                            window.setActivePane(pane.index, paneTerm)
+                            termContextMenu.popup()
+                        }
+                    }
+
+                    Component.onCompleted: if (index === window.activePane) {
+                        window.activeTerminal = paneTerm
+                        paneTerm.forceActiveFocus()
+                    }
+                }
             }
         }
     }

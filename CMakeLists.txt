@@ -117,6 +117,8 @@ qt_add_resources(qtmux "icons"
         resources/icons/command.svg
         resources/icons/copy.svg
         resources/icons/clipboard.svg
+        resources/icons/split-h.svg
+        resources/icons/split-v.svg
 )
 
 target_link_libraries(qtmux PRIVATE
