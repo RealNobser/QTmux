@@ -84,20 +84,33 @@ Konventionen: deutsche Kommentare/Kommunikation; `qtmux_core` bleibt **Gui-frei*
 (nur Qt6::Core) → Farben als `quint32` 0xRRGGBB, nicht `QRgb`. Code-Referenzen als
 Markdown-Links. Commit-Trailer: `Co-Authored-By: Claude …`.
 
-## Projekt-Dokumentation (Confluence)
+## Projekt-Dokumentation (Confluence — DUAL: on-prem + Cloud)
 
-Im internen Confluence (Space **QTMUX**, `https://confluence.intern.example`):
-- **QTmux Home** (Space-Homepage, id `<seiten-id>`) — Projektbeschreibung + Unterseiten-Liste.
-- **Benutzerdokumentation** (id `<seiten-id>`) — Unterseite von Home.
-- **Entwicklerdokumentation** (id `<seiten-id>`) — Unterseite von Home.
+Die Doku wird **parallel an zwei Stellen** gepflegt (bei jeder Doku-Änderung beide
+aktualisieren; identischer Storage-Inhalt). Token nur einlesen, **nie ausgeben/committen**.
+Beide Credential-Dateien liegen in der Repo-Wurzel und sind **git-ignoriert** (`Credential-*.txt`).
 
-**Aktualisieren (REST-API, on-prem Confluence Server/DC):** Bearer-Token + Verbindungsdaten
-in `Credential-Confluence.txt` (Repo-Wurzel, **git-ignoriert**, niemals committen; `verify_ssl=false`
-→ `curl -k`). Token nur einlesen, nie ausgeben. Muster:
-`curl -k -H "Authorization: Bearer <token>" $BASE/rest/api/content/<id>?expand=version`
-(Update via `PUT` mit `version.number+1`; neue Seite via `POST /rest/api/content` mit
-`ancestors:[{id: <seiten-id>}]`, `body.storage` = XHTML-Storage-Format).
-Bei `/feierabend` diese Seiten mitpflegen.
+**1) On-prem Confluence Server/DC** — Space **QTMUX**, `https://confluence.intern.example`,
+`Credential-Confluence.txt` (**Bearer**-Token, `verify_ssl=false` → `curl -k`):
+- **QTmux Home** (id `<seiten-id>`) · **Benutzerdokumentation** (id `<seiten-id>`) ·
+  **Entwicklerdokumentation** (id `<seiten-id>`).
+- Muster: `curl -k -H "Authorization: Bearer <token>" $BASE/rest/api/content/<id>?expand=version`.
+
+**2) Atlassian **Cloud** Confluence** — `https://<cloud-instanz>.atlassian.net`, Space-Key **`<space-key>`**
+(Anzeigename „Entwicklung"), `Credential-Atlassian.txt` (**Basic**-Auth `email:api_token`,
+`email=<e-mail>`, gültiges TLS):
+- **QTmux** (Hauptseite, id `<seiten-id>`) ↔ on-prem Home · **Benutzerdokumentation** (id `<seiten-id>`) ·
+  **Entwicklerdokumentation** (id `<seiten-id>`).
+- Muster: `Authorization: Basic base64(email:token)`, Pfade unter `/wiki/rest/api/content/<id>`.
+
+**Update (beide):** `GET …?expand=version` → `PUT /…/content/<id>` mit `version.number+1`,
+`body.storage` = XHTML-Storage-Format. Neue Seite: `POST /…/content` mit `space.key` +
+`ancestors:[{id:<parent>}]`. Storage ist Server↔Cloud weitgehend kompatibel (Vorsicht nur bei
+Makros: Mermaid heißt on-prem `mermaid-macro`, Cloud `mermaid-cloud`). Das `children`-Makro
+funktioniert auf beiden. Bei `/feierabend` beide Seiten-Sätze mitpflegen.
+
+**Jira (Cloud):** Projekt **QTMUX**, Board `https://<cloud-instanz>.atlassian.net/jira/software/projects/QTMUX/boards/36`
+(gleiche `Credential-Atlassian.txt`-Auth, API `/rest/api/3/…`).
 
 ## Status (Stand: 2026-06-06)
 
