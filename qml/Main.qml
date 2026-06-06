@@ -215,13 +215,17 @@ ApplicationWindow {
         }
     }
 
-    // Kontextmenü des Terminals (Rechtsklick): Kopieren/Einfügen.
+    // Kontextmenü des Terminals (Rechtsklick): Kopieren/Einfügen + Pane teilen/schließen.
     Menu {
         id: termContextMenu
         padding: 4
-        background: AppPopupBg { implicitWidth: 160 }
+        background: AppPopupBg { implicitWidth: 200 }
         AppMenuItem { action: actCopy;  icon.source: window.icon("copy") }
         AppMenuItem { action: actPaste; icon.source: window.icon("clipboard") }
+        MenuSeparator {}
+        AppMenuItem { action: actSplitH;    icon.source: window.icon("split-h") }
+        AppMenuItem { action: actSplitV;    icon.source: window.icon("split-v") }
+        AppMenuItem { action: actClosePane; icon.source: window.icon("x") }
     }
 
     // Vom Split-Button gewählter Standardtyp (0=Shell, 1=SSH, 2=Seriell), persistiert.
