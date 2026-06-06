@@ -119,7 +119,7 @@ Bei `/feierabend` diese Seiten mitpflegen.
   startet auf Windows im Home statt im letzten CWD); reale Verifikation auf Win 10/11.
 - 🟡 **Phase 2** — Session + SessionModel + datengetriebene Sidebar + Session-Wechsel: FERTIG.
   Sidebar-**Split-Button** „+ &lt;Typ&gt;" mit ▾-Dropdown (Shell/SSH/Seriell, gemerkt via Settings).
-  Offen: Reorder (Drag).
+  Split-Panes + Sidebar-Reorder FERTIG (siehe unten).
   **Layout-Lektion:** verschachtelte `RowLayout` mit `fillHeight`-Kindern braucht
   `Layout.maximumHeight`/`fillHeight:false`, sonst wuchert sie in der `ColumnLayout`.
 - ✅ **UI-Basis** — Theme `System/Hell/Dunkel` (`Theme.mode`, System folgt OS via
@@ -202,6 +202,14 @@ Bei `/feierabend` diese Seiten mitpflegen.
   + „Ansicht"-Menü-Buttons mit neuen Icons `split-h`/`split-v`. E2E auf macOS verifiziert
   (2× nebeneinander, 3× untereinander, sauberes Beenden aller Shells). Offen: rekursive
   Misch-Layouts (H+V verschachtelt), Pane-Reorder.
+- ✅ **Sidebar-Reorder (Drag)** — `SessionModel::moveSession(from,to)` (begin/endMoveRows,
+  `QList::move`, führt `m_activeRow` nach, persistiert). Im Delegate ein `DragHandler`
+  (nur Y-Achse, hebt die Kachel via `z`/`opacity`/`scale` an); beim Loslassen wird die
+  Zielzeile aus `tile.y / (height+spacing)` berechnet und `window.moveSession()` gerufen,
+  das zusätzlich **currentRow + alle Pane-`sessionRow`s** auf die neue Reihenfolge remappt
+  (gleiche Indexlogik wie `onRowsRemoved`). E2E auf macOS verifiziert (markierte Session per
+  Drag von unten nach oben; Auswahl/currentRow folgen korrekt). `TapHandler` (Auswahl) und
+  `DragHandler` koexistieren über die Drag-Schwelle.
 - ✅ **Copy & Paste im Terminal** — `TerminalItem`: Maus-**Selektion** (Press/Move/Release,
   Strom-/Zeilen-Auswahl) mit Highlight in `paint()`; Text via `VtScreen::cell` extrahiert
   (rechte Leerzeichen getrimmt). `copy()`/`paste()` (Q_INVOKABLE) über `QClipboard`; Paste

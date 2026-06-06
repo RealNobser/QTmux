@@ -201,6 +201,23 @@ void SessionModel::closeSession(int row) {
     saveState();
 }
 
+void SessionModel::moveSession(int from, int to) {
+    if (from < 0 || from >= count() || to < 0 || to >= count() || from == to) return;
+    // beginMoveRows erwartet bei Abwärtsbewegung den Zielindex +1.
+    const int dest = to > from ? to + 1 : to;
+    if (!beginMoveRows({}, from, from, {}, dest)) return;
+    m_sessions.move(from, to);
+    m_configs.move(from, to);
+    endMoveRows();
+
+    // Aktive Zeile mitführen.
+    if (m_activeRow == from) m_activeRow = to;
+    else if (from < to && m_activeRow > from && m_activeRow <= to) --m_activeRow;
+    else if (to < from && m_activeRow >= to && m_activeRow < from) ++m_activeRow;
+
+    saveState();
+}
+
 void SessionModel::shutdownAll() {
     // Nur Prozesse beenden (keine Modelländerung) — wird beim App-Quit aufgerufen.
     for (Session *s : m_sessions) s->shutdown();

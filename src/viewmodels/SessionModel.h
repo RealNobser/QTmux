@@ -52,6 +52,9 @@ public:
     Session *sessionById(int id) const;
     const QList<Session *> &sessions() const { return m_sessions; }
     Q_INVOKABLE void closeSession(int row);
+    /// Verschiebt die Session von `from` an die Zielposition `to` (Drag-Reorder
+    /// in der Sidebar). Persistiert die neue Reihenfolge.
+    Q_INVOKABLE void moveSession(int from, int to);
     /// Beendet alle laufenden Prozesse/Verbindungen (beim App-Quit aufzurufen,
     /// nach saveState()). Verhindert verwaiste Shells/Agenten.
     Q_INVOKABLE void shutdownAll();

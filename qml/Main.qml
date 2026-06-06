@@ -261,6 +261,22 @@ ApplicationWindow {
             if (p) { window.activeTerminal = p.term; p.term.forceActiveFocus() }
         })
     }
+    // Sidebar-Reorder: Session verschieben und alle Index-Referenzen (currentRow,
+    // Pane-sessionRows) auf die neue Reihenfolge nachführen.
+    function moveSession(from, to) {
+        if (from === to) return
+        sessions.moveSession(from, to)
+        const remap = function(x) {
+            if (x === from) return to
+            if (from < to) { if (x > from && x <= to) return x - 1 }
+            else { if (x >= to && x < from) return x + 1 }
+            return x
+        }
+        window.currentRow = remap(window.currentRow)
+        for (let i = 0; i < paneModel.count; ++i)
+            paneModel.setProperty(i, "sessionRow", remap(paneModel.get(i).sessionRow))
+    }
+
     // Sidebar-Klick: gewählte Session ins aktive Pane laden.
     function assignToActivePane(row) {
         window.currentRow = row
@@ -611,6 +627,7 @@ ApplicationWindow {
                     model: sessions
 
                     delegate: Rectangle {
+                        id: tile
                         required property int index
                         required property string title
                         required property int runState
@@ -624,8 +641,31 @@ ApplicationWindow {
                         color: index === window.currentRow ? Theme.sidebarSelected
                              : hover.hovered ? Theme.sidebarHover : "transparent"
 
+                        // Während des Ziehens angehoben darstellen.
+                        z: dragH.active ? 2 : 0
+                        opacity: dragH.active ? 0.85 : 1.0
+                        scale: dragH.active ? 1.02 : 1.0
+
                         HoverHandler { id: hover }
                         TapHandler { onTapped: window.assignToActivePane(index) }
+
+                        // Drag-to-Reorder: vertikal ziehen, beim Loslassen Zielzeile
+                        // aus der Position berechnen und die Session verschieben.
+                        DragHandler {
+                            id: dragH
+                            target: tile
+                            xAxis.enabled: false
+                            yAxis.enabled: true
+                            onActiveChanged: {
+                                if (active) return
+                                const slot = tile.height + sessionList.spacing
+                                const from = tile.index
+                                let ni = Math.round(tile.y / slot)
+                                ni = Math.max(0, Math.min(sessions.count - 1, ni))
+                                if (ni !== from) window.moveSession(from, ni)
+                                tile.y = ni * slot   // ans Ziel-Slot einrasten
+                            }
+                        }
 
                         // Roter Tab: diese Session steuert per MCP die anderen (Controller-Agent).
                         Rectangle {
