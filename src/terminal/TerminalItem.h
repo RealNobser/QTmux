@@ -5,6 +5,10 @@
 #include <QColor>
 #include <QPointer>
 
+QT_BEGIN_NAMESPACE
+class QWheelEvent;
+QT_END_NAMESPACE
+
 namespace qtmux {
 
 class Session;
@@ -58,6 +62,7 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
     void geometryChange(const QRectF &newGeo, const QRectF &oldGeo) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
@@ -70,6 +75,12 @@ private:
     QPoint cellAt(const QPointF &pos) const;     // Pixel -> Zellkoordinate (col,row)
     QString selectedText() const;
     void clearSelection();
+    void onDamaged();                            // Damage + Scroll-Anker nachführen
+    int maxScrollOffset() const;                 // = Scrollback-Zeilenzahl
+    void scrollByLines(int lines);               // + = in die Historie, - = zurück
+    /// Quelle einer sichtbaren Zeile (0..rows-1): true + sbIndex = Scrollback-Zeile,
+    /// false + liveRow = Live-Screen-Zeile. Berücksichtigt den Scroll-Offset.
+    bool viewportSource(int screenRow, int &sbIndex, int &liveRow) const;
 
     QPointer<Session> m_session;
 
@@ -89,6 +100,10 @@ private:
     QPoint m_selCaret{-1, -1};
     bool m_selecting = false;
     bool m_hasSelection = false;
+
+    // Scrollback-Ansicht: 0 = Live-Boden, >0 = so viele Zeilen in die Historie.
+    int m_scrollOffset = 0;
+    int m_lastSbCount = 0;   // letzter scrollbackCount() — für die Anker-Nachführung
 };
 
 } // namespace qtmux

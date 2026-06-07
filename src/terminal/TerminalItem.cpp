@@ -5,6 +5,7 @@
 #include <QPainter>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QWheelEvent>
 #include <QFontDatabase>
 #include <QFontMetricsF>
 #include <QGuiApplication>
@@ -42,9 +43,11 @@ void TerminalItem::setSession(QObject *session) {
     }
     m_session = s;
 
+    m_scrollOffset = 0;            // neue Session -> Live-Boden zeigen
     if (VtScreen *sc = screen()) {
-        connect(sc, &VtScreen::damaged, this, [this](const QRect &) { update(); });
+        connect(sc, &VtScreen::damaged, this, [this](const QRect &) { onDamaged(); });
         connect(sc, &VtScreen::cursorMoved, this, [this]() { update(); });
+        m_lastSbCount = sc->scrollbackCount();
         // Auf die aktuelle Item-Größe synchronisieren.
         recomputeGrid();
         forceActiveFocus();
@@ -111,8 +114,19 @@ void TerminalItem::paint(QPainter *painter) {
 
     for (int row = 0; row < m_rows; ++row) {
         const qreal y = row * m_cellH;
+        // Quelle dieser sichtbaren Zeile bestimmen (Scrollback oder Live-Screen).
+        int sbIndex = 0, liveRow = 0;
+        const bool isSb = viewportSource(row, sbIndex, liveRow);
+        const std::vector<Cell> *sbLine =
+            isSb && sbIndex < sc->scrollbackCount() ? &sc->scrollbackLine(sbIndex) : nullptr;
+
         for (int col = 0; col < m_cols; ++col) {
-            const Cell c = sc->cell(row, col);
+            Cell c;
+            if (isSb) {
+                if (sbLine && col < static_cast<int>(sbLine->size())) c = (*sbLine)[col];
+            } else {
+                c = sc->cell(liveRow, col);
+            }
             const qreal x = col * m_cellW;
 
             if (!c.bgDefault) {
@@ -138,10 +152,23 @@ void TerminalItem::paint(QPainter *painter) {
         }
     }
 
-    if (sc->cursorVisible()) {
+    // Cursor nur im Live-Boden zeigen (in der Historie ergibt er keinen Sinn).
+    if (m_scrollOffset == 0 && sc->cursorVisible()) {
         const QPoint cur = sc->cursor();
         QRectF r(cur.x() * m_cellW, cur.y() * m_cellH, m_cellW, m_cellH);
         painter->fillRect(r, QColor(0xe6, 0xe7, 0xee, 0x99));
+    }
+
+    // Dezenter Scrollbalken am rechten Rand, sobald Historie existiert.
+    const int sb = sc->scrollbackCount();
+    if (sb > 0 && m_rows > 0) {
+        const qreal total = sb + m_rows;
+        const qreal viewH = height();
+        const qreal thumbH = std::max(viewH * m_rows / total, 24.0);
+        const qreal topFrac = (sb - m_scrollOffset) / total;   // erste sichtbare virtuelle Zeile
+        const qreal yTop = std::min(topFrac * viewH, viewH - thumbH);
+        const QColor thumb(0xff, 0xff, 0xff, m_scrollOffset > 0 ? 0x66 : 0x2a);
+        painter->fillRect(QRectF(width() - 4, yTop, 3, thumbH), thumb);
     }
 }
 
@@ -181,9 +208,22 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     if (cpMod && event->key() == Qt::Key_C) { copy();  event->accept(); return; }
     if (cpMod && event->key() == Qt::Key_V) { paste(); event->accept(); return; }
 
+    // Scrollback per Tastatur: Shift+PageUp/Down (seitenweise), Shift+Home/End (Anfang/Boden).
+    if (mods & Qt::ShiftModifier) {
+        const int page = std::max(m_rows - 1, 1);
+        switch (event->key()) {
+        case Qt::Key_PageUp:   scrollByLines(page);              event->accept(); return;
+        case Qt::Key_PageDown: scrollByLines(-page);             event->accept(); return;
+        case Qt::Key_Home:     scrollByLines(maxScrollOffset()); event->accept(); return;
+        case Qt::Key_End:      scrollByLines(-maxScrollOffset());event->accept(); return;
+        default: break;
+        }
+    }
+
     const QByteArray bytes = encodeKey(event);
     if (!bytes.isEmpty()) {
         if (m_hasSelection) clearSelection();   // Tippen hebt die Selektion auf
+        if (m_scrollOffset != 0) { m_scrollOffset = 0; update(); }  // Eingabe -> zum Boden
         m_session->write(bytes);
         event->accept();
     } else {
@@ -220,9 +260,17 @@ QString TerminalItem::selectedText() const {
     for (int row = start.y(); row <= end.y(); ++row) {
         const int c0 = (row == start.y()) ? start.x() : 0;
         const int c1 = (row == end.y()) ? end.x() : m_cols - 1;
+        // Selektion ist in Bildschirm-Zeilen — Quelle (Historie/Live) berücksichtigen,
+        // damit beim Scrollen der wirklich sichtbare Text kopiert wird.
+        int sbIndex = 0, liveRow = 0;
+        const bool isSb = viewportSource(row, sbIndex, liveRow);
+        const std::vector<Cell> *sbLine =
+            isSb && sbIndex < sc->scrollbackCount() ? &sc->scrollbackLine(sbIndex) : nullptr;
         QString line;
         for (int col = c0; col <= c1 && col < m_cols; ++col) {
-            const Cell c = sc->cell(row, col);
+            Cell c;
+            if (isSb) { if (sbLine && col < static_cast<int>(sbLine->size())) c = (*sbLine)[col]; }
+            else c = sc->cell(liveRow, col);
             line += c.text.isEmpty() ? QStringLiteral(" ") : c.text;
         }
         while (line.endsWith(QLatin1Char(' '))) line.chop(1);  // rechte Leerzeichen weg
@@ -291,6 +339,50 @@ void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
         return;
     }
     event->ignore();
+}
+
+void TerminalItem::wheelEvent(QWheelEvent *event) {
+    const int dy = event->angleDelta().y();
+    if (dy == 0) { event->ignore(); return; }
+    // Nach oben (dy>0) = in die Historie; 3 Zeilen je „Klick".
+    scrollByLines(dy > 0 ? 3 : -3);
+    event->accept();
+}
+
+int TerminalItem::maxScrollOffset() const {
+    VtScreen *sc = screen();
+    return sc ? sc->scrollbackCount() : 0;
+}
+
+void TerminalItem::scrollByLines(int lines) {
+    const int o = std::clamp(m_scrollOffset + lines, 0, maxScrollOffset());
+    if (o == m_scrollOffset) return;
+    m_scrollOffset = o;
+    if (m_hasSelection) clearSelection();   // Inhalt verschiebt sich -> Selektion verwerfen
+    update();
+}
+
+bool TerminalItem::viewportSource(int screenRow, int &sbIndex, int &liveRow) const {
+    VtScreen *sc = screen();
+    const int sb = sc ? sc->scrollbackCount() : 0;
+    // Virtuelle Zeile: Scrollback [0..sb-1] gefolgt von Live-Zeilen [sb..sb+rows-1].
+    const int v = sb - m_scrollOffset + screenRow;
+    if (v < sb) { sbIndex = v < 0 ? 0 : v; return true; }
+    liveRow = v - sb;
+    return false;
+}
+
+void TerminalItem::onDamaged() {
+    // Ist der Blick in der Historie, beim Nachrücken neuer Zeilen den Anker halten,
+    // damit der betrachtete Ausschnitt nicht wegspringt; am Boden weiter mitlaufen.
+    VtScreen *sc = screen();
+    const int sb = sc ? sc->scrollbackCount() : 0;
+    if (m_scrollOffset > 0) {
+        const int delta = sb - m_lastSbCount;
+        if (delta > 0) m_scrollOffset = std::min(m_scrollOffset + delta, sb);
+    }
+    m_lastSbCount = sb;
+    update();
 }
 
 } // namespace qtmux
