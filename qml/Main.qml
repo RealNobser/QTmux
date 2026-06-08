@@ -1423,13 +1423,24 @@ ApplicationWindow {
                         anchors.leftMargin: 10
                         anchors.rightMargin: 10
                         spacing: 10
-                        Image {
-                            source: window.icon(cmdRow.modelData.icon)
-                            sourceSize.width: 16; sourceSize.height: 16
-                            layer.enabled: true
-                            layer.effect: MultiEffect {
+                        // Monochromes SVG (fill="currentColor" → schwarz) themegerecht
+                        // einfärben. Explizite MultiEffect-Form (source:) statt layer.effect,
+                        // weil layer.effect im ListView-Delegate nicht zuverlässig greift.
+                        Item {
+                            implicitWidth: 16; implicitHeight: 16
+                            Image {
+                                id: cmdIcon
+                                anchors.fill: parent
+                                source: window.icon(cmdRow.modelData.icon)
+                                sourceSize.width: 16; sourceSize.height: 16
+                                visible: false
+                            }
+                            MultiEffect {
+                                anchors.fill: parent
+                                source: cmdIcon
                                 colorization: 1.0
-                                colorizationColor: Theme.textBright
+                                colorizationColor: index === paletteList.currentIndex
+                                                   ? Theme.accent : Theme.textBright
                             }
                         }
                         Text {
