@@ -26,13 +26,22 @@ const AgentInfo *AgentRegistry::detect(const QString &commandLine) {
         if (token == QLatin1String("env") || token.contains('=')) continue;
         if (token == QLatin1String("sudo") || token == QLatin1String("command")) continue;
 
-        // Nur den Basisnamen ohne Pfad vergleichen.
+        // Nur den Basisnamen ohne Pfad vergleichen (Unix '/' wie Windows '\').
         QString base = token;
-        const int slash = base.lastIndexOf('/');
+        const int slash = qMax(base.lastIndexOf(QLatin1Char('/')),
+                               base.lastIndexOf(QLatin1Char('\\')));
         if (slash >= 0) base = base.mid(slash + 1);
+        // Auf Windows endet das Programm oft auf .exe/.cmd/.bat — abschneiden.
+        for (const QString &suffix : {QStringLiteral(".exe"), QStringLiteral(".cmd"),
+                                      QStringLiteral(".bat")}) {
+            if (base.endsWith(suffix, Qt::CaseInsensitive)) {
+                base.chop(suffix.size());
+                break;
+            }
+        }
 
         for (const AgentInfo &a : all()) {
-            if (base == a.command) return &a;
+            if (base.compare(a.command, Qt::CaseInsensitive) == 0) return &a;
         }
         // Erster echter Kommando-Token, der kein Präfix ist → kein Agent.
         return nullptr;

@@ -3,6 +3,7 @@
 #include "PtyBackend.h"
 #include "VtScreen.h"
 #include "Session.h"
+#include "TestPrograms.h"
 
 using namespace qtmux;
 
@@ -26,8 +27,9 @@ static QString rowText(const VtScreen &vt, int row) {
 // Vollständige Kette: PTY-Prozess -> Bytes -> libvterm -> sichtbare Zellen.
 void TestSession::echoReachesScreen() {
     PtyBackend backend;
-    backend.setProgram(QStringLiteral("/bin/echo"));
-    backend.setArguments({QStringLiteral("HELLO_QTMUX")});
+    const auto cmd = qtmux_test::printLine(QStringLiteral("HELLO_QTMUX"));
+    backend.setProgram(cmd.program);
+    backend.setArguments(cmd.args);
 
     VtScreen screen(24, 80);
     QObject::connect(&backend, &ITerminalBackend::dataReceived,
@@ -40,6 +42,9 @@ void TestSession::echoReachesScreen() {
 // Eingabe-Echo: in eine interaktive Shell getippter Text erscheint am Schirm.
 void TestSession::shellInputEcho() {
     PtyBackend backend;
+    const auto sh = qtmux_test::interactiveShell();
+    backend.setProgram(sh.program);
+    backend.setArguments(sh.args);
     VtScreen screen(24, 80);
     QObject::connect(&backend, &ITerminalBackend::dataReceived,
                      &screen, &VtScreen::inputWrite);
@@ -47,12 +52,12 @@ void TestSession::shellInputEcho() {
                      &backend, &ITerminalBackend::write);
 
     QVERIFY(backend.start(80, 24));
-    // Auf Prompt warten, dann tippen.
-    QTest::qWait(300);
-    backend.write("echo MARKER_123\n");
+    // Auf Prompt warten, dann tippen (Enter = CR, wie im echten Terminal).
+    QTest::qWait(500);
+    backend.write("echo MARKER_123" + qtmux_test::enterKey());
 
     bool found = false;
-    for (int attempt = 0; attempt < 50 && !found; ++attempt) {
+    for (int attempt = 0; attempt < 100 && !found; ++attempt) {
         QTest::qWait(100);
         for (int r = 0; r < screen.rows(); ++r) {
             if (rowText(screen, r).contains("MARKER_123")) { found = true; break; }
@@ -66,8 +71,9 @@ void TestSession::shellInputEcho() {
 void TestSession::bellRaisesAttentionWhenInactive() {
     Session sess;
     auto *pty = new PtyBackend;
-    pty->setProgram(QStringLiteral("/usr/bin/printf"));
-    pty->setArguments({QStringLiteral("\\a")});   // printf interpretiert \a als BEL
+    const auto cmd = qtmux_test::emitRaw(QByteArrayLiteral("\a"));   // BEL
+    pty->setProgram(cmd.program);
+    pty->setArguments(cmd.args);
     sess.attachBackend(pty, Session::Type::Shell, 80, 24);
     sess.setActive(false);
 
@@ -82,8 +88,9 @@ void TestSession::bellRaisesAttentionWhenInactive() {
 void TestSession::activeSessionIgnoresBell() {
     Session sess;
     auto *pty = new PtyBackend;
-    pty->setProgram(QStringLiteral("/usr/bin/printf"));
-    pty->setArguments({QStringLiteral("\\a")});
+    const auto cmd = qtmux_test::emitRaw(QByteArrayLiteral("\a"));
+    pty->setProgram(cmd.program);
+    pty->setArguments(cmd.args);
     sess.attachBackend(pty, Session::Type::Shell, 80, 24);
     sess.setActive(true);
 
@@ -96,8 +103,10 @@ void TestSession::activeSessionIgnoresBell() {
 void TestSession::oscNotificationReachesSession() {
     Session sess;
     auto *pty = new PtyBackend;
-    pty->setProgram(QStringLiteral("/usr/bin/printf"));
-    pty->setArguments({QStringLiteral("\\033]9;BuildOK\\007")});
+    // OSC 9 ; BuildOK BEL  ->  ESC ] 9 ; BuildOK BEL
+    const auto cmd = qtmux_test::emitRaw(QByteArrayLiteral("\033]9;BuildOK\007"));
+    pty->setProgram(cmd.program);
+    pty->setArguments(cmd.args);
     sess.attachBackend(pty, Session::Type::Shell, 80, 24);
     sess.setActive(false);
     sess.start(80, 24);
@@ -111,9 +120,10 @@ void TestSession::oscNotificationReachesSession() {
 void TestSession::osc133NonZeroExitSetsError() {
     Session sess;
     auto *pty = new PtyBackend;
-    pty->setProgram(QStringLiteral("/bin/sh"));
-    pty->setArguments({QStringLiteral("-c"),
-                       QStringLiteral("printf '\\033]133;D;2\\007'; sleep 5")});
+    // OSC 133 ; D ; 2 BEL (Befehlsende mit Exit-Code 2), danach am Leben bleiben.
+    const auto cmd = qtmux_test::emitRawThenWait(QByteArrayLiteral("\033]133;D;2\007"), 5);
+    pty->setProgram(cmd.program);
+    pty->setArguments(cmd.args);
     sess.attachBackend(pty, Session::Type::Shell, 80, 24);
     sess.setActive(true);
     sess.start(80, 24);

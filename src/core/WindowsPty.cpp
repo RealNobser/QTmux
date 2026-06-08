@@ -38,6 +38,7 @@ struct Pty::Private {
     PROCESS_INFORMATION pi {};
     LPPROC_THREAD_ATTRIBUTE_LIST attrList = nullptr;
     std::thread reader;
+    std::thread waiter;             // wartet auf das Prozessende der Shell
     std::atomic<bool> stopping{false};
 };
 
@@ -217,7 +218,7 @@ bool Pty::start(const QString &program, const QStringList &args,
     d->stopping = false;
 
     // Reader-Thread: blockierendes ReadFile, Daten per queued Connection an den
-    // GUI-Thread marshalen. Bei EOF/Fehler ist der Prozess beendet.
+    // GUI-Thread marshalen.
     d->reader = std::thread([this]() {
         char buf[8192];
         for (;;) {
@@ -229,7 +230,15 @@ bool Pty::start(const QString &program, const QStringList &args,
                 emit readyRead(chunk);
             }, Qt::QueuedConnection);
         }
-        // Prozess wahrscheinlich beendet -> im GUI-Thread aufräumen (idempotent).
+    });
+
+    // Waiter-Thread: erkennt das Ende der Shell. Anders als beim Unix-PTY (EOF auf
+    // dem Master-FD) schließt conhost die Ausgabe-Pipe NICHT, wenn sich das Kind
+    // selbst beendet (z. B. `exit`) — der Reader bekäme also kein EOF. Daher warten
+    // wir direkt auf das Prozess-Handle und lösen dann das geordnete Ende aus.
+    d->waiter = std::thread([this]() {
+        WaitForSingleObject(d->pi.hProcess, INFINITE);
+        if (d->stopping) return;   // terminate() läuft bereits
         QMetaObject::invokeMethod(this, [this]() {
             if (m_running) terminate();
         }, Qt::QueuedConnection);
@@ -268,13 +277,25 @@ void Pty::terminate() {
     QList<qint64> tree;
     if (pid > 0) tree = procinfo::descendantPids(pid);
 
-    // Wurzelprozess hart beenden ...
-    if (d->pi.hProcess) TerminateProcess(d->pi.hProcess, 1);
-
-    // ... Pseudo-Konsole schließen -> EOF auf der Ausgabe-Pipe -> Reader endet.
+    // WICHTIG: Pseudo-Konsole ZUERST schließen. Das beendet die angehängten
+    // Clients geordnet und lässt conhost die Ausgabe-Pipe schließen -> EOF, der
+    // Reader-Thread kehrt aus ReadFile zurück. Beendet man den Prozess vorher
+    // hart, hängt ClosePseudoConsole/der Reader (conhost gibt kein EOF) — das
+    // war die Ursache mehrsekündiger Hänger beim Beenden.
     if (d->hPC) { ClosePseudoConsole(d->hPC); d->hPC = nullptr; }
 
-    if (d->reader.joinable()) d->reader.join();
+    // Wurzelprozess hart beenden (falls er nicht ohnehin schon endet).
+    if (d->pi.hProcess) TerminateProcess(d->pi.hProcess, 1);
+
+    // Sicherheitsnetz: ein evtl. noch in ReadFile blockierender Reader wird
+    // entkoppelt, dann beigetreten.
+    if (d->reader.joinable()) {
+        CancelSynchronousIo(d->reader.native_handle());
+        d->reader.join();
+    }
+    // Waiter beitreten: WaitForSingleObject kehrt nach TerminateProcess (bzw. dem
+    // bereits erfolgten Prozessende) zurück. d->stopping verhindert Rückruf-Schleifen.
+    if (d->waiter.joinable()) d->waiter.join();
 
     // Überlebende Nachfahren hart beenden.
     for (const qint64 p : tree) {

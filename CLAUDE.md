@@ -70,7 +70,7 @@ weil alles über `ITerminalBackend` läuft.
 
 ## Build & Test (macOS)
 
-Abhängigkeiten: `brew install qt libvterm libssh2 ninja cmake`
+Abhängigkeiten: `brew install qt ninja cmake` (libvterm ist **mitgeliefert**, s.u.).
 
 ```bash
 cmake --preset macos
@@ -79,6 +79,51 @@ ctest --test-dir build/macos --output-on-failure
 open ./build/macos/qtmux.app          # sichtbar starten
 QT_QPA_PLATFORM=offscreen ./build/macos/qtmux.app/Contents/MacOS/qtmux   # headless smoketest
 ```
+
+## Build & Test (Windows, MSVC) — verifiziert 2026-06-08
+
+Voraussetzungen: VS 2022 (MSVC + CMake + Ninja), Qt 6.x `msvc2022_64` **inkl.
+Add-on „Qt Serial Port"** (Online-Installer macht es opt-in → sonst CMake-Fehler
+„Qt6SerialPort missing"; Nachinstallation: `C:\Qt\MaintenanceTool.exe … install
+qt.qt6.<ver>.addons.qtserialport`). `CMakePresets.json` → Windows-`CMAKE_PREFIX_PATH`
+ggf. an die eigene Qt-Version anpassen. **Kein vcpkg** (libvterm vendored, libssh2 ungenutzt).
+
+In einer Developer-Shell (`vcvars64`, damit MSVC+Ninja im PATH):
+```bat
+cmake --preset windows
+cmake --build --preset windows
+ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein
+.\build\windows\qtmux.exe
+```
+`windeployqt` läuft als Post-Build-Schritt → Qt-DLLs/QML/Plugins liegen neben der exe.
+
+**libvterm vendored:** liegt unter `third_party/libvterm/` (0.3.3, BSD, neovim-Mirror)
+und wird als kleine C-Lib mitgebaut. libvterm wurde aus vcpkg entfernt; Vendoring hält
+alle 3 Plattformen identisch & abhängigkeitsfrei. Wichtig: `project(... LANGUAGES C CXX)`
+(ohne `C` ignoriert CMake die `.c`-Dateien → leere `vterm.lib` → Linkfehler).
+
+**Windows-Lektionen (ConPTY, Prio 1 — teuer erkauft):**
+- **qtmux MUSS `WIN32_EXECUTABLE` (GUI-Subsystem) sein.** Eine Konsolen-App (CUI) erbt/
+  erhält eine Konsole, an die sich die per ConPTY gestarteten Kindshells hängen statt an
+  die Pseudo-Konsole → Terminal bekommt **keine** Ein-/Ausgabe. Als GUI-App gibt es keine
+  Konsole zum Erben → ConPTY greift. (Symptom war: Shell-Banner landet auf der Host-Konsole,
+  `read_screen` leer.)
+- **Prozessende-Erkennung:** Anders als Unix (EOF am Master-FD) schließt conhost die
+  Ausgabe-Pipe NICHT, wenn sich die Shell selbst beendet (`exit`). `WindowsPty` hat dafür
+  einen **Waiter-Thread** (`WaitForSingleObject` auf das Prozess-Handle) → löst
+  `finished`/Closed aus. Ohne ihn blieb der Zustand „Running" + langer terminate-Hänger.
+- **terminate-Reihenfolge:** `ClosePseudoConsole` **vor** `TerminateProcess` (+ `CancelSynchronousIo`).
+- **PTY-Unit-Tests** (`test_pty`/`test_session`) sind auf Windows `WIN32_EXECUTABLE` UND
+  werden via `tests/run_detached.ps1` losgelöst gestartet (sonst erben sie die ctest-Konsole).
+- Verifikation lief über den **MCP-Server** (create_session/send_text/read_screen) gegen die
+  echte GUI-App; sauberer Shutdown (Prozessbaum) bestätigt.
+- Offen (kosmetisch): Umlaute der **PowerShell-5.1**-Ausgabe erscheinen als Mojibake
+  („für"→„fÃ¼r"). Analyse: die empfangenen Bytes sind bereits **doppelt-kodiertes UTF-8**
+  (`C3 83 C2 BC`) — eine Codepage-Verwechslung in PowerShell 5.1/conhost. `VtScreen`
+  (libvterm `vterm_set_utf8(1)`, `QString::fromUcs4`) dekodiert das Empfangene korrekt; der
+  Fehler entsteht VOR QTmux. Mögliche spätere Milderung: ConPTY/Shell auf UTF-8 zwingen
+  (`chcp 65001` bzw. UTF-8-CP), oder PowerShell 7 nutzen. ASCII ist unbetroffen.
+- Offen: `Pty::currentWorkingDirectory()` auf Windows noch leer (PEB-Abfrage zurückgestellt).
 
 Konventionen: deutsche Kommentare/Kommunikation; `qtmux_core` bleibt **Gui-frei**
 (nur Qt6::Core) → Farben als `quint32` 0xRRGGBB, nicht `QRgb`. Code-Referenzen als
@@ -130,24 +175,24 @@ Summaries holen und Duplikate überspringen. Token nur einlesen, nie ausgeben/co
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
-## Status (Stand: 2026-06-06)
+## Status (Stand: 2026-06-08)
 
-- ✅ **Phase 0** — Gerüst (CMake/Presets/vcpkg, Qt-Quick-Shell, .vscode)
+- ✅ **Phase 0** — Gerüst (CMake/Presets, Qt-Quick-Shell, .vscode; libvterm vendored, kein vcpkg)
 - ✅ **Phase 1** — Terminal-Kern: PTY + libvterm + TerminalItem; 3 Tests grün; läuft auf macOS
-- 🟡 **Phase 1 (Windows)** — ConPTY in `WindowsPty.cpp` **implementiert** (Code), auf
-  Windows-Hardware noch **ungetestet** (hier kein Windows verfügbar). Umsetzung:
-  CreatePipe ×2 → `CreatePseudoConsole` → `STARTUPINFOEX` mit
-  `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` → `CreateProcessW` (kein `bInheritHandles`).
-  Ausgabe via **dediziertem Reader-Thread** (blockierendes `ReadFile`), Daten per
-  `QMetaObject::invokeMethod(..., Qt::QueuedConnection)` in den GUI-Thread gemarshalt
-  (QSocketNotifier kann auf Windows keine Pipes). `resize`→`ResizePseudoConsole`;
-  `terminate` beendet den **Prozessbaum** (`procinfo::descendantPids` + `TerminateProcess`)
-  und schließt die Pseudo-Konsole (→ EOF → Reader endet, dann `join`). Env-Block (UTF-16,
-  sortiert) + Kommandozeilen-Quoting nach CommandLineToArgvW-Regeln. `ProcessInfo` auf
-  Windows nachgezogen: `descendantPids`/`ancestorPids` via ToolHelp-Snapshot,
-  `pidOfTcpClient` via `GetExtendedTcpTable` (linkt `iphlpapi`/`ws2_32`). Offen:
-  `currentWorkingDirectory()` (PEB/`NtQueryInformationProcess` — zurückgestellt, Shell
-  startet auf Windows im Home statt im letzten CWD); reale Verifikation auf Win 10/11.
+- ✅ **Phase 1 (Windows)** — ConPTY in `WindowsPty.cpp`, **real verifiziert 2026-06-08**
+  (Win 11 23H2, MSVC, Qt 6.11.1): Terminal-I/O, Prozessende-Erkennung und sauberer
+  Prozessbaum-Shutdown funktionieren (geprüft über den MCP-Server gegen die GUI-App;
+  `ctest` 4/4 grün). Umsetzung: CreatePipe ×2 → `CreatePseudoConsole` → `STARTUPINFOEX`
+  mit `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` → `CreateProcessW` (kein `bInheritHandles`).
+  Reader-Thread (blockierendes `ReadFile`) + **Waiter-Thread** (`WaitForSingleObject` auf
+  das Prozess-Handle, erkennt Selbst-Beenden der Shell — conhost gibt dabei KEIN Pipe-EOF),
+  Daten per `QMetaObject::invokeMethod(..., Qt::QueuedConnection)` in den GUI-Thread.
+  `resize`→`ResizePseudoConsole`; `terminate`: `ClosePseudoConsole` **vor**
+  `TerminateProcess` (+ `CancelSynchronousIo`), dann `descendantPids`-Baum beenden.
+  **Schlüssel-Lektion:** qtmux ist `WIN32_EXECUTABLE` (GUI-Subsystem) — als Konsolen-App
+  erben die ConPTY-Kindshells eine Konsole und das Terminal bleibt stumm. Details +
+  Test-Setup s. Abschnitt „Build & Test (Windows)". Offen: `currentWorkingDirectory()`
+  (PEB-Abfrage zurückgestellt → Shell startet im Home), Umlaut-Codepage (kosmetisch).
 - 🟡 **Phase 2** — Session + SessionModel + datengetriebene Sidebar + Session-Wechsel: FERTIG.
   Sidebar-**Split-Button** „+ &lt;Typ&gt;" mit ▾-Dropdown (Shell/SSH/Seriell, gemerkt via Settings).
   Split-Panes + Sidebar-Reorder FERTIG (siehe unten).

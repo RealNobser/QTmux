@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(QTmux
     VERSION 0.1.0
     DESCRIPTION "Cross-platform multi-AI-agent terminal manager"
-    LANGUAGES CXX)
+    LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,18 +21,10 @@ endif()
 qt_standard_project_setup(REQUIRES 6.6)
 
 # libvterm (VT-/ANSI-Parser) -------------------------------------------------
-# Bevorzugt vcpkg/CMake-Config, sonst pkg-config, sonst manuelle Suche (Homebrew).
-find_path(VTERM_INCLUDE_DIR vterm.h)
-find_library(VTERM_LIBRARY NAMES vterm libvterm)
-if(NOT VTERM_INCLUDE_DIR OR NOT VTERM_LIBRARY)
-    message(FATAL_ERROR
-        "libvterm nicht gefunden. macOS: 'brew install libvterm'; "
-        "Windows/Linux: über vcpkg (siehe vcpkg.json).")
-endif()
-add_library(vterm::vterm UNKNOWN IMPORTED)
-set_target_properties(vterm::vterm PROPERTIES
-    IMPORTED_LOCATION "${VTERM_LIBRARY}"
-    INTERFACE_INCLUDE_DIRECTORIES "${VTERM_INCLUDE_DIR}")
+# Vendored unter third_party/libvterm (BSD). libvterm ist aus vcpkg verschwunden;
+# das Einbinden in den Baum hält macOS/Windows/Linux identisch und abhängigkeitsfrei.
+# Definiert das Target vterm::vterm.
+add_subdirectory(third_party/libvterm)
 
 # QML-Dateien liegen im Unterverzeichnis qml/ — Policy explizit setzen.
 if(QT_KNOWN_POLICY_QTP0004)
@@ -144,6 +136,28 @@ set_target_properties(qtmux PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "QTmux"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.qtmux.app"
 )
+
+# Windows: GUI-Subsystem (kein Konsolenfenster). WICHTIG nicht nur kosmetisch —
+# eine Konsolen-Subsystem-App (CUI) erbt/erhält eine Konsole, an die sich die per
+# ConPTY gestarteten Kindprozesse hängen, statt an unsere Pseudo-Konsole. Als
+# GUI-App (WIN32) gibt es keine Konsole zum Erben → ConPTY-Anbindung greift.
+set_target_properties(qtmux PROPERTIES WIN32_EXECUTABLE TRUE)
+
+# Windows: Qt-Laufzeit (DLLs, QML-Module, Plugins) neben die .exe deployen, damit
+# sie ohne manuell gesetzten PATH startet. windeployqt kommt aus dem Qt-Paket.
+if(WIN32)
+    if(NOT TARGET Qt6::windeployqt)
+        message(WARNING "Qt6::windeployqt nicht gefunden — qtmux.exe braucht Qt-bin im PATH.")
+    else()
+        add_custom_command(TARGET qtmux POST_BUILD
+            COMMAND Qt6::windeployqt
+                    --no-translations --no-system-d3d-compiler --no-opengl-sw
+                    --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml"
+                    "$<TARGET_FILE:qtmux>"
+            COMMENT "windeployqt: Qt-Laufzeit neben qtmux.exe legen"
+            VERBATIM)
+    endif()
+endif()
 
 # Tests ----------------------------------------------------------------------
 if(QTMUX_BUILD_TESTS)
