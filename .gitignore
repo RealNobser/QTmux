@@ -27,3 +27,6 @@ CMakeUserPresets.json
 moc_*.cpp
 qrc_*.cpp
 ui_*.h
+
+# Distributions-/Installer-Artefakte
+/dist/
