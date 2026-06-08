@@ -256,7 +256,13 @@ ApplicationWindow {
     }
 
     function newSession() {
-        currentRow = sessions.createShellSession("", window.defaultShellProgram)
+        const row = sessions.createShellSession("", window.defaultShellProgram)
+        // Neue Session ins aktive Pane laden und den Tastaturfokus daraufsetzen,
+        // damit man sofort tippen kann (kein Klick ins Terminal nötig).
+        if (window.activePane >= 0 && window.activePane < paneModel.count)
+            window.assignToActivePane(row)
+        else
+            window.currentRow = row   // Startfall: Pane wird gleich erst erzeugt
     }
     function closeCurrent() {
         if (currentRow < 0) return
@@ -345,6 +351,10 @@ ApplicationWindow {
         paneModel.append({ sessionRow: window.currentRow })
         window.activePane = 0
     }
+
+    // Wird das Fenster (wieder) aktiv, den Tastaturfokus auf das aktive Pane legen,
+    // damit man ohne Klick ins Terminal sofort tippen kann.
+    onActiveChanged: if (active) focusActivePane()
 
     // Beim Schließen erst den Zustand sichern (braucht laufende Prozesse für das
     // aktuelle Arbeitsverzeichnis), dann alle Prozesse/Verbindungen beenden.
