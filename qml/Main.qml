@@ -509,7 +509,9 @@ ApplicationWindow {
         id: actCommandPalette
         text: qsTr("Befehlspalette …")
         shortcut: "Ctrl+K"
-        onTriggered: { cmdInput.forceActiveFocus(); cmdInput.selectAll() }
+        // Explizit öffnen (nicht nur über onActiveFocusChanged) — sonst bleibt die
+        // Palette tot, wenn das Feld nach einem Befehl noch den Fokus hat.
+        onTriggered: { cmdInput.forceActiveFocus(); cmdInput.selectAll(); cmdPopup.openFor() }
     }
 
     // --- Toolbar oben: Schnellzugriff mit Phosphor-Icons --------------------
@@ -625,6 +627,7 @@ ApplicationWindow {
                         MultiEffect {
                             anchors.fill: parent
                             source: cmdBarIco
+                            brightness: 1.0   // s. cmdPopup-Delegate: erst weiß, dann colorize
                             colorization: 1.0
                             colorizationColor: cmdInput.activeFocus ? Theme.accent : Theme.textDim
                         }
@@ -644,7 +647,11 @@ ApplicationWindow {
                         // Fokus öffnet das Popup, Fokusverlust schließt es (Klick ins
                         // Terminal/anderswo); Item-Klicks im Popup nehmen keinen Fokus.
                         onActiveFocusChanged: activeFocus ? cmdPopup.openFor() : cmdPopup.close()
-                        onTextChanged: cmdPopup.applyFilter(text)
+                        // Tippen filtert; falls das Popup (nach einem Befehl) zu war, wieder öffnen.
+                        onTextChanged: {
+                            cmdPopup.applyFilter(text)
+                            if (activeFocus && !cmdPopup.visible) cmdPopup.openFor()
+                        }
                         Keys.onDownPressed: cmdList.incrementCurrentIndex()
                         Keys.onUpPressed: cmdList.decrementCurrentIndex()
                         Keys.onReturnPressed: cmdPopup.runCurrent()
@@ -729,6 +736,9 @@ ApplicationWindow {
                         var cmd = filtered[cmdList.currentIndex]
                         close()
                         cmdInput.text = ""
+                        // Fokus zurück ins Terminal → Feld-Status ist sauber „unfokussiert",
+                        // sodass das nächste Cmd+K / der nächste Klick zuverlässig öffnet.
+                        window.focusActivePane()
                         Qt.callLater(cmd.run)
                     }
 
@@ -772,6 +782,10 @@ ApplicationWindow {
                                     MultiEffect {
                                         anchors.fill: parent
                                         source: cmdIcon
+                                        // Schwarzes SVG erst auf Weiß heben (brightness),
+                                        // dann colorize → volle Zielhelligkeit (sonst
+                                        // gewichtet colorize mit der Quell-Luminanz ~0).
+                                        brightness: 1.0
                                         colorization: 1.0
                                         colorizationColor: cmdRow.index === cmdList.currentIndex
                                                            ? Theme.accent : Theme.textBright
