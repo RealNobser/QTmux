@@ -3,9 +3,11 @@
 #include "PtyBackend.h"
 #include "SerialBackend.h"
 #include "SshBackend.h"
+#include "ShellRegistry.h"
 
 #include <QSerialPortInfo>
 #include <QSettings>
+#include <QVariantMap>
 
 namespace qtmux {
 
@@ -84,10 +86,11 @@ void SessionModel::wireSession(Session *s, int row) {
     Q_UNUSED(row);
 }
 
-int SessionModel::createShellSession(const QString &workingDir) {
+int SessionModel::createShellSession(const QString &workingDir, const QString &program) {
     auto *s = new Session(this);
     auto *pty = new PtyBackend();
     if (!workingDir.isEmpty()) pty->setWorkingDirectory(workingDir);
+    if (!program.isEmpty()) pty->setProgram(program);   // leer = Standard-Shell
     // Eigene Session-ID in die Shell-Umgebung legen: ein steuernder Agent liest
     // $QTMUX_SESSION_ID und meldet sich per MCP-Tool attach_controller(id) an.
     pty->setExtraEnv({QStringLiteral("QTMUX_SESSION_ID=%1").arg(s->id())});
@@ -96,7 +99,11 @@ int SessionModel::createShellSession(const QString &workingDir) {
     const int row = count();
     beginInsertRows({}, row, row);
     m_sessions.append(s);
-    m_configs.append({static_cast<int>(Session::Type::Shell), {}, 0, workingDir});
+    SessionConfig cfg;
+    cfg.type = static_cast<int>(Session::Type::Shell);
+    cfg.workingDir = workingDir;
+    cfg.program = program;
+    m_configs.append(cfg);
     endInsertRows();
 
     wireSession(s, row);
@@ -104,6 +111,17 @@ int SessionModel::createShellSession(const QString &workingDir) {
     emit countChanged();
     saveState();
     return row;
+}
+
+QVariantList SessionModel::availableShells() const {
+    QVariantList out;
+    for (const ShellInfo &sh : ShellRegistry::available()) {
+        QVariantMap m;
+        m[QStringLiteral("program")] = sh.program;
+        m[QStringLiteral("name")] = sh.name;
+        out.append(m);
+    }
+    return out;
 }
 
 int SessionModel::createSerialSession(const QString &portName, int baud) {
@@ -246,6 +264,7 @@ void SessionModel::saveState() const {
             if (!live.isEmpty()) dir = live;
         }
         s.setValue(QStringLiteral("workingDir"), dir);
+        s.setValue(QStringLiteral("program"), cfg.program);
     }
     s.endArray();
     s.setValue(QStringLiteral("sessions/activeRow"), m_activeRow);
@@ -267,7 +286,8 @@ int SessionModel::restoreState() {
                              s.value(QStringLiteral("user")).toString(),
                              s.value(QStringLiteral("identity")).toString());
         } else {
-            createShellSession(s.value(QStringLiteral("workingDir")).toString());
+            createShellSession(s.value(QStringLiteral("workingDir")).toString(),
+                               s.value(QStringLiteral("program")).toString());
         }
     }
     m_restoring = false;

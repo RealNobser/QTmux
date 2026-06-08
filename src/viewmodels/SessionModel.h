@@ -2,6 +2,7 @@
 
 #include <QAbstractListModel>
 #include <QList>
+#include <QVariantList>
 #include <qqmlintegration.h>
 
 namespace qtmux {
@@ -35,8 +36,13 @@ public:
 
     int count() const { return static_cast<int>(m_sessions.size()); }
 
-    /// Erzeugt eine lokale Shell-Session (optional in `workingDir`) und gibt die Zeile zurück.
-    Q_INVOKABLE int createShellSession(const QString &workingDir = {});
+    /// Erzeugt eine lokale Shell-Session und gibt die Zeile zurück.
+    /// `workingDir` leer = Home; `program` leer = plattformübliche Standard-Shell.
+    Q_INVOKABLE int createShellSession(const QString &workingDir = {},
+                                       const QString &program = {});
+    /// Auf dieser Plattform auswählbare Shells als Liste von {program, name}-Maps
+    /// (für die Shell-Auswahl in der UI). Siehe qtmux::ShellRegistry.
+    Q_INVOKABLE QVariantList availableShells() const;
     /// Erzeugt eine serielle Session (Port + Baudrate) und gibt deren Zeilenindex zurück.
     Q_INVOKABLE int createSerialSession(const QString &portName, int baud);
     /// Erzeugt eine SSH-Session (System-ssh) und gibt deren Zeilenindex zurück.
@@ -81,6 +87,7 @@ private:
         QString serialPort;  // nur bei Seriell
         int baud = 115200;   // nur bei Seriell
         QString workingDir;  // letztes Arbeitsverzeichnis (Shell), live in saveState() erfasst
+        QString program;     // gewählte Shell (Shell), leer = Standard-Shell
         QString host;        // SSH
         int sshPort = 22;    // SSH
         QString user;        // SSH

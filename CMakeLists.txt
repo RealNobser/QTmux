@@ -47,6 +47,8 @@ add_library(qtmux_core STATIC
     src/core/Session.cpp
     src/core/AgentRegistry.h
     src/core/AgentRegistry.cpp
+    src/core/ShellRegistry.h
+    src/core/ShellRegistry.cpp
     src/core/SerialBackend.h
     src/core/SerialBackend.cpp
     src/core/SshBackend.h

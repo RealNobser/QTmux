@@ -299,7 +299,8 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
                                                args.value("user").toString(),
                                                args.value("identity").toString());
         } else {
-            row = m_sessions->createShellSession(args.value("cwd").toString());
+            row = m_sessions->createShellSession(args.value("cwd").toString(),
+                                                 args.value("program").toString());
         }
         if (row < 0) { isError = true; text = QStringLiteral("Erstellung fehlgeschlagen."); return {}; }
         auto *s = static_cast<Session *>(m_sessions->sessionAt(row));

@@ -188,16 +188,27 @@ ApplicationWindow {
     }
 
     // Session-Typ-Auswahl für den „+"-Split-Button (Sidebar + Toolbar).
+    // Shell-Einträge kommen aus sessions.availableShells(): auf Windows mehrere
+    // (PowerShell/cmd/…), auf Unix genau einer ("Shell"). Die Wahl setzt zugleich
+    // die gemerkte Standard-Shell (window.defaultShellProgram).
     Menu {
         id: typeMenu
         padding: 4
-        background: AppPopupBg { implicitWidth: 180 }
-        AppMenuItem {
-            text: qsTr("Shell")
-            icon.source: window.icon("terminal-window")
-            checkable: true
-            checked: window.newSessionType === 0
-            onTriggered: window.newSessionType = 0
+        background: AppPopupBg { implicitWidth: 200 }
+        Repeater {
+            model: sessions.availableShells()
+            delegate: AppMenuItem {
+                required property var modelData
+                text: modelData.name
+                icon.source: window.icon("terminal-window")
+                checkable: true
+                checked: window.newSessionType === 0
+                         && window.currentShellProgram() === modelData.program
+                onTriggered: {
+                    window.newSessionType = 0
+                    window.defaultShellProgram = modelData.program
+                }
+            }
         }
         AppMenuItem {
             text: qsTr("SSH …")
@@ -230,9 +241,22 @@ ApplicationWindow {
 
     // Vom Split-Button gewählter Standardtyp (0=Shell, 1=SSH, 2=Seriell), persistiert.
     property int newSessionType: 0
+    // Gewählte Standard-Shell (Programmname, z. B. "cmd.exe"); leer = Plattform-Vorgabe.
+    // Persistiert; gilt für neue Shell-Sessions und Splits.
+    property string defaultShellProgram: ""
+    // Gibt es überhaupt eine Auswahl (Windows: ja; Unix: nur Login-Shell)?
+    readonly property bool hasShellChoice: sessions.availableShells().length > 1
+
+    // Aktuell wirksame Shell (für Häkchen in den Menüs): die gewählte, sonst die
+    // erste verfügbare (= Plattform-Vorgabe).
+    function currentShellProgram() {
+        if (defaultShellProgram !== "") return defaultShellProgram
+        const list = sessions.availableShells()
+        return list.length > 0 ? list[0].program : ""
+    }
 
     function newSession() {
-        currentRow = sessions.createShellSession()
+        currentRow = sessions.createShellSession("", window.defaultShellProgram)
     }
     function closeCurrent() {
         if (currentRow < 0) return
@@ -291,7 +315,7 @@ ApplicationWindow {
     // Teilen: neue Shell-Session in einem neuen Pane (orientation gilt für alle Panes).
     function splitPane(orientation) {
         mainSplit.orientation = orientation
-        const row = sessions.createShellSession()
+        const row = sessions.createShellSession("", window.defaultShellProgram)
         paneModel.append({ sessionRow: row })
         window.activePane = paneModel.count - 1
         window.currentRow = row
@@ -337,6 +361,7 @@ ApplicationWindow {
         property alias width: window.width
         property alias height: window.height
         property alias newSessionType: window.newSessionType
+        property alias defaultShellProgram: window.defaultShellProgram
     }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
@@ -507,6 +532,25 @@ ApplicationWindow {
                 onTriggered: serialDialog.openDialog()
             }
             MenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuSeparator { visible: window.hasShellChoice }
+            // Globale Standard-Shell (nur Windows, wo es mehrere gibt). Setzt dieselbe
+            // Property wie die Schnellwahl im „+"-Menü → beide bleiben synchron.
+            Menu {
+                title: qsTr("Standard-Shell")
+                visible: window.hasShellChoice
+                Repeater {
+                    model: sessions.availableShells()
+                    delegate: MenuItem {
+                        required property var modelData
+                        text: modelData.name
+                        icon.source: window.icon("terminal-window")
+                        icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                        checkable: true
+                        checked: window.currentShellProgram() === modelData.program
+                        onTriggered: window.defaultShellProgram = modelData.program
+                    }
+                }
+            }
             MenuSeparator {}
             MenuItem { action: actQuit }
         }
