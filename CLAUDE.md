@@ -311,6 +311,14 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   (gleiche Indexlogik wie `onRowsRemoved`). E2E auf macOS verifiziert (markierte Session per
   Drag von unten nach oben; Auswahl/currentRow folgen korrekt). `TapHandler` (Auswahl) und
   `DragHandler` koexistieren über die Drag-Schwelle.
+- ✅ **Einstellungen-Dialog (QTMUX-12, Settings-UI-Teil)** — `settingsDialog` (`AppDialog`)
+  bündelt die persistierten Optionen: **Erscheinungsbild** (Theme `Wie System/Hell/Dunkel`,
+  Sprache DE/EN), **Terminal** (Schriftgröße-`SpinBox` 6–40, Standard-Shell wenn `hasShellChoice`),
+  **Eingabe & Zwischenablage** (Copy-on-Select, Rechtsklick-Paste, Multiline-Warnung). Zwei-Wege-
+  Bindung an `window.*`/`Theme`/`App` → Änderungen wirken sofort. Erreichbar via Toolbar-Zahnrad,
+  Menü „Ansicht → Einstellungen …" und **Cmd/Strg+,** (bewusst KEIN `StandardKey.Preferences`:
+  macOS verschiebt das sonst ins App-Menü und der In-Window-Shortcut greift nicht — Komma lief
+  ins Terminal). Inline-Komponente `SectionLabel`. E2E verifiziert. (Offen in QTMUX-12: Command-Palette.)
 - ✅ **Bracketed Paste + Multiline-Warnung (QTMUX-16)** — `VtScreen::startPaste()/endPaste()`
   rufen `vterm_keyboard_start/end_paste`; libvterm gibt die Klammern `ESC[200~`/`ESC[201~`
   **nur** aus, wenn die App DECSET 2004 aktiviert hat (Output-Callback → `outputToPty` → Backend).

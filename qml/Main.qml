@@ -429,6 +429,16 @@ ApplicationWindow {
         shortcut: "Ctrl+Q"
         onTriggered: Qt.quit()
     }
+    // Einstellungen-Dialog öffnen (macOS: Cmd+, ; sonst Strg+,).
+    Action {
+        id: actSettings
+        text: qsTr("Einstellungen …")
+        // Bewusst KEIN StandardKey.Preferences: macOS verschiebt solche Aktionen ins
+        // App-Menü und der In-Window-Shortcut greift dann nicht (Komma lief ins Terminal).
+        // „Ctrl+," wird auf macOS zu Cmd+, gemappt — native Optik, aber zuverlässig.
+        shortcut: "Ctrl+,"
+        onTriggered: settingsDialog.open()
+    }
     // Terminal-Zoom: Schriftgröße global vergrößern/verkleinern/zurücksetzen.
     Action {
         id: actZoomIn
@@ -586,6 +596,11 @@ ApplicationWindow {
                 onClicked: mcp.listening ? mcp.stop() : mcp.start()
             }
             IconToolButton {
+                icon.source: window.icon("gear")
+                tip: qsTr("Einstellungen …")
+                onClicked: settingsDialog.open()
+            }
+            IconToolButton {
                 icon.source: window.icon("info")
                 tip: qsTr("Über QTmux")
                 onClicked: aboutDialog.open()
@@ -675,6 +690,8 @@ ApplicationWindow {
                 action: actBroadcast
                 icon.source: window.icon("broadcast-input"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
             }
+            MenuSeparator {}
+            MenuItem { action: actSettings; icon.source: window.icon("gear"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
             MenuItem {
                 action: actToggleTheme
@@ -1181,6 +1198,97 @@ ApplicationWindow {
             wrapMode: Text.WordWrap
             color: Theme.textBright
             text: qsTr("Der Inhalt der Zwischenablage hat %1 Zeilen und könnte mehrere Befehle ausführen. Trotzdem einfügen?").arg(pasteWarnDialog.lineCount)
+        }
+    }
+
+    // --- Einstellungen ------------------------------------------------------
+    // Bündelt die persistierten Optionen; Änderungen wirken sofort (Zwei-Wege-Bindung
+    // an die window-Properties / Theme / App-Singletons).
+    AppDialog {
+        id: settingsDialog
+        width: 480
+        title: qsTr("Einstellungen")
+        standardButtons: Dialog.Close
+
+        // Abschnittsüberschrift im Dialog.
+        component SectionLabel: Text {
+            color: Theme.textDim
+            font.pixelSize: 11
+            font.bold: true
+            Layout.topMargin: 6
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+
+            SectionLabel { text: qsTr("Erscheinungsbild") }
+            GridLayout {
+                columns: 2; columnSpacing: 12; rowSpacing: 8; Layout.fillWidth: true
+                Text { text: qsTr("Design"); color: Theme.textBright }
+                AppComboBox {
+                    Layout.fillWidth: true
+                    model: [qsTr("Wie System"), qsTr("Hell"), qsTr("Dunkel")]
+                    currentIndex: Theme.mode
+                    onActivated: (i) => Theme.mode = i
+                }
+                Text { text: qsTr("Sprache"); color: Theme.textBright }
+                AppComboBox {
+                    Layout.fillWidth: true
+                    textRole: "name"
+                    model: App.languageCodes().map(c => ({ code: c, name: App.languageName(c) }))
+                    currentIndex: Math.max(0, App.languageCodes().indexOf(App.language))
+                    onActivated: (i) => App.language = App.languageCodes()[i]
+                }
+            }
+
+            SectionLabel { text: qsTr("Terminal") }
+            GridLayout {
+                columns: 2; columnSpacing: 12; rowSpacing: 8; Layout.fillWidth: true
+                Text { text: qsTr("Schriftgröße"); color: Theme.textBright }
+                SpinBox {
+                    from: 6; to: 40
+                    value: window.terminalFontSize
+                    onValueModified: window.terminalFontSize = value
+                }
+                Text {
+                    text: qsTr("Standard-Shell"); color: Theme.textBright
+                    visible: window.hasShellChoice
+                }
+                AppComboBox {
+                    visible: window.hasShellChoice
+                    Layout.fillWidth: true
+                    textRole: "name"
+                    model: sessions.availableShells()
+                    currentIndex: {
+                        const l = sessions.availableShells()
+                        for (let i = 0; i < l.length; ++i)
+                            if (l[i].program === window.currentShellProgram()) return i
+                        return 0
+                    }
+                    onActivated: (i) => window.defaultShellProgram = sessions.availableShells()[i].program
+                }
+            }
+
+            SectionLabel { text: qsTr("Eingabe & Zwischenablage") }
+            ColumnLayout {
+                spacing: 6; Layout.fillWidth: true
+                CheckBox {
+                    text: qsTr("Auswahl automatisch kopieren")
+                    checked: window.copyOnSelect
+                    onToggled: window.copyOnSelect = checked
+                }
+                CheckBox {
+                    text: qsTr("Rechtsklick fügt ein")
+                    checked: window.rightClickPaste
+                    onToggled: window.rightClickPaste = checked
+                }
+                CheckBox {
+                    text: qsTr("Vor mehrzeiligem Einfügen warnen")
+                    checked: window.pasteWarnMultiline
+                    onToggled: window.pasteWarnMultiline = checked
+                }
+            }
         }
     }
 }
