@@ -98,6 +98,7 @@ private:
     QList<SessionConfig> m_configs;   // parallel zu m_sessions
     int m_activeRow = -1;
     bool m_restoring = false;         // unterdrückt Persistierung während restoreState()
+    bool m_shuttingDown = false;      // App-Quit: kein Auto-Remove/Save mehr (Zustand ist gesichert)
 };
 
 } // namespace qtmux

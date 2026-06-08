@@ -75,9 +75,13 @@ void SessionModel::wireSession(Session *s, int row) {
 
     // Endet die zugrundeliegende Shell/Verbindung, die Session automatisch entfernen.
     // Verzögert (QueuedConnection), um nicht während der Signalauslösung zu löschen.
+    // NICHT beim App-Quit: dort hat saveState() den Zustand bereits gesichert; ein
+    // Auto-Remove würde die gerade gespeicherte Session-Liste wieder leeren.
     connect(s, &Session::stateChanged, this, [this, s]() {
+        if (m_shuttingDown) return;
         if (s->state() == BackendState::Closed) {
             QMetaObject::invokeMethod(this, [this, s]() {
+                if (m_shuttingDown) return;
                 const int r = static_cast<int>(m_sessions.indexOf(s));
                 if (r >= 0) closeSession(r);
             }, Qt::QueuedConnection);
@@ -242,13 +246,16 @@ void SessionModel::moveSession(int from, int to) {
 
 void SessionModel::shutdownAll() {
     // Nur Prozesse beenden (keine Modelländerung) — wird beim App-Quit aufgerufen.
+    // m_shuttingDown verhindert, dass die dabei ausgelösten Closed-Signale die
+    // (zuvor von saveState gesicherte) Session-Liste per Auto-Remove leeren.
+    m_shuttingDown = true;
     for (Session *s : m_sessions) s->shutdown();
 }
 
 // --- Persistenz -------------------------------------------------------------
 
 void SessionModel::saveState() const {
-    if (m_restoring) return;   // während Wiederherstellung nicht zurückschreiben
+    if (m_restoring || m_shuttingDown) return;   // weder beim Restore noch beim Quit überschreiben
     QSettings s;
     s.beginWriteArray(QStringLiteral("sessions"), m_configs.size());
     for (int i = 0; i < m_configs.size(); ++i) {
