@@ -353,8 +353,19 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   mit Schema-`AppComboBox` (`ColorSchemes.names`/`.current`) + „Importieren …" (`FileDialog`,
   `import QtQuick.Dialogs`) + 16-Farben-Vorschau. Import-Parser in `ColorScheme.cpp`: iTerm
   `.itermcolors` (XML-Plist via `QXmlStreamReader`), Xresources (`*color0:`) und Ghostty
-  (`palette = 0=#…`). E2E auf macOS verifiziert (Solarized Hell → Terminal wird cremefarben mit dunklem
-  Cursor, App-Chrome bleibt dunkel; Live-Vorschau wechselt mit der Auswahl).
+  (`palette = 0=#…`).
+  **Ganze App folgt dem Schema (erweitert):** Der Anwender wählt **je ein Schema für Hell und für
+  Dunkel** (`ColorSchemeRegistry.darkScheme`/`lightScheme`, je via QSettings `colorSchemes/dark`+`/light`).
+  Der bestehende Modus-Schalter (System/Hell/Dunkel) bleibt und bestimmt nur, **welches** der beiden
+  Schemata aktiv ist: `Theme` meldet seinen effektiven Modus per `ColorSchemeRegistry::setDark(dark())`
+  (im ctor, bei `setMode` und OS-Wechsel); `currentScheme()` = dark/light-Auswahl je nach Modus.
+  **`Theme` leitet ALLE Chrome-Farben aus dem aktiven Schema ab** (nicht mehr hartkodiert hell/dunkel):
+  Flächen als `mix(bg→fg)`-Schattierungen (Sidebar/Elevated/Hover/Border), Auswahl als `mix(bg→Akzent)`,
+  Akzent = ANSI-Blau (Index 4), `textBright/Dim` aus fg. Kette nicht-zirkulär: Modus (mode/OS) → wählt
+  Schema → färbt alles. Settings: zwei Combos „Farbschema (Dunkel/Hell)" mit je 16-Farben-Vorschau +
+  ein „Importieren …" (importiertes Schema landet je nach Helligkeit im Dunkel-/Hell-Slot).
+  E2E auf macOS verifiziert: Dunkel-Slot=Dracula → komplette App (Toolbar/Sidebar/Terminal) violett mit
+  violettem Akzent; Ctrl+D → Hell-Modus nutzt Hell-Schema → ganze App hell mit blauem Akzent.
 - ✅ **Bracketed Paste + Multiline-Warnung (QTMUX-16)** — `VtScreen::startPaste()/endPaste()`
   rufen `vterm_keyboard_start/end_paste`; libvterm gibt die Klammern `ESC[200~`/`ESC[201~`
   **nur** aus, wenn die App DECSET 2004 aktiviert hat (Output-Callback → `outputToPty` → Backend).

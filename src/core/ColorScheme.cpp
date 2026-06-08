@@ -43,8 +43,9 @@ ColorSchemeRegistry *ColorSchemeRegistry::instance() {
 ColorSchemeRegistry::ColorSchemeRegistry(QObject *parent) : QObject(parent) {
     loadBuiltins();
     loadPersisted();
-    if (indexOf(m_current) < 0)
-        m_current = m_schemes.isEmpty() ? QString() : m_schemes.first().name;
+    const QString firstName = m_schemes.isEmpty() ? QString() : m_schemes.first().name;
+    if (indexOf(m_darkChoice) < 0)  m_darkChoice  = firstName;
+    if (indexOf(m_lightChoice) < 0) m_lightChoice = firstName;
 }
 
 void ColorSchemeRegistry::loadBuiltins() {
@@ -79,7 +80,8 @@ void ColorSchemeRegistry::loadBuiltins() {
 void ColorSchemeRegistry::loadPersisted() {
     QSettings st;
     st.beginGroup(QStringLiteral("colorSchemes"));
-    m_current = st.value(QStringLiteral("current"), QStringLiteral("QTmux Dunkel")).toString();
+    m_darkChoice  = st.value(QStringLiteral("dark"),  QStringLiteral("QTmux Dunkel")).toString();
+    m_lightChoice = st.value(QStringLiteral("light"), QStringLiteral("QTmux Hell")).toString();
     // Importierte Schemata: je ein String "name|fg|bg|cursor|dark|a0,…,a15" (hex ohne #).
     const QStringList imported = st.value(QStringLiteral("imported")).toStringList();
     for (const QString &line : imported) {
@@ -103,7 +105,8 @@ void ColorSchemeRegistry::loadPersisted() {
 void ColorSchemeRegistry::persist() const {
     QSettings st;
     st.beginGroup(QStringLiteral("colorSchemes"));
-    st.setValue(QStringLiteral("current"), m_current);
+    st.setValue(QStringLiteral("dark"), m_darkChoice);
+    st.setValue(QStringLiteral("light"), m_lightChoice);
     QStringList imported;
     for (const ColorScheme &s : m_schemes) {
         if (s.builtin) continue;
@@ -135,16 +138,32 @@ const ColorScheme &ColorSchemeRegistry::scheme(const QString &name) const {
     static const ColorScheme fallback;
     const int i = indexOf(name);
     if (i >= 0) return m_schemes.at(i);
-    const int cur = indexOf(m_current);
+    const int cur = indexOf(activeName());
     if (cur >= 0) return m_schemes.at(cur);
     return m_schemes.isEmpty() ? fallback : m_schemes.first();
 }
 
-void ColorSchemeRegistry::setCurrent(const QString &name) {
-    if (name == m_current || indexOf(name) < 0) return;
-    m_current = name;
+void ColorSchemeRegistry::setDarkScheme(const QString &name) {
+    if (name == m_darkChoice || indexOf(name) < 0) return;
+    m_darkChoice = name;
     persist();
-    emit changed();
+    emit selectionChanged();
+    if (m_dark) emit changed();   // betrifft die aktuelle Ansicht
+}
+
+void ColorSchemeRegistry::setLightScheme(const QString &name) {
+    if (name == m_lightChoice || indexOf(name) < 0) return;
+    m_lightChoice = name;
+    persist();
+    emit selectionChanged();
+    if (!m_dark) emit changed();
+}
+
+void ColorSchemeRegistry::setDark(bool dark) {
+    if (dark == m_dark) return;
+    const QString before = activeName();
+    m_dark = dark;
+    if (activeName() != before) emit changed();   // aktives Schema hat gewechselt
 }
 
 QVariantMap ColorSchemeRegistry::colors(const QString &name) const {
@@ -296,10 +315,12 @@ QString ColorSchemeRegistry::importFile(const QString &path) {
     while (indexOf(s.name) >= 0) s.name = QStringLiteral("%1 (%2)").arg(base).arg(n++);
 
     m_schemes << s;
-    m_current = s.name;
+    // Importiertes Schema dem passenden Slot zuordnen (dunkel→Dunkel-, hell→Hell-Auswahl).
+    if (s.dark) m_darkChoice = s.name; else m_lightChoice = s.name;
     persist();
     emit listChanged();
-    emit changed();
+    emit selectionChanged();
+    if (s.dark == m_dark) emit changed();   // betrifft die aktuelle Ansicht
     return s.name;
 }
 

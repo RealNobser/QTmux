@@ -1506,17 +1506,18 @@ ApplicationWindow {
                     onActivated: (i) => App.language = App.languageCodes()[i]
                 }
 
-                // Terminal-Farbschema (QTMUX-18): Auswahl + Import (iTerm/Xresources/Ghostty).
-                Text { text: qsTr("Farbschema"); color: Theme.textBright }
+                // Terminal-Farbschema (QTMUX-18): je ein Schema für Dunkel und Hell.
+                // Das je nach Modus aktive Schema färbt die GANZE App. Import
+                // (iTerm/Xresources/Ghostty) landet im passenden Slot.
+                Text { text: qsTr("Farbschema (Dunkel)"); color: Theme.textBright }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 6
                     AppComboBox {
-                        id: schemeCombo
                         Layout.fillWidth: true
                         model: ColorSchemes.names
-                        currentIndex: Math.max(0, ColorSchemes.names.indexOf(ColorSchemes.current))
-                        onActivated: (i) => ColorSchemes.current = ColorSchemes.names[i]
+                        currentIndex: Math.max(0, ColorSchemes.names.indexOf(ColorSchemes.darkScheme))
+                        onActivated: (i) => ColorSchemes.darkScheme = ColorSchemes.names[i]
                     }
                     Button {
                         text: qsTr("Importieren …")
@@ -1524,21 +1525,41 @@ ApplicationWindow {
                         onClicked: schemeFileDialog.open()
                     }
                 }
-
-                // Vorschau: fg/bg + 16 ANSI-Farben des aktuellen Schemas.
                 Item { width: 1; height: 1 }   // Spalte 1 leer
                 Row {
                     Layout.fillWidth: true
                     spacing: 3
-                    property var sc: ColorSchemes.colors(ColorSchemes.current)
+                    property var sc: ColorSchemes.colors(ColorSchemes.darkScheme)
                     Repeater {
                         model: 16
                         Rectangle {
                             required property int index
                             width: 15; height: 15; radius: 3
                             color: parent.sc.ansi[index]
-                            border.color: Theme.border
-                            border.width: 1
+                            border.color: Theme.border; border.width: 1
+                        }
+                    }
+                }
+
+                Text { text: qsTr("Farbschema (Hell)"); color: Theme.textBright }
+                AppComboBox {
+                    Layout.fillWidth: true
+                    model: ColorSchemes.names
+                    currentIndex: Math.max(0, ColorSchemes.names.indexOf(ColorSchemes.lightScheme))
+                    onActivated: (i) => ColorSchemes.lightScheme = ColorSchemes.names[i]
+                }
+                Item { width: 1; height: 1 }
+                Row {
+                    Layout.fillWidth: true
+                    spacing: 3
+                    property var sc: ColorSchemes.colors(ColorSchemes.lightScheme)
+                    Repeater {
+                        model: 16
+                        Rectangle {
+                            required property int index
+                            width: 15; height: 15; radius: 3
+                            color: parent.sc.ansi[index]
+                            border.color: Theme.border; border.width: 1
                         }
                     }
                 }

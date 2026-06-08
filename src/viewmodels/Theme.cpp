@@ -6,16 +6,31 @@
 
 namespace qtmux {
 
+namespace {
+// Lineare Mischung zweier Farben (t=0 → a, t=1 → b).
+QColor mix(const QColor &a, const QColor &b, qreal t) {
+    return QColor::fromRgbF(a.redF()   + (b.redF()   - a.redF())   * t,
+                            a.greenF() + (b.greenF() - a.greenF()) * t,
+                            a.blueF()  + (b.blueF()  - a.blueF())  * t);
+}
+} // namespace
+
 Theme::Theme(QObject *parent) : QObject(parent) {
     QSettings s;
     m_mode = static_cast<Mode>(s.value(QStringLiteral("ui/themeMode"), static_cast<int>(System)).toInt());
 
-    // Auf OS-Wechsel (hell/dunkel) live reagieren. Immer melden: im System-Modus
-    // ändert sich die ganze Palette, sonst zumindest systemDark/menuIcon (native Menüs).
-    connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this,
-            [this](Qt::ColorScheme) { emit changed(); });
+    // Effektiven Hell/Dunkel-Modus an die Schema-Registry melden (wählt das aktive Schema).
+    ColorSchemeRegistry::instance()->setDark(dark());
 
-    // Terminal-Farben folgen dem gewählten Farbschema → bei dessen Wechsel neu binden.
+    // Auf OS-Wechsel (hell/dunkel) live reagieren: Modus an die Registry melden und
+    // die ganze Palette neu binden lassen.
+    connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this,
+            [this](Qt::ColorScheme) {
+                ColorSchemeRegistry::instance()->setDark(dark());
+                emit changed();
+            });
+
+    // Die ganze App folgt dem gewählten Schema → bei dessen Wechsel neu binden.
     connect(ColorSchemeRegistry::instance(), &ColorSchemeRegistry::changed, this,
             [this]() { emit changed(); });
 }
@@ -24,6 +39,7 @@ void Theme::setMode(Mode mode) {
     if (mode == m_mode) return;
     m_mode = mode;
     QSettings().setValue(QStringLiteral("ui/themeMode"), static_cast<int>(mode));
+    ColorSchemeRegistry::instance()->setDark(dark());
     emit changed();
 }
 
@@ -49,18 +65,19 @@ QColor Theme::menuIcon() const {
 
 void Theme::toggle() { setMode(dark() ? Light : Dark); }
 
-// Dark- bzw. Light-Wert je nach effektivem Modus.
-QColor Theme::bgSidebar() const       { return dark() ? QColor(0x16, 0x17, 0x1f) : QColor(0xec, 0xed, 0xf2); }
-QColor Theme::bgMain() const          { return dark() ? QColor(0x1e, 0x1f, 0x29) : QColor(0xfa, 0xfb, 0xfd); }
-QColor Theme::bgElevated() const      { return dark() ? QColor(0x22, 0x24, 0x33) : QColor(0xff, 0xff, 0xff); }
-QColor Theme::sidebarHover() const    { return dark() ? QColor(0x26, 0x28, 0x38) : QColor(0xe1, 0xe4, 0xec); }
-QColor Theme::sidebarSelected() const { return dark() ? QColor(0x2b, 0x2e, 0x42) : QColor(0xd6, 0xdf, 0xff); }
-QColor Theme::border() const          { return dark() ? QColor(0x3a, 0x3f, 0x5c) : QColor(0xc9, 0xcd, 0xd8); }
-QColor Theme::accent() const          { return QColor(0x5b, 0x8c, 0xff); }
-QColor Theme::textBright() const      { return dark() ? QColor(0xe6, 0xe7, 0xee) : QColor(0x1b, 0x1d, 0x26); }
-QColor Theme::textDim() const         { return dark() ? QColor(0x8a, 0x8d, 0x9a) : QColor(0x6a, 0x6e, 0x7c); }
-// Terminal-Default-Flächen (nicht-gefärbte Zellen) + Cursor folgen dem gewählten
-// Farbschema (QTMUX-18), unabhängig vom App-Hell/Dunkel.
+// --- Chrome-Farben: aus dem aktiven Farbschema abgeleitet (QTMUX-18) ---------
+// Die GANZE App folgt dem Schema: Flächen sind Schattierungen von bg→fg (funktioniert
+// für helle wie dunkle Schemata gleich), Akzent = ANSI-Blau (Index 4).
+QColor Theme::bgSidebar() const       { const ColorScheme &s = ColorSchemeRegistry::instance()->currentScheme(); return mix(QColor::fromRgb(s.bg), QColor::fromRgb(s.fg), 0.05); }
+QColor Theme::bgMain() const          { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().bg); }
+QColor Theme::bgElevated() const      { const ColorScheme &s = ColorSchemeRegistry::instance()->currentScheme(); return mix(QColor::fromRgb(s.bg), QColor::fromRgb(s.fg), 0.10); }
+QColor Theme::sidebarHover() const    { const ColorScheme &s = ColorSchemeRegistry::instance()->currentScheme(); return mix(QColor::fromRgb(s.bg), QColor::fromRgb(s.fg), 0.16); }
+QColor Theme::sidebarSelected() const { const ColorScheme &s = ColorSchemeRegistry::instance()->currentScheme(); return mix(QColor::fromRgb(s.bg), QColor::fromRgb(s.ansi[4]), 0.30); }
+QColor Theme::border() const          { const ColorScheme &s = ColorSchemeRegistry::instance()->currentScheme(); return mix(QColor::fromRgb(s.bg), QColor::fromRgb(s.fg), 0.24); }
+QColor Theme::accent() const          { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().ansi[4]); }
+QColor Theme::textBright() const      { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().fg); }
+QColor Theme::textDim() const         { const ColorScheme &s = ColorSchemeRegistry::instance()->currentScheme(); return mix(QColor::fromRgb(s.fg), QColor::fromRgb(s.bg), 0.45); }
+// Terminal-Flächen + Cursor = Schema-Farben direkt.
 QColor Theme::terminalBg() const     { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().bg); }
 QColor Theme::terminalFg() const     { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().fg); }
 QColor Theme::terminalCursor() const { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().cursor); }

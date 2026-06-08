@@ -106,19 +106,19 @@
     </message>
     <message>
         <location filename="../qml/Main.qml" line="893"/>
-        <location filename="../qml/Main.qml" line="1579"/>
+        <location filename="../qml/Main.qml" line="1600"/>
         <source>Auswahl automatisch kopieren</source>
         <translation>Auswahl automatisch kopieren</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="899"/>
-        <location filename="../qml/Main.qml" line="1584"/>
+        <location filename="../qml/Main.qml" line="1605"/>
         <source>Rechtsklick fügt ein</source>
         <translation>Rechtsklick fügt ein</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="905"/>
-        <location filename="../qml/Main.qml" line="1589"/>
+        <location filename="../qml/Main.qml" line="1610"/>
         <source>Vor mehrzeiligem Einfügen warnen</source>
         <translation>Vor mehrzeiligem Einfügen warnen</translation>
     </message>
@@ -203,27 +203,36 @@
         <translation>Dunkel</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1510"/>
-        <source>Farbschema</source>
-        <translation type="unfinished">Farbschema</translation>
+        <location filename="../qml/Main.qml" line="1512"/>
+        <source>Farbschema (Dunkel)</source>
+        <translation type="unfinished">Farbschema (Dunkel)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1522"/>
+        <source>Farbschema</source>
+        <translation type="obsolete">Farbschema</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="1523"/>
         <source>Importieren …</source>
         <translation type="unfinished">Importieren …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1547"/>
+        <location filename="../qml/Main.qml" line="1544"/>
+        <source>Farbschema (Hell)</source>
+        <translation type="unfinished">Farbschema (Hell)</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="1568"/>
         <source>Terminal</source>
         <translation>Terminal</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1550"/>
+        <location filename="../qml/Main.qml" line="1571"/>
         <source>Schriftgröße</source>
         <translation>Schriftgröße</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1575"/>
+        <location filename="../qml/Main.qml" line="1596"/>
         <source>Eingabe &amp; Zwischenablage</source>
         <translation>Eingabe &amp; Zwischenablage</translation>
     </message>
@@ -451,7 +460,7 @@ Qt %1</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="869"/>
-        <location filename="../qml/Main.qml" line="1557"/>
+        <location filename="../qml/Main.qml" line="1578"/>
         <source>Standard-Shell</source>
         <translation type="unfinished">Standard-Shell</translation>
     </message>
