@@ -177,7 +177,11 @@ QByteArray TerminalItem::encodeKey(QKeyEvent *event) const {
     case Qt::Key_Return:
     case Qt::Key_Enter:    return "\r";
     case Qt::Key_Backspace:return "\x7f";
-    case Qt::Key_Tab:      return "\t";
+    case Qt::Key_Tab:
+        // Shift+Tab kann (je nach Plattform) als Key_Tab+Shift ankommen -> Back-Tab.
+        return (event->modifiers() & Qt::ShiftModifier) ? QByteArray("\x1b[Z")
+                                                         : QByteArray("\t");
+    case Qt::Key_Backtab:  return "\x1b[Z";   // Shift+Tab (Back-Tab, CSI Z) -> z. B. Claude-Mode
     case Qt::Key_Escape:   return "\x1b";
     case Qt::Key_Up:       return "\x1b[A";
     case Qt::Key_Down:     return "\x1b[B";
