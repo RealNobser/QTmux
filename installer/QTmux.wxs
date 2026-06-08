@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WiX v4 Quelle für den Windows-Installer (MSI) von QTmux.
+
+  Bauen (WiX v4 CLI als dotnet-Tool, FREI ohne OSMF; v6/v7 verlangen die Fee):
+      wix build installer\QTmux.wxs -arch x64 ^
+          -d Version=0.1.0 -d PayloadDir=<Pfad zu dist\QTmux> ^
+          -o dist\QTmux-<Version>-win64.msi
+
+  PayloadDir ist das per windeployqt erzeugte, selbst-enthaltene Release-
+  Verzeichnis (qtmux.exe + Qt-DLLs/QML/Plugins + VC-Runtime). Alle Dateien
+  darin werden per <Files> automatisch geharvestet.
+
+  Hinweis: unsigniert -> beim Start warnt SmartScreen ("unbekannter Herausgeber").
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="QTmux"
+           Manufacturer="QTmux"
+           Version="$(var.Version)"
+           UpgradeCode="84D77034-7166-4138-B80F-2B2DCEFD1602"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="Eine neuere Version von QTmux ist bereits installiert." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Eintrag in "Apps &amp; Features": Icon, kein Reparieren. -->
+    <Icon Id="qtmux.ico" SourceFile="$(var.PayloadDir)\qtmux.exe" />
+    <Property Id="ARPPRODUCTICON" Value="qtmux.ico" />
+    <Property Id="ARPNOREPAIR" Value="1" Secure="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="QTmux" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ShortcutFolder" Name="QTmux" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="QTmux">
+      <ComponentGroupRef Id="Payload" />
+      <ComponentGroupRef Id="Shortcuts" />
+    </Feature>
+
+    <!-- Komplettes Laufzeit-Verzeichnis automatisch einbinden. -->
+    <ComponentGroup Id="Payload" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PayloadDir)\**" />
+    </ComponentGroup>
+
+    <!-- Startmenü-Verknüpfung + sauberes Entfernen bei Deinstallation. -->
+    <ComponentGroup Id="Shortcuts" Directory="ShortcutFolder">
+      <Component Id="StartMenuShortcut" Guid="*">
+        <Shortcut Id="QTmuxStartMenu" Name="QTmux"
+                  Target="[INSTALLFOLDER]qtmux.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="qtmux.ico" />
+        <RemoveFolder Id="RemoveShortcutFolder" On="uninstall" />
+        <RegistryValue Root="HKMU" Key="Software\QTmux\QTmux"
+                       Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Package>
+</Wix>

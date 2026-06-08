@@ -1,0 +1,39 @@
+QTmux — Early-Adopter-Build (Windows x64)
+==========================================
+
+Signatur:  UNSIGNIERT (Test-/Early-Adopter-Build)
+
+Was ist das?
+------------
+QTmux ist ein plattformübergreifender Multi-KI-Agenten-Terminal-Manager
+(Qt 6 / C++20).
+
+Installation
+------------
+- MSI-Installer: "QTmux-<Version>-win64.msi" doppelklicken. Installiert nach
+  "Programme\QTmux" und legt eine Startmenü-Verknüpfung an. Deinstellation über
+  "Apps & Features".
+- Portable Variante (ZIP): Ordner entpacken und "qtmux.exe" starten — keine
+  Installation nötig.
+
+Hinweis zu Windows SmartScreen
+------------------------------
+Da der Build NICHT signiert ist, erscheint beim ersten Start bzw. bei der
+Installation evtl. "Der Computer wurde durch Windows geschützt":
+   -> "Weitere Informationen" -> "Trotzdem ausführen".
+Das ist bei unsignierten Test-Builds normal.
+
+Voraussetzungen
+---------------
+- Windows 10 ab Version 1809 (Build 17763) oder Windows 11
+  (für die ConPTY-Terminal-Anbindung).
+- Die nötige Visual-C++-Laufzeit ist enthalten — keine Zusatzinstallation.
+
+Daten / Zurücksetzen
+--------------------
+- Einstellungen liegen in der Registry unter HKCU\Software\QTmux\QTmux.
+  Zum vollständigen Zurücksetzen diesen Schlüssel löschen.
+
+Feedback
+--------
+Rückmeldungen, Fehler und Wünsche bitte an das QTmux-Team. Danke fürs Testen!

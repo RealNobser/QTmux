@@ -52,6 +52,25 @@ gesetzten `PATH`. (Die Test-Exes brauchen die Qt-`bin` im `PATH`.)
 
 Linux (GCC/Clang) nutzt denselben Preset-Mechanismus mit System-Qt.
 
+### Windows-Installer (MSI)
+
+Ein **unsignierter** MSI-Installer (für Early Adopters) entsteht reproduzierbar über
+[`installer/build-msi.ps1`](installer/build-msi.ps1) (Release-Build → `windeployqt` →
+WiX). Voraussetzung ist die **freie** WiX-CLI als dotnet-Tool:
+
+```powershell
+dotnet tool install --global wix --version 5.0.2   # v6/v7 verlangen die OSMF-Fee
+wix extension add -g WixToolset.UI.wixext/5.0.2     # optional (Assistent-UI)
+
+powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1
+# -> dist\QTmux-0.1.0-win64.msi (selbst-enthaltend, inkl. Qt + VC-Runtime)
+```
+
+WiX-Quelle: [`installer/QTmux.wxs`](installer/QTmux.wxs) (Installation nach
+`Programme\QTmux` + Startmenü-Verknüpfung; Deinstallation über „Apps & Features").
+Alternativ liegt ein **portables ZIP** der gleichen Laufzeit bei. Da unsigniert,
+warnt SmartScreen beim ersten Start („Weitere Informationen → Trotzdem ausführen").
+
 ## Roadmap
 
 - [x] Phase 0 — Gerüst (CMake/Qt-Quick-Shell)
