@@ -71,6 +71,13 @@ void TerminalItem::setForegroundColor(const QColor &c) {
     update();
 }
 
+void TerminalItem::setCursorColor(const QColor &c) {
+    if (c == m_cursorColor) return;
+    m_cursorColor = c;
+    emit colorsChanged();
+    update();
+}
+
 void TerminalItem::setBroadcast(bool on) {
     if (on == m_broadcast) return;
     m_broadcast = on;
@@ -170,7 +177,9 @@ void TerminalItem::paint(QPainter *painter) {
     if (m_scrollOffset == 0 && sc->cursorVisible()) {
         const QPoint cur = sc->cursor();
         QRectF r(cur.x() * m_cellW, cur.y() * m_cellH, m_cellW, m_cellH);
-        painter->fillRect(r, QColor(0xe6, 0xe7, 0xee, 0x99));
+        QColor cc = m_cursorColor;
+        cc.setAlpha(0x99);
+        painter->fillRect(r, cc);
     }
 
     // Dezenter Scrollbalken am rechten Rand, sobald Historie existiert.

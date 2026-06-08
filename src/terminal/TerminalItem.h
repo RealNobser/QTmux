@@ -27,6 +27,7 @@ class TerminalItem : public QQuickPaintedItem {
     Q_PROPERTY(int pointSize READ pointSize WRITE setPointSize NOTIFY fontChanged)
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY colorsChanged)
+    Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY colorsChanged)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
     Q_PROPERTY(bool broadcast READ broadcast WRITE setBroadcast NOTIFY broadcastChanged)
     Q_PROPERTY(bool copyOnSelect READ copyOnSelect WRITE setCopyOnSelect NOTIFY copyOnSelectChanged)
@@ -46,6 +47,8 @@ public:
     void setBackgroundColor(const QColor &c);
     QColor foregroundColor() const { return m_defaultFg; }
     void setForegroundColor(const QColor &c);
+    QColor cursorColor() const { return m_cursorColor; }
+    void setCursorColor(const QColor &c);
 
     /// Broadcast-Modus: Eingabe geht nicht an die eigene Session, sondern wird
     /// per `inputForBroadcast`-Signal nach außen gereicht (QML → an alle Sessions).
@@ -133,6 +136,7 @@ private:
 
     QColor m_defaultFg{0xe6, 0xe7, 0xee};
     QColor m_defaultBg{0x1e, 0x1f, 0x29};
+    QColor m_cursorColor{0xe6, 0xe7, 0xee};
 
     // Maus-Selektion (Zellkoordinaten col=x, row=y; Strom-/Zeilen-Selektion).
     QPoint m_selAnchor{-1, -1};

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Effects
+import QtQuick.Dialogs
 import QtCore
 import QTmux
 
@@ -1293,6 +1294,7 @@ ApplicationWindow {
                         pointSize: window.terminalFontSize   // globaler Zoom
                         backgroundColor: Theme.terminalBg
                         foregroundColor: Theme.terminalFg
+                        cursorColor: Theme.terminalCursor
                         session: pane.sessionRow >= 0 && pane.sessionRow < sessions.count
                                  ? sessions.sessionAt(pane.sessionRow) : null
                         // Broadcast-Modus: Eingabe an ALLE Sessions verteilen.
@@ -1423,6 +1425,30 @@ ApplicationWindow {
         }
     }
 
+    // --- Farbschema importieren (iTerm .itermcolors / Xresources / Ghostty) -
+    FileDialog {
+        id: schemeFileDialog
+        title: qsTr("Farbschema importieren")
+        nameFilters: [ qsTr("Farbschemata (*.itermcolors *.Xresources *.conf *.txt)"),
+                       qsTr("Alle Dateien (*)") ]
+        onAccepted: {
+            const name = ColorSchemes.importFile(selectedFile)
+            if (name.length === 0) schemeImportError.open()
+        }
+    }
+    AppDialog {
+        id: schemeImportError
+        width: 380
+        title: qsTr("Import fehlgeschlagen")
+        standardButtons: Dialog.Ok
+        Label {
+            width: 340
+            wrapMode: Text.WordWrap
+            color: Theme.textBright
+            text: qsTr("Die Datei konnte nicht als Farbschema gelesen werden (unterstützt: iTerm .itermcolors, Xresources, Ghostty).")
+        }
+    }
+
     // --- Mehrzeilige-Einfügung-Warnung -------------------------------------
     AppDialog {
         id: pasteWarnDialog
@@ -1478,6 +1504,43 @@ ApplicationWindow {
                     model: App.languageCodes().map(c => ({ code: c, name: App.languageName(c) }))
                     currentIndex: Math.max(0, App.languageCodes().indexOf(App.language))
                     onActivated: (i) => App.language = App.languageCodes()[i]
+                }
+
+                // Terminal-Farbschema (QTMUX-18): Auswahl + Import (iTerm/Xresources/Ghostty).
+                Text { text: qsTr("Farbschema"); color: Theme.textBright }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    AppComboBox {
+                        id: schemeCombo
+                        Layout.fillWidth: true
+                        model: ColorSchemes.names
+                        currentIndex: Math.max(0, ColorSchemes.names.indexOf(ColorSchemes.current))
+                        onActivated: (i) => ColorSchemes.current = ColorSchemes.names[i]
+                    }
+                    Button {
+                        text: qsTr("Importieren …")
+                        font.pixelSize: 12
+                        onClicked: schemeFileDialog.open()
+                    }
+                }
+
+                // Vorschau: fg/bg + 16 ANSI-Farben des aktuellen Schemas.
+                Item { width: 1; height: 1 }   // Spalte 1 leer
+                Row {
+                    Layout.fillWidth: true
+                    spacing: 3
+                    property var sc: ColorSchemes.colors(ColorSchemes.current)
+                    Repeater {
+                        model: 16
+                        Rectangle {
+                            required property int index
+                            width: 15; height: 15; radius: 3
+                            color: parent.sc.ansi[index]
+                            border.color: Theme.border
+                            border.width: 1
+                        }
+                    }
                 }
             }
 

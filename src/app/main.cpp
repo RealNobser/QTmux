@@ -3,8 +3,10 @@
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QTranslator>
+#include <QQmlContext>
 
 #include "AppController.h"
+#include "ColorScheme.h"
 
 namespace {
 
@@ -42,6 +44,13 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle("Basic");
 
     QQmlApplicationEngine engine;
+    // Farbschema-Registry als globale Context-Property verfügbar machen (dieselbe
+    // Instanz, die Core/Session nutzen) → QML wählt/importiert, Core wendet an.
+    // Bewusst KEIN qmlRegisterSingletonInstance in die URI „QTmux": das kollidiert
+    // mit der auto-generierten Modul-Typregistrierung (Symptom: „TerminalItem is not a type").
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("ColorSchemes"), qtmux::ColorSchemeRegistry::instance());
+
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed,
         &app, []() { QCoreApplication::exit(-1); },

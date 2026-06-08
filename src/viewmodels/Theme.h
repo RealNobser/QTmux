@@ -36,6 +36,7 @@ private:
     Q_PROPERTY(QColor textDim         READ textDim         NOTIFY changed)
     Q_PROPERTY(QColor terminalBg      READ terminalBg      NOTIFY changed)
     Q_PROPERTY(QColor terminalFg      READ terminalFg      NOTIFY changed)
+    Q_PROPERTY(QColor terminalCursor  READ terminalCursor  NOTIFY changed)
 public:
     explicit Theme(QObject *parent = nullptr);
 
@@ -57,6 +58,7 @@ public:
     QColor textDim() const;
     QColor terminalBg() const;
     QColor terminalFg() const;
+    QColor terminalCursor() const;
 
 signals:
     void changed();

@@ -1,4 +1,5 @@
 #include "VtScreen.h"
+#include "ColorScheme.h"
 
 #include <vterm.h>
 #include <QChar>
@@ -208,6 +209,25 @@ void VtScreen::cbOutput(const QByteArray &data) { emit outputToPty(data); }
 
 void VtScreen::startPaste() { if (m_vt) vterm_keyboard_start_paste(m_vt); }
 void VtScreen::endPaste()   { if (m_vt) vterm_keyboard_end_paste(m_vt); }
+
+void VtScreen::applyColorScheme(const ColorScheme &scheme) {
+    if (!m_vt) return;
+    VTermState *state = vterm_obtain_state(m_vt);
+    if (!state) return;
+    auto toVt = [](quint32 rgb) {
+        VTermColor c;
+        vterm_color_rgb(&c, (rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
+        return c;
+    };
+    for (int i = 0; i < 16; ++i) {
+        VTermColor c = toVt(scheme.ansi[i]);
+        vterm_state_set_palette_color(state, i, &c);
+    }
+    VTermColor fg = toVt(scheme.fg), bg = toVt(scheme.bg);
+    vterm_state_set_default_colors(state, &fg, &bg);
+    // Palette-Wechsel erzeugt keine Damage -> vollständige Neuzeichnung anstoßen.
+    emit damaged(QRect(0, 0, m_cols, m_rows));
+}
 
 void VtScreen::cbOsc(int command, const char *str, int len, bool initial, bool final) {
     if (initial) {

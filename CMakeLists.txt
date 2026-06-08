@@ -43,6 +43,8 @@ add_library(qtmux_core STATIC
     src/core/PtyBackend.cpp
     src/core/VtScreen.h
     src/core/VtScreen.cpp
+    src/core/ColorScheme.h
+    src/core/ColorScheme.cpp
     src/core/Session.h
     src/core/Session.cpp
     src/core/AgentRegistry.h

@@ -1,6 +1,7 @@
 #include "Session.h"
 #include "VtScreen.h"
 #include "AgentRegistry.h"
+#include "ColorScheme.h"
 
 #include <QCoreApplication>
 #include <QHash>
@@ -87,6 +88,14 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
     connect(m_screen.get(), &VtScreen::bell, this, &Session::onBell);
     connect(m_screen.get(), &VtScreen::notify, this, &Session::onNotify);
     connect(m_screen.get(), &VtScreen::promptMarker, this, &Session::onPromptMarker);
+
+    // Aktuelles Farbschema anwenden und bei Wechsel automatisch neu setzen.
+    auto *schemes = ColorSchemeRegistry::instance();
+    m_screen->applyColorScheme(schemes->currentScheme());
+    connect(schemes, &ColorSchemeRegistry::changed, m_screen.get(), [this, schemes]() {
+        if (m_screen) m_screen->applyColorScheme(schemes->currentScheme());
+    });
+
     // Zustand aus dem Signal-Argument nehmen (NICHT m_backend dereferenzieren — das
     // Signal kann während der Zerstörung des Backends feuern).
     connect(m_backend.get(), &ITerminalBackend::stateChanged, this,

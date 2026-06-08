@@ -337,6 +337,24 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   `Image`, `colorizationColor` = `Theme.textBright`/`Theme.accent`). i18n DE/EN ergänzt.
   **Damit ist QTMUX-12 vollständig** (Settings-UI + Command-Palette). E2E auf macOS verifiziert
   (Cmd+K fokussiert → „spli" filtert auf 2 Treffer mit getönten Icons → Enter teilt + schließt).
+- ✅ **Color-Schemes (QTMUX-18)** — wählbare ANSI-Farbpaletten + Import. Kern: `src/core/ColorScheme.{h,cpp}`
+  (Gui-frei) — `struct ColorScheme` (fg/bg/cursor + 16 ANSI als `quint32`) und `ColorSchemeRegistry`
+  (prozessweiter Singleton via `instance()`, QObject nur Qt Core). Eingebaute Schemata (QTmux
+  Hell/Dunkel, Solarized Dark/Hell, Dracula, Gruvbox, Nord, One Dark); aktuelles Schema + importierte
+  via QSettings persistiert (`colorSchemes/current` + `…/imported`). `VtScreen::applyColorScheme()`
+  setzt die libvterm-Palette (`vterm_state_set_palette_color` ×16 + `vterm_state_set_default_colors`)
+  und stößt ein Full-Repaint an. `Session` wendet beim VtScreen-Aufbau das aktuelle Schema an und
+  hört auf `ColorSchemeRegistry::changed` (Live-Wechsel aller Sessions). `Theme.terminalBg/Fg/Cursor`
+  liefern jetzt die Schema-Farben (unabhängig vom App-Hell/Dunkel); `Theme` verbindet sich mit der
+  Registry → QML-Bindings (inkl. neuem `TerminalItem.cursorColor`) aktualisieren live. **Registry-QML-
+  Brücke:** als **Context-Property** `ColorSchemes` in `main.cpp` (`setContextProperty`) — bewusst
+  KEIN `qmlRegisterSingletonInstance` in die URI „QTmux", das kollidiert mit der auto-generierten
+  Modul-Typregistrierung (Symptom: „TerminalItem is not a type"). UI: Einstellungen → „Erscheinungsbild"
+  mit Schema-`AppComboBox` (`ColorSchemes.names`/`.current`) + „Importieren …" (`FileDialog`,
+  `import QtQuick.Dialogs`) + 16-Farben-Vorschau. Import-Parser in `ColorScheme.cpp`: iTerm
+  `.itermcolors` (XML-Plist via `QXmlStreamReader`), Xresources (`*color0:`) und Ghostty
+  (`palette = 0=#…`). E2E auf macOS verifiziert (Solarized Hell → Terminal wird cremefarben mit dunklem
+  Cursor, App-Chrome bleibt dunkel; Live-Vorschau wechselt mit der Auswahl).
 - ✅ **Bracketed Paste + Multiline-Warnung (QTMUX-16)** — `VtScreen::startPaste()/endPaste()`
   rufen `vterm_keyboard_start/end_paste`; libvterm gibt die Klammern `ESC[200~`/`ESC[201~`
   **nur** aus, wenn die App DECSET 2004 aktiviert hat (Output-Callback → `outputToPty` → Backend).

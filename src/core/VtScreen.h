@@ -13,6 +13,8 @@ struct VTermScreen;
 
 namespace qtmux {
 
+struct ColorScheme;
+
 /// Eine gerenderte Terminalzelle in Qt-freundlicher Form.
 struct Cell {
     QString text;                 // ein Graphem (meist 1 Codepoint)
@@ -61,6 +63,11 @@ public:
     /// Eine Einfügung wird zwischen startPaste()/endPaste() geklammert.
     void startPaste();
     void endPaste();
+
+    /// Setzt die libvterm-Palette (16 ANSI-Farben + Default-fg/bg) aus einem Schema
+    /// und stößt eine vollständige Neuzeichnung an. Default-fg/bg rendert das
+    /// TerminalItem über das Theme; hier v. a. für korrekte ANSI-/Reverse-Farben.
+    void applyColorScheme(const ColorScheme &scheme);
 
 signals:
     /// Geänderter Bereich in Zellkoordinaten (col/row).

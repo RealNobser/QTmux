@@ -1,4 +1,5 @@
 #include "Theme.h"
+#include "ColorScheme.h"
 #include <QSettings>
 #include <QGuiApplication>
 #include <QStyleHints>
@@ -13,6 +14,10 @@ Theme::Theme(QObject *parent) : QObject(parent) {
     // ändert sich die ganze Palette, sonst zumindest systemDark/menuIcon (native Menüs).
     connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this,
             [this](Qt::ColorScheme) { emit changed(); });
+
+    // Terminal-Farben folgen dem gewählten Farbschema → bei dessen Wechsel neu binden.
+    connect(ColorSchemeRegistry::instance(), &ColorSchemeRegistry::changed, this,
+            [this]() { emit changed(); });
 }
 
 void Theme::setMode(Mode mode) {
@@ -54,8 +59,10 @@ QColor Theme::border() const          { return dark() ? QColor(0x3a, 0x3f, 0x5c)
 QColor Theme::accent() const          { return QColor(0x5b, 0x8c, 0xff); }
 QColor Theme::textBright() const      { return dark() ? QColor(0xe6, 0xe7, 0xee) : QColor(0x1b, 0x1d, 0x26); }
 QColor Theme::textDim() const         { return dark() ? QColor(0x8a, 0x8d, 0x9a) : QColor(0x6a, 0x6e, 0x7c); }
-// Terminal-Default-Flächen (nicht-gefärbte Zellen) folgen dem Theme.
-QColor Theme::terminalBg() const      { return dark() ? QColor(0x14, 0x15, 0x1c) : QColor(0xff, 0xff, 0xff); }
-QColor Theme::terminalFg() const      { return dark() ? QColor(0xe6, 0xe7, 0xee) : QColor(0x20, 0x22, 0x2b); }
+// Terminal-Default-Flächen (nicht-gefärbte Zellen) + Cursor folgen dem gewählten
+// Farbschema (QTMUX-18), unabhängig vom App-Hell/Dunkel.
+QColor Theme::terminalBg() const     { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().bg); }
+QColor Theme::terminalFg() const     { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().fg); }
+QColor Theme::terminalCursor() const { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().cursor); }
 
 } // namespace qtmux
