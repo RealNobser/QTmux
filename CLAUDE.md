@@ -157,9 +157,11 @@ funktioniert auf beiden. Bei `/feierabend` beide Seiten-Sätze mitpflegen.
 ## Jira (DUAL: on-prem + Cloud)
 
 Tickets werden **parallel in beiden Jira** gepflegt (Backlog/Status synchron halten). Beide
-Projekte haben den Key **`QTMUX`** und denselben Issue-Satz (QTMUX-1…14, identische Summaries
+Projekte haben den Key **`QTMUX`** und denselben Issue-Satz (QTMUX-1…25, identische Summaries
 → Abgleich per Summary). Issue-Typ: **Task** (in beiden vorhanden). Erledigt: **QTMUX-1**
-(ConPTY Windows verifiziert), **QTMUX-5** (Scrollback). Neu: **QTMUX-14** (Terminal-Zoom).
+(ConPTY Windows verifiziert), **QTMUX-5** (Scrollback). **QTMUX-15…25**: aus dem Tabby-Feature-
+Abgleich (Hotkeys, Bracketed/Copy-on-Select-Paste, Color-Schemes, Ligaturen, Quake-Modus,
+Broadcast-Input, Secrets-Vault, Login-Scripts, Progress-Anzeige, Clink/cmd.exe).
 
 - **On-prem Jira Server/DC** — `https://jira.intern.example`, `Credential-Jira.txt`
   (**Bearer**-PAT, `verify_ssl=false`), API `/rest/api/2/`. Projekt-ID 10201.
