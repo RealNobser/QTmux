@@ -348,6 +348,12 @@ void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
 void TerminalItem::wheelEvent(QWheelEvent *event) {
     const int dy = event->angleDelta().y();
     if (dy == 0) { event->ignore(); return; }
+    // Cmd (macOS) bzw. Strg + Mausrad -> zoomen statt scrollen.
+    if (event->modifiers() & Qt::ControlModifier) {
+        emit zoomRequested(dy > 0 ? 1 : -1);
+        event->accept();
+        return;
+    }
     // Nach oben (dy>0) = in die Historie; 3 Zeilen je „Klick".
     scrollByLines(dy > 0 ? 3 : -3);
     event->accept();

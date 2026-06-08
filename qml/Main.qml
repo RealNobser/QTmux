@@ -247,6 +247,14 @@ ApplicationWindow {
     // Gibt es überhaupt eine Auswahl (Windows: ja; Unix: nur Login-Shell)?
     readonly property bool hasShellChoice: sessions.availableShells().length > 1
 
+    // Terminal-Schriftgröße (global für alle Panes, persistiert). Zoom via
+    // Cmd/Strg +/−/0 und Cmd/Strg+Mausrad. Auf 6..40 pt begrenzt.
+    property int terminalFontSize: 13
+    function zoomTerminal(delta) {
+        terminalFontSize = Math.max(6, Math.min(40, terminalFontSize + delta))
+    }
+    function resetTerminalZoom() { terminalFontSize = 13 }
+
     // Aktuell wirksame Shell (für Häkchen in den Menüs): die gewählte, sonst die
     // erste verfügbare (= Plattform-Vorgabe).
     function currentShellProgram() {
@@ -372,6 +380,7 @@ ApplicationWindow {
         property alias height: window.height
         property alias newSessionType: window.newSessionType
         property alias defaultShellProgram: window.defaultShellProgram
+        property alias terminalFontSize: window.terminalFontSize
     }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
@@ -399,6 +408,25 @@ ApplicationWindow {
         text: qsTr("Beenden")
         shortcut: "Ctrl+Q"
         onTriggered: Qt.quit()
+    }
+    // Terminal-Zoom: Schriftgröße global vergrößern/verkleinern/zurücksetzen.
+    Action {
+        id: actZoomIn
+        text: qsTr("Schrift vergrößern")
+        shortcut: StandardKey.ZoomIn        // Cmd++/Strg++ (inkl. „=" ohne Shift)
+        onTriggered: window.zoomTerminal(1)
+    }
+    Action {
+        id: actZoomOut
+        text: qsTr("Schrift verkleinern")
+        shortcut: StandardKey.ZoomOut        // Cmd+-/Strg+-
+        onTriggered: window.zoomTerminal(-1)
+    }
+    Action {
+        id: actZoomReset
+        text: qsTr("Schriftgröße zurücksetzen")
+        shortcut: "Ctrl+0"
+        onTriggered: window.resetTerminalZoom()
     }
     // Kopieren/Einfügen. Shortcut nur auf macOS (Cmd+C/V) — kapert dort NICHT das
     // Terminal-Ctrl+C (SIGINT). Auf Windows/Linux handhabt das TerminalItem selbst
@@ -580,6 +608,10 @@ ApplicationWindow {
                 icon.source: window.icon("split-v"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
             }
             MenuItem { action: actClosePane; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuSeparator {}
+            MenuItem { action: actZoomIn }
+            MenuItem { action: actZoomOut }
+            MenuItem { action: actZoomReset }
             MenuSeparator {}
             MenuItem {
                 action: actToggleTheme
@@ -918,13 +950,15 @@ ApplicationWindow {
                         id: paneTerm
                         anchors.fill: parent
                         anchors.margins: 6
-                        pointSize: 13
+                        pointSize: window.terminalFontSize   // globaler Zoom
                         backgroundColor: Theme.terminalBg
                         foregroundColor: Theme.terminalFg
                         session: pane.sessionRow >= 0 && pane.sessionRow < sessions.count
                                  ? sessions.sessionAt(pane.sessionRow) : null
                         // Fokus (Klick/Tab) macht dieses Pane aktiv.
                         onActiveFocusChanged: if (activeFocus) window.setActivePane(pane.index, paneTerm)
+                        // Cmd/Strg+Mausrad -> global zoomen.
+                        onZoomRequested: (delta) => window.zoomTerminal(delta)
                         // Rechtsklick -> erst Pane aktivieren, dann Kontextmenü.
                         onContextMenuRequested: {
                             window.setActivePane(pane.index, paneTerm)

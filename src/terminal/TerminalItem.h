@@ -59,6 +59,8 @@ signals:
     void selectionChanged();
     /// Rechtsklick im Terminal — QML öffnet daraufhin das Kontextmenü (Kopieren/Einfügen).
     void contextMenuRequested();
+    /// Cmd/Strg+Mausrad — QML passt die globale Schriftgröße an (delta +1/−1).
+    void zoomRequested(int delta);
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;

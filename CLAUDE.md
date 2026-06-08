@@ -311,6 +311,12 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   (gleiche Indexlogik wie `onRowsRemoved`). E2E auf macOS verifiziert (markierte Session per
   Drag von unten nach oben; Auswahl/currentRow folgen korrekt). `TapHandler` (Auswahl) und
   `DragHandler` koexistieren über die Drag-Schwelle.
+- ✅ **Terminal-Zoom (QTMUX-14)** — globale Schriftgröße `window.terminalFontSize` (6..40 pt,
+  via QML `Settings` persistiert), alle Pane-`TerminalItem.pointSize` binden daran. Aktionen
+  `actZoomIn`/`actZoomOut` (`StandardKey.ZoomIn/ZoomOut` = Cmd/Strg +/−) + `actZoomReset`
+  (Ctrl+0), im „Ansicht"-Menü. **Cmd/Strg+Mausrad** zoomt: `TerminalItem` sendet
+  `zoomRequested(±1)` (sonst scrollt das Rad), QML ruft `window.zoomTerminal()`. E2E verifiziert
+  (Cmd++ vergrößert, Cmd+0 zurück). i18n DE/EN ergänzt.
 - ✅ **Scrollback (QTMUX-5)** — `TerminalItem` rendert jetzt die Historie: Scroll-Offset
   `m_scrollOffset` (0 = Live-Boden, >0 = Zeilen in die Historie). `viewportSource(row)` mappt
   jede sichtbare Zeile auf Scrollback (`VtScreen::scrollbackLine`) oder Live-Screen
