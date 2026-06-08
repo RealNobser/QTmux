@@ -503,12 +503,13 @@ ApplicationWindow {
         enabled: paneModel.count > 1
         onTriggered: window.closePane()
     }
-    // Befehlspalette: durchsuchbare Liste aller Befehle + Session-Sprünge.
+    // Befehlspalette: fokussiert das dauerhafte Such-/Befehlsfeld in der Toolbar
+    // (öffnet dadurch das Befehls-Popup) und markiert den Inhalt zum Überschreiben.
     Action {
         id: actCommandPalette
         text: qsTr("Befehlspalette …")
         shortcut: "Ctrl+K"
-        onTriggered: commandPalette.openPalette()
+        onTriggered: { cmdInput.forceActiveFocus(); cmdInput.selectAll() }
     }
 
     // --- Toolbar oben: Schnellzugriff mit Phosphor-Icons --------------------
@@ -541,14 +542,6 @@ ApplicationWindow {
                 implicitWidth: 22
                 tip: qsTr("Session-Typ wählen")
                 onClicked: typeMenu.popup(this, 0, height)
-            }
-
-            ToolSeparator {}
-
-            IconToolButton {
-                icon.source: window.icon("command")
-                tip: qsTr("Befehlspalette (Strg/Cmd+K)")
-                onClicked: commandPalette.openPalette()
             }
 
             ToolSeparator {}
@@ -596,7 +589,222 @@ ApplicationWindow {
                 onClicked: window.broadcastInput = !window.broadcastInput
             }
 
-            Item { Layout.fillWidth: true }   // Abstandhalter
+            Item { Layout.fillWidth: true }   // linker Abstandhalter (zentriert das Feld)
+
+            // --- Dauerhaftes Such-/Befehlsfeld (VSCode-Stil) -----------------
+            // Immer sichtbar; bei Fokus (Klick oder Strg/Cmd+K) klappt darunter
+            // die Befehlsliste (cmdPopup) auf. Tippen filtert, ↑/↓ wählt, Enter führt aus.
+            Rectangle {
+                id: cmdBar
+                Layout.preferredWidth: 340
+                Layout.maximumWidth: 340
+                Layout.preferredHeight: 28
+                Layout.alignment: Qt.AlignVCenter
+                radius: 6
+                color: Theme.bgMain
+                border.color: cmdInput.activeFocus ? Theme.accent : Theme.border
+                border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 9
+                    anchors.rightMargin: 8
+                    spacing: 7
+
+                    // Command-Icon (getönt, folgt Fokus).
+                    Item {
+                        implicitWidth: 15; implicitHeight: 15
+                        Layout.alignment: Qt.AlignVCenter
+                        Image {
+                            id: cmdBarIco
+                            anchors.fill: parent
+                            source: window.icon("command")
+                            sourceSize.width: 15; sourceSize.height: 15
+                            visible: false
+                        }
+                        MultiEffect {
+                            anchors.fill: parent
+                            source: cmdBarIco
+                            colorization: 1.0
+                            colorizationColor: cmdInput.activeFocus ? Theme.accent : Theme.textDim
+                        }
+                    }
+
+                    TextField {
+                        id: cmdInput
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        placeholderText: qsTr("Befehl suchen …")
+                        font.pixelSize: 12
+                        color: Theme.textBright
+                        placeholderTextColor: Theme.textDim
+                        verticalAlignment: TextInput.AlignVCenter
+                        background: null
+                        padding: 0
+                        // Fokus öffnet das Popup, Fokusverlust schließt es (Klick ins
+                        // Terminal/anderswo); Item-Klicks im Popup nehmen keinen Fokus.
+                        onActiveFocusChanged: activeFocus ? cmdPopup.openFor() : cmdPopup.close()
+                        onTextChanged: cmdPopup.applyFilter(text)
+                        Keys.onDownPressed: cmdList.incrementCurrentIndex()
+                        Keys.onUpPressed: cmdList.decrementCurrentIndex()
+                        Keys.onReturnPressed: cmdPopup.runCurrent()
+                        Keys.onEnterPressed: cmdPopup.runCurrent()
+                        Keys.onEscapePressed: { cmdPopup.close(); window.focusActivePane() }
+                    }
+
+                    // Tastenkürzel-Hinweis.
+                    Text {
+                        text: Qt.platform.os === "osx" ? "⌘K" : "Ctrl+K"
+                        color: Theme.textDim
+                        font.pixelSize: 10
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                }
+
+                // Aufklappende Befehlsliste, unter dem Feld verankert.
+                Popup {
+                    id: cmdPopup
+                    parent: cmdBar
+                    y: cmdBar.height + 4
+                    x: 0
+                    width: 420
+                    padding: 4
+                    focus: false           // Textfeld behält den Fokus
+                    closePolicy: Popup.CloseOnEscape
+                    background: AppPopupBg {}
+
+                    property var allCommands: []
+                    property var filtered: []
+
+                    // Befehle: feste Aktionen + je offener Session ein „Wechseln zu: …".
+                    function buildCommands() {
+                        var c = [
+                            { title: qsTr("Neue Session"),               sub: "Ctrl+T",       icon: "plus",            run: function(){ window.newSession() } },
+                            { title: qsTr("Neue SSH-Verbindung …"),      sub: "",             icon: "plugs",           run: function(){ sshDialog.open() } },
+                            { title: qsTr("Neue serielle Verbindung …"), sub: "",             icon: "usb",             run: function(){ serialDialog.openDialog() } },
+                            { title: qsTr("Session schließen"),          sub: "Ctrl+W",       icon: "x",               run: function(){ window.closeCurrent() } },
+                            { title: qsTr("Nebeneinander teilen"),       sub: "Ctrl+Shift+E", icon: "split-h",         run: function(){ window.splitPane(Qt.Horizontal) } },
+                            { title: qsTr("Untereinander teilen"),       sub: "Ctrl+Shift+O", icon: "split-v",         run: function(){ window.splitPane(Qt.Vertical) } },
+                            { title: qsTr("Pane schließen"),             sub: "Ctrl+Shift+W", icon: "x",               run: function(){ window.closePane() } },
+                            { title: qsTr("Schrift vergrößern"),         sub: "",             icon: "plus",            run: function(){ window.zoomTerminal(1) } },
+                            { title: qsTr("Schrift verkleinern"),        sub: "",             icon: "x",               run: function(){ window.zoomTerminal(-1) } },
+                            { title: qsTr("Schriftgröße zurücksetzen"),  sub: "Ctrl+0",       icon: "gear",            run: function(){ window.resetTerminalZoom() } },
+                            { title: qsTr("Eingabe an alle Sessions"),   sub: "Ctrl+Shift+B", icon: "broadcast-input", run: function(){ window.broadcastInput = !window.broadcastInput } },
+                            { title: qsTr("Design umschalten"),          sub: "Ctrl+D",       icon: "moon",            run: function(){ Theme.toggle() } },
+                            { title: qsTr("Einstellungen …"),            sub: "Ctrl+,",       icon: "gear",            run: function(){ settingsDialog.open() } },
+                            { title: qsTr("MCP-Server umschalten"),      sub: "",             icon: "broadcast",       run: function(){ mcp.listening ? mcp.stop() : mcp.start() } },
+                            { title: qsTr("Über QTmux"),                 sub: "",             icon: "info",            run: function(){ aboutDialog.open() } },
+                            { title: qsTr("Beenden"),                    sub: "Ctrl+Q",       icon: "x",               run: function(){ Qt.quit() } },
+                        ]
+                        for (var i = 0; i < sessions.count; ++i) {
+                            var s = sessions.sessionAt(i)
+                            var t = s ? s.title : qsTr("Session %1").arg(i + 1)
+                            c.push({ title: qsTr("Wechseln zu: %1").arg(t), sub: qsTr("Session"),
+                                     icon: "terminal-window",
+                                     run: (function(row){ return function(){ window.assignToActivePane(row) } })(i) })
+                        }
+                        return c
+                    }
+
+                    function applyFilter(text) {
+                        var q = text.trim().toLowerCase()
+                        filtered = (q.length === 0)
+                            ? allCommands
+                            : allCommands.filter(function(cmd){ return cmd.title.toLowerCase().indexOf(q) >= 0 })
+                        cmdList.currentIndex = filtered.length > 0 ? 0 : -1
+                    }
+
+                    // Bei Fokus öffnen: Befehle frisch zusammenstellen (aktuelle Sessions)
+                    // und nach dem aktuellen Feldinhalt filtern.
+                    function openFor() {
+                        allCommands = buildCommands()
+                        applyFilter(cmdInput.text)
+                        if (!visible) open()
+                    }
+
+                    // Markierten Befehl ausführen: erst schließen + Feld leeren, dann
+                    // via Qt.callLater ausführen (damit Folge-Dialoge nicht verdeckt werden).
+                    function runCurrent() {
+                        if (cmdList.currentIndex < 0 || cmdList.currentIndex >= filtered.length) return
+                        var cmd = filtered[cmdList.currentIndex]
+                        close()
+                        cmdInput.text = ""
+                        Qt.callLater(cmd.run)
+                    }
+
+                    contentItem: ListView {
+                        id: cmdList
+                        implicitHeight: Math.min(contentHeight, 360)
+                        clip: true
+                        model: cmdPopup.filtered
+                        currentIndex: 0
+                        ScrollIndicator.vertical: ScrollIndicator {}
+
+                        delegate: Rectangle {
+                            id: cmdRow
+                            required property var modelData
+                            required property int index
+                            width: ListView.view.width
+                            height: 38
+                            radius: 6
+                            color: index === cmdList.currentIndex ? Theme.sidebarSelected
+                                 : rowHover.hovered ? Theme.sidebarHover : "transparent"
+                            HoverHandler { id: rowHover }
+                            TapHandler {
+                                onTapped: { cmdList.currentIndex = cmdRow.index; cmdPopup.runCurrent() }
+                            }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 10
+                                spacing: 10
+                                // Monochromes SVG themegerecht einfärben (explizite
+                                // MultiEffect-Form: layer.effect greift im Delegate nicht).
+                                Item {
+                                    implicitWidth: 16; implicitHeight: 16
+                                    Image {
+                                        id: cmdIcon
+                                        anchors.fill: parent
+                                        source: window.icon(cmdRow.modelData.icon)
+                                        sourceSize.width: 16; sourceSize.height: 16
+                                        visible: false
+                                    }
+                                    MultiEffect {
+                                        anchors.fill: parent
+                                        source: cmdIcon
+                                        colorization: 1.0
+                                        colorizationColor: cmdRow.index === cmdList.currentIndex
+                                                           ? Theme.accent : Theme.textBright
+                                    }
+                                }
+                                Text {
+                                    text: cmdRow.modelData.title
+                                    color: Theme.textBright
+                                    font.pixelSize: 13
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: cmdRow.modelData.sub
+                                    visible: cmdRow.modelData.sub.length > 0
+                                    color: Theme.textDim
+                                    font.pixelSize: 11
+                                }
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: cmdList.count === 0
+                            text: qsTr("Keine Treffer")
+                            color: Theme.textDim
+                            font.pixelSize: 12
+                        }
+                    }
+                }
+            }
+
+            Item { Layout.fillWidth: true }   // rechter Abstandhalter (zentriert das Feld)
 
             IconToolButton {
                 icon.source: Theme.dark ? window.icon("sun") : window.icon("moon")
@@ -1309,164 +1517,4 @@ ApplicationWindow {
         }
     }
 
-    // --- Befehlspalette (Strg/Cmd+K) ---------------------------------------
-    // Durchsuchbare Liste aller Befehle + direkter Sprung zu jeder offenen Session.
-    // Tippen filtert, ↑/↓ wählt, Enter führt aus, Esc schließt.
-    AppDialog {
-        id: commandPalette
-        width: 560
-        title: ""
-        padding: 12
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        // Aktuelle Befehlsliste (statisch + dynamisch je Session) und das Filterergebnis.
-        property var allCommands: []
-        property var filtered: []
-
-        // Stellt alle verfügbaren Befehle zusammen: feste Aktionen + je Session ein Sprung.
-        function buildCommands() {
-            var c = [
-                { title: qsTr("Neue Session"),               sub: "Ctrl+T",       icon: "plus",            run: function(){ window.newSession() } },
-                { title: qsTr("Neue SSH-Verbindung …"),      sub: "",             icon: "plugs",           run: function(){ sshDialog.open() } },
-                { title: qsTr("Neue serielle Verbindung …"), sub: "",             icon: "usb",             run: function(){ serialDialog.openDialog() } },
-                { title: qsTr("Session schließen"),          sub: "Ctrl+W",       icon: "x",               run: function(){ window.closeCurrent() } },
-                { title: qsTr("Nebeneinander teilen"),       sub: "Ctrl+Shift+E", icon: "split-h",         run: function(){ window.splitPane(Qt.Horizontal) } },
-                { title: qsTr("Untereinander teilen"),       sub: "Ctrl+Shift+O", icon: "split-v",         run: function(){ window.splitPane(Qt.Vertical) } },
-                { title: qsTr("Pane schließen"),             sub: "Ctrl+Shift+W", icon: "x",               run: function(){ window.closePane() } },
-                { title: qsTr("Schrift vergrößern"),         sub: "",             icon: "plus",            run: function(){ window.zoomTerminal(1) } },
-                { title: qsTr("Schrift verkleinern"),        sub: "",             icon: "x",               run: function(){ window.zoomTerminal(-1) } },
-                { title: qsTr("Schriftgröße zurücksetzen"),  sub: "Ctrl+0",       icon: "gear",            run: function(){ window.resetTerminalZoom() } },
-                { title: qsTr("Eingabe an alle Sessions"),   sub: "Ctrl+Shift+B", icon: "broadcast-input", run: function(){ window.broadcastInput = !window.broadcastInput } },
-                { title: qsTr("Design umschalten"),          sub: "Ctrl+D",       icon: "moon",            run: function(){ Theme.toggle() } },
-                { title: qsTr("Einstellungen …"),            sub: "Ctrl+,",       icon: "gear",            run: function(){ settingsDialog.open() } },
-                { title: qsTr("MCP-Server umschalten"),      sub: "",             icon: "broadcast",       run: function(){ mcp.listening ? mcp.stop() : mcp.start() } },
-                { title: qsTr("Über QTmux"),                 sub: "",             icon: "info",            run: function(){ aboutDialog.open() } },
-                { title: qsTr("Beenden"),                    sub: "Ctrl+Q",       icon: "x",               run: function(){ Qt.quit() } },
-            ]
-            // Sessions zum direkten Anspringen (laden ins aktive Pane).
-            for (var i = 0; i < sessions.count; ++i) {
-                var s = sessions.sessionAt(i)
-                var t = s ? s.title : qsTr("Session %1").arg(i + 1)
-                c.push({ title: qsTr("Wechseln zu: %1").arg(t), sub: qsTr("Session"),
-                         icon: "terminal-window",
-                         run: (function(row){ return function(){ window.assignToActivePane(row) } })(i) })
-            }
-            return c
-        }
-
-        // Filtert die Befehle nach Teilstring (ohne Groß-/Kleinschreibung) und setzt die Auswahl.
-        function applyFilter(text) {
-            var q = text.trim().toLowerCase()
-            filtered = (q.length === 0)
-                ? allCommands
-                : allCommands.filter(function(cmd){ return cmd.title.toLowerCase().indexOf(q) >= 0 })
-            paletteList.currentIndex = filtered.length > 0 ? 0 : -1
-        }
-
-        function openPalette() {
-            allCommands = buildCommands()
-            searchField.text = ""
-            applyFilter("")
-            open()
-            Qt.callLater(function(){ searchField.forceActiveFocus() })
-        }
-
-        // Führt den aktuell markierten Befehl aus (Dialog erst schließen, dann ausführen,
-        // damit Befehle, die selbst einen Dialog öffnen, nicht verdeckt werden).
-        function runCurrent() {
-            if (paletteList.currentIndex < 0 || paletteList.currentIndex >= filtered.length) return
-            var cmd = filtered[paletteList.currentIndex]
-            commandPalette.close()
-            Qt.callLater(cmd.run)
-        }
-
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 8
-
-            TextField {
-                id: searchField
-                Layout.fillWidth: true
-                placeholderText: qsTr("Befehl suchen …")
-                onTextChanged: commandPalette.applyFilter(text)
-                // Pfeiltasten navigieren die Liste, Enter führt aus (Fokus bleibt im Feld).
-                Keys.onDownPressed: paletteList.incrementCurrentIndex()
-                Keys.onUpPressed: paletteList.decrementCurrentIndex()
-                Keys.onReturnPressed: commandPalette.runCurrent()
-                Keys.onEnterPressed: commandPalette.runCurrent()
-            }
-
-            ListView {
-                id: paletteList
-                Layout.fillWidth: true
-                Layout.preferredHeight: 320
-                clip: true
-                model: commandPalette.filtered
-                currentIndex: 0
-                ScrollIndicator.vertical: ScrollIndicator {}
-
-                delegate: Rectangle {
-                    id: cmdRow
-                    required property var modelData
-                    required property int index
-                    width: ListView.view.width
-                    height: 40
-                    radius: 6
-                    color: index === paletteList.currentIndex ? Theme.sidebarSelected
-                         : rowHover.hovered ? Theme.sidebarHover : "transparent"
-                    HoverHandler { id: rowHover }
-                    TapHandler {
-                        onTapped: { paletteList.currentIndex = cmdRow.index; commandPalette.runCurrent() }
-                    }
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
-                        spacing: 10
-                        // Monochromes SVG (fill="currentColor" → schwarz) themegerecht
-                        // einfärben. Explizite MultiEffect-Form (source:) statt layer.effect,
-                        // weil layer.effect im ListView-Delegate nicht zuverlässig greift.
-                        Item {
-                            implicitWidth: 16; implicitHeight: 16
-                            Image {
-                                id: cmdIcon
-                                anchors.fill: parent
-                                source: window.icon(cmdRow.modelData.icon)
-                                sourceSize.width: 16; sourceSize.height: 16
-                                visible: false
-                            }
-                            MultiEffect {
-                                anchors.fill: parent
-                                source: cmdIcon
-                                colorization: 1.0
-                                colorizationColor: index === paletteList.currentIndex
-                                                   ? Theme.accent : Theme.textBright
-                            }
-                        }
-                        Text {
-                            text: cmdRow.modelData.title
-                            color: Theme.textBright
-                            font.pixelSize: 13
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: cmdRow.modelData.sub
-                            visible: cmdRow.modelData.sub.length > 0
-                            color: Theme.textDim
-                            font.pixelSize: 11
-                        }
-                    }
-                }
-
-                Text {
-                    anchors.centerIn: parent
-                    visible: paletteList.count === 0
-                    text: qsTr("Keine Treffer")
-                    color: Theme.textDim
-                    font.pixelSize: 12
-                }
-            }
-        }
-    }
 }

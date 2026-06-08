@@ -319,16 +319,24 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   Menü „Ansicht → Einstellungen …" und **Cmd/Strg+,** (bewusst KEIN `StandardKey.Preferences`:
   macOS verschiebt das sonst ins App-Menü und der In-Window-Shortcut greift nicht — Komma lief
   ins Terminal). Inline-Komponente `SectionLabel`. E2E verifiziert.
-- ✅ **Command-Palette (QTMUX-12, abgeschlossen)** — `commandPalette` (`AppDialog`), geöffnet via
-  **Strg/Cmd+K** (`actCommandPalette`), Toolbar-Icon `command` und Menü „Ansicht". Durchsuchbares
-  Suchfeld (`searchField`) + gefilterte `ListView`: `buildCommands()` stellt feste Befehle
-  (Neue Session, SSH/Seriell, Teilen, Zoom, Broadcast, Theme, Einstellungen, MCP, Beenden …)
-  **plus je offener Session einen „Wechseln zu: …"-Sprung** zusammen (Sprung lädt die Session ins
-  aktive Pane). Teilstring-Filter (case-insensitive), ↑/↓ navigiert (Fokus bleibt im Feld via
-  `Keys.onUp/DownPressed` → `paletteList.in/decrementCurrentIndex`), Enter führt aus, Esc/Klick-
-  außerhalb schließt. `runCurrent()` schließt erst, führt dann via `Qt.callLater` aus (damit
-  Folge-Dialoge nicht verdeckt werden). i18n DE/EN ergänzt. **Damit ist QTMUX-12 vollständig**
-  (Settings-UI + Command-Palette). E2E auf macOS verifiziert („split" → 2 Treffer mit Shortcut).
+- ✅ **Command-Palette (QTMUX-12, abgeschlossen) — VSCode-Stil** — **dauerhaftes Such-/Befehlsfeld**
+  (`cmdBar` + `cmdInput`) mittig in der Toolbar (zentriert via zwei `fillWidth`-Spacer), immer
+  sichtbar mit getöntem `command`-Icon und „⌘K/Ctrl+K"-Hinweis. Bei Fokus (Klick oder
+  **Strg/Cmd+K** via `actCommandPalette` → `forceActiveFocus`+`selectAll`) klappt darunter das
+  **`cmdPopup`** auf (nicht-modal, `focus:false` → Feld behält Tastaturfokus). `buildCommands()`
+  stellt feste Befehle (Neue Session, SSH/Seriell, Teilen, Zoom, Broadcast, Theme, Einstellungen,
+  MCP, Beenden …) **plus je offener Session einen „Wechseln zu: …"-Sprung** zusammen (lädt die
+  Session ins aktive Pane). Teilstring-Filter (case-insensitive), ↑/↓ navigiert die `ListView`
+  (`cmdList`, Fokus bleibt im Feld), Enter führt aus, Esc schließt + refokussiert das Pane.
+  `onActiveFocusChanged` öffnet/schließt das Popup (Klick ins Terminal schließt; Item-Klicks im
+  Popup nehmen keinen Fokus). `runCurrent()` schließt + leert das Feld, führt via `Qt.callLater`
+  aus (Folge-Dialoge nicht verdeckt). Auch über Menü „Ansicht → Befehlspalette …" erreichbar.
+  **Icon-Tinting-Lektion:** monochrome SVGs (`fill="currentColor"` → schwarz) im ListView-Delegate
+  **nicht** mit `layer.effect` tönen (greift dort nicht zuverlässig — Icons blieben schwarz),
+  sondern mit der **expliziten `MultiEffect`-Form** (eigenes `Item`, `source:` = unsichtbares
+  `Image`, `colorizationColor` = `Theme.textBright`/`Theme.accent`). i18n DE/EN ergänzt.
+  **Damit ist QTMUX-12 vollständig** (Settings-UI + Command-Palette). E2E auf macOS verifiziert
+  (Cmd+K fokussiert → „spli" filtert auf 2 Treffer mit getönten Icons → Enter teilt + schließt).
 - ✅ **Bracketed Paste + Multiline-Warnung (QTMUX-16)** — `VtScreen::startPaste()/endPaste()`
   rufen `vterm_keyboard_start/end_paste`; libvterm gibt die Klammern `ESC[200~`/`ESC[201~`
   **nur** aus, wenn die App DECSET 2004 aktiviert hat (Output-Callback → `outputToPty` → Backend).
