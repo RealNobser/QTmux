@@ -2,33 +2,31 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug QTmux (macOS)",
-      "type": "cppdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/build/macos/qtmux.app/Contents/MacOS/qtmux",
-      "args": [],
-      "cwd": "${workspaceFolder}",
-      "MIMode": "lldb",
-      "preLaunchTask": "CMake: build"
-    },
-    {
-      "name": "Debug QTmux (Windows)",
-      "type": "cppvsdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/build/windows/qtmux.exe",
-      "args": [],
-      "cwd": "${workspaceFolder}",
-      "preLaunchTask": "CMake: build"
-    },
-    {
-      "name": "Debug QTmux (Linux)",
+      // Eine Konfiguration für alle Plattformen. VS Code überlagert je nach OS den
+      // passenden Block (osx/windows/linux) über die gemeinsamen Felder:
+      //   - macOS/Linux: cppdbg (lldb bzw. gdb), Programm = Bundle/ELF
+      //   - Windows:     cppvsdbg (MSVC-Debugger), Programm = qtmux.exe
+      // qtmux.exe findet seine Qt-DLLs über den windeployqt-Post-Build-Schritt;
+      // das macOS-Bundle über die Homebrew-rpaths — kein PATH-Setup nötig.
+      "name": "Debug QTmux",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/linux/qtmux",
       "args": [],
       "cwd": "${workspaceFolder}",
-      "MIMode": "gdb",
-      "preLaunchTask": "CMake: build"
+      "preLaunchTask": "CMake: build",
+      "osx": {
+        "MIMode": "lldb",
+        "program": "${workspaceFolder}/build/macos/qtmux.app/Contents/MacOS/qtmux"
+      },
+      "linux": {
+        "MIMode": "gdb",
+        "program": "${workspaceFolder}/build/linux/qtmux"
+      },
+      "windows": {
+        "type": "cppvsdbg",
+        "program": "${workspaceFolder}/build/windows/qtmux.exe"
+      }
     }
   ]
 }
