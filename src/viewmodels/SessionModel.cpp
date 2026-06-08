@@ -95,6 +95,10 @@ int SessionModel::createShellSession(const QString &workingDir, const QString &p
     // $QTMUX_SESSION_ID und meldet sich per MCP-Tool attach_controller(id) an.
     pty->setExtraEnv({QStringLiteral("QTMUX_SESSION_ID=%1").arg(s->id())});
     s->attachBackend(pty, Session::Type::Shell, 80, 24);
+    // Initialtitel aus dem gestarteten Programm ableiten (z. B. "PowerShell",
+    // "Eingabeaufforderung", "Bash") — Session::setTitle verschönert ihn. So zeigt
+    // die Sidebar sofort einen Namen statt eines Pfads, auch bevor ein OSC-Titel kommt.
+    s->setTitle(program.isEmpty() ? PtyBackend::defaultShell() : program);
 
     const int row = count();
     beginInsertRows({}, row, row);

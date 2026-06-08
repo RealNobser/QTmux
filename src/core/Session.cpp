@@ -2,7 +2,61 @@
 #include "VtScreen.h"
 #include "AgentRegistry.h"
 
+#include <QCoreApplication>
+#include <QHash>
+
 namespace qtmux {
+
+namespace {
+
+// Macht aus einem rohen Fenstertitel/Programmpfad einen lesbaren Namen:
+//   - bekannte KI-Agenten (claude, codex, …)        -> Anzeigename aus AgentRegistry
+//   - übliche Shells (powershell/cmd/bash/zsh/…)     -> freundlicher Name
+//   - alles andere (z. B. "user@host: ~/projekt")    -> unverändert
+// Auf Windows liefert conhost als Titel den vollen exe-Pfad — den wandeln wir so
+// z. B. in "PowerShell" bzw. "Eingabeaufforderung".
+QString prettifyTitle(const QString &raw) {
+    if (raw.isEmpty()) return raw;
+
+    // Basisnamen ohne Pfad ermitteln (Unix '/' wie Windows '\').
+    const int slash = qMax(raw.lastIndexOf(QLatin1Char('/')),
+                           raw.lastIndexOf(QLatin1Char('\\')));
+    const QString base = slash >= 0 ? raw.mid(slash + 1) : raw;
+
+    // Bekannte Agenten über die zentrale Registry erkennen (deckt auch
+    // "claude.exe", Pfade und Groß-/Kleinschreibung ab).
+    if (const AgentInfo *a = AgentRegistry::detect(base)) return a->displayName;
+
+    // Für den Shell-Abgleich die .exe/.cmd/.bat-Endung strippen.
+    QString name = base;
+    for (const QString &suf : {QStringLiteral(".exe"), QStringLiteral(".cmd"),
+                               QStringLiteral(".bat")}) {
+        if (name.endsWith(suf, Qt::CaseInsensitive)) { name.chop(suf.size()); break; }
+    }
+    const QString lower = name.toLower();
+
+    // "Eingabeaufforderung" ist lokalisierbar (Kontext "Shells"); pro Aufruf
+    // übersetzt, damit ein Laufzeit-Sprachwechsel beim nächsten Titel greift.
+    if (lower == QLatin1String("cmd"))
+        return QCoreApplication::translate("Shells", "Eingabeaufforderung");
+
+    // Eigennamen — sprachunabhängig, daher nicht übersetzt.
+    static const QHash<QString, QString> kShells = {
+        {QStringLiteral("powershell"), QStringLiteral("PowerShell")},
+        {QStringLiteral("pwsh"),       QStringLiteral("PowerShell 7")},
+        {QStringLiteral("bash"),       QStringLiteral("Bash")},
+        {QStringLiteral("zsh"),        QStringLiteral("Zsh")},
+        {QStringLiteral("fish"),       QStringLiteral("fish")},
+        {QStringLiteral("sh"),         QStringLiteral("sh")},
+        {QStringLiteral("wsl"),        QStringLiteral("WSL")},
+    };
+    const auto it = kShells.constFind(lower);
+    if (it != kShells.constEnd()) return it.value();
+
+    return raw;   // unbekannt -> Originaltitel beibehalten
+}
+
+} // namespace
 
 Session::Session(QObject *parent) : QObject(parent) {}
 Session::~Session() = default;
@@ -109,9 +163,10 @@ void Session::onPromptMarker(char kind, int exitCode) {
 }
 
 void Session::setTitle(const QString &t) {
-    if (t.isEmpty() || t == m_title) return;
-    m_title = t;
-    emit titleChanged(t);
+    const QString pretty = prettifyTitle(t);
+    if (pretty.isEmpty() || pretty == m_title) return;
+    m_title = pretty;
+    emit titleChanged(m_title);
 }
 
 void Session::start(int cols, int rows) {
