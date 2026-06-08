@@ -244,6 +244,11 @@ void SessionModel::moveSession(int from, int to) {
     saveState();
 }
 
+void SessionModel::writeToAll(const QByteArray &data) {
+    for (Session *s : m_sessions)
+        if (s) s->write(data);
+}
+
 void SessionModel::shutdownAll() {
     // Nur Prozesse beenden (keine Modelländerung) — wird beim App-Quit aufgerufen.
     // m_shuttingDown verhindert, dass die dabei ausgelösten Closed-Signale die

@@ -71,6 +71,20 @@ void TerminalItem::setForegroundColor(const QColor &c) {
     update();
 }
 
+void TerminalItem::setBroadcast(bool on) {
+    if (on == m_broadcast) return;
+    m_broadcast = on;
+    emit broadcastChanged();
+}
+
+void TerminalItem::sendInput(const QByteArray &bytes) {
+    if (bytes.isEmpty()) return;
+    if (m_broadcast)
+        emit inputForBroadcast(bytes);   // QML verteilt an ALLE Sessions (inkl. dieser)
+    else if (m_session)
+        m_session->write(bytes);
+}
+
 void TerminalItem::setPointSize(int s) {
     if (s == m_pointSize || s <= 0) return;
     m_pointSize = s;
@@ -228,7 +242,7 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     if (!bytes.isEmpty()) {
         if (m_hasSelection) clearSelection();   // Tippen hebt die Selektion auf
         if (m_scrollOffset != 0) { m_scrollOffset = 0; update(); }  // Eingabe -> zum Boden
-        m_session->write(bytes);
+        sendInput(bytes);                        // eigene Session oder Broadcast
         event->accept();
     } else {
         QQuickPaintedItem::keyPressEvent(event);
@@ -290,13 +304,12 @@ void TerminalItem::copy() {
 }
 
 void TerminalItem::paste() {
-    if (!m_session) return;
     const QString t = QGuiApplication::clipboard()->text();
     if (t.isEmpty()) return;
     QByteArray data = t.toUtf8();
     data.replace("\r\n", "\r");   // Zeilenumbrüche -> CR (wie Enter im Terminal)
     data.replace('\n', '\r');
-    m_session->write(data);
+    sendInput(data);              // eigene Session oder Broadcast
 }
 
 void TerminalItem::geometryChange(const QRectF &newGeo, const QRectF &oldGeo) {

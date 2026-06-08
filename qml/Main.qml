@@ -255,6 +255,10 @@ ApplicationWindow {
     }
     function resetTerminalZoom() { terminalFontSize = 13 }
 
+    // Broadcast-/Sync-Input: getippte Eingabe geht an ALLE Sessions (Multi-Agent).
+    // Bewusst NICHT persistiert (Footgun) — startet je Sitzung aus.
+    property bool broadcastInput: false
+
     // Aktuell wirksame Shell (für Häkchen in den Menüs): die gewählte, sonst die
     // erste verfügbare (= Plattform-Vorgabe).
     function currentShellProgram() {
@@ -428,6 +432,15 @@ ApplicationWindow {
         shortcut: "Ctrl+0"
         onTriggered: window.resetTerminalZoom()
     }
+    // Broadcast-Input umschalten: Eingabe an alle Sessions.
+    Action {
+        id: actBroadcast
+        text: qsTr("Eingabe an alle Sessions")
+        shortcut: "Ctrl+Shift+B"
+        checkable: true
+        checked: window.broadcastInput
+        onTriggered: window.broadcastInput = !window.broadcastInput
+    }
     // Kopieren/Einfügen. Shortcut nur auf macOS (Cmd+C/V) — kapert dort NICHT das
     // Terminal-Ctrl+C (SIGINT). Auf Windows/Linux handhabt das TerminalItem selbst
     // Ctrl+Shift+C/V, damit Ctrl+C im Terminal weiter SIGINT bleibt.
@@ -532,6 +545,16 @@ ApplicationWindow {
                 onClicked: window.splitPane(Qt.Vertical)
             }
 
+            ToolSeparator {}
+
+            IconToolButton {
+                icon.source: window.icon("broadcast-input")
+                active: window.broadcastInput
+                tip: window.broadcastInput ? qsTr("Broadcast-Eingabe: an (an alle Sessions)")
+                                           : qsTr("Eingabe an alle Sessions (Broadcast)")
+                onClicked: window.broadcastInput = !window.broadcastInput
+            }
+
             Item { Layout.fillWidth: true }   // Abstandhalter
 
             IconToolButton {
@@ -612,6 +635,11 @@ ApplicationWindow {
             MenuItem { action: actZoomIn }
             MenuItem { action: actZoomOut }
             MenuItem { action: actZoomReset }
+            MenuSeparator {}
+            MenuItem {
+                action: actBroadcast
+                icon.source: window.icon("broadcast-input"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+            }
             MenuSeparator {}
             MenuItem {
                 action: actToggleTheme
@@ -910,7 +938,28 @@ ApplicationWindow {
             }
         }
 
-        // --- Hauptbereich: ein oder mehrere Terminal-Panes (Split-View) -----
+        // --- Hauptbereich: Broadcast-Banner + Terminal-Panes (Split-View) ---
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 0
+
+            // Warn-Banner, solange die Eingabe an alle Sessions geht.
+            Rectangle {
+                visible: window.broadcastInput
+                Layout.fillWidth: true
+                implicitHeight: 26
+                color: Theme.accent
+                Text {
+                    anchors.centerIn: parent
+                    text: qsTr("⟫ Eingabe geht an ALLE Sessions — Strg/Cmd+Umschalt+B zum Beenden")
+                    color: "#ffffff"
+                    font.pixelSize: 12
+                    font.bold: true
+                    elide: Text.ElideRight
+                }
+            }
+
         SplitView {
             id: mainSplit
             Layout.fillWidth: true
@@ -955,6 +1004,9 @@ ApplicationWindow {
                         foregroundColor: Theme.terminalFg
                         session: pane.sessionRow >= 0 && pane.sessionRow < sessions.count
                                  ? sessions.sessionAt(pane.sessionRow) : null
+                        // Broadcast-Modus: Eingabe an ALLE Sessions verteilen.
+                        broadcast: window.broadcastInput
+                        onInputForBroadcast: (data) => sessions.writeToAll(data)
                         // Fokus (Klick/Tab) macht dieses Pane aktiv.
                         onActiveFocusChanged: if (activeFocus) window.setActivePane(pane.index, paneTerm)
                         // Cmd/Strg+Mausrad -> global zoomen.
@@ -973,6 +1025,7 @@ ApplicationWindow {
                 }
             }
         }
+        }   // ColumnLayout (Banner + SplitView)
     }
 
     // --- SSH-Verbindung öffnen ---------------------------------------------

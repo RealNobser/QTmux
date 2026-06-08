@@ -58,6 +58,9 @@ public:
     Session *sessionById(int id) const;
     const QList<Session *> &sessions() const { return m_sessions; }
     Q_INVOKABLE void closeSession(int row);
+    /// Schreibt `data` an ALLE Sessions (Broadcast-/Sync-Input). Genutzt vom
+    /// Broadcast-Modus: einmal getippt → alle Sessions erhalten dieselbe Eingabe.
+    Q_INVOKABLE void writeToAll(const QByteArray &data);
     /// Verschiebt die Session von `from` an die Zielposition `to` (Drag-Reorder
     /// in der Sidebar). Persistiert die neue Reihenfolge.
     Q_INVOKABLE void moveSession(int from, int to);

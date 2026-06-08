@@ -113,6 +113,7 @@ qt_add_resources(qtmux "icons"
         resources/icons/clipboard.svg
         resources/icons/split-h.svg
         resources/icons/split-v.svg
+        resources/icons/broadcast-input.svg
 )
 
 target_link_libraries(qtmux PRIVATE

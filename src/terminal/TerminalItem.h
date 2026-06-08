@@ -28,6 +28,7 @@ class TerminalItem : public QQuickPaintedItem {
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY colorsChanged)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
+    Q_PROPERTY(bool broadcast READ broadcast WRITE setBroadcast NOTIFY broadcastChanged)
 public:
     explicit TerminalItem(QQuickItem *parent = nullptr);
     ~TerminalItem() override;
@@ -42,6 +43,11 @@ public:
     void setBackgroundColor(const QColor &c);
     QColor foregroundColor() const { return m_defaultFg; }
     void setForegroundColor(const QColor &c);
+
+    /// Broadcast-Modus: Eingabe geht nicht an die eigene Session, sondern wird
+    /// per `inputForBroadcast`-Signal nach außen gereicht (QML → an alle Sessions).
+    bool broadcast() const { return m_broadcast; }
+    void setBroadcast(bool on);
 
     void paint(QPainter *painter) override;
 
@@ -61,6 +67,9 @@ signals:
     void contextMenuRequested();
     /// Cmd/Strg+Mausrad — QML passt die globale Schriftgröße an (delta +1/−1).
     void zoomRequested(int delta);
+    /// Im Broadcast-Modus: getippte/eingefügte Bytes, die QML an ALLE Sessions verteilt.
+    void inputForBroadcast(const QByteArray &data);
+    void broadcastChanged();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -73,6 +82,9 @@ protected:
 private:
     void recomputeGrid();
     QByteArray encodeKey(QKeyEvent *event) const;
+    /// Eingabe-Bytes zustellen: im Broadcast-Modus per Signal nach außen, sonst an
+    /// die eigene Session. Zentral genutzt von Tastatur- und Paste-Eingabe.
+    void sendInput(const QByteArray &bytes);
     VtScreen *screen() const;
     QPoint cellAt(const QPointF &pos) const;     // Pixel -> Zellkoordinate (col,row)
     QString selectedText() const;
@@ -102,6 +114,7 @@ private:
     QPoint m_selCaret{-1, -1};
     bool m_selecting = false;
     bool m_hasSelection = false;
+    bool m_broadcast = false;   // Eingabe an alle Sessions (siehe sendInput)
 
     // Scrollback-Ansicht: 0 = Live-Boden, >0 = so viele Zeilen in die Historie.
     int m_scrollOffset = 0;

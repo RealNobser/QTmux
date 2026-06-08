@@ -311,6 +311,14 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   (gleiche Indexlogik wie `onRowsRemoved`). E2E auf macOS verifiziert (markierte Session per
   Drag von unten nach oben; Auswahl/currentRow folgen korrekt). `TapHandler` (Auswahl) und
   `DragHandler` koexistieren über die Drag-Schwelle.
+- ✅ **Broadcast-/Sync-Input (QTMUX-21)** — Modus „Eingabe an alle Sessions" (`window.broadcastInput`,
+  Toggle via Toolbar-Icon `broadcast-input`, Menü „Ansicht" und **Ctrl/Cmd+Shift+B**; bewusst NICHT
+  persistiert). `TerminalItem` hat `broadcast`-Property + Signal `inputForBroadcast(QByteArray)`:
+  `sendInput()` routet Tastatur- UND Paste-Eingabe im Broadcast-Modus nach außen statt an die
+  eigene Session; QML verteilt via `SessionModel::writeToAll()` an **alle** Sessions. Warn-Banner
+  (Akzentfarbe) über den Panes, solange aktiv. **Lektion:** QByteArray-Signal → QML-`writeToAll`
+  reicht Steuerbytes (`\r`) verlustfrei durch (Qt6 ArrayBuffer-Mapping; E2E bestätigt: `echo`+Enter
+  lief in 2 Panes). E2E verifiziert (2 Panes, einmal getippt → beide führen aus).
 - ✅ **Terminal-Zoom (QTMUX-14)** — globale Schriftgröße `window.terminalFontSize` (6..40 pt,
   via QML `Settings` persistiert), alle Pane-`TerminalItem.pointSize` binden daran. Aktionen
   `actZoomIn`/`actZoomOut` (`StandardKey.ZoomIn/ZoomOut` = Cmd/Strg +/−) + `actZoomReset`
