@@ -318,7 +318,17 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   Bindung an `window.*`/`Theme`/`App` → Änderungen wirken sofort. Erreichbar via Toolbar-Zahnrad,
   Menü „Ansicht → Einstellungen …" und **Cmd/Strg+,** (bewusst KEIN `StandardKey.Preferences`:
   macOS verschiebt das sonst ins App-Menü und der In-Window-Shortcut greift nicht — Komma lief
-  ins Terminal). Inline-Komponente `SectionLabel`. E2E verifiziert. (Offen in QTMUX-12: Command-Palette.)
+  ins Terminal). Inline-Komponente `SectionLabel`. E2E verifiziert.
+- ✅ **Command-Palette (QTMUX-12, abgeschlossen)** — `commandPalette` (`AppDialog`), geöffnet via
+  **Strg/Cmd+K** (`actCommandPalette`), Toolbar-Icon `command` und Menü „Ansicht". Durchsuchbares
+  Suchfeld (`searchField`) + gefilterte `ListView`: `buildCommands()` stellt feste Befehle
+  (Neue Session, SSH/Seriell, Teilen, Zoom, Broadcast, Theme, Einstellungen, MCP, Beenden …)
+  **plus je offener Session einen „Wechseln zu: …"-Sprung** zusammen (Sprung lädt die Session ins
+  aktive Pane). Teilstring-Filter (case-insensitive), ↑/↓ navigiert (Fokus bleibt im Feld via
+  `Keys.onUp/DownPressed` → `paletteList.in/decrementCurrentIndex`), Enter führt aus, Esc/Klick-
+  außerhalb schließt. `runCurrent()` schließt erst, führt dann via `Qt.callLater` aus (damit
+  Folge-Dialoge nicht verdeckt werden). i18n DE/EN ergänzt. **Damit ist QTMUX-12 vollständig**
+  (Settings-UI + Command-Palette). E2E auf macOS verifiziert („split" → 2 Treffer mit Shortcut).
 - ✅ **Bracketed Paste + Multiline-Warnung (QTMUX-16)** — `VtScreen::startPaste()/endPaste()`
   rufen `vterm_keyboard_start/end_paste`; libvterm gibt die Klammern `ESC[200~`/`ESC[201~`
   **nur** aus, wenn die App DECSET 2004 aktiviert hat (Output-Callback → `outputToPty` → Backend).
