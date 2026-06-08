@@ -309,7 +309,33 @@ void TerminalItem::paste() {
     QByteArray data = t.toUtf8();
     data.replace("\r\n", "\r");   // Zeilenumbrüche -> CR (wie Enter im Terminal)
     data.replace('\n', '\r');
-    sendInput(data);              // eigene Session oder Broadcast
+    // Mehrzeilig (enthält CR) -> vor versehentlichem Ausführen mehrerer Befehle
+    // warnen; im Broadcast-Modus überspringen.
+    if (!m_broadcast && m_pasteWarnMultiline && data.contains('\r')) {
+        m_pendingPaste = data;
+        emit multilinePasteWarning(static_cast<int>(data.count('\r')) + 1);
+        return;
+    }
+    doPaste(data);
+}
+
+void TerminalItem::confirmPaste() {
+    const QByteArray d = m_pendingPaste;
+    m_pendingPaste.clear();
+    doPaste(d);
+}
+
+void TerminalItem::cancelPaste() { m_pendingPaste.clear(); }
+
+void TerminalItem::doPaste(const QByteArray &data) {
+    if (data.isEmpty()) return;
+    if (m_broadcast) { emit inputForBroadcast(data); return; }   // roh an alle
+    // Bracketed Paste: libvterm gibt die Klammern nur aus, wenn die App den
+    // Modus aktiviert hat (DECSET 2004); sonst landet nur der reine Text.
+    VtScreen *sc = screen();
+    if (sc) sc->startPaste();
+    if (m_session) m_session->write(data);
+    if (sc) sc->endPaste();
 }
 
 void TerminalItem::geometryChange(const QRectF &newGeo, const QRectF &oldGeo) {
@@ -329,8 +355,10 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
         emit selectionChanged();
         update();
     } else if (event->button() == Qt::RightButton) {
-        // Selektion bleibt erhalten (für „Kopieren"); QML öffnet das Kontextmenü.
-        emit contextMenuRequested();
+        if (m_rightClickPaste)
+            paste();                       // PuTTY-Stil: Rechtsklick fügt ein
+        else
+            emit contextMenuRequested();   // sonst Kontextmenü (Selektion bleibt erhalten)
     }
     event->accept();
 }
@@ -350,8 +378,10 @@ void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
 void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
     if (m_selecting) {
         m_selecting = false;
-        // Reiner Klick (keine Bewegung) hebt eine evtl. alte Selektion auf.
+        // Reiner Klick (keine Bewegung) hebt eine evtl. alte Selektion auf;
+        // sonst ggf. die fertige Selektion automatisch kopieren (PuTTY-Stil).
         if (m_selCaret == m_selAnchor) clearSelection();
+        else if (m_copyOnSelect && m_hasSelection) copy();
         event->accept();
         return;
     }

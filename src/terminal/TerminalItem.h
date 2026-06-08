@@ -29,6 +29,9 @@ class TerminalItem : public QQuickPaintedItem {
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY colorsChanged)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
     Q_PROPERTY(bool broadcast READ broadcast WRITE setBroadcast NOTIFY broadcastChanged)
+    Q_PROPERTY(bool copyOnSelect READ copyOnSelect WRITE setCopyOnSelect NOTIFY copyOnSelectChanged)
+    Q_PROPERTY(bool rightClickPaste READ rightClickPaste WRITE setRightClickPaste NOTIFY rightClickPasteChanged)
+    Q_PROPERTY(bool pasteWarnMultiline READ pasteWarnMultiline WRITE setPasteWarnMultiline NOTIFY pasteWarnMultilineChanged)
 public:
     explicit TerminalItem(QQuickItem *parent = nullptr);
     ~TerminalItem() override;
@@ -49,12 +52,26 @@ public:
     bool broadcast() const { return m_broadcast; }
     void setBroadcast(bool on);
 
+    // Komfortoptionen (PuTTY-Stil), via QML/Settings gesetzt.
+    bool copyOnSelect() const { return m_copyOnSelect; }
+    void setCopyOnSelect(bool b) { if (b != m_copyOnSelect) { m_copyOnSelect = b; emit copyOnSelectChanged(); } }
+    bool rightClickPaste() const { return m_rightClickPaste; }
+    void setRightClickPaste(bool b) { if (b != m_rightClickPaste) { m_rightClickPaste = b; emit rightClickPasteChanged(); } }
+    bool pasteWarnMultiline() const { return m_pasteWarnMultiline; }
+    void setPasteWarnMultiline(bool b) { if (b != m_pasteWarnMultiline) { m_pasteWarnMultiline = b; emit pasteWarnMultilineChanged(); } }
+
     void paint(QPainter *painter) override;
 
     /// Kopiert die aktuelle Maus-Selektion in die Zwischenablage (leer = nichts).
     Q_INVOKABLE void copy();
     /// Fügt den Zwischenablage-Text in die Session ein (Zeilenumbrüche -> CR).
+    /// Bei mehrzeiligem Inhalt + aktiver Warnung wird stattdessen
+    /// `multilinePasteWarning` ausgelöst (QML bestätigt via confirmPaste()).
     Q_INVOKABLE void paste();
+    /// Führt eine zuvor zurückgehaltene (mehrzeilige) Einfügung aus.
+    Q_INVOKABLE void confirmPaste();
+    /// Verwirft eine zurückgehaltene Einfügung.
+    Q_INVOKABLE void cancelPaste();
     /// Ob aktuell etwas selektiert ist (für Menü-Aktivierung).
     Q_INVOKABLE bool hasSelection() const { return m_hasSelection; }
 
@@ -70,6 +87,11 @@ signals:
     /// Im Broadcast-Modus: getippte/eingefügte Bytes, die QML an ALLE Sessions verteilt.
     void inputForBroadcast(const QByteArray &data);
     void broadcastChanged();
+    void copyOnSelectChanged();
+    void rightClickPasteChanged();
+    void pasteWarnMultilineChanged();
+    /// Mehrzeilige Einfügung erkannt — QML fragt nach (lineCount = Zeilenzahl).
+    void multilinePasteWarning(int lineCount);
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -85,6 +107,9 @@ private:
     /// Eingabe-Bytes zustellen: im Broadcast-Modus per Signal nach außen, sonst an
     /// die eigene Session. Zentral genutzt von Tastatur- und Paste-Eingabe.
     void sendInput(const QByteArray &bytes);
+    /// Führt die eigentliche Einfügung aus: bracketed (falls App DECSET 2004 aktiv)
+    /// an die eigene Session, oder im Broadcast-Modus roh an alle.
+    void doPaste(const QByteArray &data);
     VtScreen *screen() const;
     QPoint cellAt(const QPointF &pos) const;     // Pixel -> Zellkoordinate (col,row)
     QString selectedText() const;
@@ -114,7 +139,11 @@ private:
     QPoint m_selCaret{-1, -1};
     bool m_selecting = false;
     bool m_hasSelection = false;
-    bool m_broadcast = false;   // Eingabe an alle Sessions (siehe sendInput)
+    bool m_broadcast = false;          // Eingabe an alle Sessions (siehe sendInput)
+    bool m_copyOnSelect = false;       // Auswahl automatisch kopieren (PuTTY-Stil)
+    bool m_rightClickPaste = false;    // Rechtsklick fügt ein statt Kontextmenü
+    bool m_pasteWarnMultiline = true;  // Vor mehrzeiligem Einfügen warnen
+    QByteArray m_pendingPaste;         // zurückgehaltene Einfügung (Multiline-Warnung)
 
     // Scrollback-Ansicht: 0 = Live-Boden, >0 = so viele Zeilen in die Historie.
     int m_scrollOffset = 0;

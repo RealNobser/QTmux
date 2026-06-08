@@ -206,6 +206,9 @@ void VtScreen::cbPushScrollback(std::vector<Cell> &&line) {
 
 void VtScreen::cbOutput(const QByteArray &data) { emit outputToPty(data); }
 
+void VtScreen::startPaste() { if (m_vt) vterm_keyboard_start_paste(m_vt); }
+void VtScreen::endPaste()   { if (m_vt) vterm_keyboard_end_paste(m_vt); }
+
 void VtScreen::cbOsc(int command, const char *str, int len, bool initial, bool final) {
     if (initial) {
         m_oscBuffer.clear();

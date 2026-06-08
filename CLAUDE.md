@@ -311,6 +311,19 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   (gleiche Indexlogik wie `onRowsRemoved`). E2E auf macOS verifiziert (markierte Session per
   Drag von unten nach oben; Auswahl/currentRow folgen korrekt). `TapHandler` (Auswahl) und
   `DragHandler` koexistieren über die Drag-Schwelle.
+- ✅ **Bracketed Paste + Multiline-Warnung (QTMUX-16)** — `VtScreen::startPaste()/endPaste()`
+  rufen `vterm_keyboard_start/end_paste`; libvterm gibt die Klammern `ESC[200~`/`ESC[201~`
+  **nur** aus, wenn die App DECSET 2004 aktiviert hat (Output-Callback → `outputToPty` → Backend).
+  `TerminalItem::doPaste()` klammert die Einfügung entsprechend (im Broadcast roh). **Multiline-
+  Warnung:** `paste()` erkennt mehrzeiligen Inhalt (enthält `\r`), hält ihn in `m_pendingPaste`
+  zurück und meldet `multilinePasteWarning(lines)`; QML-`AppDialog` bestätigt → `confirmPaste()`
+  bzw. `cancelPaste()`. Setting `pasteWarnMultiline` (Menü „Bearbeiten", persistiert). E2E
+  verifiziert (Modus 2004 an → Einfügung als `^[[200~hello^[[201~`; 3-Zeilen-Dialog → Einfügen
+  ohne Auto-Ausführung dank Bracketing).
+- ✅ **Copy-on-Select + Rechtsklick-Paste (QTMUX-17)** — `TerminalItem`-Properties `copyOnSelect`
+  (Auswahl beim Loslassen automatisch in die Zwischenablage) und `rightClickPaste` (Rechtsklick
+  fügt ein statt Kontextmenü, PuTTY-Stil). Beide via Settings persistiert + Toggles im Menü
+  „Bearbeiten"; an alle Panes gebunden. E2E verifiziert (Drag-Select kopiert, Rechtsklick fügt ein).
 - ✅ **Broadcast-/Sync-Input (QTMUX-21)** — Modus „Eingabe an alle Sessions" (`window.broadcastInput`,
   Toggle via Toolbar-Icon `broadcast-input`, Menü „Ansicht" und **Ctrl/Cmd+Shift+B**; bewusst NICHT
   persistiert). `TerminalItem` hat `broadcast`-Property + Signal `inputForBroadcast(QByteArray)`:

@@ -56,6 +56,12 @@ public:
     /// Scrollback-Zeile (0 = älteste).
     const std::vector<Cell> &scrollbackLine(int index) const { return m_scrollback[index]; }
 
+    /// Bracketed-Paste-Markierungen (ESC[200~ / ESC[201~) ausgeben — libvterm sendet
+    /// sie über die Output-Callback NUR, wenn die Anwendung DECSET 2004 aktiviert hat.
+    /// Eine Einfügung wird zwischen startPaste()/endPaste() geklammert.
+    void startPaste();
+    void endPaste();
+
 signals:
     /// Geänderter Bereich in Zellkoordinaten (col/row).
     void damaged(const QRect &cells);

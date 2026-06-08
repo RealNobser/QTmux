@@ -259,6 +259,19 @@ ApplicationWindow {
     // Bewusst NICHT persistiert (Footgun) — startet je Sitzung aus.
     property bool broadcastInput: false
 
+    // Terminal-Komfortoptionen (PuTTY-Stil), persistiert:
+    property bool copyOnSelect: false       // Auswahl automatisch kopieren
+    property bool rightClickPaste: false    // Rechtsklick fügt ein (statt Kontextmenü)
+    property bool pasteWarnMultiline: true  // Vor mehrzeiligem Einfügen warnen
+
+    // Mehrzeilige Einfügung: das betroffene Terminal merken und nachfragen.
+    property var pendingPasteTerm: null
+    function askMultilinePaste(term, lines) {
+        pendingPasteTerm = term
+        pasteWarnDialog.lineCount = lines
+        pasteWarnDialog.open()
+    }
+
     // Aktuell wirksame Shell (für Häkchen in den Menüs): die gewählte, sonst die
     // erste verfügbare (= Plattform-Vorgabe).
     function currentShellProgram() {
@@ -385,6 +398,9 @@ ApplicationWindow {
         property alias newSessionType: window.newSessionType
         property alias defaultShellProgram: window.defaultShellProgram
         property alias terminalFontSize: window.terminalFontSize
+        property alias copyOnSelect: window.copyOnSelect
+        property alias rightClickPaste: window.rightClickPaste
+        property alias pasteWarnMultiline: window.pasteWarnMultiline
     }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
@@ -619,6 +635,25 @@ ApplicationWindow {
             title: qsTr("Bearbeiten")
             MenuItem { action: actCopy;  icon.source: window.icon("copy");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuItem { action: actPaste; icon.source: window.icon("clipboard"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuSeparator {}
+            MenuItem {
+                text: qsTr("Auswahl automatisch kopieren")
+                checkable: true
+                checked: window.copyOnSelect
+                onTriggered: window.copyOnSelect = !window.copyOnSelect
+            }
+            MenuItem {
+                text: qsTr("Rechtsklick fügt ein")
+                checkable: true
+                checked: window.rightClickPaste
+                onTriggered: window.rightClickPaste = !window.rightClickPaste
+            }
+            MenuItem {
+                text: qsTr("Vor mehrzeiligem Einfügen warnen")
+                checkable: true
+                checked: window.pasteWarnMultiline
+                onTriggered: window.pasteWarnMultiline = !window.pasteWarnMultiline
+            }
         }
         Menu {
             title: qsTr("Ansicht")
@@ -1007,6 +1042,11 @@ ApplicationWindow {
                         // Broadcast-Modus: Eingabe an ALLE Sessions verteilen.
                         broadcast: window.broadcastInput
                         onInputForBroadcast: (data) => sessions.writeToAll(data)
+                        // Komfortoptionen (PuTTY-Stil) + Multiline-Paste-Warnung.
+                        copyOnSelect: window.copyOnSelect
+                        rightClickPaste: window.rightClickPaste
+                        pasteWarnMultiline: window.pasteWarnMultiline
+                        onMultilinePasteWarning: (lines) => window.askMultilinePaste(paneTerm, lines)
                         // Fokus (Klick/Tab) macht dieses Pane aktiv.
                         onActiveFocusChanged: if (activeFocus) window.setActivePane(pane.index, paneTerm)
                         // Cmd/Strg+Mausrad -> global zoomen.
@@ -1124,6 +1164,23 @@ ApplicationWindow {
             wrapMode: Text.WordWrap
             color: Theme.textBright
             text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nQt %1").arg(Qt.application.version || "0.1")
+        }
+    }
+
+    // --- Mehrzeilige-Einfügung-Warnung -------------------------------------
+    AppDialog {
+        id: pasteWarnDialog
+        width: 420
+        property int lineCount: 0
+        title: qsTr("Mehrzeilig einfügen?")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        onAccepted: if (window.pendingPasteTerm) window.pendingPasteTerm.confirmPaste()
+        onRejected: if (window.pendingPasteTerm) window.pendingPasteTerm.cancelPaste()
+        Label {
+            width: 380
+            wrapMode: Text.WordWrap
+            color: Theme.textBright
+            text: qsTr("Der Inhalt der Zwischenablage hat %1 Zeilen und könnte mehrere Befehle ausführen. Trotzdem einfügen?").arg(pasteWarnDialog.lineCount)
         }
     }
 }
