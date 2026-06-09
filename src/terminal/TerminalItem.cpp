@@ -18,6 +18,7 @@ TerminalItem::TerminalItem(QQuickItem *parent) : QQuickPaintedItem(parent) {
     m_font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     m_font.setStyleHint(QFont::Monospace);
     m_font.setPointSize(m_pointSize);
+    applyFontFeatures();   // Ligaturen initial aus (opt-in)
 
     setFlag(ItemHasContents, true);
     setAcceptedMouseButtons(Qt::AllButtons);
@@ -101,6 +102,36 @@ void TerminalItem::setPointSize(int s) {
     update();
 }
 
+void TerminalItem::setFontFamily(const QString &family) {
+    if (family.isEmpty() || family == m_font.family()) return;
+    m_font.setFamily(family);
+    recomputeGrid();
+    emit fontChanged();
+    update();
+}
+
+void TerminalItem::setLigatures(bool on) {
+    if (on == m_ligatures) return;
+    m_ligatures = on;
+    applyFontFeatures();
+    emit fontChanged();
+    update();
+}
+
+// Programmier-Ligaturen über OpenType-Features schalten. Aus (Default) unterdrückt
+// `liga`/`calt`/`dlig`; an überlässt sie dem Font (Run-Rendering in paint() formt sie).
+void TerminalItem::applyFontFeatures() {
+    if (m_ligatures) {
+        m_font.unsetFeature(QFont::Tag("liga"));
+        m_font.unsetFeature(QFont::Tag("calt"));
+        m_font.unsetFeature(QFont::Tag("dlig"));
+    } else {
+        m_font.setFeature(QFont::Tag("liga"), 0);
+        m_font.setFeature(QFont::Tag("calt"), 0);
+        m_font.setFeature(QFont::Tag("dlig"), 0);
+    }
+}
+
 void TerminalItem::recomputeGrid() {
     QFontMetricsF fm(m_font);
     m_cellW = fm.horizontalAdvance(QChar('M'));
@@ -133,6 +164,20 @@ void TerminalItem::paint(QPainter *painter) {
     }
     const QColor selColor(0x5b, 0x8c, 0xff, 0x70);
 
+    // Hilfsfunktion: ein einzelnes Zeichen mit eigenen Attributen zeichnen (breite
+    // Zeichen / Sonderfälle, die nicht in einen Run passen).
+    auto drawGlyph = [&](const QString &text, qreal x, qreal y, const QColor &fg,
+                         bool bold, bool italic, bool underline) {
+        painter->setPen(fg);
+        if (bold || italic || underline) {
+            QFont f = m_font;
+            f.setBold(bold); f.setItalic(italic); f.setUnderline(underline);
+            painter->setFont(f);
+        }
+        painter->drawText(QPointF(x, y + m_baseline), text);
+        if (bold || italic || underline) painter->setFont(m_font);
+    };
+
     for (int row = 0; row < m_rows; ++row) {
         const qreal y = row * m_cellH;
         // Quelle dieser sichtbaren Zeile bestimmen (Scrollback oder Live-Screen).
@@ -140,6 +185,19 @@ void TerminalItem::paint(QPainter *painter) {
         const bool isSb = viewportSource(row, sbIndex, liveRow);
         const std::vector<Cell> *sbLine =
             isSb && sbIndex < sc->scrollbackCount() ? &sc->scrollbackLine(sbIndex) : nullptr;
+
+        // Run-Rendering: zusammenhängende, gleich attributierte Zeichen einer Zeile in
+        // EINEM drawText zeichnen → ermöglicht Ligaturen (wenn aktiv) und ist effizienter.
+        // Bei Monospace stimmt die Vorschub-Breite mit dem Raster überein.
+        QString run;
+        qreal runX = 0;
+        QColor runFg;
+        bool runBold = false, runItalic = false, runUnder = false;
+        auto flush = [&]() {
+            if (run.isEmpty()) return;
+            drawGlyph(run, runX, y, runFg, runBold, runItalic, runUnder);
+            run.clear();
+        };
 
         for (int col = 0; col < m_cols; ++col) {
             Cell c;
@@ -159,18 +217,27 @@ void TerminalItem::paint(QPainter *painter) {
                 if (idx >= selLo && idx <= selHi)
                     painter->fillRect(QRectF(x, y, m_cellW * c.width, m_cellH), selColor);
             }
-            if (!c.text.isEmpty() && c.text != QStringLiteral(" ")) {
-                painter->setPen(c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg));
-                if (c.bold || c.italic) {
-                    QFont f = m_font;
-                    f.setBold(c.bold);
-                    f.setItalic(c.italic);
-                    painter->setFont(f);
-                }
-                painter->drawText(QPointF(x, y + m_baseline), c.text);
-                if (c.bold || c.italic) painter->setFont(m_font);
+
+            const bool visible = !c.text.isEmpty() && c.text != QStringLiteral(" ");
+            // Lücken (Leerzeichen/leer) und breite Zeichen brechen den Run.
+            if (!visible || c.width != 1) {
+                flush();
+                if (visible)  // breites Zeichen einzeln
+                    drawGlyph(c.text, x, y, c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg),
+                              c.bold, c.italic, c.underline);
+                continue;
             }
+            const QColor fg = c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg);
+            if (!run.isEmpty() && (fg != runFg || c.bold != runBold
+                                   || c.italic != runItalic || c.underline != runUnder))
+                flush();
+            if (run.isEmpty()) {
+                runX = x; runFg = fg;
+                runBold = c.bold; runItalic = c.italic; runUnder = c.underline;
+            }
+            run += c.text;
         }
+        flush();
     }
 
     // Cursor nur im Live-Boden zeigen (in der Historie ergibt er keinen Sinn).

@@ -366,6 +366,20 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   ein „Importieren …" (importiertes Schema landet je nach Helligkeit im Dunkel-/Hell-Slot).
   E2E auf macOS verifiziert: Dunkel-Slot=Dracula → komplette App (Toolbar/Sidebar/Terminal) violett mit
   violettem Akzent; Ctrl+D → Hell-Modus nutzt Hell-Schema → ganze App hell mit blauem Akzent.
+- ✅ **Terminal-Schriftart + Ligaturen (QTMUX-19)** — wählbare Monospace-Schrift und opt-in
+  Programmier-Ligaturen. `TerminalItem`: `fontFamily` (Default = `QFontDatabase::systemFont(FixedFont)`)
+  und `ligatures` (Default aus). **Run-basiertes Rendering** in `paint()`: zusammenhängende,
+  gleich attributierte (fg/bold/italic/underline) Nicht-Leerzeichen einer Zeile werden in EINEM
+  `drawText` gezeichnet → ermöglicht Ligaturen UND ist effizienter (die in den offenen Notizen
+  genannte Optimierung); Runs brechen an Lücken/Leerzeichen, breiten Zeichen (CJK, einzeln gezeichnet)
+  und Attributwechseln. Bei Monospace stimmt der Glyph-Vorschub mit dem Zellraster überein → keine
+  Verschiebung. `applyFontFeatures()` schaltet `liga`/`calt`/`dlig` per `QFont::setFeature`/`unsetFeature`
+  (Qt 6.7+): aus = Ligaturen unterdrückt (Default), an = Font formt sie im Run. Schriftliste:
+  `AppController::monospaceFonts()` (`QFontDatabase::isFixedPitch`) + `defaultMonospaceFont()`. Global
+  + persistiert (`window.terminalFontFamily/terminalLigatures`), an alle Panes gebunden; Settings →
+  „Terminal" (Schriftart-Combo + Ligaturen-Checkbox). E2E auf macOS verifiziert (Run-Rendering korrekt
+  & rastertreu mit Menlo; Schriftwechsel Menlo→Courier New sichtbar). Ligatur-*Bilden* nicht gezeigt
+  (kein Ligatur-Font installiert), Mechanik aber verdrahtet.
 - ✅ **Bracketed Paste + Multiline-Warnung (QTMUX-16)** — `VtScreen::startPaste()/endPaste()`
   rufen `vterm_keyboard_start/end_paste`; libvterm gibt die Klammern `ESC[200~`/`ESC[201~`
   **nur** aus, wenn die App DECSET 2004 aktiviert hat (Output-Callback → `outputToPty` → Backend).

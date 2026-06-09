@@ -25,6 +25,8 @@ class TerminalItem : public QQuickPaintedItem {
     QML_ELEMENT
     Q_PROPERTY(QObject *session READ session WRITE setSession NOTIFY sessionChanged)
     Q_PROPERTY(int pointSize READ pointSize WRITE setPointSize NOTIFY fontChanged)
+    Q_PROPERTY(QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY fontChanged)
+    Q_PROPERTY(bool ligatures READ ligatures WRITE setLigatures NOTIFY fontChanged)
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY colorsChanged)
@@ -42,6 +44,11 @@ public:
 
     int pointSize() const { return m_pointSize; }
     void setPointSize(int s);
+
+    QString fontFamily() const { return m_font.family(); }
+    void setFontFamily(const QString &family);
+    bool ligatures() const { return m_ligatures; }
+    void setLigatures(bool on);
 
     QColor backgroundColor() const { return m_defaultBg; }
     void setBackgroundColor(const QColor &c);
@@ -106,6 +113,7 @@ protected:
 
 private:
     void recomputeGrid();
+    void applyFontFeatures();   // Ligaturen je nach m_ligatures (de)aktivieren
     QByteArray encodeKey(QKeyEvent *event) const;
     /// Eingabe-Bytes zustellen: im Broadcast-Modus per Signal nach außen, sonst an
     /// die eigene Session. Zentral genutzt von Tastatur- und Paste-Eingabe.
@@ -128,6 +136,7 @@ private:
 
     QFont m_font;
     int m_pointSize = 13;
+    bool m_ligatures = false;   // Programmier-Ligaturen (Run-Rendering) opt-in
     qreal m_cellW = 8;
     qreal m_cellH = 16;
     qreal m_baseline = 12;

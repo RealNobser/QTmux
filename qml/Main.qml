@@ -251,6 +251,10 @@ ApplicationWindow {
     // Terminal-Schriftgröße (global für alle Panes, persistiert). Zoom via
     // Cmd/Strg +/−/0 und Cmd/Strg+Mausrad. Auf 6..40 pt begrenzt.
     property int terminalFontSize: 13
+    // Terminal-Schriftfamilie (leer = Plattform-Standard, beim Start gesetzt) und
+    // Programmier-Ligaturen (opt-in). Beide global + persistiert.
+    property string terminalFontFamily: ""
+    property bool terminalLigatures: false
     function zoomTerminal(delta) {
         terminalFontSize = Math.max(6, Math.min(40, terminalFontSize + delta))
     }
@@ -368,6 +372,7 @@ ApplicationWindow {
 
     // Beim Start die persistierten Sessions wiederherstellen; sonst eine neue öffnen.
     Component.onCompleted: {
+        if (terminalFontFamily === "") terminalFontFamily = App.defaultMonospaceFont()
         const active = sessions.restoreState()
         if (sessions.count === 0)
             newSession()
@@ -399,6 +404,8 @@ ApplicationWindow {
         property alias newSessionType: window.newSessionType
         property alias defaultShellProgram: window.defaultShellProgram
         property alias terminalFontSize: window.terminalFontSize
+        property alias terminalFontFamily: window.terminalFontFamily
+        property alias terminalLigatures: window.terminalLigatures
         property alias copyOnSelect: window.copyOnSelect
         property alias rightClickPaste: window.rightClickPaste
         property alias pasteWarnMultiline: window.pasteWarnMultiline
@@ -1292,6 +1299,8 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.margins: 6
                         pointSize: window.terminalFontSize   // globaler Zoom
+                        fontFamily: window.terminalFontFamily
+                        ligatures: window.terminalLigatures
                         backgroundColor: Theme.terminalBg
                         foregroundColor: Theme.terminalFg
                         cursorColor: Theme.terminalCursor
@@ -1568,11 +1577,24 @@ ApplicationWindow {
             SectionLabel { text: qsTr("Terminal") }
             GridLayout {
                 columns: 2; columnSpacing: 12; rowSpacing: 8; Layout.fillWidth: true
+                Text { text: qsTr("Schriftart"); color: Theme.textBright }
+                AppComboBox {
+                    Layout.fillWidth: true
+                    model: App.monospaceFonts()
+                    currentIndex: Math.max(0, App.monospaceFonts().indexOf(window.terminalFontFamily))
+                    onActivated: (i) => window.terminalFontFamily = App.monospaceFonts()[i]
+                }
                 Text { text: qsTr("Schriftgröße"); color: Theme.textBright }
                 SpinBox {
                     from: 6; to: 40
                     value: window.terminalFontSize
                     onValueModified: window.terminalFontSize = value
+                }
+                Text { text: qsTr("Ligaturen"); color: Theme.textBright }
+                CheckBox {
+                    text: qsTr("Programmier-Ligaturen (z. B. FiraCode)")
+                    checked: window.terminalLigatures
+                    onToggled: window.terminalLigatures = checked
                 }
                 Text {
                     text: qsTr("Standard-Shell"); color: Theme.textBright

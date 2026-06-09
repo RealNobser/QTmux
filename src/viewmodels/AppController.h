@@ -24,6 +24,11 @@ public:
     Q_INVOKABLE QStringList languageCodes() const { return {QStringLiteral("de"), QStringLiteral("en")}; }
     Q_INVOKABLE QString languageName(const QString &code) const;
 
+    /// Installierte Monospace-Schriftfamilien (für die Terminal-Schriftwahl).
+    Q_INVOKABLE QStringList monospaceFonts() const;
+    /// Plattformübliche Standard-Monospace-Familie (Default der Terminal-Schrift).
+    Q_INVOKABLE QString defaultMonospaceFont() const;
+
 signals:
     void languageChanged(const QString &lang);
 
