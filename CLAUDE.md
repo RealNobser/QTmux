@@ -178,7 +178,13 @@ Summaries holen und Duplikate überspringen. Token nur einlesen, nie ausgeben/co
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
-## Status (Stand: 2026-06-08)
+## Status (Stand: 2026-06-09)
+
+> ⏭️ **Nächste Aufgabe:** QTMUX-4 (**Pane-Reorder**) + QTMUX-3 (**verschachtelte
+> Misch-Layouts H+V**) — Split-Panes thematisch zusammen angehen. Heutige Session
+> (2026-06-09) lieferte QTMUX-18 (Color-Schemes, ganze App folgt dem Schema),
+> QTMUX-19 (Schriftart+Ligaturen), QTMUX-20 (Quake-Modus), QTMUX-24 (Progress OSC 9;4)
+> sowie die Command-Palette (QTMUX-12, VSCode-Stil) — alles committet/gepusht, Jira dual erledigt.
 
 ### Windows-Test-Session 2026-06-08 (alles committet + gepusht, GitHub `RealNobser/QTmux`)
 Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11.1). Geliefert:
