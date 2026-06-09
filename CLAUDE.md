@@ -180,11 +180,13 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 ## Status (Stand: 2026-06-09)
 
-> ⏭️ **Nächste Aufgabe:** QTMUX-4 (**Pane-Reorder**) + QTMUX-3 (**verschachtelte
-> Misch-Layouts H+V**) — Split-Panes thematisch zusammen angehen. Heutige Session
-> (2026-06-09) lieferte QTMUX-18 (Color-Schemes, ganze App folgt dem Schema),
-> QTMUX-19 (Schriftart+Ligaturen), QTMUX-20 (Quake-Modus), QTMUX-24 (Progress OSC 9;4)
-> sowie die Command-Palette (QTMUX-12, VSCode-Stil) — alles committet/gepusht, Jira dual erledigt.
+> ⏭️ **Nächste Aufgabe:** QTMUX-7 (SSH-Connection-Manager/Profile) oder QTMUX-6
+> (GPU-Glyph-Atlas) — größere Brocken; alternativ kleinere Backlog-Tickets (QTMUX-15
+> Hotkeys konfigurierbar, QTMUX-22 Secrets-Vault, QTMUX-23 Login-Scripts, QTMUX-25 Clink).
+> Session 2026-06-09: QTMUX-3 (verschachtelte H+V-Layouts) + QTMUX-4 (Pane-Reorder per
+> Drag) erledigt; davor QTMUX-18 (Color-Schemes), QTMUX-19 (Schriftart+Ligaturen),
+> QTMUX-20 (Quake-Modus), QTMUX-24 (Progress OSC 9;4), Command-Palette (QTMUX-12) —
+> alles committet/gepusht, Jira dual erledigt.
 
 ### Windows-Test-Session 2026-06-08 (alles committet + gepusht, GitHub `RealNobser/QTmux`)
 Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11.1). Geliefert:
@@ -296,19 +298,37 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
     (`SessionModel::createShellSession` → `PtyBackend::setExtraEnv`); Agent ruft
     `attach_controller(id)`. Plattform-Helfer: `src/core/ProcessInfo.{h,cpp}` (macOS libproc,
     Linux /proc, Windows-Stub).
-- ✅ **Split-Panes** — Hauptbereich ist ein `SplitView` mit `Repeater` über `paneModel`
-  (ListModel, ein Eintrag je Pane mit `sessionRow`). `window.activePane`/`activeTerminal`
-  halten das fokussierte Pane; `currentRow` folgt dessen Session. Aktives Pane bei
-  Mehrfach-Layout durch **Akzentrahmen** markiert; Fokus (Klick/Tab) aktiviert ein Pane
-  (`TerminalItem.onActiveFocusChanged`). Aktionen `actSplitH`/`actSplitV` (Ctrl+Shift+E/O)
-  legen ein neues Pane mit **neuer Shell-Session** an (Orientierung gilt für alle Panes,
-  SplitView hat eine Achse); `actClosePane` (Ctrl+Shift+W) schließt das aktive Pane (letztes
-  → normale Session-Schließung). Sidebar-Klick lädt die Session ins **aktive** Pane
-  (`assignToActivePane`). `onRowsRemoved` führt **alle** Panes auf gültige Session-Reihen
-  nach (verschobene Indizes). Copy/Paste/Kontextmenü nutzen `window.activeTerminal`. Toolbar-
-  + „Ansicht"-Menü-Buttons mit neuen Icons `split-h`/`split-v`. E2E auf macOS verifiziert
-  (2× nebeneinander, 3× untereinander, sauberes Beenden aller Shells). Offen: rekursive
-  Misch-Layouts (H+V verschachtelt), Pane-Reorder.
+- ✅ **Split-Panes — verschachtelte H+V-Layouts (QTMUX-3) + Pane-Reorder (QTMUX-4)** —
+  Der Hauptbereich ist jetzt ein **rekursiver Layout-Baum** statt eines einachsigen
+  `SplitView`. Datenmodell (`window.layout`, reines JS-Objekt): Knoten ist entweder ein
+  **Blatt** `{paneId, sessionRow}` (ein Terminal) oder ein **Split** `{orientation, children:[…]}`.
+  Beliebige Mischungen (H in V usw.) möglich. UI: rekursive QML-Komponente
+  [qml/SplitNode.qml](qml/SplitNode.qml) — Blatt → Pane mit Kopf+`TerminalItem`,
+  Split → `SplitView` mit `Repeater` über die Kinder. **QML verbietet die statische
+  Selbst-Instanziierung eines Typs** → die Rekursion läuft über einen `Loader` mit
+  `source`-URL; node/win **per `setSource(url,{props})` VOR dem Laden** setzen (sonst
+  evaluieren innere Bindungen kurz mit `win===undefined` und brechen dauerhaft → weißer
+  Header/kein Inhalt). Strukturänderungen mutieren den JS-Baum und rufen
+  `window.rebuildLayout()` (Loader-`sourceComponent` kurz `null`); Tastaturfokus wird über
+  die Registry `paneItems` (paneId→Term) wiederhergestellt. Operationen in
+  [qml/Main.qml](qml/Main.qml): `splitPane(orientation)` (ersetzt aktives Blatt durch
+  `[Blatt, neu]`; gleiche Orientierung im Eltern-Split → nur Geschwister anfügen),
+  `closePane()` (Blatt entfernen, Eltern-Split mit 1 Kind via `collapseSplit` kollabieren),
+  `assignToActivePane`, `moveSession`/`onRowsRemoved` (remappen alle Blatt-`sessionRow`s).
+  Shortcuts `Cmd/Strg+Shift+E`/`O` (teilen), `Cmd/Strg+Shift+W` (Pane schließen). Aktives
+  Blatt durch Akzentrahmen + getönten Kopf markiert.
+  **Pane-Reorder (QTMUX-4):** jeder Pane-Kopf hat links einen **Greifpunkt** (sechs Punkte).
+  Statt fragilem Qt-`Drag`/`DropArea` (ParentChange/Hotspot) ein **`DragHandler`
+  (`target:null`) + manueller Hit-Test**: `beginPaneDrag`/`updatePaneDrag`/`endPaneDrag`
+  in Main.qml ermitteln über `paneIdAt(scenePt)` (Szenen-Rechtecke aller `paneItems`) das
+  überfahrene Pane (Live-Akzent-Highlight) und **tauschen beim Loslassen die `sessionRow`s**
+  beider Blätter (`swapPanes`). **Wichtiger Bugfix** [TerminalItem.cpp](src/terminal/TerminalItem.cpp):
+  `setSession` ruft `recomputeGrid` **nur bei gültiger Größe** (`width/height>0`) — ein noch
+  ungelayoutetes, neu erzeugtes Item resizte sonst die (geteilte) Session auf 1×1 und verwarf
+  ihren Inhalt; `geometryChange` synchronisiert mit der echten Größe → **Inhalt bleibt über
+  Rebuild/Reorder/Close erhalten** (nur Scroll-Offset springt auf den Boden). E2E auf macOS
+  verifiziert: H+V verschachtelt (links V-Stapel neben Pane), Drag-Reorder tauscht Inhalte
+  sichtbar (`LINKS`↔`OBEN_RECHTS`), Schließen kollabiert den Split — überall Inhalt intakt.
 - ✅ **Sidebar-Reorder (Drag)** — `SessionModel::moveSession(from,to)` (begin/endMoveRows,
   `QList::move`, führt `m_activeRow` nach, persistiert). Im Delegate ein `DragHandler`
   (nur Y-Achse, hebt die Kachel via `z`/`opacity`/`scale` an); beim Loslassen wird die

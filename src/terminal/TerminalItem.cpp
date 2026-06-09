@@ -49,8 +49,11 @@ void TerminalItem::setSession(QObject *session) {
         connect(sc, &VtScreen::damaged, this, [this](const QRect &) { onDamaged(); });
         connect(sc, &VtScreen::cursorMoved, this, [this]() { update(); });
         m_lastSbCount = sc->scrollbackCount();
-        // Auf die aktuelle Item-Größe synchronisieren.
-        recomputeGrid();
+        // Nur synchronisieren, wenn die Größe schon feststeht. Sonst würde ein noch
+        // ungelayoutetes Item (Breite/Höhe 0) die — ggf. geteilte — Session auf 1x1
+        // resizen und ihren Inhalt verwerfen (Bug bei Pane-Rebuild/Reorder). Das
+        // spätere geometryChange ruft recomputeGrid mit der echten Größe auf.
+        if (width() > 0 && height() > 0) recomputeGrid();
         forceActiveFocus();
     }
     emit sessionChanged();

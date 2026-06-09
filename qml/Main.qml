@@ -35,13 +35,24 @@ ApplicationWindow {
     // Aktive (fokussierte) Session ans Model melden -> löscht deren Aufmerksamkeits-Hinweis.
     onCurrentRowChanged: sessions.setActiveRow(currentRow)
 
-    // --- Split-Panes ---------------------------------------------------------
-    // paneModel: ein Eintrag je sichtbarem Terminal-Pane; `sessionRow` indexiert
-    // die im Pane gezeigte Session (Sidebar-Reihenfolge). `activePane` ist das
-    // fokussierte Pane; `currentRow` folgt dessen Session.
-    ListModel { id: paneModel }
-    property int activePane: 0
+    // --- Split-Panes (rekursiver Baum, QTMUX-3) ------------------------------
+    // `layout` ist die Wurzel eines Baums aus Blättern und Splits — beliebig
+    // verschachtelbar (H in V usw.). Knotentypen:
+    //   Blatt: { paneId: int, sessionRow: int }   (ein Terminal)
+    //   Split: { orientation: int, children: [...] }
+    // Strukturänderungen (teilen/schließen/reorder) bauen den Baum neu auf
+    // (rebuildLayout); der Tastaturfokus wird über `paneItems` (paneId->Term)
+    // wiederhergestellt. `currentRow` folgt der Session des aktiven Blatts.
+    property var layout: null
+    property int nextPaneId: 1
+    property int activePaneId: -1
+    property int paneCount: 1
+    property var paneItems: ({})         // paneId -> TerminalItem (für Fokus + Hit-Test)
     property var activeTerminal: null
+    // Pane-Reorder per Drag (QTMUX-4): aktives Quell-Pane + aktuell überfahrenes Ziel.
+    property int dragPaneId: -1
+    property int dragOverPaneId: -1
+    property var dragScenePt: null
 
     SessionModel { id: sessions }
 
@@ -66,9 +77,9 @@ ApplicationWindow {
                 return r
             }
             window.currentRow = adjust(window.currentRow)
-            // Alle Panes auf gültige Session-Reihen nachführen (verschobene Indizes).
-            for (let i = 0; i < paneModel.count; ++i)
-                paneModel.setProperty(i, "sessionRow", adjust(paneModel.get(i).sessionRow))
+            // Alle Blätter auf gültige Session-Reihen nachführen (verschobene Indizes).
+            window.remapLeaves(adjust)
+            window.rebuildLayout()
         }
         // Fenster-Alert (Dock-Hüpfen/Taskbar-Blinken), wenn QTmux nicht im Vordergrund ist.
         function onAttentionRaised(row) {
@@ -308,7 +319,7 @@ ApplicationWindow {
         const row = sessions.createShellSession("", window.defaultShellProgram)
         // Neue Session ins aktive Pane laden und den Tastaturfokus daraufsetzen,
         // damit man sofort tippen kann (kein Klick ins Terminal nötig).
-        if (window.activePane >= 0 && window.activePane < paneModel.count)
+        if (window.layout)
             window.assignToActivePane(row)
         else
             window.currentRow = row   // Startfall: Pane wird gleich erst erzeugt
@@ -327,25 +338,94 @@ ApplicationWindow {
         else newSession()
     }
 
-    // --- Pane-Steuerung ------------------------------------------------------
-    // Setzt das fokussierte Pane (+ dessen Terminal) und zieht currentRow nach.
-    function setActivePane(index, term) {
-        window.activePane = index
-        window.activeTerminal = term
-        if (index >= 0 && index < paneModel.count) {
-            const row = paneModel.get(index).sessionRow
-            if (row >= 0 && row < sessions.count) window.currentRow = row
+    // --- Pane-Steuerung (Baum-Operationen) -----------------------------------
+    // SplitNode greift nur über diese window.*-Helfer auf Modell/Globals zu.
+
+    // Baum-Helfer: rekursiv über alle Blätter; isLeaf = kein `children`.
+    function isLeaf(n) { return n && n.children === undefined }
+    function forEachLeaf(n, fn) {
+        if (!n) return
+        if (isLeaf(n)) { fn(n); return }
+        for (let i = 0; i < n.children.length; ++i) forEachLeaf(n.children[i], fn)
+    }
+    function findLeaf(id) {
+        // Liefert { leaf, parent, idx } für paneId oder null.
+        let res = null
+        const walk = function(n, parent, idx) {
+            if (isLeaf(n)) { if (n.paneId === id) res = { leaf: n, parent: parent, idx: idx }; return }
+            for (let i = 0; i < n.children.length; ++i) walk(n.children[i], n, i)
+        }
+        walk(window.layout, null, -1)
+        return res
+    }
+    function firstLeaf(n) {
+        let f = null
+        forEachLeaf(n, function(l) { if (!f) f = l })
+        return f
+    }
+    function findContainerOf(target) {
+        // Knoten, dessen children-Array `target` enthält (oder null, wenn Wurzel).
+        let res = null
+        const walk = function(n) {
+            if (!n || isLeaf(n)) return
+            for (let i = 0; i < n.children.length; ++i) {
+                if (n.children[i] === target) { res = n; return }
+                walk(n.children[i])
+            }
+        }
+        walk(window.layout)
+        return res
+    }
+    function collapseSplit(split) {
+        // Split mit nur noch einem Kind durch dieses Kind ersetzen.
+        if (!split || split.children.length !== 1) return
+        const only = split.children[0]
+        if (window.layout === split) { window.layout = only; return }
+        const cont = findContainerOf(split)
+        if (cont) {
+            const i = cont.children.indexOf(split)
+            if (i >= 0) cont.children[i] = only
         }
     }
-    // Fokus nachträglich (nach Item-Erzeugung) auf das aktive Pane legen.
+    function leafCount() { let c = 0; forEachLeaf(window.layout, function() { ++c }); return c }
+    function remapLeaves(fn) {
+        forEachLeaf(window.layout, function(l) { l.sessionRow = fn(l.sessionRow) })
+    }
+
+    // Registry Term<->paneId (Fokus nach Rebuild zurückgeben).
+    function registerPane(id, term) { window.paneItems[id] = term }
+    function unregisterPane(id) { delete window.paneItems[id] }
+    function sessionObject(row) {
+        return (row >= 0 && row < sessions.count) ? sessions.sessionAt(row) : null
+    }
+    function broadcastWrite(data) { sessions.writeToAll(data) }
+    function popupTermContextMenu(term) { termContextMenu.popup() }
+
+    // Baum neu aufbauen (nach Strukturänderung) + Blattzahl/Fokus aktualisieren.
+    function rebuildLayout() {
+        window.paneCount = leafCount()
+        paneTreeLoader.sourceComponent = null
+        paneTreeLoader.sourceComponent = paneTreeComp
+        focusActivePane()
+    }
+
+    // Aktives Pane setzen (per paneId) und currentRow nachziehen.
+    function setActivePaneById(id, term) {
+        window.activePaneId = id
+        if (term) window.activeTerminal = term
+        const f = findLeaf(id)
+        if (f && f.leaf.sessionRow >= 0 && f.leaf.sessionRow < sessions.count)
+            window.currentRow = f.leaf.sessionRow
+    }
+    // Fokus (nach Item-Erzeugung) auf das aktive Pane legen.
     function focusActivePane() {
         Qt.callLater(function() {
-            const p = paneRepeater.itemAt(window.activePane)
-            if (p) { window.activeTerminal = p.term; p.term.forceActiveFocus() }
+            const t = window.paneItems[window.activePaneId]
+            if (t) { window.activeTerminal = t; t.forceActiveFocus() }
         })
     }
-    // Sidebar-Reorder: Session verschieben und alle Index-Referenzen (currentRow,
-    // Pane-sessionRows) auf die neue Reihenfolge nachführen.
+
+    // Sidebar-Reorder: Session verschieben und alle Index-Referenzen nachführen.
     function moveSession(from, to) {
         if (from === to) return
         sessions.moveSession(from, to)
@@ -356,37 +436,100 @@ ApplicationWindow {
             return x
         }
         window.currentRow = remap(window.currentRow)
-        for (let i = 0; i < paneModel.count; ++i)
-            paneModel.setProperty(i, "sessionRow", remap(paneModel.get(i).sessionRow))
+        remapLeaves(remap)
+        rebuildLayout()
     }
 
-    // Sidebar-Klick: gewählte Session ins aktive Pane laden.
+    // Sidebar-Klick: gewählte Session ins aktive Blatt laden.
     function assignToActivePane(row) {
         window.currentRow = row
-        if (window.activePane >= 0 && window.activePane < paneModel.count)
-            paneModel.setProperty(window.activePane, "sessionRow", row)
-        focusActivePane()
+        const f = findLeaf(window.activePaneId)
+        if (f) { f.leaf.sessionRow = row; rebuildLayout() }
+        else focusActivePane()
     }
-    // Teilen: neue Shell-Session in einem neuen Pane (orientation gilt für alle Panes).
+
+    // Teilen: aktives Blatt durch einen Split [Blatt, neues Blatt] ersetzen.
+    // Hat der Eltern-Split bereits dieselbe Orientierung, wird nur ein Geschwister
+    // eingefügt — so entstehen saubere verschachtelte H+V-Mischungen (QTMUX-3).
     function splitPane(orientation) {
-        mainSplit.orientation = orientation
         const row = sessions.createShellSession("", window.defaultShellProgram)
-        paneModel.append({ sessionRow: row })
-        window.activePane = paneModel.count - 1
+        const newLeaf = { paneId: window.nextPaneId++, sessionRow: row }
+        const f = findLeaf(window.activePaneId)
+        if (!f) {                                   // Fallback: ersetze die Wurzel
+            window.layout = { orientation: orientation,
+                              children: [window.layout, newLeaf] }
+        } else if (f.parent && f.parent.orientation === orientation) {
+            f.parent.children.splice(f.idx + 1, 0, newLeaf)
+        } else {
+            const replacement = { orientation: orientation,
+                                  children: [f.leaf, newLeaf] }
+            if (f.parent) f.parent.children[f.idx] = replacement
+            else window.layout = replacement
+        }
+        window.activePaneId = newLeaf.paneId
         window.currentRow = row
-        focusActivePane()
+        rebuildLayout()
     }
+
     // Aktives Pane schließen (letztes Pane -> normale Session-Schließung).
     function closePane() {
-        if (paneModel.count <= 1) { window.closeCurrent(); return }
-        const idx = window.activePane
-        const row = paneModel.get(idx).sessionRow
-        paneModel.remove(idx)
-        window.activePane = Math.min(idx, paneModel.count - 1)
-        sessions.closeSession(row)   // -> onRowsRemoved passt übrige Panes an
-        focusActivePane()
-        if (window.activePane < paneModel.count)
-            window.currentRow = paneModel.get(window.activePane).sessionRow
+        if (leafCount() <= 1) { window.closeCurrent(); return }
+        const f = findLeaf(window.activePaneId)
+        if (!f || !f.parent) return
+        const row = f.leaf.sessionRow
+        const parent = f.parent
+        parent.children.splice(f.idx, 1)
+        collapseSplit(parent)        // Eltern-Split mit nur einem Kind kollabieren
+        // Neues aktives Blatt wählen (irgendein verbleibendes).
+        const fl = firstLeaf(window.layout)
+        window.activePaneId = fl ? fl.paneId : -1
+        if (fl) window.currentRow = fl.sessionRow
+        sessions.closeSession(row)   // -> onRowsRemoved führt übrige Blätter nach
+        rebuildLayout()
+    }
+
+    // Pane-Reorder (QTMUX-4): Inhalte (Session) zweier Blätter tauschen.
+    function swapPanes(idA, idB) {
+        if (idA === idB) return
+        const a = findLeaf(idA), b = findLeaf(idB)
+        if (!a || !b) return
+        const tmp = a.leaf.sessionRow
+        a.leaf.sessionRow = b.leaf.sessionRow
+        b.leaf.sessionRow = tmp
+        window.activePaneId = idB
+        window.currentRow = b.leaf.sessionRow
+        rebuildLayout()
+    }
+
+    // Welches Pane liegt unter einem Szenenpunkt? (für Drag-Reorder-Hit-Test)
+    function paneIdAt(pt) {
+        if (!pt) return -1
+        for (const id in window.paneItems) {
+            const t = window.paneItems[id]
+            if (!t) continue
+            const tl = t.mapToItem(null, 0, 0)   // Szenenkoordinaten der Term-Ecke
+            if (pt.x >= tl.x && pt.x < tl.x + t.width &&
+                pt.y >= tl.y && pt.y < tl.y + t.height)
+                return parseInt(id)
+        }
+        return -1
+    }
+    // Drag-Reorder-Lebenszyklus (vom Greifpunkt im Pane-Header gesteuert).
+    function beginPaneDrag(id) {
+        window.dragPaneId = id
+        window.dragOverPaneId = -1
+    }
+    function updatePaneDrag(scenePt) {
+        window.dragScenePt = scenePt
+        window.dragOverPaneId = paneIdAt(scenePt)
+    }
+    function endPaneDrag() {
+        const target = paneIdAt(window.dragScenePt)
+        const src = window.dragPaneId
+        window.dragPaneId = -1
+        window.dragOverPaneId = -1
+        window.dragScenePt = null
+        if (target >= 0 && src >= 0 && target !== src) swapPanes(src, target)
     }
 
     // Beim Start die persistierten Sessions wiederherstellen; sonst eine neue öffnen.
@@ -398,9 +541,10 @@ ApplicationWindow {
             newSession()
         else
             currentRow = (active >= 0 && active < sessions.count) ? active : 0
-        // Start mit genau einem Pane, das die aktive Session zeigt.
-        paneModel.append({ sessionRow: window.currentRow })
-        window.activePane = 0
+        // Start mit genau einem Blatt, das die aktive Session zeigt.
+        window.layout = { paneId: window.nextPaneId++, sessionRow: window.currentRow }
+        window.activePaneId = window.layout.paneId
+        window.paneCount = 1
     }
 
     // Wird das Fenster (wieder) aktiv, den Tastaturfokus auf das aktive Pane legen,
@@ -529,7 +673,7 @@ ApplicationWindow {
         id: actClosePane
         text: qsTr("Pane schließen")
         shortcut: "Ctrl+Shift+W"
-        enabled: paneModel.count > 1
+        enabled: window.paneCount > 1
         onTriggered: window.closePane()
     }
     // Befehlspalette: fokussiert das dauerhafte Such-/Befehlsfeld in der Toolbar
@@ -1318,78 +1462,17 @@ ApplicationWindow {
                 }
             }
 
-        SplitView {
-            id: mainSplit
+        // Rekursiver Split-Baum (QTMUX-3). Strukturänderungen bauen den Baum über
+        // window.rebuildLayout() neu auf (sourceComponent kurz null setzen).
+        Loader {
+            id: paneTreeLoader
             Layout.fillWidth: true
             Layout.fillHeight: true
-            orientation: Qt.Horizontal
-
-            handle: Rectangle {
-                implicitWidth: 6
-                implicitHeight: 6
-                color: SplitHandle.pressed ? Theme.accent
-                     : SplitHandle.hovered ? Theme.border : Theme.bgMain
-            }
-
-            Repeater {
-                id: paneRepeater
-                model: paneModel
-
-                delegate: Rectangle {
-                    id: pane
-                    required property int index
-                    required property int sessionRow
-                    // Terminal-Zugriff für copy/paste über paneRepeater.itemAt(...).term
-                    property alias term: paneTerm
-
-                    SplitView.fillWidth: true
-                    SplitView.fillHeight: true
-                    SplitView.minimumWidth: 140
-                    SplitView.minimumHeight: 90
-
-                    color: Theme.bgMain
-                    radius: paneModel.count > 1 ? 6 : 0
-                    // Aktives Pane bei Mehrfach-Layout durch Akzentrahmen markieren.
-                    border.width: paneModel.count > 1 && index === window.activePane ? 2 : 0
-                    border.color: Theme.accent
-
-                    TerminalItem {
-                        id: paneTerm
-                        anchors.fill: parent
-                        anchors.margins: 6
-                        pointSize: window.terminalFontSize   // globaler Zoom
-                        fontFamily: window.terminalFontFamily
-                        ligatures: window.terminalLigatures
-                        backgroundColor: Theme.terminalBg
-                        foregroundColor: Theme.terminalFg
-                        cursorColor: Theme.terminalCursor
-                        session: pane.sessionRow >= 0 && pane.sessionRow < sessions.count
-                                 ? sessions.sessionAt(pane.sessionRow) : null
-                        // Broadcast-Modus: Eingabe an ALLE Sessions verteilen.
-                        broadcast: window.broadcastInput
-                        onInputForBroadcast: (data) => sessions.writeToAll(data)
-                        // Komfortoptionen (PuTTY-Stil) + Multiline-Paste-Warnung.
-                        copyOnSelect: window.copyOnSelect
-                        rightClickPaste: window.rightClickPaste
-                        pasteWarnMultiline: window.pasteWarnMultiline
-                        onMultilinePasteWarning: (lines) => window.askMultilinePaste(paneTerm, lines)
-                        // Fokus (Klick/Tab) macht dieses Pane aktiv.
-                        onActiveFocusChanged: if (activeFocus) window.setActivePane(pane.index, paneTerm)
-                        // Cmd/Strg+Mausrad -> global zoomen.
-                        onZoomRequested: (delta) => window.zoomTerminal(delta)
-                        // Rechtsklick -> erst Pane aktivieren, dann Kontextmenü.
-                        onContextMenuRequested: {
-                            window.setActivePane(pane.index, paneTerm)
-                            termContextMenu.popup()
-                        }
-                    }
-
-                    Component.onCompleted: if (index === window.activePane) {
-                        window.activeTerminal = paneTerm
-                        paneTerm.forceActiveFocus()
-                    }
-                }
-            }
+            sourceComponent: paneTreeComp
+        }
+        Component {
+            id: paneTreeComp
+            SplitNode { node: window.layout; win: window }
         }
         }   // ColumnLayout (Banner + SplitView)
     }

@@ -81,6 +81,7 @@ qt_add_qml_module(qtmux
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/SplitNode.qml
     SOURCES
         src/terminal/TerminalItem.h
         src/terminal/TerminalItem.cpp
