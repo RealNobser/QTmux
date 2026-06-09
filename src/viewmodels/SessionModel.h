@@ -24,6 +24,9 @@ public:
         AttentionRole,
         NotificationRole,
         McpControllerRole,
+        ProgressActiveRole,
+        ProgressStateRole,
+        ProgressValueRole,
         SessionRole,
     };
     Q_ENUM(Roles)

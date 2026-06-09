@@ -79,6 +79,9 @@ signals:
     void outputToPty(const QByteArray &data);
     /// Desktop-/App-Notification (OSC 9 bzw. OSC 777).
     void notify(const QString &text);
+    /// Fortschritt (OSC 9;4): state 0=aus, 1=normal, 2=Fehler, 3=unbestimmt,
+    /// 4=pausiert/Warnung; value 0..100 (bei 3 ohne Bedeutung).
+    void progress(int state, int value);
     /// Shell-Integrations-Prompt-Marker (OSC 133): kind 'A'/'B'/'C'/'D'.
     /// exitCode gilt nur für 'D' (sonst -1).
     void promptMarker(char kind, int exitCode);

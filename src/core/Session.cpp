@@ -87,6 +87,7 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
     connect(m_screen.get(), &VtScreen::titleChanged, this, &Session::setTitle);
     connect(m_screen.get(), &VtScreen::bell, this, &Session::onBell);
     connect(m_screen.get(), &VtScreen::notify, this, &Session::onNotify);
+    connect(m_screen.get(), &VtScreen::progress, this, &Session::onProgress);
     connect(m_screen.get(), &VtScreen::promptMarker, this, &Session::onPromptMarker);
 
     // Aktuelles Farbschema anwenden und bei Wechsel automatisch neu setzen.
@@ -146,6 +147,17 @@ void Session::onNotify(const QString &text) {
     m_lastNotification = text;
     emit notificationChanged();
     raiseAttention();
+}
+
+void Session::onProgress(int state, int value) {
+    // OSC 9;4: state 0 = aus, sonst aktiv mit Wert 0..100.
+    const bool active = state != 0;
+    if (active == m_progressActive && state == m_progressState && value == m_progressValue)
+        return;
+    m_progressActive = active;
+    m_progressState = active ? state : 0;
+    m_progressValue = qBound(0, value, 100);
+    emit progressChanged();
 }
 
 void Session::onPromptMarker(char kind, int exitCode) {

@@ -20,6 +20,10 @@ class Session : public QObject {
     Q_PROPERTY(bool needsAttention READ needsAttention NOTIFY attentionChanged)
     Q_PROPERTY(int activity READ activityInt NOTIFY activityChanged)
     Q_PROPERTY(QString lastNotification READ lastNotification NOTIFY notificationChanged)
+    // Fortschritt (OSC 9;4): aktiv? + state (1=normal,2=Fehler,3=unbestimmt,4=pausiert) + 0..100.
+    Q_PROPERTY(bool progressActive READ progressActive NOTIFY progressChanged)
+    Q_PROPERTY(int progressState READ progressState NOTIFY progressChanged)
+    Q_PROPERTY(int progressValue READ progressValue NOTIFY progressChanged)
     // True, wenn in dieser Session ein Agent läuft, der sich per MCP als Controller
     // angemeldet hat (Sidebar zeigt dann einen roten Tab). Reiner Laufzeitzustand.
     Q_PROPERTY(bool mcpController READ mcpController NOTIFY mcpControllerChanged)
@@ -54,6 +58,9 @@ public:
     int activityInt() const { return static_cast<int>(m_activity); }
     QString lastNotification() const { return m_lastNotification; }
     bool mcpController() const { return m_mcpController; }
+    bool progressActive() const { return m_progressActive; }
+    int progressState() const { return m_progressState; }
+    int progressValue() const { return m_progressValue; }
 
     /// Meldet, dass in dieser Session der steuernde MCP-Agent läuft (roter Tab).
     void setMcpController(bool on);
@@ -84,6 +91,7 @@ signals:
     void activityChanged();
     void notificationChanged();
     void mcpControllerChanged();
+    void progressChanged();
     void bell();
 
 private:
@@ -92,6 +100,7 @@ private:
     void observeInput(const QByteArray &data);  // erkennt getippte Agenten-Kommandos
     void onBell();                              // Bell -> Aufmerksamkeit, wenn inaktiv
     void onNotify(const QString &text);         // OSC 9/777
+    void onProgress(int state, int value);      // OSC 9;4
     void onPromptMarker(char kind, int exitCode); // OSC 133
 
     std::unique_ptr<ITerminalBackend> m_backend;
@@ -104,6 +113,9 @@ private:
     bool m_active = false;
     bool m_needsAttention = false;
     bool m_mcpController = false;
+    bool m_progressActive = false;
+    int m_progressState = 0;     // 1=normal,2=Fehler,3=unbestimmt,4=pausiert
+    int m_progressValue = 0;     // 0..100
     Activity m_activity = Activity::Running;
     QString m_lastNotification;
     bool m_commandRunning = false;   // zwischen OSC 133;C und ;D

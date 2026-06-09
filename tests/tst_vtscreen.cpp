@@ -16,6 +16,7 @@ private slots:
     void cursorAndDamage();
     void oscNotification();
     void oscPromptMarkers();
+    void oscProgress();
 };
 
 // Einfacher Text landet 1:1 in den Zellen.
@@ -68,6 +69,27 @@ void TestVtScreen::oscPromptMarkers() {
     vt.inputWrite("\x1b]133;D;1\x07");
     QCOMPARE(kind, 'D');
     QCOMPARE(exitCode, 1);
+}
+
+// OSC 9;4 (ConEmu/Windows-Terminal-Fortschritt) wird als progress() ausgegeben,
+// während OSC 9;<text> weiterhin eine Notification bleibt.
+void TestVtScreen::oscProgress() {
+    VtScreen vt(24, 80);
+    int state = -1, value = -1;
+    QString note;
+    QObject::connect(&vt, &VtScreen::progress, [&](int s, int v) { state = s; value = v; });
+    QObject::connect(&vt, &VtScreen::notify, [&](const QString &t) { note = t; });
+
+    vt.inputWrite("\x1b]9;4;1;42\x07");      // normal, 42 %
+    QCOMPARE(state, 1);
+    QCOMPARE(value, 42);
+
+    vt.inputWrite("\x1b]9;4;0\x07");         // Fortschritt aus
+    QCOMPARE(state, 0);
+
+    vt.inputWrite("\x1b]9;Hallo Welt\x07");  // weiterhin Notification, kein Fortschritt
+    QCOMPARE(note, QStringLiteral("Hallo Welt"));
+    QCOMPARE(state, 0);                       // unverändert
 }
 
 QTEST_MAIN(TestVtScreen)

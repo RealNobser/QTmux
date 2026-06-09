@@ -243,8 +243,16 @@ void VtScreen::cbOsc(int command, const char *str, int len, bool initial, bool f
     m_oscCommand = -1;
 
     switch (cmd) {
-    case 9: {  // OSC 9 ; <text>  (Desktop-Notification)
-        emit notify(QString::fromUtf8(data));
+    case 9: {  // OSC 9 ; …
+        // OSC 9 ; 4 ; <state> ; <progress>  (ConEmu/Windows-Terminal-Fortschritt).
+        const QList<QByteArray> p = data.split(';');
+        if (p.size() >= 2 && p.first() == "4") {
+            const int state = p.at(1).toInt();
+            const int value = p.size() > 2 ? p.at(2).toInt() : 0;
+            emit progress(state, value);
+        } else {
+            emit notify(QString::fromUtf8(data));  // OSC 9 ; <text> (Notification)
+        }
         break;
     }
     case 777: {  // OSC 777 ; notify ; <title> ; <body>

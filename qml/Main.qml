@@ -1073,6 +1073,9 @@ ApplicationWindow {
                         required property bool needsAttention
                         required property string lastNotification
                         required property bool mcpController
+                        required property bool progressActive
+                        required property int progressState
+                        required property int progressValue
                         width: ListView.view.width
                         height: 48
                         radius: 8
@@ -1186,6 +1189,41 @@ ApplicationWindow {
                                 }
                                 HoverHandler { id: closeHover }
                                 TapHandler { onTapped: sessions.closeSession(index) }
+                            }
+                        }
+
+                        // Fortschrittsbalken (OSC 9;4) am unteren Kachelrand.
+                        // State: 1=normal, 2=Fehler (rot), 3=unbestimmt (pulsierend), 4=pausiert (gelb).
+                        Rectangle {
+                            visible: tile.progressActive
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            anchors.bottomMargin: 4
+                            height: 3
+                            radius: 1.5
+                            color: Theme.border
+                            Rectangle {
+                                anchors.left: parent.left
+                                height: parent.height
+                                radius: parent.radius
+                                width: tile.progressState === 3
+                                       ? parent.width
+                                       : parent.width * Math.max(0, Math.min(100, tile.progressValue)) / 100
+                                color: tile.progressState === 2 ? "#e5534b"
+                                     : tile.progressState === 4 ? "#f5c451"
+                                     : Theme.accent
+                                Behavior on width { NumberAnimation { duration: 120 } }
+                                SequentialAnimation on opacity {
+                                    running: tile.progressActive && tile.progressState === 3
+                                    loops: Animation.Infinite
+                                    alwaysRunToEnd: true
+                                    NumberAnimation { to: 0.3; duration: 700 }
+                                    NumberAnimation { to: 1.0; duration: 700 }
+                                    onStopped: parent.opacity = 1.0
+                                }
                             }
                         }
                     }

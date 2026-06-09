@@ -366,6 +366,16 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   ein „Importieren …" (importiertes Schema landet je nach Helligkeit im Dunkel-/Hell-Slot).
   E2E auf macOS verifiziert: Dunkel-Slot=Dracula → komplette App (Toolbar/Sidebar/Terminal) violett mit
   violettem Akzent; Ctrl+D → Hell-Modus nutzt Hell-Schema → ganze App hell mit blauem Akzent.
+- ✅ **Progress-Anzeige im Tab (QTMUX-24)** — Fortschrittsbalken in der Sidebar via **OSC 9;4**
+  (ConEmu/Windows-Terminal-Protokoll: `OSC 9 ; 4 ; <state> ; <progress>`; state 1=normal, 2=Fehler,
+  3=unbestimmt, 4=pausiert, 0=aus). `VtScreen::cbOsc` unterscheidet im OSC-9-Zweig `4;…` (→ Signal
+  `progress(state,value)`) von `OSC 9;<text>` (weiterhin `notify`). `Session` hält `progressActive/
+  progressState/progressValue` (Q_PROPERTY, NICHT persistiert) via `onProgress`; `SessionModel` reicht
+  sie als Rollen `progressActive/State/Value` durch (dataChanged bei `progressChanged`). Sidebar-
+  Delegate zeigt unten einen dünnen Balken: Breite = value %, Farbe nach state (normal=Akzent,
+  2=rot, 4=gelb, 3=unbestimmt → voller Balken pulsierend). 5 Tests grün (neuer `oscProgress`-Test in
+  `tst_vtscreen`: `9;4;1;42`→progress, `9;<text>`→weiterhin notify). E2E auf macOS verifiziert
+  (`printf '\e]9;4;1;60\a'` → 60%-Akzentbalken; `…;2;85` → roter Balken).
 - ✅ **Quake-Modus (QTMUX-20)** — global per Hotkey ein-/ausblendbares Fenster. Plattform-Hotkey
   `src/core/GlobalHotkey.{h,cpp}`: macOS via Carbon `RegisterEventHotKey` (Ctrl+` = keyCode 0x32 +
   `controlKey`; `InstallApplicationEventHandler`, Callback → `activated()` per `QMetaObject::invokeMethod`

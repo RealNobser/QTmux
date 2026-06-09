@@ -28,6 +28,9 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case AttentionRole: return s->needsAttention();
     case NotificationRole: return s->lastNotification();
     case McpControllerRole: return s->mcpController();
+    case ProgressActiveRole: return s->progressActive();
+    case ProgressStateRole: return s->progressState();
+    case ProgressValueRole: return s->progressValue();
     case SessionRole: return QVariant::fromValue(static_cast<QObject *>(s));
     default:          return {};
     }
@@ -42,6 +45,9 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
         {AttentionRole, "needsAttention"},
         {NotificationRole, "lastNotification"},
         {McpControllerRole, "mcpController"},
+        {ProgressActiveRole, "progressActive"},
+        {ProgressStateRole, "progressState"},
+        {ProgressValueRole, "progressValue"},
         {SessionRole, "session"},
     };
 }
@@ -54,7 +60,7 @@ void SessionModel::wireSession(Session *s, int row) {
             const QModelIndex idx = index(r);
             emit dataChanged(idx, idx,
                 {TitleRole, StateRole, AgentRole, AttentionRole, NotificationRole,
-                 McpControllerRole});
+                 McpControllerRole, ProgressActiveRole, ProgressStateRole, ProgressValueRole});
         }
     };
     connect(s, &Session::titleChanged, this, refresh);
@@ -64,6 +70,7 @@ void SessionModel::wireSession(Session *s, int row) {
     connect(s, &Session::notificationChanged, this, refresh);
     connect(s, &Session::attentionChanged, this, refresh);
     connect(s, &Session::mcpControllerChanged, this, refresh);
+    connect(s, &Session::progressChanged, this, refresh);
 
     // Steigt die Aufmerksamkeit, das Fenster informieren (Dock-/Taskbar-Alert).
     connect(s, &Session::attentionChanged, this, [this, s]() {
