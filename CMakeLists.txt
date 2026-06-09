@@ -45,6 +45,8 @@ add_library(qtmux_core STATIC
     src/core/VtScreen.cpp
     src/core/ColorScheme.h
     src/core/ColorScheme.cpp
+    src/core/GlobalHotkey.h
+    src/core/GlobalHotkey.cpp
     src/core/Session.h
     src/core/Session.cpp
     src/core/AgentRegistry.h
@@ -62,6 +64,11 @@ target_link_libraries(qtmux_core PUBLIC Qt6::Core Qt6::SerialPort PRIVATE vterm:
 # Windows: ConPTY (kernel32, default) + TCP-Tabelle/Sockets für ProcessInfo.
 if(WIN32)
     target_link_libraries(qtmux_core PRIVATE iphlpapi ws2_32)
+endif()
+
+# macOS: Carbon für den globalen Quake-Hotkey (RegisterEventHotKey).
+if(APPLE)
+    target_link_libraries(qtmux_core PRIVATE "-framework Carbon")
 endif()
 
 # Anwendungs-Target ----------------------------------------------------------

@@ -7,6 +7,7 @@
 
 #include "AppController.h"
 #include "ColorScheme.h"
+#include "GlobalHotkey.h"
 
 namespace {
 
@@ -50,6 +51,11 @@ int main(int argc, char *argv[])
     // mit der auto-generierten Modul-Typregistrierung (Symptom: „TerminalItem is not a type").
     engine.rootContext()->setContextProperty(
         QStringLiteral("ColorSchemes"), qtmux::ColorSchemeRegistry::instance());
+
+    // Globaler Quake-Hotkey (Ctrl+`) als Context-Property; QML schaltet ihn je nach
+    // Einstellung und reagiert auf `activated` (Fenster ein-/ausblenden).
+    qtmux::GlobalHotkey quakeHotkey;
+    engine.rootContext()->setContextProperty(QStringLiteral("QuakeHotkey"), &quakeHotkey);
 
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed,

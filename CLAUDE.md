@@ -366,6 +366,17 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   ein „Importieren …" (importiertes Schema landet je nach Helligkeit im Dunkel-/Hell-Slot).
   E2E auf macOS verifiziert: Dunkel-Slot=Dracula → komplette App (Toolbar/Sidebar/Terminal) violett mit
   violettem Akzent; Ctrl+D → Hell-Modus nutzt Hell-Schema → ganze App hell mit blauem Akzent.
+- ✅ **Quake-Modus (QTMUX-20)** — global per Hotkey ein-/ausblendbares Fenster. Plattform-Hotkey
+  `src/core/GlobalHotkey.{h,cpp}`: macOS via Carbon `RegisterEventHotKey` (Ctrl+` = keyCode 0x32 +
+  `controlKey`; `InstallApplicationEventHandler`, Callback → `activated()` per `QMetaObject::invokeMethod`
+  Queued in den GUI-Thread); **funktioniert ohne Bedienungshilfen-Rechte und systemweit** (auch wenn
+  QTmux nicht vorn ist). Windows/Linux vorerst Stub (Feature dort deaktiviert, Checkbox disabled).
+  Carbon via `if(APPLE) target_link_libraries(qtmux_core PRIVATE "-framework Carbon")`. Als
+  Context-Property `QuakeHotkey` in `main.cpp` (Instanz auf dem Stack in `main`, lebt bis `exec()`
+  endet). QML: `window.quakeMode` (persistiert) → `QuakeHotkey.setEnabled`; `Connections{onActivated}`
+  → `toggleQuake()`: sichtbar+aktiv → `hide()`, sonst `showNormal()`+`raise()`+`requestActivate()`+
+  Fokus aufs Pane. Settings → „Fenster"-Schalter (nur macOS aktiv). E2E auf macOS verifiziert
+  (Ctrl+` blendet aus → blendet wieder ein; Backtick landet NICHT im Terminal, Hotkey konsumiert ihn).
 - ✅ **Terminal-Schriftart + Ligaturen (QTMUX-19)** — wählbare Monospace-Schrift und opt-in
   Programmier-Ligaturen. `TerminalItem`: `fontFamily` (Default = `QFontDatabase::systemFont(FixedFont)`)
   und `ligatures` (Default aus). **Run-basiertes Rendering** in `paint()`: zusammenhängende,

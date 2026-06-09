@@ -264,6 +264,25 @@ ApplicationWindow {
     // Bewusst NICHT persistiert (Footgun) — startet je Sitzung aus.
     property bool broadcastInput: false
 
+    // Quake-Modus (QTMUX-20): globaler Hotkey (Ctrl+`) blendet das Fenster ein/aus,
+    // auch wenn QTmux nicht im Vordergrund ist. Persistiert.
+    property bool quakeMode: false
+    onQuakeModeChanged: QuakeHotkey.setEnabled(quakeMode)
+    function toggleQuake() {
+        if (window.visible && window.active) {
+            window.hide()
+        } else {
+            window.showNormal()
+            window.raise()
+            window.requestActivate()
+            focusActivePane()
+        }
+    }
+    Connections {
+        target: QuakeHotkey
+        function onActivated() { window.toggleQuake() }
+    }
+
     // Terminal-Komfortoptionen (PuTTY-Stil), persistiert:
     property bool copyOnSelect: false       // Auswahl automatisch kopieren
     property bool rightClickPaste: false    // Rechtsklick fügt ein (statt Kontextmenü)
@@ -373,6 +392,7 @@ ApplicationWindow {
     // Beim Start die persistierten Sessions wiederherstellen; sonst eine neue öffnen.
     Component.onCompleted: {
         if (terminalFontFamily === "") terminalFontFamily = App.defaultMonospaceFont()
+        if (quakeMode) QuakeHotkey.setEnabled(true)
         const active = sessions.restoreState()
         if (sessions.count === 0)
             newSession()
@@ -406,6 +426,7 @@ ApplicationWindow {
         property alias terminalFontSize: window.terminalFontSize
         property alias terminalFontFamily: window.terminalFontFamily
         property alias terminalLigatures: window.terminalLigatures
+        property alias quakeMode: window.quakeMode
         property alias copyOnSelect: window.copyOnSelect
         property alias rightClickPaste: window.rightClickPaste
         property alias pasteWarnMultiline: window.pasteWarnMultiline
@@ -1632,6 +1653,25 @@ ApplicationWindow {
                     text: qsTr("Vor mehrzeiligem Einfügen warnen")
                     checked: window.pasteWarnMultiline
                     onToggled: window.pasteWarnMultiline = checked
+                }
+            }
+
+            SectionLabel { text: qsTr("Fenster") }
+            ColumnLayout {
+                spacing: 4; Layout.fillWidth: true
+                CheckBox {
+                    text: qsTr("Quake-Modus: per globalem Hotkey ein-/ausblenden")
+                    checked: window.quakeMode
+                    enabled: Qt.platform.os === "osx"   // vorerst nur macOS
+                    onToggled: window.quakeMode = checked
+                }
+                Text {
+                    text: Qt.platform.os === "osx"
+                          ? qsTr("Globaler Hotkey: Strg+^ (blendet QTmux überall ein/aus)")
+                          : qsTr("Derzeit nur unter macOS verfügbar.")
+                    color: Theme.textDim
+                    font.pixelSize: 11
+                    Layout.leftMargin: 26
                 }
             }
         }
