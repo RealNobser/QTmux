@@ -23,8 +23,10 @@ Detaillierter Plan: `~/.claude/plans/neue-projekt-idee-eine-qt-version-radiant-w
 1. **Kein `ptyqt`.** Es nutzt `QProcess::setupChildProcess()`, das in **Qt6 entfernt** wurde →
    baut nicht mit Qt 6.11. Stattdessen **eigener, dependency-freier PTY-Layer**
    (`forkpty` auf Unix, ConPTY auf Windows). Erfüllt das Plan-Ziel robuster.
-2. **Rendering via `QQuickPaintedItem`** (GPU-getextured, robust) statt direkt QSGRenderNode.
-   GPU-Glyph-Atlas ist die spätere Performance-Stufe.
+2. **Rendering via Scene-Graph + GPU-Glyph-Atlas** (QTMUX-6, erledigt): `TerminalItem` ist
+   ein `QQuickItem` mit eigenem RHI-Shader-Material (Atlas-Alpha × Vertex-Farbe). Der frühere
+   `QQuickPaintedItem`/`QPainter`-Pfad bleibt als umschaltbarer **Fallback** erhalten
+   (`gpuRendering=false` bzw. bei aktiven Ligaturen, die Run-Shaping brauchen).
 
 ## Architektur-Schichten
 
@@ -180,9 +182,13 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 ## Status (Stand: 2026-06-09)
 
-> ⏭️ **Nächste Aufgabe:** QTMUX-6 (GPU-Glyph-Atlas) — größerer Brocken. Offene
-> Folgeschritte: libssh2/SFTP-Variante (QTMUX-7) und Vault-Integration (SSH-Passwort-
-> Auto-Fill aus dem Vault, baut auf QTMUX-22 auf).
+> ⏭️ **Nächste Aufgabe:** offen — z. B. Phase 5 (Plugin-System) oder Phase 6
+> (Packaging/CI). Offene Folgeschritte: libssh2/SFTP-Variante (QTMUX-7) und Vault-
+> Integration (SSH-Passwort-Auto-Fill aus dem Vault, baut auf QTMUX-22 auf).
+> Session 2026-06-10: QTMUX-6 (GPU-Glyph-Atlas) erledigt — Scene-Graph-Renderer mit
+> dynamischem Glyph-Atlas + eigenem RHI-Shader-Material; QPainter-Fallback bleibt
+> umschaltbar. E2E auf macOS verifiziert (siehe Feature-Eintrag). Jira dual noch auf Done
+> setzen.
 > Session 2026-06-10: QTMUX-25 (Clink für cmd.exe) **implementiert — Windows-Test noch
 > ausstehend** (am Mac nicht testbar; Clink ist Windows-only). Erkennung + Shell-Eintrag
 > „Eingabeaufforderung (Clink)" (siehe Feature-Eintrag unten). macOS-Build + alle 7 Tests
@@ -414,6 +420,41 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
     Kommandozeile geschnitzten Basisnamens (greift nur initial; ein OSC-Titel der Shell ersetzt ihn).
   - i18n DE/EN ergänzt (Kontext „Shells"). macOS-Build + alle 7 Tests grün. **Offen:** Verifikation
     auf Windows mit installiertem Clink (Erkennung + tatsächliche Injektion in cmd.exe).
+- ✅ **GPU-Glyph-Atlas (QTMUX-6)** — Terminal-Rendering über den **Scene-Graph** statt
+  `QQuickPaintedItem`/`QPainter`. `TerminalItem` ist jetzt ein **`QQuickItem`** mit
+  `updatePaintNode()`. Komponenten:
+  - **`src/terminal/GlyphAtlas.{h,cpp}`**: rastert jede genutzte Glyphe (Zeichen × bold/italic)
+    **zellweise** per `QPainter` als Alpha-Maske in eine gemeinsame Textur (ARGB32-Premultiplied,
+    weiß auf transparent) und cached ihr **Pixel-Rechteck**. Shelf-Packer, feste Breite (1024),
+    wächst in der Höhe (alten Inhalt erhaltend → Pixel-Rechtecke bleiben gültig, nur die Textur-
+    `generation` steigt). DPR-genau (Kacheln in Geräte-Pixeln). Zellweise = maximal cachebar;
+    **Ligaturen brauchen Run-Shaping und laufen daher über den Fallback** (`useGpu()` =
+    `m_gpu && !m_ligatures`).
+  - **Eigenes `QSGMaterial`/`QSGMaterialShader`** (file-lokal in `TerminalItem.cpp`) +
+    **RHI-Shader** `src/terminal/shaders/glyph.{vert,frag}` (`#version 440`), via
+    **`qt_add_shaders`** (BATCHABLE) zu `.qsb` kompiliert und unter `:/shaders/` eingebettet
+    (`find_package(... ShaderTools)`). Der Fragment-Shader multipliziert die **Atlas-Deckung
+    (Alpha) mit der Per-Vertex-Vordergrundfarbe** → **ein Atlas färbt beliebige fg-Farben**.
+    Custom-Vertex-Layout (pos `vec2` + tex `vec2` + color `ubyte4` normalisiert).
+  - **`updatePaintNode`** baut drei Geometrie-Knoten in Zeichenreihenfolge: **Hintergrund**
+    (ganzflächiger Default-bg + Nicht-Default-Zellen, `QSGVertexColorMaterial`), **Glyphen**
+    (eigenes Material, Atlas-Textur), **Overlay** (Selektion/Cursor/Unterstreichung/Scrollbalken,
+    `QSGVertexColorMaterial`). Vertexfarben **vormultipliziert** (Scene-Graph-Konvention).
+    Glyph-Quads werden zunächst mit **Pixel-UV** gesammelt und erst **nach** der Schleife mit der
+    endgültigen Atlas-Größe normalisiert (der Atlas kann während der Schleife wachsen).
+  - **🔑 Schlüssel-Lektion (Bug):** bei einem **eigenen** Material muss die Textur selbst per
+    **`QSGTexture::commitTextureOperations(state.rhi(), state.resourceUpdateBatch())`** in
+    `updateSampledImage` auf die GPU geladen werden — `QSGSimpleTextureNode` macht das intern,
+    ein Custom-Material nicht. Ohne den Commit bleibt die Atlas-Textur leer → **Glyphen
+    unsichtbar** (Hintergrund/Cursor rendern, Text fehlt). War exakt das beobachtete Symptom.
+  - **Fallback (umschaltbar):** `gpuRendering`-Property (Default an, via Settings „Terminal →
+    Rendering" persistiert; Env-Override `QTMUX_NO_GPU=1`). Aus → `paintContents()` (die alte
+    Run-basierte `QPainter`-Logik) rendert in ein `QImage` → `QSGSimpleTextureNode`. Bei aktiven
+    Ligaturen wird intern immer der Fallback genutzt. Renderpfad-Wechsel zur Laufzeit über
+    `dynamic_cast` auf den Wurzelknoten (Typ-Mismatch → alten Knoten verwerfen, neuen bauen).
+  - E2E auf macOS (Metal) verifiziert: Glyphen scharf, ANSI-Farben (rot/grün/blau), **bold**,
+    **unterstrichen**, **CJK-Doppelbreite (日本語)**, Cursor, viele Glyphen/Scrollback (Atlas-
+    Wachstum), **Laufzeit-Umschaltung GPU↔Fallback ohne Crash**. 7 Test-Binaries grün.
 - ✅ **MCP-Schnittstelle** — `src/server/McpServer.{h,cpp}`: eingebetteter MCP-Server
   (HTTP/JSON-RPC 2.0) auf `127.0.0.1:7345`, Menü „Agent-Steuerung". Tools: list/create/
   close/focus_session, send_text, read_screen, **attach_controller**, set_theme. Session hat
@@ -622,7 +663,10 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
 
 ## Offene technische Notizen
 
-- Rendering ist aktuell zellweise (ausreichend für Phase 1). Optimierung: Runs gleicher
-  Attribute zusammenfassen, dann GPU-Glyph-Atlas.
-- Scrollback wird in `VtScreen` gespeichert (`sb_pushline`), aber noch nicht gerendert/gescrollt.
+- Rendering: GPU-Glyph-Atlas über den Scene-Graph (QTMUX-6, erledigt) mit umschaltbarem
+  QPainter-Fallback. Mögliche Folge-Optimierungen: Geometrie nur bei Damage neu bauen statt
+  jeden Frame; Ligaturen auch im GPU-Pfad (Run-Shaping → Glyph-Index-Atlas).
+- Scrollback wird in `VtScreen` gespeichert und gerendert/gescrollt (QTMUX-5).
 - Font: `QFontDatabase::systemFont(FixedFont)`; offscreen warnt über fehlende Family „Monospace" (harmlos).
+- **GPU-Atlas/Custom-Material:** Atlas-Textur in `updateSampledImage` per `commitTextureOperations`
+  hochladen (sonst leere Textur). Auf Windows/Linux RHI-Backend (D3D/Vulkan/GL) noch verifizieren.

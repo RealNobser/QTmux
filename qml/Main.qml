@@ -266,6 +266,9 @@ ApplicationWindow {
     // Programmier-Ligaturen (opt-in). Beide global + persistiert.
     property string terminalFontFamily: ""
     property bool terminalLigatures: false
+    // GPU-Glyph-Atlas-Rendering (QTMUX-6). Aus = QPainter-Fallback. Bei aktiven
+    // Ligaturen nutzt das TerminalItem ohnehin den Fallback (Run-Shaping nötig).
+    property bool terminalGpuRendering: true
     function zoomTerminal(delta) {
         terminalFontSize = Math.max(6, Math.min(40, terminalFontSize + delta))
     }
@@ -619,6 +622,7 @@ ApplicationWindow {
         property alias terminalFontSize: window.terminalFontSize
         property alias terminalFontFamily: window.terminalFontFamily
         property alias terminalLigatures: window.terminalLigatures
+        property alias terminalGpuRendering: window.terminalGpuRendering
         property alias quakeMode: window.quakeMode
         property alias copyOnSelect: window.copyOnSelect
         property alias rightClickPaste: window.rightClickPaste
@@ -2425,6 +2429,12 @@ ApplicationWindow {
                     text: qsTr("Programmier-Ligaturen (z. B. FiraCode)")
                     checked: window.terminalLigatures
                     onToggled: window.terminalLigatures = checked
+                }
+                Text { text: qsTr("Rendering"); color: Theme.textBright }
+                CheckBox {
+                    text: qsTr("GPU-Glyph-Atlas (schneller; aus = QPainter-Fallback)")
+                    checked: window.terminalGpuRendering
+                    onToggled: window.terminalGpuRendering = checked
                 }
                 Text {
                     text: qsTr("Standard-Shell"); color: Theme.textBright

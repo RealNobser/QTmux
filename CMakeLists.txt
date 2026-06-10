@@ -13,7 +13,7 @@ set(CMAKE_AUTORCC ON)
 option(QTMUX_BUILD_TESTS "Build unit tests" ON)
 
 # Qt6 ------------------------------------------------------------------------
-find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 SerialPort Network Svg LinguistTools)
+find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 SerialPort Network Svg LinguistTools ShaderTools)
 if(QTMUX_BUILD_TESTS)
     find_package(Qt6 6.6 REQUIRED COMPONENTS Test)
 endif()
@@ -91,6 +91,8 @@ qt_add_qml_module(qtmux
     SOURCES
         src/terminal/TerminalItem.h
         src/terminal/TerminalItem.cpp
+        src/terminal/GlyphAtlas.h
+        src/terminal/GlyphAtlas.cpp
         src/viewmodels/SessionModel.h
         src/viewmodels/SessionModel.cpp
         src/viewmodels/Theme.h
@@ -102,6 +104,18 @@ qt_add_qml_module(qtmux
 )
 target_include_directories(qtmux PRIVATE src/terminal src/viewmodels src/server)
 target_link_libraries(qtmux PRIVATE Qt6::Network Qt6::Svg)
+
+# GPU-Glyph-Atlas (QTMUX-6): RHI-Shader für das Glyph-Material in .qsb kompilieren
+# und unter qrc:/shaders/ einbetten. BATCHABLE, damit das Material in der
+# Scene-Graph-Batch-Pipeline mitläuft. Liegt unter :/shaders/glyph.{vert,frag}.qsb.
+qt_add_shaders(qtmux "terminal_shaders"
+    BATCHABLE
+    PREFIX "/shaders"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/src/terminal/shaders"
+    FILES
+        src/terminal/shaders/glyph.vert
+        src/terminal/shaders/glyph.frag
+)
 
 # Phosphor-Icons (SVG) unter qrc:/icons/<name>.svg einbetten. Sie werden über
 # das Qt-icon-System (icon.source + icon.color) in Toolbar UND Menüs genutzt;

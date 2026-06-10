@@ -179,6 +179,7 @@ Item {
                     pointSize: win.terminalFontSize          // globaler Zoom
                     fontFamily: win.terminalFontFamily
                     ligatures: win.terminalLigatures
+                    gpuRendering: win.terminalGpuRendering
                     backgroundColor: Theme.terminalBg
                     foregroundColor: Theme.terminalFg
                     cursorColor: Theme.terminalCursor

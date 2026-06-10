@@ -10,20 +10,165 @@
 #include <QFontMetricsF>
 #include <QGuiApplication>
 #include <QClipboard>
+#include <QQuickWindow>
+#include <QSGGeometry>
+#include <QSGGeometryNode>
+#include <QSGVertexColorMaterial>
+#include <QSGMaterial>
+#include <QSGMaterialShader>
+#include <QSGTexture>
+#include <QSGSimpleTextureNode>
 #include <algorithm>
+#include <vector>
 
 namespace qtmux {
 
-TerminalItem::TerminalItem(QQuickItem *parent) : QQuickPaintedItem(parent) {
+// ============================================================================
+//  GPU-Glyph-Rendering: eigenes Material (Atlas-Alpha × Vertex-Vordergrundfarbe)
+//  + Vertex-Layout. Alles file-lokal (nur hier genutzt). (QTMUX-6)
+// ============================================================================
+namespace {
+
+// Vertex des Glyph-Knotens: Position (logisch), Atlas-Texturkoordinate, Farbe.
+struct GlyphVertex {
+    float x, y;
+    float u, v;
+    unsigned char r, g, b, a;
+};
+
+const QSGGeometry::AttributeSet &glyphAttributes() {
+    static QSGGeometry::Attribute attrs[] = {
+        QSGGeometry::Attribute::createWithAttributeType(
+            0, 2, QSGGeometry::FloatType, QSGGeometry::PositionAttribute),
+        QSGGeometry::Attribute::createWithAttributeType(
+            1, 2, QSGGeometry::FloatType, QSGGeometry::TexCoordAttribute),
+        QSGGeometry::Attribute::createWithAttributeType(
+            2, 4, QSGGeometry::UnsignedByteType, QSGGeometry::ColorAttribute),
+    };
+    static QSGGeometry::AttributeSet set = { 3, sizeof(GlyphVertex), attrs };
+    return set;
+}
+
+// Shader, der die Atlas-Deckung (Alpha) mit der Per-Vertex-Farbe multipliziert.
+class GlyphShader : public QSGMaterialShader {
+public:
+    GlyphShader() {
+        setShaderFileName(VertexStage, QStringLiteral(":/shaders/glyph.vert.qsb"));
+        setShaderFileName(FragmentStage, QStringLiteral(":/shaders/glyph.frag.qsb"));
+    }
+
+    bool updateUniformData(RenderState &state, QSGMaterial *, QSGMaterial *) override {
+        QByteArray *buf = state.uniformData();
+        Q_ASSERT(buf->size() >= 68);
+        bool changed = false;
+        if (state.isMatrixDirty()) {
+            const QMatrix4x4 m = state.combinedMatrix();
+            memcpy(buf->data(), m.constData(), 64);
+            changed = true;
+        }
+        if (state.isOpacityDirty()) {
+            const float o = float(state.opacity());
+            memcpy(buf->data() + 64, &o, 4);
+            changed = true;
+        }
+        return changed;
+    }
+
+    void updateSampledImage(RenderState &, int, QSGTexture **texture,
+                            QSGMaterial *newMaterial, QSGMaterial *) override;
+};
+
+class GlyphMaterial : public QSGMaterial {
+public:
+    GlyphMaterial() { setFlag(Blending, true); }
+    QSGMaterialType *type() const override { static QSGMaterialType t; return &t; }
+    QSGMaterialShader *createShader(QSGRendererInterface::RenderMode) const override {
+        return new GlyphShader;
+    }
+    int compare(const QSGMaterial *o) const override {
+        auto *other = static_cast<const GlyphMaterial *>(o);
+        if (m_texture == other->m_texture) return 0;
+        return m_texture < other->m_texture ? -1 : 1;
+    }
+    void setTexture(QSGTexture *t) { m_texture = t; }
+    QSGTexture *texture() const { return m_texture; }
+private:
+    QSGTexture *m_texture = nullptr;
+};
+
+void GlyphShader::updateSampledImage(RenderState &state, int, QSGTexture **texture,
+                                     QSGMaterial *newMaterial, QSGMaterial *) {
+    auto *m = static_cast<GlyphMaterial *>(newMaterial);
+    if (QSGTexture *t = m->texture()) {
+        t->setFiltering(QSGTexture::Linear);
+        // Pixeldaten der Atlas-Textur tatsächlich auf die GPU laden. Bei eigenem
+        // Material zwingend selbst anstoßen (anders als QSGSimpleTextureNode) —
+        // sonst bleibt die Textur leer und die Glyphen unsichtbar.
+        t->commitTextureOperations(state.rhi(), state.resourceUpdateBatch());
+        *texture = t;
+    }
+}
+
+// Wurzelknoten des GPU-Pfads: drei Geometrie-Kinder (Hintergrund, Glyphen, Overlay)
+// in Zeichenreihenfolge + die selbst verwaltete Atlas-Textur.
+class GpuRoot : public QSGNode {
+public:
+    QSGGeometryNode *bg = nullptr;
+    QSGGeometryNode *glyph = nullptr;
+    QSGGeometryNode *overlay = nullptr;
+    GlyphMaterial *glyphMat = nullptr;
+    QSGTexture *atlasTex = nullptr;
+    quint64 texGen = 0;
+    ~GpuRoot() override { delete atlasTex; }
+};
+
+// Hilfen zum Füllen der Geometrie ------------------------------------------------
+
+void uploadColored(QSGGeometryNode *node,
+                   const std::vector<QSGGeometry::ColoredPoint2D> &verts) {
+    const int n = int(verts.size());
+    QSGGeometry *g = node->geometry();
+    if (!g) {
+        g = new QSGGeometry(QSGGeometry::defaultAttributes_ColoredPoint2D(), n);
+        g->setDrawingMode(QSGGeometry::DrawTriangles);
+        node->setGeometry(g);
+        node->setFlag(QSGNode::OwnsGeometry, true);
+    } else {
+        g->allocate(n);
+    }
+    if (n > 0) memcpy(g->vertexData(), verts.data(), n * sizeof(QSGGeometry::ColoredPoint2D));
+    node->markDirty(QSGNode::DirtyGeometry);
+}
+
+void uploadGlyph(QSGGeometryNode *node, const std::vector<GlyphVertex> &verts) {
+    const int n = int(verts.size());
+    QSGGeometry *g = node->geometry();
+    if (!g) {
+        g = new QSGGeometry(glyphAttributes(), n);
+        g->setDrawingMode(QSGGeometry::DrawTriangles);
+        node->setGeometry(g);
+        node->setFlag(QSGNode::OwnsGeometry, true);
+    } else {
+        g->allocate(n);
+    }
+    if (n > 0) memcpy(g->vertexData(), verts.data(), n * sizeof(GlyphVertex));
+    node->markDirty(QSGNode::DirtyGeometry);
+}
+
+} // namespace
+
+TerminalItem::TerminalItem(QQuickItem *parent) : QQuickItem(parent) {
     m_font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     m_font.setStyleHint(QFont::Monospace);
     m_font.setPointSize(m_pointSize);
     applyFontFeatures();   // Ligaturen initial aus (opt-in)
 
+    // Notausstieg/Support-Schalter: QTMUX_NO_GPU=1 erzwingt den QPainter-Fallback.
+    if (qEnvironmentVariableIsSet("QTMUX_NO_GPU")) m_gpu = false;
+
     setFlag(ItemHasContents, true);
     setAcceptedMouseButtons(Qt::AllButtons);
     setActiveFocusOnTab(true);
-    setFillColor(m_defaultBg);
     recomputeGrid();
 }
 
@@ -63,7 +208,6 @@ void TerminalItem::setSession(QObject *session) {
 void TerminalItem::setBackgroundColor(const QColor &c) {
     if (c == m_defaultBg) return;
     m_defaultBg = c;
-    setFillColor(c);
     emit colorsChanged();
     update();
 }
@@ -118,11 +262,18 @@ void TerminalItem::setLigatures(bool on) {
     m_ligatures = on;
     applyFontFeatures();
     emit fontChanged();
+    update();   // useGpu() ändert sich → Renderpfad wird in updatePaintNode getauscht
+}
+
+void TerminalItem::setGpuRendering(bool on) {
+    if (on == m_gpu) return;
+    m_gpu = on;
+    emit gpuRenderingChanged();
     update();
 }
 
 // Programmier-Ligaturen über OpenType-Features schalten. Aus (Default) unterdrückt
-// `liga`/`calt`/`dlig`; an überlässt sie dem Font (Run-Rendering in paint() formt sie).
+// `liga`/`calt`/`dlig`; an überlässt sie dem Font (Run-Rendering im Fallback formt sie).
 void TerminalItem::applyFontFeatures() {
     if (m_ligatures) {
         m_font.unsetFeature(QFont::Tag("liga"));
@@ -150,14 +301,16 @@ void TerminalItem::recomputeGrid() {
     if (m_session) m_session->resize(m_cols, m_rows);
 }
 
-void TerminalItem::paint(QPainter *painter) {
+// --- Gemeinsame Zeichenlogik (Fallback + Referenz) --------------------------
+// Zeichnet den kompletten Inhalt in LOGISCHEN Koordinaten. Im Fallback-Pfad rendert
+// dies in ein QImage; der GPU-Pfad baut dieselbe Bildbeschreibung als Geometrie.
+void TerminalItem::paintContents(QPainter *painter) {
     painter->fillRect(boundingRect(), m_defaultBg);
     VtScreen *sc = screen();
     if (!sc) return;
 
     painter->setFont(m_font);
 
-    // Selektionsbereich als lineare Zellindizes (lo..hi), falls vorhanden.
     int selLo = -1, selHi = -1;
     if (m_hasSelection) {
         const int a = m_selAnchor.y() * m_cols + m_selAnchor.x();
@@ -167,8 +320,6 @@ void TerminalItem::paint(QPainter *painter) {
     }
     const QColor selColor(0x5b, 0x8c, 0xff, 0x70);
 
-    // Hilfsfunktion: ein einzelnes Zeichen mit eigenen Attributen zeichnen (breite
-    // Zeichen / Sonderfälle, die nicht in einen Run passen).
     auto drawGlyph = [&](const QString &text, qreal x, qreal y, const QColor &fg,
                          bool bold, bool italic, bool underline) {
         painter->setPen(fg);
@@ -183,15 +334,11 @@ void TerminalItem::paint(QPainter *painter) {
 
     for (int row = 0; row < m_rows; ++row) {
         const qreal y = row * m_cellH;
-        // Quelle dieser sichtbaren Zeile bestimmen (Scrollback oder Live-Screen).
         int sbIndex = 0, liveRow = 0;
         const bool isSb = viewportSource(row, sbIndex, liveRow);
         const std::vector<Cell> *sbLine =
             isSb && sbIndex < sc->scrollbackCount() ? &sc->scrollbackLine(sbIndex) : nullptr;
 
-        // Run-Rendering: zusammenhängende, gleich attributierte Zeichen einer Zeile in
-        // EINEM drawText zeichnen → ermöglicht Ligaturen (wenn aktiv) und ist effizienter.
-        // Bei Monospace stimmt die Vorschub-Breite mit dem Raster überein.
         QString run;
         qreal runX = 0;
         QColor runFg;
@@ -222,10 +369,9 @@ void TerminalItem::paint(QPainter *painter) {
             }
 
             const bool visible = !c.text.isEmpty() && c.text != QStringLiteral(" ");
-            // Lücken (Leerzeichen/leer) und breite Zeichen brechen den Run.
             if (!visible || c.width != 1) {
                 flush();
-                if (visible)  // breites Zeichen einzeln
+                if (visible)
                     drawGlyph(c.text, x, y, c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg),
                               c.bold, c.italic, c.underline);
                 continue;
@@ -243,7 +389,6 @@ void TerminalItem::paint(QPainter *painter) {
         flush();
     }
 
-    // Cursor nur im Live-Boden zeigen (in der Historie ergibt er keinen Sinn).
     if (m_scrollOffset == 0 && sc->cursorVisible()) {
         const QPoint cur = sc->cursor();
         QRectF r(cur.x() * m_cellW, cur.y() * m_cellH, m_cellW, m_cellH);
@@ -252,17 +397,190 @@ void TerminalItem::paint(QPainter *painter) {
         painter->fillRect(r, cc);
     }
 
-    // Dezenter Scrollbalken am rechten Rand, sobald Historie existiert.
     const int sb = sc->scrollbackCount();
     if (sb > 0 && m_rows > 0) {
         const qreal total = sb + m_rows;
         const qreal viewH = height();
         const qreal thumbH = std::max(viewH * m_rows / total, 24.0);
-        const qreal topFrac = (sb - m_scrollOffset) / total;   // erste sichtbare virtuelle Zeile
+        const qreal topFrac = (sb - m_scrollOffset) / total;
         const qreal yTop = std::min(topFrac * viewH, viewH - thumbH);
         const QColor thumb(0xff, 0xff, 0xff, m_scrollOffset > 0 ? 0x66 : 0x2a);
         painter->fillRect(QRectF(width() - 4, yTop, 3, thumbH), thumb);
     }
+}
+
+// --- Scene-Graph: GPU-Pfad + Fallback-Pfad ----------------------------------
+QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) {
+    if (width() <= 0 || height() <= 0) { delete oldNode; return nullptr; }
+    QQuickWindow *win = window();
+    const qreal dpr = win ? win->effectiveDevicePixelRatio() : 1.0;
+
+    // ---- Fallback: QPainter → QImage → QSGSimpleTextureNode ----------------
+    if (!useGpu() || !win) {
+        auto *tn = dynamic_cast<QSGSimpleTextureNode *>(oldNode);
+        if (!tn) { delete oldNode; tn = new QSGSimpleTextureNode; tn->setOwnsTexture(true); }
+        const QSize px(std::max(1, int(std::ceil(width() * dpr))),
+                       std::max(1, int(std::ceil(height() * dpr))));
+        QImage img(px, QImage::Format_ARGB32_Premultiplied);
+        img.setDevicePixelRatio(dpr);
+        img.fill(Qt::transparent);
+        { QPainter p(&img); paintContents(&p); }
+        QSGTexture *t = win ? win->createTextureFromImage(img, QQuickWindow::TextureHasAlphaChannel)
+                            : nullptr;
+        tn->setTexture(t);          // ownsTexture → alte Textur wird freigegeben
+        tn->setRect(boundingRect());
+        tn->setFiltering(QSGTexture::Linear);
+        return tn;
+    }
+
+    // ---- GPU-Pfad: Glyph-Atlas + Geometrie ---------------------------------
+    auto *root = dynamic_cast<GpuRoot *>(oldNode);
+    if (!root) {
+        delete oldNode;
+        root = new GpuRoot;
+        root->bg = new QSGGeometryNode;
+        root->bg->setMaterial(new QSGVertexColorMaterial);
+        root->bg->setFlag(QSGNode::OwnsMaterial, true);
+        root->glyph = new QSGGeometryNode;
+        root->glyphMat = new GlyphMaterial;
+        root->glyph->setMaterial(root->glyphMat);
+        root->glyph->setFlag(QSGNode::OwnsMaterial, true);
+        root->overlay = new QSGGeometryNode;
+        root->overlay->setMaterial(new QSGVertexColorMaterial);
+        root->overlay->setFlag(QSGNode::OwnsMaterial, true);
+        // Zeichenreihenfolge: Hintergrund → Glyphen → Overlay (Selektion/Cursor).
+        root->appendChildNode(root->bg);
+        root->appendChildNode(root->glyph);
+        root->appendChildNode(root->overlay);
+    }
+
+    m_atlas.configure(m_font, m_cellW, m_cellH, m_baseline, dpr);
+
+    std::vector<QSGGeometry::ColoredPoint2D> bgVerts, ovVerts;
+    std::vector<GlyphVertex> glVerts;
+
+    auto pushColoredQuad = [](std::vector<QSGGeometry::ColoredPoint2D> &v,
+                              qreal x, qreal y, qreal w, qreal h, const QColor &c) {
+        if (w <= 0 || h <= 0) return;
+        const int a = c.alpha();
+        // Scene-Graph erwartet vormultiplizierte Vertexfarben.
+        const uchar r = uchar(c.red() * a / 255);
+        const uchar g = uchar(c.green() * a / 255);
+        const uchar b = uchar(c.blue() * a / 255);
+        const uchar A = uchar(a);
+        const float x0 = float(x), y0 = float(y), x1 = float(x + w), y1 = float(y + h);
+        QSGGeometry::ColoredPoint2D q[6];
+        q[0].set(x0, y0, r, g, b, A); q[1].set(x1, y0, r, g, b, A); q[2].set(x0, y1, r, g, b, A);
+        q[3].set(x1, y0, r, g, b, A); q[4].set(x1, y1, r, g, b, A); q[5].set(x0, y1, r, g, b, A);
+        for (auto &pt : q) v.push_back(pt);
+    };
+
+    // Glyph-Quads zunächst mit PIXEL-UV sammeln; nach der Schleife normalisieren
+    // (der Atlas kann während der Schleife wachsen → Größe ändert sich).
+    struct GQ { float x, y, w, h; QRect uv; uchar r, g, b; };
+    std::vector<GQ> glyphQuads;
+
+    VtScreen *sc = screen();
+    // Ganzflächiger Standard-Hintergrund.
+    pushColoredQuad(bgVerts, 0, 0, width(), height(), m_defaultBg);
+
+    if (sc) {
+        int selLo = -1, selHi = -1;
+        if (m_hasSelection) {
+            const int a = m_selAnchor.y() * m_cols + m_selAnchor.x();
+            const int b = m_selCaret.y() * m_cols + m_selCaret.x();
+            selLo = std::min(a, b); selHi = std::max(a, b);
+        }
+        const QColor selColor(0x5b, 0x8c, 0xff, 0x70);
+
+        for (int row = 0; row < m_rows; ++row) {
+            const qreal y = row * m_cellH;
+            int sbIndex = 0, liveRow = 0;
+            const bool isSb = viewportSource(row, sbIndex, liveRow);
+            const std::vector<Cell> *sbLine =
+                isSb && sbIndex < sc->scrollbackCount() ? &sc->scrollbackLine(sbIndex) : nullptr;
+
+            for (int col = 0; col < m_cols; ++col) {
+                Cell c;
+                if (isSb) { if (sbLine && col < int(sbLine->size())) c = (*sbLine)[col]; }
+                else c = sc->cell(liveRow, col);
+                const qreal x = col * m_cellW;
+                const int wUnits = std::max(1, int(c.width));
+
+                if (!c.bgDefault)
+                    pushColoredQuad(bgVerts, x, y, m_cellW * c.width, m_cellH,
+                                    QColor::fromRgb(c.bg));
+                if (selLo >= 0) {
+                    const int idx = row * m_cols + col;
+                    if (idx >= selLo && idx <= selHi)
+                        pushColoredQuad(ovVerts, x, y, m_cellW * c.width, m_cellH, selColor);
+                }
+
+                const bool visible = !c.text.isEmpty() && c.text != QStringLiteral(" ");
+                if (visible) {
+                    const QColor fg = c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg);
+                    const GlyphAtlas::Entry &e = m_atlas.glyph(c.text, c.bold, c.italic, wUnits);
+                    if (e.valid)
+                        glyphQuads.push_back({float(x), float(y),
+                                              float(m_cellW * wUnits), float(m_cellH), e.rect,
+                                              uchar(fg.red()), uchar(fg.green()), uchar(fg.blue())});
+                    if (c.underline) {
+                        const qreal uy = y + m_baseline + 1;
+                        pushColoredQuad(ovVerts, x, uy, m_cellW * wUnits,
+                                        std::max(1.0, dpr), fg);
+                    }
+                }
+            }
+        }
+
+        if (m_scrollOffset == 0 && sc->cursorVisible()) {
+            const QPoint cur = sc->cursor();
+            QColor cc = m_cursorColor; cc.setAlpha(0x99);
+            pushColoredQuad(ovVerts, cur.x() * m_cellW, cur.y() * m_cellH, m_cellW, m_cellH, cc);
+        }
+
+        const int sb = sc->scrollbackCount();
+        if (sb > 0 && m_rows > 0) {
+            const qreal total = sb + m_rows;
+            const qreal viewH = height();
+            const qreal thumbH = std::max(viewH * m_rows / total, 24.0);
+            const qreal topFrac = (sb - m_scrollOffset) / total;
+            const qreal yTop = std::min(topFrac * viewH, viewH - thumbH);
+            const QColor thumb(0xff, 0xff, 0xff, m_scrollOffset > 0 ? 0x66 : 0x2a);
+            pushColoredQuad(ovVerts, width() - 4, yTop, 3, thumbH, thumb);
+        }
+    }
+
+    // Atlas-Textur bei Inhalts-/Größenänderung (neu) erzeugen.
+    if (!root->atlasTex || root->texGen != m_atlas.generation() || m_atlas.contentDirty()) {
+        delete root->atlasTex;
+        root->atlasTex = win->createTextureFromImage(m_atlas.image(),
+                                                     QQuickWindow::TextureHasAlphaChannel);
+        root->texGen = m_atlas.generation();
+        m_atlas.clearContentDirty();
+    }
+    root->glyphMat->setTexture(root->atlasTex);
+
+    // Glyph-Quads jetzt mit endgültiger Atlas-Größe normalisieren.
+    const float aw = std::max(1, m_atlas.width());
+    const float ah = std::max(1, m_atlas.height());
+    glVerts.reserve(glyphQuads.size() * 6);
+    for (const GQ &q : glyphQuads) {
+        const float u0 = q.uv.x() / aw, v0 = q.uv.y() / ah;
+        const float u1 = (q.uv.x() + q.uv.width()) / aw, v1 = (q.uv.y() + q.uv.height()) / ah;
+        const float x0 = q.x, y0 = q.y, x1 = q.x + q.w, y1 = q.y + q.h;
+        GlyphVertex v[6] = {
+            {x0, y0, u0, v0, q.r, q.g, q.b, 255}, {x1, y0, u1, v0, q.r, q.g, q.b, 255},
+            {x0, y1, u0, v1, q.r, q.g, q.b, 255}, {x1, y0, u1, v0, q.r, q.g, q.b, 255},
+            {x1, y1, u1, v1, q.r, q.g, q.b, 255}, {x0, y1, u0, v1, q.r, q.g, q.b, 255},
+        };
+        for (const auto &pt : v) glVerts.push_back(pt);
+    }
+
+    uploadColored(root->bg, bgVerts);
+    uploadGlyph(root->glyph, glVerts);
+    uploadColored(root->overlay, ovVerts);
+    return root;
 }
 
 QByteArray TerminalItem::encodeKey(QKeyEvent *event) const {
@@ -271,10 +589,9 @@ QByteArray TerminalItem::encodeKey(QKeyEvent *event) const {
     case Qt::Key_Enter:    return "\r";
     case Qt::Key_Backspace:return "\x7f";
     case Qt::Key_Tab:
-        // Shift+Tab kann (je nach Plattform) als Key_Tab+Shift ankommen -> Back-Tab.
         return (event->modifiers() & Qt::ShiftModifier) ? QByteArray("\x1b[Z")
                                                          : QByteArray("\t");
-    case Qt::Key_Backtab:  return "\x1b[Z";   // Shift+Tab (Back-Tab, CSI Z) -> z. B. Claude-Mode
+    case Qt::Key_Backtab:  return "\x1b[Z";
     case Qt::Key_Escape:   return "\x1b";
     case Qt::Key_Up:       return "\x1b[A";
     case Qt::Key_Down:     return "\x1b[B";
@@ -293,9 +610,6 @@ QByteArray TerminalItem::encodeKey(QKeyEvent *event) const {
 void TerminalItem::keyPressEvent(QKeyEvent *event) {
     if (!m_session) { event->ignore(); return; }
 
-    // Copy/Paste-Tasten abfangen — plattformkorrekt, ohne das Terminal-Ctrl+C
-    // (SIGINT) zu kapern. macOS: Cmd (=ControlModifier) ohne physisches Ctrl
-    // (=MetaModifier). Sonst: Ctrl+Shift.
     const Qt::KeyboardModifiers mods = event->modifiers();
 #if defined(Q_OS_MACOS)
     const bool cpMod = (mods & Qt::ControlModifier) && !(mods & Qt::MetaModifier);
@@ -305,7 +619,6 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     if (cpMod && event->key() == Qt::Key_C) { copy();  event->accept(); return; }
     if (cpMod && event->key() == Qt::Key_V) { paste(); event->accept(); return; }
 
-    // Scrollback per Tastatur: Shift+PageUp/Down (seitenweise), Shift+Home/End (Anfang/Boden).
     if (mods & Qt::ShiftModifier) {
         const int page = std::max(m_rows - 1, 1);
         switch (event->key()) {
@@ -319,12 +632,12 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
 
     const QByteArray bytes = encodeKey(event);
     if (!bytes.isEmpty()) {
-        if (m_hasSelection) clearSelection();   // Tippen hebt die Selektion auf
-        if (m_scrollOffset != 0) { m_scrollOffset = 0; update(); }  // Eingabe -> zum Boden
-        sendInput(bytes);                        // eigene Session oder Broadcast
+        if (m_hasSelection) clearSelection();
+        if (m_scrollOffset != 0) { m_scrollOffset = 0; update(); }
+        sendInput(bytes);
         event->accept();
     } else {
-        QQuickPaintedItem::keyPressEvent(event);
+        QQuickItem::keyPressEvent(event);
     }
 }
 
@@ -357,8 +670,6 @@ QString TerminalItem::selectedText() const {
     for (int row = start.y(); row <= end.y(); ++row) {
         const int c0 = (row == start.y()) ? start.x() : 0;
         const int c1 = (row == end.y()) ? end.x() : m_cols - 1;
-        // Selektion ist in Bildschirm-Zeilen — Quelle (Historie/Live) berücksichtigen,
-        // damit beim Scrollen der wirklich sichtbare Text kopiert wird.
         int sbIndex = 0, liveRow = 0;
         const bool isSb = viewportSource(row, sbIndex, liveRow);
         const std::vector<Cell> *sbLine =
@@ -370,7 +681,7 @@ QString TerminalItem::selectedText() const {
             else c = sc->cell(liveRow, col);
             line += c.text.isEmpty() ? QStringLiteral(" ") : c.text;
         }
-        while (line.endsWith(QLatin1Char(' '))) line.chop(1);  // rechte Leerzeichen weg
+        while (line.endsWith(QLatin1Char(' '))) line.chop(1);
         if (row > start.y()) out += QLatin1Char('\n');
         out += line;
     }
@@ -386,10 +697,8 @@ void TerminalItem::paste() {
     const QString t = QGuiApplication::clipboard()->text();
     if (t.isEmpty()) return;
     QByteArray data = t.toUtf8();
-    data.replace("\r\n", "\r");   // Zeilenumbrüche -> CR (wie Enter im Terminal)
+    data.replace("\r\n", "\r");
     data.replace('\n', '\r');
-    // Mehrzeilig (enthält CR) -> vor versehentlichem Ausführen mehrerer Befehle
-    // warnen; im Broadcast-Modus überspringen.
     if (!m_broadcast && m_pasteWarnMultiline && data.contains('\r')) {
         m_pendingPaste = data;
         emit multilinePasteWarning(static_cast<int>(data.count('\r')) + 1);
@@ -408,9 +717,7 @@ void TerminalItem::cancelPaste() { m_pendingPaste.clear(); }
 
 void TerminalItem::doPaste(const QByteArray &data) {
     if (data.isEmpty()) return;
-    if (m_broadcast) { emit inputForBroadcast(data); return; }   // roh an alle
-    // Bracketed Paste: libvterm gibt die Klammern nur aus, wenn die App den
-    // Modus aktiviert hat (DECSET 2004); sonst landet nur der reine Text.
+    if (m_broadcast) { emit inputForBroadcast(data); return; }
     VtScreen *sc = screen();
     if (sc) sc->startPaste();
     if (m_session) m_session->write(data);
@@ -418,7 +725,7 @@ void TerminalItem::doPaste(const QByteArray &data) {
 }
 
 void TerminalItem::geometryChange(const QRectF &newGeo, const QRectF &oldGeo) {
-    QQuickPaintedItem::geometryChange(newGeo, oldGeo);
+    QQuickItem::geometryChange(newGeo, oldGeo);
     if (newGeo.size() != oldGeo.size()) {
         recomputeGrid();
         update();
@@ -430,14 +737,14 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
         m_selAnchor = m_selCaret = cellAt(event->position());
         m_selecting = true;
-        m_hasSelection = false;          // erst ab Ziehen sichtbar
+        m_hasSelection = false;
         emit selectionChanged();
         update();
     } else if (event->button() == Qt::RightButton) {
         if (m_rightClickPaste)
-            paste();                       // PuTTY-Stil: Rechtsklick fügt ein
+            paste();
         else
-            emit contextMenuRequested();   // sonst Kontextmenü (Selektion bleibt erhalten)
+            emit contextMenuRequested();
     }
     event->accept();
 }
@@ -457,8 +764,6 @@ void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
 void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
     if (m_selecting) {
         m_selecting = false;
-        // Reiner Klick (keine Bewegung) hebt eine evtl. alte Selektion auf;
-        // sonst ggf. die fertige Selektion automatisch kopieren (PuTTY-Stil).
         if (m_selCaret == m_selAnchor) clearSelection();
         else if (m_copyOnSelect && m_hasSelection) copy();
         event->accept();
@@ -470,13 +775,11 @@ void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
 void TerminalItem::wheelEvent(QWheelEvent *event) {
     const int dy = event->angleDelta().y();
     if (dy == 0) { event->ignore(); return; }
-    // Cmd (macOS) bzw. Strg + Mausrad -> zoomen statt scrollen.
     if (event->modifiers() & Qt::ControlModifier) {
         emit zoomRequested(dy > 0 ? 1 : -1);
         event->accept();
         return;
     }
-    // Nach oben (dy>0) = in die Historie; 3 Zeilen je „Klick".
     scrollByLines(dy > 0 ? 3 : -3);
     event->accept();
 }
@@ -490,14 +793,13 @@ void TerminalItem::scrollByLines(int lines) {
     const int o = std::clamp(m_scrollOffset + lines, 0, maxScrollOffset());
     if (o == m_scrollOffset) return;
     m_scrollOffset = o;
-    if (m_hasSelection) clearSelection();   // Inhalt verschiebt sich -> Selektion verwerfen
+    if (m_hasSelection) clearSelection();
     update();
 }
 
 bool TerminalItem::viewportSource(int screenRow, int &sbIndex, int &liveRow) const {
     VtScreen *sc = screen();
     const int sb = sc ? sc->scrollbackCount() : 0;
-    // Virtuelle Zeile: Scrollback [0..sb-1] gefolgt von Live-Zeilen [sb..sb+rows-1].
     const int v = sb - m_scrollOffset + screenRow;
     if (v < sb) { sbIndex = v < 0 ? 0 : v; return true; }
     liveRow = v - sb;
@@ -505,8 +807,6 @@ bool TerminalItem::viewportSource(int screenRow, int &sbIndex, int &liveRow) con
 }
 
 void TerminalItem::onDamaged() {
-    // Ist der Blick in der Historie, beim Nachrücken neuer Zeilen den Anker halten,
-    // damit der betrachtete Ausschnitt nicht wegspringt; am Boden weiter mitlaufen.
     VtScreen *sc = screen();
     const int sb = sc ? sc->scrollbackCount() : 0;
     if (m_scrollOffset > 0) {

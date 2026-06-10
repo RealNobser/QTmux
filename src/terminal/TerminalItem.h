@@ -1,12 +1,16 @@
 #pragma once
 
-#include <QQuickPaintedItem>
+#include <QQuickItem>
 #include <QFont>
 #include <QColor>
+#include <QImage>
 #include <QPointer>
+#include "GlyphAtlas.h"
 
 QT_BEGIN_NAMESPACE
 class QWheelEvent;
+class QPainter;
+class QSGNode;
 QT_END_NAMESPACE
 
 namespace qtmux {
@@ -16,17 +20,21 @@ class VtScreen;
 
 /// QML-Item, das eine zugewiesene Session darstellt.
 ///
-/// Rendering vorerst über QQuickPaintedItem/QPainter (GPU-getextured, robust);
-/// eine GPU-Glyph-Atlas-Variante (QSGRenderNode) ist die spätere Performance-Stufe.
+/// Rendering über den Scene-Graph mit GPU-Glyph-Atlas (QTMUX-6): Hintergrund/Cursor/
+/// Selektion als farbige Quads, Glyphen als texturierte Quads aus einem dynamischen
+/// Atlas (siehe GlyphAtlas + Glyph-Material). Als Rückfallnetz existiert ein
+/// QPainter-in-QImage-Pfad (`gpuRendering=false` bzw. automatisch bei aktiven
+/// Ligaturen, die Run-Shaping brauchen).
 /// Besitzt die Session NICHT — die gehört dem SessionModel (ermöglicht Split-Panes
 /// und Session-Wechsel ohne Neustart).
-class TerminalItem : public QQuickPaintedItem {
+class TerminalItem : public QQuickItem {
     Q_OBJECT
     QML_ELEMENT
     Q_PROPERTY(QObject *session READ session WRITE setSession NOTIFY sessionChanged)
     Q_PROPERTY(int pointSize READ pointSize WRITE setPointSize NOTIFY fontChanged)
     Q_PROPERTY(QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY fontChanged)
     Q_PROPERTY(bool ligatures READ ligatures WRITE setLigatures NOTIFY fontChanged)
+    Q_PROPERTY(bool gpuRendering READ gpuRendering WRITE setGpuRendering NOTIFY gpuRenderingChanged)
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY colorsChanged)
@@ -50,6 +58,11 @@ public:
     bool ligatures() const { return m_ligatures; }
     void setLigatures(bool on);
 
+    /// GPU-Glyph-Atlas-Rendering (Standard). Aus = QPainter-Fallback. Bei aktiven
+    /// Ligaturen wird intern immer der Fallback genutzt (Run-Shaping nötig).
+    bool gpuRendering() const { return m_gpu; }
+    void setGpuRendering(bool on);
+
     QColor backgroundColor() const { return m_defaultBg; }
     void setBackgroundColor(const QColor &c);
     QColor foregroundColor() const { return m_defaultFg; }
@@ -70,7 +83,7 @@ public:
     bool pasteWarnMultiline() const { return m_pasteWarnMultiline; }
     void setPasteWarnMultiline(bool b) { if (b != m_pasteWarnMultiline) { m_pasteWarnMultiline = b; emit pasteWarnMultilineChanged(); } }
 
-    void paint(QPainter *painter) override;
+    QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) override;
 
     /// Kopiert die aktuelle Maus-Selektion in die Zwischenablage (leer = nichts).
     Q_INVOKABLE void copy();
@@ -88,6 +101,7 @@ public:
 signals:
     void sessionChanged();
     void fontChanged();
+    void gpuRenderingChanged();
     void colorsChanged();
     void selectionChanged();
     /// Rechtsklick im Terminal — QML öffnet daraufhin das Kontextmenü (Kopieren/Einfügen).
@@ -114,6 +128,12 @@ protected:
 private:
     void recomputeGrid();
     void applyFontFeatures();   // Ligaturen je nach m_ligatures (de)aktivieren
+    /// Effektiver Renderpfad: GPU nur, wenn aktiviert UND keine Ligaturen (die
+    /// Run-Shaping brauchen → QPainter-Fallback).
+    bool useGpu() const { return m_gpu && !m_ligatures; }
+    /// Zeichnet den kompletten Terminalinhalt in logischen Koordinaten (Fallback +
+    /// gemeinsame Logik). `painter` muss bereits auf Hintergrund/Font gesetzt sein.
+    void paintContents(QPainter *painter);
     QByteArray encodeKey(QKeyEvent *event) const;
     /// Eingabe-Bytes zustellen: im Broadcast-Modus per Signal nach außen, sonst an
     /// die eigene Session. Zentral genutzt von Tastatur- und Paste-Eingabe.
@@ -137,6 +157,8 @@ private:
     QFont m_font;
     int m_pointSize = 13;
     bool m_ligatures = false;   // Programmier-Ligaturen (Run-Rendering) opt-in
+    bool m_gpu = true;          // GPU-Glyph-Atlas (Standard) vs. QPainter-Fallback
+    GlyphAtlas m_atlas;         // genutzt vom GPU-Pfad (in updatePaintNode)
     qreal m_cellW = 8;
     qreal m_cellH = 16;
     qreal m_baseline = 12;
