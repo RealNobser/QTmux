@@ -156,6 +156,21 @@ Beide Credential-Dateien liegen in der Repo-Wurzel und sind **git-ignoriert** (`
 Makros: Mermaid heißt on-prem `mermaid-macro`, Cloud `mermaid-cloud`). Das `children`-Makro
 funktioniert auf beiden. Bei `/feierabend` beide Seiten-Sätze mitpflegen.
 
+## CI (GitHub Actions)
+
+`.github/workflows/ci.yml` baut QTmux bei jedem Push/PR auf `main` (+ manuell) auf
+**macOS, Windows und Linux** und führt die Tests headless aus. Qt via
+`jurplel/install-qt-action` (Module **qtserialport** + **qtshadertools** für
+`qsb`/`qt_add_shaders`; qtsvg/qttools/qtdeclarative kommen mit dem Base). Ninja via
+`gha-setup-ninja`; Windows MSVC via `ilammy/msvc-dev-cmd`; Linux GL/EGL/xkbcommon/
+fontconfig-Devpakete. `ctest` mit `QT_QPA_PLATFORM=offscreen`; **Windows-Tests
+informativ** (`continue-on-error`) wegen der ConPTY-Konsolen-Anbindung (s. u.).
+**Erstlauf 2026-06-10 grün** auf allen drei Plattformen → der GPU-Glyph-Atlas (QTMUX-6,
+inkl. Shader-Kompilierung) und der Windows-`#ifdef`-Clink-Code (QTMUX-25) **kompilieren
+plattformübergreifend**. (Laufzeit-Verhalten — RHI-Rendering, Clink-Injektion — bleibt
+manuell zu prüfen.) Hinweis: die Actions warnen über Node-20-Deprecation (ab Sept. 2026),
+unkritisch — bei Gelegenheit Action-Versionen anheben.
+
 ## Jira (DUAL: on-prem + Cloud)
 
 Tickets werden **parallel in beiden Jira** gepflegt (Backlog/Status synchron halten). Beide
@@ -182,9 +197,11 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 ## Status (Stand: 2026-06-09)
 
-> ⏭️ **Nächste Aufgabe:** offen — z. B. Phase 5 (Plugin-System) oder Phase 6
-> (Packaging/CI). Offene Folgeschritte: libssh2/SFTP-Variante (QTMUX-7) und Vault-
-> Integration (SSH-Passwort-Auto-Fill aus dem Vault, baut auf QTMUX-22 auf).
+> ⏭️ **Nächste Aufgabe:** offen — z. B. Vault→Profil-Integration (SSH-Passwort-Auto-Fill,
+> baut auf QTMUX-22) oder Phase 5 (Plugin-System) / Rest von Phase 6 (CPack-Pakete,
+> MSI-Signing). Offene Folgeschritte: libssh2/SFTP-Variante (QTMUX-7).
+> Session 2026-06-10: **CI-Matrix** (GitHub Actions, macOS/Windows/Linux) eingerichtet —
+> Erstlauf grün; bestätigt, dass QTMUX-6 + QTMUX-25 auf allen drei Plattformen bauen.
 > Session 2026-06-10: QTMUX-6 (GPU-Glyph-Atlas) erledigt — Scene-Graph-Renderer mit
 > dynamischem Glyph-Atlas + eigenem RHI-Shader-Material; QPainter-Fallback bleibt
 > umschaltbar. E2E auf macOS verifiziert (siehe Feature-Eintrag). Jira dual noch auf Done
