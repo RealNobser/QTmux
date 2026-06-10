@@ -31,6 +31,9 @@ public:
     /// bleibt dadurch Gui-frei.
     Q_INVOKABLE QString keyChord(int key, int modifiers) const;
 
+    /// Kopiert Text in die System-Zwischenablage (z. B. ein Vault-Geheimnis).
+    Q_INVOKABLE void copyToClipboard(const QString &text) const;
+
     /// Installierte Monospace-Schriftfamilien (für die Terminal-Schriftwahl).
     Q_INVOKABLE QStringList monospaceFonts() const;
     /// Plattformübliche Standard-Monospace-Familie (Default der Terminal-Schrift).

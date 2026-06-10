@@ -9,6 +9,7 @@
 #include "ColorScheme.h"
 #include "ConnectionProfile.h"
 #include "HotkeyRegistry.h"
+#include "SecretsVault.h"
 #include "GlobalHotkey.h"
 
 namespace {
@@ -64,6 +65,10 @@ int main(int argc, char *argv[])
     // Hotkeys.bindings[id]; Neubelegung wirkt sofort. Gleiche Brücke wie oben.
     engine.rootContext()->setContextProperty(
         QStringLiteral("Hotkeys"), qtmux::HotkeyRegistry::instance());
+
+    // Secrets-Vault (QTMUX-22): verschlüsselter Geheimnis-Speicher (Master-Passwort).
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("Vault"), qtmux::SecretsVault::instance());
 
     // Globaler Quake-Hotkey (Ctrl+`) als Context-Property; QML schaltet ihn je nach
     // Einstellung und reagiert auf `activated` (Fenster ein-/ausblenden).

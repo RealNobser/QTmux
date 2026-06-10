@@ -3,6 +3,8 @@
 #include <QLocale>
 #include <QFontDatabase>
 #include <QKeySequence>
+#include <QGuiApplication>
+#include <QClipboard>
 #include <Qt>
 
 namespace qtmux {
@@ -26,6 +28,10 @@ QString AppController::languageName(const QString &code) const {
     if (code == QLatin1String("de")) return QStringLiteral("Deutsch");
     if (code == QLatin1String("en")) return QStringLiteral("English");
     return code;
+}
+
+void AppController::copyToClipboard(const QString &text) const {
+    if (auto *cb = QGuiApplication::clipboard()) cb->setText(text);
 }
 
 QString AppController::keyChord(int key, int modifiers) const {

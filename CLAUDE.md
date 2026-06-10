@@ -181,8 +181,10 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 ## Status (Stand: 2026-06-09)
 
 > ⏭️ **Nächste Aufgabe:** QTMUX-6 (GPU-Glyph-Atlas) — größerer Brocken; alternativ
-> kleinere Backlog-Tickets (QTMUX-22 Secrets-Vault, QTMUX-25 Clink). Für QTMUX-7 ist
-> als Folgeschritt noch die libssh2/SFTP-Variante offen.
+> QTMUX-25 (Clink, Windows). Offene Folgeschritte: libssh2/SFTP-Variante (QTMUX-7) und
+> Vault-Integration (SSH-Passwort-Auto-Fill aus dem Vault, baut auf QTMUX-22 auf).
+> Session 2026-06-10: QTMUX-22 (Secrets-Vault) erledigt — Pure-Qt-Master-Passwort-Vault
+> (PBKDF2-HMAC-SHA512 + HMAC-SHA256-Keystream/Encrypt-then-MAC), Verwaltungs-UI, E2E verifiziert.
 > Session 2026-06-10: QTMUX-23 (Login-Scripts pro Profil) erledigt — Auto-Befehle nach
 > Verbindungsaufbau (Session sendet sie am ersten Prompt bzw. per Fallback-Timer),
 > E2E verifiziert. QTMUX-7 + QTMUX-15 zusätzlich auf **Windows** verifiziert.
@@ -310,6 +312,36 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   DE/EN ergänzt. **Lektion (GUI-Test):** das CGEvent-Maus-Tool braucht eine kurze Pause
   zwischen `leftMouseDown`/`leftMouseUp` (sonst nur Hover, kein Klick) — siehe Memory
   `qtmux-gui-test-macos`.
+- ✅ **Secrets-Vault (QTMUX-22)** — verschlüsselter Geheimnis-Speicher hinter einem Master-
+  Passwort, **dependency-frei** (nur Qt Core, kein OpenSSL). Kern: `src/core/SecretsVault.{h,cpp}`
+  (Gui-frei, prozessweiter Singleton). **Krypto-Konstruktion (bewusst pure-Qt):**
+  - KDF: **PBKDF2-HMAC-SHA512** (RFC 2898), selbst auf `QMessageAuthenticationCode` implementiert
+    — `QPasswordDigestor` lebt in QtNetwork, das würde `qtmux_core` eine Modul-Abhängigkeit
+    aufzwingen; PBKDF2 ist ein eindeutiger Standard, Sicherheits-Primitiv bleibt Qt's HMAC.
+    Zufalls-Salt (16 B), 210 000 Iterationen → 64 B Schlüsselmaterial = encKey(32)+macKey(32).
+  - Cipher: **HMAC-SHA256 als PRF im CTR-Modus** erzeugt einen Keystream (frischer 16-B-Nonce pro
+    Schreibvorgang), XOR mit dem Klartext. **Encrypt-then-MAC:** tag = HMAC-SHA256(macKey,
+    salt|nonce|ct); beim Entsperren konstantzeitig geprüft → falsches Passwort/Manipulation
+    schlägt fehl. **Hinweis:** standardnahe, aber selbstgebaute Cipher-Konstruktion (kein AES) —
+    bewusste Abwägung zugunsten der dependency-free-Linie (vom Anwender so gewählt).
+  - Der ganze Geheimnis-Satz wird als ein JSON-Blob ver-/entschlüsselt und in
+    `AppData/QTmux/QTmux/vault.json` (base64-Felder: salt/nonce/ct/tag) abgelegt. Schlüssel +
+    Klartext liegen nur entsperrt im Speicher und werden beim Sperren mit 0 überschrieben.
+  - API: `create`/`unlock`/`lock`/`changeMasterPassword`/`secret`/`setSecret`/`removeSecret`,
+    `Q_PROPERTY exists/unlocked/names`. Als Context-Property `Vault` in `main.cpp`.
+  - UI ([qml/Main.qml](qml/Main.qml)): `vaultDialog` mit zwei Zuständen (gesperrt/anlegen ↔
+    entsperrt) — **innere ColumnLayouts in einer äußeren**, damit der unsichtbare Zustand aus
+    dem Layout fällt (sonst stimmt die Dialoghöhe nicht). Passwortfeld wird **beim Öffnen
+    fokussiert** (`forceActiveFocus`). Geheimnis-Liste mit Anzeigen (Auge-Icon)/Kopieren
+    (`App.copyToClipboard`)/Bearbeiten/Löschen; Editor `secretEditDialog`; Master-Passwort-Wechsel
+    `vaultChangePwDialog`. Toolbar-Schlüssel-Icon (`key.svg`, `active: Vault.unlocked`), Menü- +
+    Command-Palette-Eintrag. Neuer Clipboard-Helfer `AppController::copyToClipboard`.
+  - **Scope v1:** Vault-Speicher + Verwaltung. Folgeschritt: Profil-Integration (SSH-Passwort-
+    Auto-Fill aus dem Vault). Test `tst_vault` (Anlegen, Upsert, Persistenz-Roundtrip, falsches
+    Passwort, **Manipulationserkennung**, Passwortwechsel; prüft auch, dass die Datei den
+    Klartext nicht enthält) → **7 Test-Binaries grün**. E2E auf macOS verifiziert: anlegen →
+    Geheimnis hinzufügen → anzeigen → sperren → mit Master-Passwort wieder entsperren (Geheimnis
+    aus der verschlüsselten Datei korrekt zurückerhalten); i18n DE/EN.
 - ✅ **Login-Scripts pro Profil (QTMUX-23)** — Auto-Befehle nach Verbindungsaufbau. Das
   Profil (`ConnectionProfile`) hat ein Feld `loginScript` (eine Zeile = ein Befehl, persistiert).
   `Session::setLoginScript()` + Logik: das Script wird **einmal** gesendet, sobald die Shell

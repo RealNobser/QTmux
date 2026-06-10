@@ -49,6 +49,8 @@ add_library(qtmux_core STATIC
     src/core/ConnectionProfile.cpp
     src/core/HotkeyRegistry.h
     src/core/HotkeyRegistry.cpp
+    src/core/SecretsVault.h
+    src/core/SecretsVault.cpp
     src/core/GlobalHotkey.h
     src/core/GlobalHotkey.cpp
     src/core/Session.h
@@ -129,6 +131,8 @@ qt_add_resources(qtmux "icons"
         resources/icons/split-v.svg
         resources/icons/broadcast-input.svg
         resources/icons/bookmark.svg
+        resources/icons/key.svg
+        resources/icons/eye.svg
 )
 
 target_link_libraries(qtmux PRIVATE

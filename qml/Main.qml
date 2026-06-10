@@ -797,6 +797,12 @@ ApplicationWindow {
                 tip: qsTr("Verbindungen verwalten …")
                 onClicked: connectionsDialog.open()
             }
+            IconToolButton {
+                icon.source: window.icon("key")
+                active: Vault.unlocked
+                tip: qsTr("Secrets-Vault …")
+                onClicked: vaultDialog.open()
+            }
 
             ToolSeparator {}
 
@@ -929,6 +935,7 @@ ApplicationWindow {
                             { title: qsTr("Neue SSH-Verbindung …"),      sub: "",             icon: "plugs",           run: function(){ sshDialog.open() } },
                             { title: qsTr("Neue serielle Verbindung …"), sub: "",             icon: "usb",             run: function(){ serialDialog.openDialog() } },
                             { title: qsTr("Verbindungen verwalten …"),   sub: "",             icon: "bookmark",        run: function(){ connectionsDialog.open() } },
+                            { title: qsTr("Secrets-Vault …"),            sub: "",             icon: "key",             run: function(){ vaultDialog.open() } },
                             { title: qsTr("Session schließen"),          sub: "Ctrl+W",       icon: "x",               run: function(){ window.closeCurrent() } },
                             { title: qsTr("Nebeneinander teilen"),       sub: "Ctrl+Shift+E", icon: "split-h",         run: function(){ window.splitPane(Qt.Horizontal) } },
                             { title: qsTr("Untereinander teilen"),       sub: "Ctrl+Shift+O", icon: "split-v",         run: function(){ window.splitPane(Qt.Vertical) } },
@@ -1112,6 +1119,11 @@ ApplicationWindow {
                 text: qsTr("Verbindungen verwalten …")
                 icon.source: window.icon("bookmark"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 onTriggered: connectionsDialog.open()
+            }
+            MenuItem {
+                text: qsTr("Secrets-Vault …")
+                icon.source: window.icon("key"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                onTriggered: vaultDialog.open()
             }
             MenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator { visible: window.hasShellChoice }
@@ -1913,6 +1925,199 @@ ApplicationWindow {
                 font.pixelSize: 11
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
+            }
+        }
+    }
+
+    // --- Secrets-Vault (QTMUX-22) -------------------------------------------
+    AppDialog {
+        id: vaultDialog
+        width: 540
+        title: qsTr("Secrets-Vault")
+        standardButtons: Dialog.Close
+        property string vaultError: ""
+        // Beim Öffnen das Passwortfeld fokussieren, damit man sofort tippen kann
+        // (kein Klick nötig) — nur sinnvoll im gesperrten Zustand.
+        onOpened: {
+            vaultError = ""; vpw.text = ""; vpwConfirm.text = ""
+            if (!Vault.unlocked) vpw.forceActiveFocus()
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+
+        // --- Gesperrt / Anlegen ---
+        ColumnLayout {
+            visible: !Vault.unlocked
+            Layout.fillWidth: true
+            spacing: 10
+            Text {
+                text: Vault.exists ? qsTr("Der Vault ist gesperrt. Master-Passwort eingeben:")
+                                   : qsTr("Noch kein Vault vorhanden. Lege ein Master-Passwort fest:")
+                color: Theme.textBright; Layout.fillWidth: true; wrapMode: Text.WordWrap
+            }
+            TextField {
+                id: vpw
+                Layout.fillWidth: true
+                echoMode: TextInput.Password
+                placeholderText: qsTr("Master-Passwort")
+                onAccepted: vaultPrimaryBtn.clicked()
+            }
+            TextField {
+                id: vpwConfirm
+                Layout.fillWidth: true
+                echoMode: TextInput.Password
+                visible: !Vault.exists
+                placeholderText: qsTr("Master-Passwort bestätigen")
+                onAccepted: vaultPrimaryBtn.clicked()
+            }
+            Text {
+                visible: vaultDialog.vaultError.length > 0
+                text: vaultDialog.vaultError
+                color: "#e0a040"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap
+            }
+            Button {
+                id: vaultPrimaryBtn
+                text: Vault.exists ? qsTr("Entsperren") : qsTr("Vault anlegen")
+                onClicked: {
+                    vaultDialog.vaultError = ""
+                    if (Vault.exists) {
+                        if (!Vault.unlock(vpw.text))
+                            vaultDialog.vaultError = qsTr("Falsches Master-Passwort.")
+                    } else if (vpw.text.length === 0) {
+                        vaultDialog.vaultError = qsTr("Bitte ein Passwort eingeben.")
+                    } else if (vpw.text !== vpwConfirm.text) {
+                        vaultDialog.vaultError = qsTr("Die Passwörter stimmen nicht überein.")
+                    } else if (!Vault.create(vpw.text)) {
+                        vaultDialog.vaultError = qsTr("Der Vault konnte nicht angelegt werden.")
+                    }
+                    if (Vault.unlocked) { vpw.text = ""; vpwConfirm.text = "" }
+                }
+            }
+            Text {
+                text: qsTr("Der Vault speichert Geheimnisse (Passwörter, Passphrasen, Tokens) verschlüsselt hinter dem Master-Passwort. Das Master-Passwort wird nicht gespeichert und kann nicht wiederhergestellt werden.")
+                color: Theme.textDim; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap
+            }
+        }
+
+        // --- Entsperrt: Geheimnis-Liste ---
+        ColumnLayout {
+            visible: Vault.unlocked
+            Layout.fillWidth: true
+            spacing: 10
+            RowLayout {
+                Layout.fillWidth: true
+                Label { text: qsTr("Gespeicherte Geheimnisse"); color: Theme.textDim; font.pixelSize: 11; Layout.fillWidth: true }
+                Button { text: qsTr("Hinzufügen"); onClicked: secretEditDialog.openNew() }
+            }
+            ListView {
+                id: secretList
+                Layout.fillWidth: true
+                Layout.preferredHeight: 260
+                clip: true
+                spacing: 4
+                model: Vault.names
+                ScrollIndicator.vertical: ScrollIndicator {}
+                delegate: Rectangle {
+                    id: secretRow
+                    required property string modelData
+                    property bool revealed: false
+                    width: secretList.width
+                    height: 46
+                    radius: 6
+                    color: Theme.bgElevated
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 6
+                        spacing: 6
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Text { text: secretRow.modelData; color: Theme.textBright; font.pixelSize: 13; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text {
+                                text: secretRow.revealed ? Vault.secret(secretRow.modelData) : "••••••••••"
+                                color: Theme.textDim; font.pixelSize: 11; font.family: window.terminalFontFamily
+                                elide: Text.ElideRight; Layout.fillWidth: true
+                            }
+                        }
+                        IconToolButton {
+                            icon.source: window.icon("eye")
+                            tip: secretRow.revealed ? qsTr("Verbergen") : qsTr("Anzeigen")
+                            active: secretRow.revealed
+                            onClicked: secretRow.revealed = !secretRow.revealed
+                        }
+                        IconToolButton { icon.source: window.icon("copy"); tip: qsTr("In Zwischenablage kopieren"); onClicked: App.copyToClipboard(Vault.secret(secretRow.modelData)) }
+                        IconToolButton { icon.source: window.icon("gear"); tip: qsTr("Bearbeiten"); onClicked: secretEditDialog.openEdit(secretRow.modelData) }
+                        IconToolButton { icon.source: window.icon("trash"); tip: qsTr("Löschen"); onClicked: Vault.removeSecret(secretRow.modelData) }
+                    }
+                }
+            }
+            Label {
+                visible: Vault.names.length === 0
+                text: qsTr("Noch keine Geheimnisse. Mit „Hinzufügen“ eines anlegen.")
+                color: Theme.textDim; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Button { text: qsTr("Master-Passwort ändern …"); onClicked: vaultChangePwDialog.open() }
+                Item { Layout.fillWidth: true }
+                Button { text: qsTr("Sperren"); onClicked: Vault.lock() }
+            }
+        }
+        }
+    }
+
+    // --- Vault: Geheimnis anlegen/bearbeiten --------------------------------
+    AppDialog {
+        id: secretEditDialog
+        width: 440
+        title: qsTr("Geheimnis")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property bool editing: false
+        function openNew() { editing = false; sName.text = ""; sValue.text = ""; sReveal.checked = false; open() }
+        function openEdit(name) { editing = true; sName.text = name; sValue.text = Vault.secret(name); sReveal.checked = false; open() }
+        onOpened: (editing ? sValue : sName).forceActiveFocus()
+        onAccepted: if (sName.text.trim().length > 0) Vault.setSecret(sName.text.trim(), sValue.text)
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+            GridLayout {
+                columns: 2; columnSpacing: 10; rowSpacing: 8; Layout.fillWidth: true
+                Text { text: qsTr("Name"); color: Theme.textBright }
+                TextField { id: sName; Layout.fillWidth: true; readOnly: secretEditDialog.editing; placeholderText: qsTr("z. B. ssh/prod") }
+                Text { text: qsTr("Wert"); color: Theme.textBright }
+                TextField { id: sValue; Layout.fillWidth: true; echoMode: sReveal.checked ? TextInput.Normal : TextInput.Password; placeholderText: qsTr("Passwort / Token / Passphrase") }
+            }
+            CheckBox { id: sReveal; text: qsTr("Wert anzeigen") }
+        }
+    }
+
+    // --- Vault: Master-Passwort ändern --------------------------------------
+    AppDialog {
+        id: vaultChangePwDialog
+        width: 420
+        title: qsTr("Master-Passwort ändern")
+        standardButtons: Dialog.Cancel
+        property string err: ""
+        onOpened: { cpOld.text = ""; cpNew.text = ""; cpConfirm.text = ""; err = ""; cpOld.forceActiveFocus() }
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 8
+            TextField { id: cpOld; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: qsTr("Aktuelles Master-Passwort") }
+            TextField { id: cpNew; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: qsTr("Neues Master-Passwort") }
+            TextField { id: cpConfirm; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: qsTr("Neues Passwort bestätigen") }
+            Text { visible: vaultChangePwDialog.err.length > 0; text: vaultChangePwDialog.err; color: "#e0a040"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            Button {
+                text: qsTr("Ändern")
+                onClicked: {
+                    vaultChangePwDialog.err = ""
+                    if (cpNew.text.length === 0) vaultChangePwDialog.err = qsTr("Bitte ein neues Passwort eingeben.")
+                    else if (cpNew.text !== cpConfirm.text) vaultChangePwDialog.err = qsTr("Die neuen Passwörter stimmen nicht überein.")
+                    else if (!Vault.changeMasterPassword(cpOld.text, cpNew.text)) vaultChangePwDialog.err = qsTr("Das aktuelle Master-Passwort ist falsch.")
+                    else vaultChangePwDialog.close()
+                }
             }
         }
     }
