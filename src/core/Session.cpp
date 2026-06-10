@@ -22,6 +22,14 @@ namespace {
 QString prettifyTitle(const QString &raw) {
     if (raw.isEmpty()) return raw;
 
+    // Clink-Shell (QTMUX-25): das Programm ist die Kommandozeile
+    // `cmd.exe /k "<clink.bat>" inject --quiet`. Sie als solche benennen, statt aus
+    // ihr einen Basisnamen zu schnitzen. (Greift nur auf den anfänglichen, aus dem
+    // Programm abgeleiteten Titel; ein späterer OSC-Titel der Shell ersetzt ihn.)
+    if (raw.contains(QLatin1String("clink"), Qt::CaseInsensitive)
+        && raw.contains(QLatin1String("cmd"), Qt::CaseInsensitive))
+        return QCoreApplication::translate("Shells", "Eingabeaufforderung (Clink)");
+
     // Basisnamen ohne Pfad ermitteln (Unix '/' wie Windows '\').
     const int slash = qMax(raw.lastIndexOf(QLatin1Char('/')),
                            raw.lastIndexOf(QLatin1Char('\\')));

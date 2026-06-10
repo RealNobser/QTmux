@@ -180,9 +180,13 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 ## Status (Stand: 2026-06-09)
 
-> ⏭️ **Nächste Aufgabe:** QTMUX-6 (GPU-Glyph-Atlas) — größerer Brocken; alternativ
-> QTMUX-25 (Clink, Windows). Offene Folgeschritte: libssh2/SFTP-Variante (QTMUX-7) und
-> Vault-Integration (SSH-Passwort-Auto-Fill aus dem Vault, baut auf QTMUX-22 auf).
+> ⏭️ **Nächste Aufgabe:** QTMUX-6 (GPU-Glyph-Atlas) — größerer Brocken. Offene
+> Folgeschritte: libssh2/SFTP-Variante (QTMUX-7) und Vault-Integration (SSH-Passwort-
+> Auto-Fill aus dem Vault, baut auf QTMUX-22 auf).
+> Session 2026-06-10: QTMUX-25 (Clink für cmd.exe) **implementiert — Windows-Test noch
+> ausstehend** (am Mac nicht testbar; Clink ist Windows-only). Erkennung + Shell-Eintrag
+> „Eingabeaufforderung (Clink)" (siehe Feature-Eintrag unten). macOS-Build + alle 7 Tests
+> grün; Jira erst nach dem Windows-Test auf Done setzen.
 > Session 2026-06-10: QTMUX-22 (Secrets-Vault) erledigt — Pure-Qt-Master-Passwort-Vault
 > (PBKDF2-HMAC-SHA512 + HMAC-SHA256-Keystream/Encrypt-then-MAC), Verwaltungs-UI, E2E verifiziert.
 > Session 2026-06-10: QTMUX-23 (Login-Scripts pro Profil) erledigt — Auto-Befehle nach
@@ -382,6 +386,34 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   verifiziert: „Split side by side" via Aufnahme auf Cmd+Shift+J (→ `Ctrl+Shift+J`) umgelegt,
   Liste zeigt „Standard"-Button, neues Kürzel teilt **live**, „Alle zurücksetzen" stellt die
   Defaults wieder her; i18n DE/EN ergänzt.
+- 🟡 **Clink für cmd.exe (QTMUX-25) — implementiert, Windows-Test ausstehend.** Bietet auf
+  **Windows** zusätzlich die Shell „Eingabeaufforderung (Clink)" an, wenn [Clink](https://github.com/chrisant996/clink)
+  (Readline-Completion/History für cmd.exe, **GPL-3.0**) installiert ist. **Bewusst NICHT
+  gebündelt** (GPL + Signing/Größe) — nur eine vorhandene Installation wird erkannt; als
+  separater Prozess gestartet berührt das QTmux' Lizenz nicht. **Umsetzung — fügt sich in die
+  bestehende `ShellRegistry`/Shell-Profil-Mechanik:**
+  - **Erkennung** ([ShellRegistry.cpp](src/core/ShellRegistry.cpp), `findClinkLauncher()`,
+    Windows-only): zuerst `QStandardPaths::findExecutable("clink")` (deckt **scoop-/winget-Shims**
+    und manuelles PATH ab; bei `clink.exe` wird die `clink.bat` im selben Ordner bevorzugt),
+    dann bekannte Installationsorte (`%LOCALAPPDATA%\clink`, `…\Programs\clink`, scoop
+    `%USERPROFILE%\scoop\apps\clink\current`, `%ProgramFiles%`/`(x86)`).
+  - **Shell-Eintrag:** das `program` des `ShellInfo` ist hier eine **vollständige Kommandozeile**
+    `cmd.exe /k "<clink.bat>" inject --quiet`. Damit bleibt der gesamte bestehende, auf einem
+    einzelnen `program`-String basierende Mechanismus (Default-Shell-Dedup, QSettings-Persistenz,
+    Restore, QML-Auswahl) **unverändert** — die Clink-Shell ist über ihre eindeutige Kommandozeile
+    von `cmd.exe` unterscheidbar.
+  - **Zerlegung beim Start** ([PtyBackend.cpp](src/core/PtyBackend.cpp)): sind keine Argumente
+    separat gesetzt, wird das `program` per `QProcess::splitCommand` in Programm + Args zerlegt
+    (respektiert Anführungszeichen → Pfade mit Leerzeichen bleiben zusammen). Ein einfacher
+    Programmname/-pfad ergibt genau ein Token und verhält sich wie bisher; `SshBackend` setzt
+    `m_args` explizit und ist nicht betroffen. **Grenze:** ein unzitierter Programmpfad mit
+    Leerzeichen würde fälschlich zerlegt — solche Pfade sind aber für `CreateProcessW`/`exec`
+    ohnehin mehrdeutig; zitiert (oder Standardfall) ist alles korrekt.
+  - **Titel:** `prettifyTitle` ([Session.cpp](src/core/Session.cpp)) erkennt die Clink-
+    Kommandozeile (enthält „clink"+„cmd") → „Eingabeaufforderung (Clink)" statt eines aus der
+    Kommandozeile geschnitzten Basisnamens (greift nur initial; ein OSC-Titel der Shell ersetzt ihn).
+  - i18n DE/EN ergänzt (Kontext „Shells"). macOS-Build + alle 7 Tests grün. **Offen:** Verifikation
+    auf Windows mit installiertem Clink (Erkennung + tatsächliche Injektion in cmd.exe).
 - ✅ **MCP-Schnittstelle** — `src/server/McpServer.{h,cpp}`: eingebetteter MCP-Server
   (HTTP/JSON-RPC 2.0) auf `127.0.0.1:7345`, Menü „Agent-Steuerung". Tools: list/create/
   close/focus_session, send_text, read_screen, **attach_controller**, set_theme. Session hat

@@ -859,8 +859,14 @@ Qt %1</translation>
 <context>
     <name>Shells</name>
     <message>
-        <location filename="../src/core/Session.cpp" line="45"/>
-        <location filename="../src/core/ShellRegistry.cpp" line="16"/>
+        <location filename="../src/core/Session.cpp" line="31"/>
+        <location filename="../src/core/ShellRegistry.cpp" line="87"/>
+        <source>Eingabeaufforderung (Clink)</source>
+        <translation>Command Prompt (Clink)</translation>
+    </message>
+    <message>
+        <location filename="../src/core/Session.cpp" line="53"/>
+        <location filename="../src/core/ShellRegistry.cpp" line="71"/>
         <source>Eingabeaufforderung</source>
         <translation>Command Prompt</translation>
     </message>
