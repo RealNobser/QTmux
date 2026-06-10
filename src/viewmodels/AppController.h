@@ -24,6 +24,13 @@ public:
     Q_INVOKABLE QStringList languageCodes() const { return {QStringLiteral("de"), QStringLiteral("en")}; }
     Q_INVOKABLE QString languageName(const QString &code) const;
 
+    /// Wandelt ein QML-Tasten-Event (Qt::Key + Qt::KeyboardModifiers als int) in einen
+    /// kanonischen Akkord-String im Portable-Format um (z. B. "Ctrl+Shift+E"). Reine
+    /// Modifier-Tasten liefern "" (für die Hotkey-Aufnahme, QTMUX-15). Nutzt QKeySequence
+    /// (QtGui) — hier korrekt, da AppController im Gui-Target lebt; die HotkeyRegistry
+    /// bleibt dadurch Gui-frei.
+    Q_INVOKABLE QString keyChord(int key, int modifiers) const;
+
     /// Installierte Monospace-Schriftfamilien (für die Terminal-Schriftwahl).
     Q_INVOKABLE QStringList monospaceFonts() const;
     /// Plattformübliche Standard-Monospace-Familie (Default der Terminal-Schrift).

@@ -11,6 +11,10 @@ qt_add_executable(test_profiles tst_profiles.cpp)
 target_link_libraries(test_profiles PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_profiles COMMAND test_profiles)
 
+qt_add_executable(test_hotkeys tst_hotkeys.cpp)
+target_link_libraries(test_hotkeys PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_hotkeys COMMAND test_hotkeys)
+
 # --- PTY-/ConPTY-E2E-Tests (starten echte Shells) ---------------------------
 qt_add_executable(test_pty tst_pty.cpp)
 target_link_libraries(test_pty PRIVATE qtmux_core Qt6::Test)

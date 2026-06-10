@@ -8,6 +8,7 @@
 #include "AppController.h"
 #include "ColorScheme.h"
 #include "ConnectionProfile.h"
+#include "HotkeyRegistry.h"
 #include "GlobalHotkey.h"
 
 namespace {
@@ -58,6 +59,11 @@ int main(int argc, char *argv[])
     // die passende SessionModel::create…Session-Methode (QTMUX-7).
     engine.rootContext()->setContextProperty(
         QStringLiteral("Profiles"), qtmux::ConnectionProfileRegistry::instance());
+
+    // Konfigurierbare Tastenkürzel (QTMUX-15): QML bindet Action.shortcut an
+    // Hotkeys.bindings[id]; Neubelegung wirkt sofort. Gleiche Brücke wie oben.
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("Hotkeys"), qtmux::HotkeyRegistry::instance());
 
     // Globaler Quake-Hotkey (Ctrl+`) als Context-Property; QML schaltet ihn je nach
     // Einstellung und reagiert auf `activated` (Fenster ein-/ausblenden).

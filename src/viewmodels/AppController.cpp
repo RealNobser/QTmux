@@ -2,6 +2,8 @@
 #include <QSettings>
 #include <QLocale>
 #include <QFontDatabase>
+#include <QKeySequence>
+#include <Qt>
 
 namespace qtmux {
 
@@ -24,6 +26,20 @@ QString AppController::languageName(const QString &code) const {
     if (code == QLatin1String("de")) return QStringLiteral("Deutsch");
     if (code == QLatin1String("en")) return QStringLiteral("English");
     return code;
+}
+
+QString AppController::keyChord(int key, int modifiers) const {
+    // Reine Modifier-Tasten (oder leeres Event) ergeben keinen Akkord.
+    switch (key) {
+    case Qt::Key_Control: case Qt::Key_Shift: case Qt::Key_Alt:
+    case Qt::Key_Meta:    case Qt::Key_AltGr: case 0:
+        return QString();
+    default: break;
+    }
+    // Nur die Modifier behalten, die QKeySequence kennt (Keypad/GroupSwitch raus).
+    const int mods = modifiers & (Qt::ControlModifier | Qt::ShiftModifier
+                                  | Qt::AltModifier | Qt::MetaModifier);
+    return QKeySequence(mods | key).toString(QKeySequence::PortableText);
 }
 
 QStringList AppController::monospaceFonts() const {

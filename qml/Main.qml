@@ -367,6 +367,25 @@ ApplicationWindow {
         return t === 1 ? "plugs" : t === 2 ? "usb" : "terminal-window"
     }
 
+    // Stabiler, übersetzbarer Anzeigename je konfigurierbarer Aktion (QTMUX-15) —
+    // bewusst eigene Strings (nicht die ggf. dynamischen Action.text, z. B. Theme).
+    function hotkeyLabel(id) {
+        switch (id) {
+        case "actNewSession":     return qsTr("Neue Session")
+        case "actCloseSession":   return qsTr("Session schließen")
+        case "actClosePane":      return qsTr("Pane schließen")
+        case "actSplitH":         return qsTr("Nebeneinander teilen")
+        case "actSplitV":         return qsTr("Untereinander teilen")
+        case "actCommandPalette": return qsTr("Befehlspalette")
+        case "actBroadcast":      return qsTr("Eingabe an alle Sessions")
+        case "actZoomReset":      return qsTr("Schriftgröße zurücksetzen")
+        case "actToggleTheme":    return qsTr("Design umschalten")
+        case "actSettings":       return qsTr("Einstellungen")
+        case "actQuit":           return qsTr("Beenden")
+        }
+        return id
+    }
+
     // --- Pane-Steuerung (Baum-Operationen) -----------------------------------
     // SplitNode greift nur über diese window.*-Helfer auf Modell/Globals zu.
 
@@ -609,26 +628,29 @@ ApplicationWindow {
     Action {
         id: actNewSession
         text: qsTr("Neue Session")
-        shortcut: "Ctrl+T"
+        shortcut: Hotkeys.bindings["actNewSession"]
+        enabled: !hotkeyCaptureDialog.capturing
         onTriggered: window.newSession()
     }
     Action {
         id: actCloseSession
         text: qsTr("Session schließen")
-        shortcut: "Ctrl+W"
-        enabled: window.currentRow >= 0
+        shortcut: Hotkeys.bindings["actCloseSession"]
+        enabled: window.currentRow >= 0 && !hotkeyCaptureDialog.capturing
         onTriggered: window.closeCurrent()
     }
     Action {
         id: actToggleTheme
         text: Theme.dark ? qsTr("Helles Design") : qsTr("Dunkles Design")
-        shortcut: "Ctrl+D"
+        shortcut: Hotkeys.bindings["actToggleTheme"]
+        enabled: !hotkeyCaptureDialog.capturing
         onTriggered: Theme.toggle()
     }
     Action {
         id: actQuit
         text: qsTr("Beenden")
-        shortcut: "Ctrl+Q"
+        shortcut: Hotkeys.bindings["actQuit"]
+        enabled: !hotkeyCaptureDialog.capturing
         onTriggered: Qt.quit()
     }
     // Einstellungen-Dialog öffnen (macOS: Cmd+, ; sonst Strg+,).
@@ -638,7 +660,8 @@ ApplicationWindow {
         // Bewusst KEIN StandardKey.Preferences: macOS verschiebt solche Aktionen ins
         // App-Menü und der In-Window-Shortcut greift dann nicht (Komma lief ins Terminal).
         // „Ctrl+," wird auf macOS zu Cmd+, gemappt — native Optik, aber zuverlässig.
-        shortcut: "Ctrl+,"
+        shortcut: Hotkeys.bindings["actSettings"]
+        enabled: !hotkeyCaptureDialog.capturing
         onTriggered: settingsDialog.open()
     }
     // Terminal-Zoom: Schriftgröße global vergrößern/verkleinern/zurücksetzen.
@@ -646,25 +669,29 @@ ApplicationWindow {
         id: actZoomIn
         text: qsTr("Schrift vergrößern")
         shortcut: StandardKey.ZoomIn        // Cmd++/Strg++ (inkl. „=" ohne Shift)
+        enabled: !hotkeyCaptureDialog.capturing
         onTriggered: window.zoomTerminal(1)
     }
     Action {
         id: actZoomOut
         text: qsTr("Schrift verkleinern")
         shortcut: StandardKey.ZoomOut        // Cmd+-/Strg+-
+        enabled: !hotkeyCaptureDialog.capturing
         onTriggered: window.zoomTerminal(-1)
     }
     Action {
         id: actZoomReset
         text: qsTr("Schriftgröße zurücksetzen")
-        shortcut: "Ctrl+0"
+        shortcut: Hotkeys.bindings["actZoomReset"]
+        enabled: !hotkeyCaptureDialog.capturing
         onTriggered: window.resetTerminalZoom()
     }
     // Broadcast-Input umschalten: Eingabe an alle Sessions.
     Action {
         id: actBroadcast
         text: qsTr("Eingabe an alle Sessions")
-        shortcut: "Ctrl+Shift+B"
+        shortcut: Hotkeys.bindings["actBroadcast"]
+        enabled: !hotkeyCaptureDialog.capturing
         checkable: true
         checked: window.broadcastInput
         onTriggered: window.broadcastInput = !window.broadcastInput
@@ -675,13 +702,14 @@ ApplicationWindow {
     Action {
         id: actCopy
         text: qsTr("Kopieren")
-        enabled: window.activeTerminal && window.activeTerminal.hasSelection
+        enabled: window.activeTerminal && window.activeTerminal.hasSelection && !hotkeyCaptureDialog.capturing
         shortcut: Qt.platform.os === "osx" ? StandardKey.Copy : ""
         onTriggered: if (window.activeTerminal) window.activeTerminal.copy()
     }
     Action {
         id: actPaste
         text: qsTr("Einfügen")
+        enabled: !hotkeyCaptureDialog.capturing
         shortcut: Qt.platform.os === "osx" ? StandardKey.Paste : ""
         onTriggered: if (window.activeTerminal) window.activeTerminal.paste()
     }
@@ -689,20 +717,22 @@ ApplicationWindow {
     Action {
         id: actSplitH
         text: qsTr("Nebeneinander teilen")
-        shortcut: "Ctrl+Shift+E"
+        shortcut: Hotkeys.bindings["actSplitH"]
+        enabled: !hotkeyCaptureDialog.capturing
         onTriggered: window.splitPane(Qt.Horizontal)
     }
     Action {
         id: actSplitV
         text: qsTr("Untereinander teilen")
-        shortcut: "Ctrl+Shift+O"
+        shortcut: Hotkeys.bindings["actSplitV"]
+        enabled: !hotkeyCaptureDialog.capturing
         onTriggered: window.splitPane(Qt.Vertical)
     }
     Action {
         id: actClosePane
         text: qsTr("Pane schließen")
-        shortcut: "Ctrl+Shift+W"
-        enabled: window.paneCount > 1
+        shortcut: Hotkeys.bindings["actClosePane"]
+        enabled: window.paneCount > 1 && !hotkeyCaptureDialog.capturing
         onTriggered: window.closePane()
     }
     // Befehlspalette: fokussiert das dauerhafte Such-/Befehlsfeld in der Toolbar
@@ -710,7 +740,8 @@ ApplicationWindow {
     Action {
         id: actCommandPalette
         text: qsTr("Befehlspalette …")
-        shortcut: "Ctrl+K"
+        shortcut: Hotkeys.bindings["actCommandPalette"]
+        enabled: !hotkeyCaptureDialog.capturing
         // Explizit öffnen (nicht nur über onActiveFocusChanged) — sonst bleibt die
         // Palette tot, wenn das Feld nach einem Befehl noch den Fokus hat.
         onTriggered: { cmdInput.forceActiveFocus(); cmdInput.selectAll(); cmdPopup.openFor() }
@@ -1904,12 +1935,131 @@ ApplicationWindow {
         }
     }
 
+    // --- Tastenkürzel aufnehmen (QTMUX-15) ----------------------------------
+    // Modaler Aufnahme-Dialog: erfasst gedrückte Tasten als Akkord(e). Solange er
+    // offen ist (`capturing`), sind alle App-Shortcuts deaktiviert, damit die Tasten
+    // nicht versehentlich eine Aktion auslösen statt aufgenommen zu werden.
+    AppDialog {
+        id: hotkeyCaptureDialog
+        width: 420
+        title: qsTr("Tastenkürzel ändern")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        property string targetId: ""
+        property string targetLabel: ""
+        property var chords: []
+        property bool capturing: false
+        readonly property string seqStr: chords.join(", ")
+        readonly property string conflictId: seqStr.length > 0 ? Hotkeys.conflict(seqStr, targetId) : ""
+
+        function start(id, label) {
+            targetId = id
+            targetLabel = label
+            chords = []
+            capturing = true
+            open()
+        }
+        onOpened: captureArea.forceActiveFocus()
+        onClosed: capturing = false
+        onAccepted: if (chords.length > 0) Hotkeys.setBinding(targetId, seqStr)
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+
+            Text {
+                text: qsTr("Neues Kürzel für „%1“").arg(hotkeyCaptureDialog.targetLabel)
+                color: Theme.textBright
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 46
+                radius: 6
+                color: Theme.bgElevated
+                border.width: 1
+                border.color: captureArea.activeFocus ? Theme.accent : Theme.border
+
+                Text {
+                    anchors.centerIn: parent
+                    text: hotkeyCaptureDialog.seqStr.length > 0
+                          ? hotkeyCaptureDialog.seqStr : qsTr("Tasten drücken …")
+                    color: hotkeyCaptureDialog.seqStr.length > 0 ? Theme.textBright : Theme.textDim
+                    font.pixelSize: 15
+                    font.bold: hotkeyCaptureDialog.seqStr.length > 0
+                }
+
+                // Unsichtbarer Fokus-Empfänger für die Tastenaufnahme.
+                Item {
+                    id: captureArea
+                    anchors.fill: parent
+                    focus: true
+                    Keys.onPressed: (event) => {
+                        // Esc bricht ab, Enter bestätigt (jeweils ohne Modifier) —
+                        // mit Modifier sind sie als Kürzel aufnehmbar.
+                        if (event.key === Qt.Key_Escape && event.modifiers === Qt.NoModifier) {
+                            event.accepted = true; hotkeyCaptureDialog.reject(); return
+                        }
+                        if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                                && event.modifiers === Qt.NoModifier) {
+                            event.accepted = true; hotkeyCaptureDialog.accept(); return
+                        }
+                        var c = App.keyChord(event.key, event.modifiers)
+                        if (c.length === 0) return            // reine Modifier-Taste
+                        event.accepted = true
+                        var arr = hotkeyCaptureDialog.chords.slice()
+                        arr.push(c)
+                        if (arr.length > 4) arr = [c]         // QKeySequence: max. 4 Akkorde
+                        hotkeyCaptureDialog.chords = arr
+                    }
+                }
+                MouseArea { anchors.fill: parent; onClicked: captureArea.forceActiveFocus() }
+            }
+
+            Text {
+                visible: hotkeyCaptureDialog.conflictId.length > 0
+                text: qsTr("Bereits belegt von: %1").arg(window.hotkeyLabel(hotkeyCaptureDialog.conflictId))
+                color: "#e0a040"   // Warn-Amber (kein Theme-Token vorhanden)
+                font.pixelSize: 11
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Button {
+                    text: qsTr("Leeren")
+                    enabled: hotkeyCaptureDialog.chords.length > 0
+                    onClicked: hotkeyCaptureDialog.chords = []
+                }
+                Item { Layout.fillWidth: true }
+                Button {
+                    text: qsTr("Auf Standard")
+                    onClicked: { Hotkeys.reset(hotkeyCaptureDialog.targetId); hotkeyCaptureDialog.close() }
+                }
+            }
+
+            Text {
+                text: qsTr("Mehrere nacheinander gedrückte Akkorde ergeben eine Tastenfolge (max. 4). Esc bricht ab, Eingabe bestätigt.")
+                color: Theme.textDim
+                font.pixelSize: 11
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+        }
+    }
+
     // --- Einstellungen ------------------------------------------------------
     // Bündelt die persistierten Optionen; Änderungen wirken sofort (Zwei-Wege-Bindung
     // an die window-Properties / Theme / App-Singletons).
     AppDialog {
         id: settingsDialog
         width: 480
+        // Höhe begrenzen + Inhalt scrollbar — sonst wächst der Dialog (viele Abschnitte,
+        // u. a. die Tastenkürzel-Liste) über den Bildschirm hinaus.
+        contentHeight: Math.min(settingsCol.implicitHeight, window.height - 180)
         title: qsTr("Einstellungen")
         standardButtons: Dialog.Close
 
@@ -1921,8 +2071,17 @@ ApplicationWindow {
             Layout.topMargin: 6
         }
 
-        ColumnLayout {
+        Flickable {
             anchors.fill: parent
+            contentWidth: width
+            contentHeight: settingsCol.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollIndicator.vertical: ScrollIndicator {}
+
+        ColumnLayout {
+            id: settingsCol
+            width: parent.width
             spacing: 12
 
             SectionLabel { text: qsTr("Erscheinungsbild") }
@@ -2082,6 +2241,47 @@ ApplicationWindow {
                     Layout.leftMargin: 26
                 }
             }
+
+            SectionLabel { text: qsTr("Tastenkürzel") }
+            // Konfigurierbare Aktionen (QTMUX-15). Repeater statt eigener ListView —
+            // das umgebende Flickable des Dialogs scrollt (kein verschachteltes Scrollen).
+            // Klick auf das Kürzel öffnet den Aufnahme-Dialog; „Standard" erscheint nur
+            // bei Abweichung vom Default.
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 2
+                Repeater {
+                    model: Hotkeys.actionIds()
+                    delegate: RowLayout {
+                        required property string modelData
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Text {
+                            text: window.hotkeyLabel(modelData)
+                            color: Theme.textBright
+                            font.pixelSize: 13
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        Button {
+                            text: Hotkeys.bindings[modelData] || qsTr("(keins)")
+                            font.pixelSize: 12
+                            onClicked: hotkeyCaptureDialog.start(modelData, window.hotkeyLabel(modelData))
+                        }
+                        Button {
+                            text: qsTr("Standard")
+                            font.pixelSize: 12
+                            visible: Hotkeys.bindings[modelData] !== Hotkeys.defaultSequence(modelData)
+                            onClicked: Hotkeys.reset(modelData)
+                        }
+                    }
+                }
+            }
+            Button {
+                text: qsTr("Alle Kürzel zurücksetzen")
+                onClicked: Hotkeys.resetAll()
+            }
+        }
         }
     }
 

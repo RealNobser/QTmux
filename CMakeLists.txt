@@ -47,6 +47,8 @@ add_library(qtmux_core STATIC
     src/core/ColorScheme.cpp
     src/core/ConnectionProfile.h
     src/core/ConnectionProfile.cpp
+    src/core/HotkeyRegistry.h
+    src/core/HotkeyRegistry.cpp
     src/core/GlobalHotkey.h
     src/core/GlobalHotkey.cpp
     src/core/Session.h

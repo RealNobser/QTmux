@@ -181,11 +181,12 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 ## Status (Stand: 2026-06-09)
 
 > ⏭️ **Nächste Aufgabe:** QTMUX-6 (GPU-Glyph-Atlas) — größerer Brocken; alternativ
-> kleinere Backlog-Tickets (QTMUX-15 Hotkeys konfigurierbar, QTMUX-22 Secrets-Vault,
-> QTMUX-23 Login-Scripts, QTMUX-25 Clink). Für QTMUX-7 ist als Folgeschritt noch die
-> libssh2/SFTP-Variante offen (siehe Ticket-Scope).
-> Session 2026-06-10: QTMUX-7 (Connection-Manager/Profile) erledigt — Profile-Editor +
-> Manager-Dialog + Schnellverbinden, QSettings-persistiert, E2E verifiziert.
+> kleinere Backlog-Tickets (QTMUX-22 Secrets-Vault, QTMUX-23 Login-Scripts, QTMUX-25
+> Clink). Für QTMUX-7 ist als Folgeschritt noch die libssh2/SFTP-Variante offen.
+> Session 2026-06-10: QTMUX-15 (konfigurierbare Hotkeys inkl. Multi-Chord) erledigt —
+> HotkeyRegistry + Aufnahme-Dialog + Settings-Liste, QSettings-persistiert, E2E verifiziert.
+> QTMUX-7 (Connection-Manager/Profile) erledigt — Profile-Editor + Manager-Dialog +
+> Schnellverbinden, QSettings-persistiert, E2E verifiziert.
 > Session 2026-06-09: QTMUX-3 (verschachtelte H+V-Layouts) + QTMUX-4 (Pane-Reorder per
 > Drag) erledigt; davor QTMUX-18 (Color-Schemes), QTMUX-19 (Schriftart+Ligaturen),
 > QTMUX-20 (Quake-Modus), QTMUX-24 (Progress OSC 9;4), Command-Palette (QTMUX-12) —
@@ -306,6 +307,31 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   DE/EN ergänzt. **Lektion (GUI-Test):** das CGEvent-Maus-Tool braucht eine kurze Pause
   zwischen `leftMouseDown`/`leftMouseUp` (sonst nur Hover, kein Klick) — siehe Memory
   `qtmux-gui-test-macos`.
+- ✅ **Konfigurierbare Hotkeys inkl. Multi-Chord (QTMUX-15)** — frei belegbare Tastenkürzel
+  für 11 Aktionen. Kern: `src/core/HotkeyRegistry.{h,cpp}` (**Gui-frei**, nur Qt Core) — hält
+  die Default-Sequenzen je Aktions-ID plus benutzerdefinierte Overrides, persistiert **nur die
+  Overrides** via QSettings (Gruppe `hotkeys`). `Q_PROPERTY(QVariantMap bindings)` (NOTIFY
+  `changed`) liefert die effektiven Sequenzen; QML bindet `Action.shortcut: Hotkeys.bindings[id]`
+  → eine Neubelegung greift **sofort**. `setBinding` (Upsert; leer/Default entfernt den Override),
+  `reset`/`resetAll`, `conflict(seq, exceptId)` (case-insensitiver Vergleich). **Multi-Chord:**
+  eine Sequenz darf aus mehreren kommagetrennten Akkorden bestehen (QKeySequence-Format, z. B.
+  `Ctrl+K, Ctrl+P`, max. 4). **Gui-frei-Trick:** das Bilden des Akkord-Strings aus einem
+  Tasten-Event macht `AppController::keyChord(key, modifiers)` (QtGui-`QKeySequence`,
+  PortableText) — die Registry bleibt dadurch testbar/Gui-frei. Als Context-Property `Hotkeys`
+  in `main.cpp` registriert. UI in [qml/Main.qml](qml/Main.qml): Settings-Abschnitt
+  „Tastenkürzel" (Liste je Aktion mit aktueller Sequenz + „Standard"-Button bei Abweichung +
+  „Alle Kürzel zurücksetzen"); der Settings-Dialog ist jetzt **scrollbar** (Flickable,
+  Höhe auf `window.height-180` begrenzt). **Aufnahme-Dialog** `hotkeyCaptureDialog`: ein
+  fokussierter Item fängt `Keys.onPressed`, baut über `App.keyChord` die Akkorde (Esc bricht ab,
+  Enter bestätigt, reine Modifier werden ignoriert), zeigt Live-Konfliktwarnung. **Wichtig:**
+  solange der Aufnahme-Dialog offen ist (`capturing`), sind **alle** App-Shortcuts via
+  `enabled: !hotkeyCaptureDialog.capturing` deaktiviert — sonst würde eine aufzunehmende Taste
+  zugleich die zugehörige Aktion auslösen. Bewusst NICHT konfigurierbar: Zoom +/− und Copy/Paste
+  (bleiben auf `StandardKey`, plattform-/terminal-sensibel). Test `tst_hotkeys` (Defaults,
+  Upsert/Persistenz, reset, Konflikt, Multi-Chord) → **6 Test-Binaries grün**. E2E auf macOS
+  verifiziert: „Split side by side" via Aufnahme auf Cmd+Shift+J (→ `Ctrl+Shift+J`) umgelegt,
+  Liste zeigt „Standard"-Button, neues Kürzel teilt **live**, „Alle zurücksetzen" stellt die
+  Defaults wieder her; i18n DE/EN ergänzt.
 - ✅ **MCP-Schnittstelle** — `src/server/McpServer.{h,cpp}`: eingebetteter MCP-Server
   (HTTP/JSON-RPC 2.0) auf `127.0.0.1:7345`, Menü „Agent-Steuerung". Tools: list/create/
   close/focus_session, send_text, read_screen, **attach_controller**, set_theme. Session hat
