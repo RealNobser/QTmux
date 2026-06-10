@@ -7,6 +7,10 @@ qt_add_executable(test_agent tst_agent.cpp)
 target_link_libraries(test_agent PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_agent COMMAND test_agent)
 
+qt_add_executable(test_profiles tst_profiles.cpp)
+target_link_libraries(test_profiles PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_profiles COMMAND test_profiles)
+
 # --- PTY-/ConPTY-E2E-Tests (starten echte Shells) ---------------------------
 qt_add_executable(test_pty tst_pty.cpp)
 target_link_libraries(test_pty PRIVATE qtmux_core Qt6::Test)

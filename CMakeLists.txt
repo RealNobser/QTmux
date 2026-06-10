@@ -45,6 +45,8 @@ add_library(qtmux_core STATIC
     src/core/VtScreen.cpp
     src/core/ColorScheme.h
     src/core/ColorScheme.cpp
+    src/core/ConnectionProfile.h
+    src/core/ConnectionProfile.cpp
     src/core/GlobalHotkey.h
     src/core/GlobalHotkey.cpp
     src/core/Session.h
@@ -124,6 +126,7 @@ qt_add_resources(qtmux "icons"
         resources/icons/split-h.svg
         resources/icons/split-v.svg
         resources/icons/broadcast-input.svg
+        resources/icons/bookmark.svg
 )
 
 target_link_libraries(qtmux PRIVATE

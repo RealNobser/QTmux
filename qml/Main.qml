@@ -338,6 +338,35 @@ ApplicationWindow {
         else newSession()
     }
 
+    // Startet eine Session aus einem gespeicherten Verbindungsprofil (Connection-
+    // Manager, QTMUX-7). `p` ist die Profil-Map aus Profiles.profiles / .profile().
+    function connectProfile(p) {
+        if (!p || !p.name) return
+        var row
+        if (p.type === 1)
+            row = sessions.createSshSession(p.host, p.port || 22, p.user, p.identity)
+        else if (p.type === 2)
+            row = sessions.createSerialSession(p.serialPort, p.baud || 115200)
+        else
+            row = sessions.createShellSession(p.workingDir || "", p.program || "")
+        // Wie bei newSession: ins aktive Pane laden (sofort tippbereit).
+        if (window.layout) window.assignToActivePane(row)
+        else window.currentRow = row
+    }
+    // Kurzbeschreibung eines Profils für die Listenanzeige (Ziel/Programm).
+    function profileSummary(p) {
+        if (!p) return ""
+        if (p.type === 1)
+            return (p.user ? p.user + "@" : "") + (p.host || "") + (p.port && p.port !== 22 ? ":" + p.port : "")
+        if (p.type === 2)
+            return (p.serialPort || "") + (p.baud ? " · " + p.baud : "")
+        return p.program || qsTr("Standard-Shell")
+    }
+    // Icon-Name je Profiltyp (Sidebar-/Listen-Icon).
+    function profileIcon(t) {
+        return t === 1 ? "plugs" : t === 2 ? "usb" : "terminal-window"
+    }
+
     // --- Pane-Steuerung (Baum-Operationen) -----------------------------------
     // SplitNode greift nur über diese window.*-Helfer auf Modell/Globals zu.
 
@@ -731,6 +760,11 @@ ApplicationWindow {
                 tip: qsTr("Neue serielle Verbindung …")
                 onClicked: serialDialog.openDialog()
             }
+            IconToolButton {
+                icon.source: window.icon("bookmark")
+                tip: qsTr("Verbindungen verwalten …")
+                onClicked: connectionsDialog.open()
+            }
 
             ToolSeparator {}
 
@@ -862,6 +896,7 @@ ApplicationWindow {
                             { title: qsTr("Neue Session"),               sub: "Ctrl+T",       icon: "plus",            run: function(){ window.newSession() } },
                             { title: qsTr("Neue SSH-Verbindung …"),      sub: "",             icon: "plugs",           run: function(){ sshDialog.open() } },
                             { title: qsTr("Neue serielle Verbindung …"), sub: "",             icon: "usb",             run: function(){ serialDialog.openDialog() } },
+                            { title: qsTr("Verbindungen verwalten …"),   sub: "",             icon: "bookmark",        run: function(){ connectionsDialog.open() } },
                             { title: qsTr("Session schließen"),          sub: "Ctrl+W",       icon: "x",               run: function(){ window.closeCurrent() } },
                             { title: qsTr("Nebeneinander teilen"),       sub: "Ctrl+Shift+E", icon: "split-h",         run: function(){ window.splitPane(Qt.Horizontal) } },
                             { title: qsTr("Untereinander teilen"),       sub: "Ctrl+Shift+O", icon: "split-v",         run: function(){ window.splitPane(Qt.Vertical) } },
@@ -876,6 +911,14 @@ ApplicationWindow {
                             { title: qsTr("Über QTmux"),                 sub: "",             icon: "info",            run: function(){ aboutDialog.open() } },
                             { title: qsTr("Beenden"),                    sub: "Ctrl+Q",       icon: "x",               run: function(){ Qt.quit() } },
                         ]
+                        // Je gespeichertem Profil ein Schnellverbinden.
+                        var profs = Profiles.profiles
+                        for (var j = 0; j < profs.length; ++j) {
+                            c.push({ title: qsTr("Verbinden: %1").arg(profs[j].name),
+                                     sub: window.profileSummary(profs[j]),
+                                     icon: window.profileIcon(profs[j].type),
+                                     run: (function(p){ return function(){ window.connectProfile(p) } })(profs[j]) })
+                        }
                         for (var i = 0; i < sessions.count; ++i) {
                             var s = sessions.sessionAt(i)
                             var t = s ? s.title : qsTr("Session %1").arg(i + 1)
@@ -1032,6 +1075,11 @@ ApplicationWindow {
                 text: qsTr("Neue serielle Verbindung …")
                 icon.source: window.icon("usb"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 onTriggered: serialDialog.openDialog()
+            }
+            MenuItem {
+                text: qsTr("Verbindungen verwalten …")
+                icon.source: window.icon("bookmark"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                onTriggered: connectionsDialog.open()
             }
             MenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator { visible: window.hasShellChoice }
@@ -1558,6 +1606,245 @@ ApplicationWindow {
                 text: qsTr("Keine seriellen Ports gefunden.")
                 color: Theme.textDim
                 font.pixelSize: 11
+            }
+        }
+    }
+
+    // --- Connection-Manager: gespeicherte Profile (QTMUX-7) -----------------
+    AppDialog {
+        id: connectionsDialog
+        width: 540
+        title: qsTr("Verbindungen")
+        standardButtons: Dialog.Close
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+
+            RowLayout {
+                Layout.fillWidth: true
+                Label {
+                    text: qsTr("Gespeicherte Verbindungsprofile")
+                    color: Theme.textDim
+                    font.pixelSize: 11
+                    Layout.fillWidth: true
+                }
+                Button {
+                    text: qsTr("Neu …")
+                    onClicked: profileEditDialog.openNew()
+                }
+            }
+
+            ListView {
+                id: profList
+                Layout.fillWidth: true
+                Layout.preferredHeight: 300
+                clip: true
+                spacing: 4
+                model: Profiles.profiles
+                ScrollIndicator.vertical: ScrollIndicator {}
+
+                delegate: Rectangle {
+                    required property var modelData
+                    width: profList.width
+                    height: 48
+                    radius: 6
+                    color: Theme.bgElevated
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 6
+                        spacing: 10
+
+                        // Typ-Icon (explizite MultiEffect-Tönung — layer.effect greift im Delegate nicht).
+                        Item {
+                            Layout.preferredWidth: 18
+                            Layout.preferredHeight: 18
+                            Image {
+                                id: typeImg
+                                anchors.fill: parent
+                                source: window.icon(window.profileIcon(modelData.type))
+                                sourceSize.width: 18
+                                sourceSize.height: 18
+                                visible: false
+                            }
+                            MultiEffect {
+                                anchors.fill: parent
+                                source: typeImg
+                                colorization: 1.0
+                                colorizationColor: Theme.textBright
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Text {
+                                text: modelData.name
+                                color: Theme.textBright
+                                font.pixelSize: 13
+                                font.bold: true
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                text: window.typeLabel(modelData.type) + " · " + window.profileSummary(modelData)
+                                color: Theme.textDim
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        Button {
+                            text: qsTr("Verbinden")
+                            onClicked: { window.connectProfile(modelData); connectionsDialog.close() }
+                        }
+                        IconToolButton {
+                            icon.source: window.icon("gear")
+                            tip: qsTr("Bearbeiten")
+                            onClicked: profileEditDialog.openEdit(modelData)
+                        }
+                        IconToolButton {
+                            icon.source: window.icon("trash")
+                            tip: qsTr("Löschen")
+                            onClicked: Profiles.removeProfile(modelData.name)
+                        }
+                    }
+                }
+            }
+
+            Label {
+                visible: Profiles.profiles.length === 0
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Theme.textDim
+                font.pixelSize: 12
+                text: qsTr("Noch keine Profile. Lege mit „Neu …“ eine wiederverwendbare Verbindung an.")
+            }
+        }
+    }
+
+    // --- Profil-Editor (anlegen/bearbeiten) ---------------------------------
+    AppDialog {
+        id: profileEditDialog
+        width: 460
+        title: qsTr("Verbindungsprofil")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        // Ursprungsname: leer = neues Profil; gesetzt = Bearbeiten (Upsert-/Umbenenn-Schlüssel).
+        property string originalName: ""
+
+        function openNew() {
+            originalName = ""
+            pName.text = ""
+            pType.currentIndex = 0
+            pHost.text = ""; pUser.text = ""; pPort.text = "22"; pIdentity.text = ""
+            pProgram.text = ""; pWorkdir.text = ""
+            pSerialPort.text = ""; pBaud.editText = "115200"
+            open()
+        }
+        function openEdit(p) {
+            originalName = p.name
+            pName.text = p.name
+            pType.currentIndex = p.type
+            pHost.text = p.host || ""; pUser.text = p.user || ""
+            pPort.text = (p.port || 22).toString(); pIdentity.text = p.identity || ""
+            pProgram.text = p.program || ""; pWorkdir.text = p.workingDir || ""
+            pSerialPort.text = p.serialPort || ""
+            pBaud.editText = (p.baud || 115200).toString()
+            open()
+        }
+        onAccepted: {
+            var name = pName.text.trim()
+            if (name.length === 0) return
+            // Beim Umbenennen das alte Profil entfernen (Upsert läuft über den Namen).
+            if (originalName.length > 0 && originalName !== name)
+                Profiles.removeProfile(originalName)
+            Profiles.saveProfile({
+                name: name, type: pType.currentIndex,
+                host: pHost.text, port: parseInt(pPort.text) || 22,
+                user: pUser.text, identity: pIdentity.text,
+                program: pProgram.text, workingDir: pWorkdir.text,
+                serialPort: pSerialPort.text, baud: parseInt(pBaud.editText) || 115200
+            })
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+
+            GridLayout {
+                columns: 2
+                columnSpacing: 10
+                rowSpacing: 8
+                Layout.fillWidth: true
+                Text { text: qsTr("Name"); color: Theme.textBright }
+                TextField { id: pName; Layout.fillWidth: true; placeholderText: qsTr("z. B. Prod-Server") }
+                Text { text: qsTr("Typ"); color: Theme.textBright }
+                AppComboBox {
+                    id: pType
+                    Layout.fillWidth: true
+                    model: [ qsTr("Shell"), qsTr("SSH"), qsTr("Seriell") ]
+                }
+            }
+
+            // SSH-Felder.
+            GridLayout {
+                visible: pType.currentIndex === 1
+                columns: 2
+                columnSpacing: 10
+                rowSpacing: 8
+                Layout.fillWidth: true
+                Text { text: qsTr("Host"); color: Theme.textBright }
+                TextField { id: pHost; Layout.fillWidth: true; placeholderText: "example.com" }
+                Text { text: qsTr("Benutzer"); color: Theme.textBright }
+                TextField { id: pUser; Layout.fillWidth: true }
+                Text { text: qsTr("Port"); color: Theme.textBright }
+                TextField { id: pPort; Layout.fillWidth: true; text: "22" }
+                Text { text: qsTr("Identity-Datei"); color: Theme.textBright }
+                TextField { id: pIdentity; Layout.fillWidth: true; placeholderText: "~/.ssh/id_ed25519 (optional)" }
+            }
+
+            // Shell-Felder.
+            GridLayout {
+                visible: pType.currentIndex === 0
+                columns: 2
+                columnSpacing: 10
+                rowSpacing: 8
+                Layout.fillWidth: true
+                Text { text: qsTr("Programm"); color: Theme.textBright }
+                TextField { id: pProgram; Layout.fillWidth: true; placeholderText: qsTr("leer = Standard-Shell") }
+                Text { text: qsTr("Arbeitsverzeichnis"); color: Theme.textBright }
+                TextField { id: pWorkdir; Layout.fillWidth: true; placeholderText: qsTr("leer = Home") }
+            }
+
+            // Seriell-Felder.
+            GridLayout {
+                visible: pType.currentIndex === 2
+                columns: 2
+                columnSpacing: 10
+                rowSpacing: 8
+                Layout.fillWidth: true
+                Text { text: qsTr("Port"); color: Theme.textBright }
+                TextField { id: pSerialPort; Layout.fillWidth: true; placeholderText: "/dev/tty… · COM3" }
+                Text { text: qsTr("Baudrate"); color: Theme.textBright }
+                AppComboBox {
+                    id: pBaud
+                    Layout.fillWidth: true
+                    editable: true
+                    model: ["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"]
+                }
+            }
+
+            Text {
+                visible: pType.currentIndex === 1
+                text: qsTr("Passwort/Schlüssel werden im Terminal abgefragt (System-ssh).")
+                color: Theme.textDim
+                font.pixelSize: 11
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
             }
         }
     }

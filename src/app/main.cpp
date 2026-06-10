@@ -7,6 +7,7 @@
 
 #include "AppController.h"
 #include "ColorScheme.h"
+#include "ConnectionProfile.h"
 #include "GlobalHotkey.h"
 
 namespace {
@@ -51,6 +52,12 @@ int main(int argc, char *argv[])
     // mit der auto-generierten Modul-Typregistrierung (Symptom: „TerminalItem is not a type").
     engine.rootContext()->setContextProperty(
         QStringLiteral("ColorSchemes"), qtmux::ColorSchemeRegistry::instance());
+
+    // Connection-Manager: gespeicherte Verbindungsprofile (Shell/SSH/Seriell).
+    // Wie oben als Context-Property; QML liest/bearbeitet, beim Verbinden ruft es
+    // die passende SessionModel::create…Session-Methode (QTMUX-7).
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("Profiles"), qtmux::ConnectionProfileRegistry::instance());
 
     // Globaler Quake-Hotkey (Ctrl+`) als Context-Property; QML schaltet ihn je nach
     // Einstellung und reagiert auf `activated` (Fenster ein-/ausblenden).

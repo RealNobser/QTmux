@@ -180,9 +180,12 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 ## Status (Stand: 2026-06-09)
 
-> ⏭️ **Nächste Aufgabe:** QTMUX-7 (SSH-Connection-Manager/Profile) oder QTMUX-6
-> (GPU-Glyph-Atlas) — größere Brocken; alternativ kleinere Backlog-Tickets (QTMUX-15
-> Hotkeys konfigurierbar, QTMUX-22 Secrets-Vault, QTMUX-23 Login-Scripts, QTMUX-25 Clink).
+> ⏭️ **Nächste Aufgabe:** QTMUX-6 (GPU-Glyph-Atlas) — größerer Brocken; alternativ
+> kleinere Backlog-Tickets (QTMUX-15 Hotkeys konfigurierbar, QTMUX-22 Secrets-Vault,
+> QTMUX-23 Login-Scripts, QTMUX-25 Clink). Für QTMUX-7 ist als Folgeschritt noch die
+> libssh2/SFTP-Variante offen (siehe Ticket-Scope).
+> Session 2026-06-10: QTMUX-7 (Connection-Manager/Profile) erledigt — Profile-Editor +
+> Manager-Dialog + Schnellverbinden, QSettings-persistiert, E2E verifiziert.
 > Session 2026-06-09: QTMUX-3 (verschachtelte H+V-Layouts) + QTMUX-4 (Pane-Reorder per
 > Drag) erledigt; davor QTMUX-18 (Color-Schemes), QTMUX-19 (Schriftart+Ligaturen),
 > QTMUX-20 (Quake-Modus), QTMUX-24 (Progress OSC 9;4), Command-Palette (QTMUX-12) —
@@ -279,7 +282,30 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   SSH läuft über den **System-`ssh`-Client im PTY** (Passwort/Key/known_hosts/ssh-config/
   Agent-Forwarding „funktionieren einfach"); `SshBackend : PtyBackend` baut die ssh-Argumente.
   Dialoge für beide unter „Datei". Persistenz inkl. host/port/user/identity. MCP
-  `create_session type=ssh`. Offen: Connection-Manager/Profile, libssh2-Variante (SFTP).
+  `create_session type=ssh`. Offen: libssh2-Variante (SFTP).
+- ✅ **Connection-Manager / Profile (QTMUX-7)** — gespeicherte, wiederverwendbare
+  Verbindungsvorlagen für **Shell/SSH/Seriell**. Kern: `src/core/ConnectionProfile.{h,cpp}`
+  (Gui-frei, nur Qt Core) — `struct ConnectionProfile` (name + type 0=Shell/1=Ssh/2=Serial +
+  alle typ­spezifischen Felder) und `ConnectionProfileRegistry` (prozessweiter Singleton via
+  `instance()`, **QSettings**-Array `profiles`, `saveProfile`-Upsert über den Namen,
+  `removeProfile`, `profilesVariant()` für QML). **Bewusst entkoppelt:** die Registry kennt
+  KEINE Sessions — das Starten macht QML, indem es das Profil liest und die passende
+  `SessionModel::create{Shell,Ssh,Serial}Session` ruft (`window.connectProfile`). QML-Brücke
+  wie bei den Farbschemata als **Context-Property `Profiles`** in `main.cpp` (kein
+  `qmlRegisterSingletonInstance`, das kollidiert mit der Modul-Typregistrierung). UI in
+  [qml/Main.qml](qml/Main.qml): **Manager-Dialog** (`connectionsDialog` — Liste der Profile mit
+  Typ-Icon/Ziel-Zusammenfassung + „Verbinden/Bearbeiten/Löschen", „Neu …", Leer-Hinweis) und
+  **Profil-Editor** (`profileEditDialog` — Name + Typ-`AppComboBox`, danach **bedingte Felder**
+  je Typ: SSH host/user/port/identity · Shell program/workingDir · Seriell port/baud; beim
+  Umbenennen wird das alte Profil entfernt). Erreichbar über Toolbar-**Lesezeichen-Icon**
+  (`bookmark.svg`), Menü „Datei → Verbindungen verwalten …" und die **Command-Palette**
+  (fester Eintrag + je Profil „Verbinden: <name>"). Test `tst_profiles` (Upsert/Persistenz/
+  Entfernen, QSettings-Testmodus) → **5 Test-Binaries grün** (neu: `tst_profiles`). E2E auf macOS verifiziert: SSH- und
+  Shell-Profil angelegt/persistiert/gelistet, „Verbinden" lädt die Session ins aktive Pane
+  (Shell-Profil mit `workingDir=/tmp` → `pwd`=`/private/tmp`), Löschen leert die Liste; i18n
+  DE/EN ergänzt. **Lektion (GUI-Test):** das CGEvent-Maus-Tool braucht eine kurze Pause
+  zwischen `leftMouseDown`/`leftMouseUp` (sonst nur Hover, kein Klick) — siehe Memory
+  `qtmux-gui-test-macos`.
 - ✅ **MCP-Schnittstelle** — `src/server/McpServer.{h,cpp}`: eingebetteter MCP-Server
   (HTTP/JSON-RPC 2.0) auf `127.0.0.1:7345`, Menü „Agent-Steuerung". Tools: list/create/
   close/focus_session, send_text, read_screen, **attach_controller**, set_theme. Session hat
