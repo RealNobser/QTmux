@@ -343,12 +343,13 @@ ApplicationWindow {
     function connectProfile(p) {
         if (!p || !p.name) return
         var row
+        var ls = p.loginScript || ""
         if (p.type === 1)
-            row = sessions.createSshSession(p.host, p.port || 22, p.user, p.identity)
+            row = sessions.createSshSession(p.host, p.port || 22, p.user, p.identity, ls)
         else if (p.type === 2)
-            row = sessions.createSerialSession(p.serialPort, p.baud || 115200)
+            row = sessions.createSerialSession(p.serialPort, p.baud || 115200, ls)
         else
-            row = sessions.createShellSession(p.workingDir || "", p.program || "")
+            row = sessions.createShellSession(p.workingDir || "", p.program || "", ls)
         // Wie bei newSession: ins aktive Pane laden (sofort tippbereit).
         if (window.layout) window.assignToActivePane(row)
         else window.currentRow = row
@@ -1774,6 +1775,7 @@ ApplicationWindow {
             pHost.text = ""; pUser.text = ""; pPort.text = "22"; pIdentity.text = ""
             pProgram.text = ""; pWorkdir.text = ""
             pSerialPort.text = ""; pBaud.editText = "115200"
+            pLogin.text = ""
             open()
         }
         function openEdit(p) {
@@ -1785,6 +1787,7 @@ ApplicationWindow {
             pProgram.text = p.program || ""; pWorkdir.text = p.workingDir || ""
             pSerialPort.text = p.serialPort || ""
             pBaud.editText = (p.baud || 115200).toString()
+            pLogin.text = p.loginScript || ""
             open()
         }
         onAccepted: {
@@ -1798,7 +1801,8 @@ ApplicationWindow {
                 host: pHost.text, port: parseInt(pPort.text) || 22,
                 user: pUser.text, identity: pIdentity.text,
                 program: pProgram.text, workingDir: pWorkdir.text,
-                serialPort: pSerialPort.text, baud: parseInt(pBaud.editText) || 115200
+                serialPort: pSerialPort.text, baud: parseInt(pBaud.editText) || 115200,
+                loginScript: pLogin.text
             })
         }
 
@@ -1872,6 +1876,39 @@ ApplicationWindow {
             Text {
                 visible: pType.currentIndex === 1
                 text: qsTr("Passwort/Schlüssel werden im Terminal abgefragt (System-ssh).")
+                color: Theme.textDim
+                font.pixelSize: 11
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+
+            // Login-Script: Auto-Befehle nach Verbindungsaufbau (QTMUX-23), eine pro Zeile.
+            Text { text: qsTr("Befehle nach Verbindung (eine pro Zeile)"); color: Theme.textBright }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 84
+                radius: 6
+                color: Theme.bgElevated
+                border.width: 1
+                border.color: pLogin.activeFocus ? Theme.accent : Theme.border
+                ScrollView {
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    clip: true
+                    TextArea {
+                        id: pLogin
+                        wrapMode: TextArea.NoWrap
+                        color: Theme.textBright
+                        font.family: window.terminalFontFamily
+                        font.pixelSize: 13
+                        background: null
+                        placeholderText: qsTr("z. B. cd ~/projekt\\nsource .venv/bin/activate")
+                        placeholderTextColor: Theme.textDim
+                    }
+                }
+            }
+            Text {
+                text: qsTr("Werden gesendet, sobald die Shell bereit ist (Shell-Integration: am ersten Prompt, sonst kurz nach Verbindungsaufbau). Geeignet für key-/agent-authentifizierte Verbindungen.")
                 color: Theme.textDim
                 font.pixelSize: 11
                 Layout.fillWidth: true

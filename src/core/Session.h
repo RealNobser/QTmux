@@ -72,6 +72,13 @@ public:
     /// einen anstehenden Aufmerksamkeits-Hinweis.
     void setActive(bool active);
 
+    /// Login-Script (Auto-Befehle nach Verbindungsaufbau, QTMUX-23): eine Zeile = ein
+    /// Befehl. Wird EINMAL gesendet, sobald die Shell bereit ist — bei Shell-Integration
+    /// am ersten OSC-133-Prompt, sonst per Fallback-Timer nach dem ersten Output.
+    /// Vor start() setzen. Gedacht für key-/agent-authentifizierte bzw. nicht-interaktive
+    /// Verbindungen (bei einer Passwortabfrage könnte der Fallback-Timer zu früh senden).
+    void setLoginScript(const QString &s);
+
     /// Setzt den Anzeigetitel (z. B. Portname für serielle Sessions).
     void setTitle(const QString &t);
     BackendState state() const { return m_backend ? m_backend->state() : BackendState::Closed; }
@@ -98,6 +105,8 @@ private:
     void setActivity(Activity a);
     void raiseAttention();                      // setzt needsAttention (wenn inaktiv)
     void observeInput(const QByteArray &data);  // erkennt getippte Agenten-Kommandos
+    void armLoginScript();                      // Fallback-Timer beim ersten Output starten
+    void runLoginScript();                      // Login-Script einmalig senden
     void onBell();                              // Bell -> Aufmerksamkeit, wenn inaktiv
     void onNotify(const QString &text);         // OSC 9/777
     void onProgress(int state, int value);      // OSC 9;4
@@ -109,6 +118,9 @@ private:
     QString m_title = QStringLiteral("Shell");
     QString m_agentId;
     QString m_inputLine;       // Puffer der aktuell getippten Zeile
+    QString m_loginScript;     // Auto-Befehle nach Verbindungsaufbau (QTMUX-23)
+    bool m_loginScriptPending = false;  // Login-Script noch zu senden?
+    bool m_loginArmed = false;          // Fallback-Timer bereits gestartet?
     bool m_titleFromAgent = false;
     bool m_active = false;
     bool m_needsAttention = false;

@@ -31,6 +31,7 @@ ConnectionProfile ConnectionProfileRegistry::fromMap(const QVariantMap &m) {
     p.workingDir = m.value(QStringLiteral("workingDir")).toString();
     p.serialPort = m.value(QStringLiteral("serialPort")).toString();
     p.baud       = m.value(QStringLiteral("baud"), 115200).toInt();
+    p.loginScript = m.value(QStringLiteral("loginScript")).toString();
     return p;
 }
 
@@ -46,6 +47,7 @@ QVariantMap ConnectionProfileRegistry::toMap(const ConnectionProfile &p) {
     m[QStringLiteral("workingDir")] = p.workingDir;
     m[QStringLiteral("serialPort")] = p.serialPort;
     m[QStringLiteral("baud")]       = p.baud;
+    m[QStringLiteral("loginScript")] = p.loginScript;
     return m;
 }
 
@@ -95,6 +97,7 @@ void ConnectionProfileRegistry::load() {
         p.workingDir = s.value(QStringLiteral("workingDir")).toString();
         p.serialPort = s.value(QStringLiteral("serialPort")).toString();
         p.baud       = s.value(QStringLiteral("baud"), 115200).toInt();
+        p.loginScript = s.value(QStringLiteral("loginScript")).toString();
         if (!p.name.isEmpty()) m_profiles.append(p);
     }
     s.endArray();
@@ -116,6 +119,7 @@ void ConnectionProfileRegistry::persist() const {
         s.setValue(QStringLiteral("workingDir"), p.workingDir);
         s.setValue(QStringLiteral("serialPort"), p.serialPort);
         s.setValue(QStringLiteral("baud"), p.baud);
+        s.setValue(QStringLiteral("loginScript"), p.loginScript);
     }
     s.endArray();
 }

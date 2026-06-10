@@ -31,9 +31,13 @@ private slots:
         ssh[QStringLiteral("host")] = QStringLiteral("example.com");
         ssh[QStringLiteral("port")] = 2222;
         ssh[QStringLiteral("user")] = QStringLiteral("root");
+        ssh[QStringLiteral("loginScript")] = QStringLiteral("cd /srv\ntmux attach");
         reg->saveProfile(ssh);
         QCOMPARE(reg->profiles().size(), 1);
         QCOMPARE(reg->profile(QStringLiteral("prod")).value(QStringLiteral("port")).toInt(), 2222);
+        // Login-Script (QTMUX-23) wird mitgeführt/persistiert.
+        QCOMPARE(reg->profile(QStringLiteral("prod")).value(QStringLiteral("loginScript")).toString(),
+                 QStringLiteral("cd /srv\ntmux attach"));
 
         // Upsert: gleicher Name → ersetzen, nicht duplizieren.
         ssh[QStringLiteral("port")] = 22;

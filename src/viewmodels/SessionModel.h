@@ -41,16 +41,20 @@ public:
 
     /// Erzeugt eine lokale Shell-Session und gibt die Zeile zurück.
     /// `workingDir` leer = Home; `program` leer = plattformübliche Standard-Shell.
+    /// `loginScript` (optional): Auto-Befehle nach dem Start (QTMUX-23).
     Q_INVOKABLE int createShellSession(const QString &workingDir = {},
-                                       const QString &program = {});
+                                       const QString &program = {},
+                                       const QString &loginScript = {});
     /// Auf dieser Plattform auswählbare Shells als Liste von {program, name}-Maps
     /// (für die Shell-Auswahl in der UI). Siehe qtmux::ShellRegistry.
     Q_INVOKABLE QVariantList availableShells() const;
     /// Erzeugt eine serielle Session (Port + Baudrate) und gibt deren Zeilenindex zurück.
-    Q_INVOKABLE int createSerialSession(const QString &portName, int baud);
+    Q_INVOKABLE int createSerialSession(const QString &portName, int baud,
+                                        const QString &loginScript = {});
     /// Erzeugt eine SSH-Session (System-ssh) und gibt deren Zeilenindex zurück.
     Q_INVOKABLE int createSshSession(const QString &host, int port,
-                                     const QString &user, const QString &identityFile = {});
+                                     const QString &user, const QString &identityFile = {},
+                                     const QString &loginScript = {});
     /// Verfügbare serielle Ports (z. B. "/dev/cu.usbserial-XYZ").
     Q_INVOKABLE QStringList availableSerialPorts() const;
     /// Session-Objekt einer Zeile (für Binding an TerminalItem.session).

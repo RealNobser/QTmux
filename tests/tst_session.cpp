@@ -16,6 +16,7 @@ private slots:
     void activeSessionIgnoresBell();
     void oscNotificationReachesSession();
     void osc133NonZeroExitSetsError();
+    void loginScriptRunsOnConnect();
 };
 
 static QString rowText(const VtScreen &vt, int row) {
@@ -131,6 +132,31 @@ void TestSession::osc133NonZeroExitSetsError() {
     QTRY_COMPARE_WITH_TIMEOUT(sess.activityInt(),
                               static_cast<int>(Session::Activity::Error), 5000);
     sess.write("\x03");  // ^C, aufräumen
+}
+
+// Login-Script (QTMUX-23): ein per setLoginScript gesetzter Befehl wird nach dem
+// Verbindungsaufbau AUTOMATISCH gesendet (kein write() durch den Test) und erscheint
+// dadurch am Schirm. Beweist die Auto-Send-Kette über den Fallback-Timer.
+void TestSession::loginScriptRunsOnConnect() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    const auto sh = qtmux_test::interactiveShell();
+    pty->setProgram(sh.program);
+    pty->setArguments(sh.args);
+    sess.setLoginScript(QStringLiteral("echo QTMUX_LOGIN_MARKER"));
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.setActive(true);
+    sess.start(80, 24);
+
+    // Niemand tippt — taucht der Marker auf, hat das Login-Script ihn gesendet.
+    bool found = false;
+    for (int attempt = 0; attempt < 100 && !found; ++attempt) {
+        QTest::qWait(100);
+        if (sess.screenText().contains("QTMUX_LOGIN_MARKER")) found = true;
+    }
+    QVERIFY(found);
+    sess.write("\x03");   // ^C, aufräumen
+    sess.shutdown();
 }
 
 QTEST_MAIN(TestSession)

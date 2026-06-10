@@ -181,8 +181,11 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 ## Status (Stand: 2026-06-09)
 
 > ⏭️ **Nächste Aufgabe:** QTMUX-6 (GPU-Glyph-Atlas) — größerer Brocken; alternativ
-> kleinere Backlog-Tickets (QTMUX-22 Secrets-Vault, QTMUX-23 Login-Scripts, QTMUX-25
-> Clink). Für QTMUX-7 ist als Folgeschritt noch die libssh2/SFTP-Variante offen.
+> kleinere Backlog-Tickets (QTMUX-22 Secrets-Vault, QTMUX-25 Clink). Für QTMUX-7 ist
+> als Folgeschritt noch die libssh2/SFTP-Variante offen.
+> Session 2026-06-10: QTMUX-23 (Login-Scripts pro Profil) erledigt — Auto-Befehle nach
+> Verbindungsaufbau (Session sendet sie am ersten Prompt bzw. per Fallback-Timer),
+> E2E verifiziert. QTMUX-7 + QTMUX-15 zusätzlich auf **Windows** verifiziert.
 > Session 2026-06-10: QTMUX-15 (konfigurierbare Hotkeys inkl. Multi-Chord) erledigt —
 > HotkeyRegistry + Aufnahme-Dialog + Settings-Liste, QSettings-persistiert, E2E verifiziert.
 > QTMUX-7 (Connection-Manager/Profile) erledigt — Profile-Editor + Manager-Dialog +
@@ -307,6 +310,21 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   DE/EN ergänzt. **Lektion (GUI-Test):** das CGEvent-Maus-Tool braucht eine kurze Pause
   zwischen `leftMouseDown`/`leftMouseUp` (sonst nur Hover, kein Klick) — siehe Memory
   `qtmux-gui-test-macos`.
+- ✅ **Login-Scripts pro Profil (QTMUX-23)** — Auto-Befehle nach Verbindungsaufbau. Das
+  Profil (`ConnectionProfile`) hat ein Feld `loginScript` (eine Zeile = ein Befehl, persistiert).
+  `Session::setLoginScript()` + Logik: das Script wird **einmal** gesendet, sobald die Shell
+  bereit ist — bei Shell-Integration am **ersten OSC-133-Prompt** (`onPromptMarker` 'A'/'B' →
+  `runLoginScript`), sonst per **Fallback-Timer** (800 ms nach dem ersten Output, via
+  `armLoginScript` an `dataReceived` gehängt). `runLoginScript` leert `m_loginScriptPending`,
+  sodass nur der erste Trigger feuert; jede nicht-leere Zeile wird als Befehl + CR direkt ans
+  Backend geschrieben. `SessionModel::create{Shell,Ssh,Serial}Session` nehmen einen optionalen
+  `loginScript`-Parameter; `window.connectProfile` reicht ihn durch. **Bewusst NICHT pro Session
+  persistiert** — Quelle ist das Profil; restaurierte Sessions führen das Script nicht erneut aus
+  (vermeidet u. a. Fehl-Sends in eine Passwortabfrage beim Restore). Profil-Editor: mehrzeiliges
+  `TextArea`-Feld „Befehle nach Verbindung". **Grenze:** bei interaktiver Passwortabfrage ohne
+  Shell-Integration könnte der Fallback-Timer zu früh senden → gedacht für key-/agent-Auth bzw.
+  nicht-interaktive Verbindungen. Tests: `tst_session::loginScriptRunsOnConnect` (echte Shell,
+  Auto-Send) + loginScript-Roundtrip in `tst_profiles`. E2E auf macOS verifiziert.
 - ✅ **Konfigurierbare Hotkeys inkl. Multi-Chord (QTMUX-15)** — frei belegbare Tastenkürzel
   für 11 Aktionen. Kern: `src/core/HotkeyRegistry.{h,cpp}` (**Gui-frei**, nur Qt Core) — hält
   die Default-Sequenzen je Aktions-ID plus benutzerdefinierte Overrides, persistiert **nur die

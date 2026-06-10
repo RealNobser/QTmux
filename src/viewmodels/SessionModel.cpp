@@ -97,11 +97,13 @@ void SessionModel::wireSession(Session *s, int row) {
     Q_UNUSED(row);
 }
 
-int SessionModel::createShellSession(const QString &workingDir, const QString &program) {
+int SessionModel::createShellSession(const QString &workingDir, const QString &program,
+                                     const QString &loginScript) {
     auto *s = new Session(this);
     auto *pty = new PtyBackend();
     if (!workingDir.isEmpty()) pty->setWorkingDirectory(workingDir);
     if (!program.isEmpty()) pty->setProgram(program);   // leer = Standard-Shell
+    s->setLoginScript(loginScript);
     // Eigene Session-ID in die Shell-Umgebung legen: ein steuernder Agent liest
     // $QTMUX_SESSION_ID und meldet sich per MCP-Tool attach_controller(id) an.
     pty->setExtraEnv({QStringLiteral("QTMUX_SESSION_ID=%1").arg(s->id())});
@@ -139,11 +141,13 @@ QVariantList SessionModel::availableShells() const {
     return out;
 }
 
-int SessionModel::createSerialSession(const QString &portName, int baud) {
+int SessionModel::createSerialSession(const QString &portName, int baud,
+                                      const QString &loginScript) {
     auto *s = new Session(this);
     auto *serial = new SerialBackend();
     serial->setPortName(portName);
     serial->setBaudRate(baud);
+    s->setLoginScript(loginScript);
     s->attachBackend(serial, Session::Type::Serial, 80, 24);
     s->setTitle(portName);
 
@@ -161,13 +165,15 @@ int SessionModel::createSerialSession(const QString &portName, int baud) {
 }
 
 int SessionModel::createSshSession(const QString &host, int port,
-                                   const QString &user, const QString &identityFile) {
+                                   const QString &user, const QString &identityFile,
+                                   const QString &loginScript) {
     auto *s = new Session(this);
     auto *ssh = new SshBackend();
     ssh->setHost(host);
     ssh->setPort(port > 0 ? port : 22);
     ssh->setUser(user);
     ssh->setIdentityFile(identityFile);
+    s->setLoginScript(loginScript);
     s->attachBackend(ssh, Session::Type::Ssh, 80, 24);
     s->setTitle(ssh->target());
 

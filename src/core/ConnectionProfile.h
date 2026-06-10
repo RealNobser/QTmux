@@ -24,6 +24,8 @@ struct ConnectionProfile {
     // Seriell
     QString serialPort;
     int baud = 115200;
+    // Auto-Befehle nach Verbindungsaufbau (QTMUX-23), eine Zeile = ein Befehl.
+    QString loginScript;
 };
 
 /// Prozessweite Verwaltung gespeicherter Verbindungsprofile (Gui-frei, nur Qt Core).

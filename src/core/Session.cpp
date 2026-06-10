@@ -5,6 +5,9 @@
 
 #include <QCoreApplication>
 #include <QHash>
+#include <QTimer>
+#include <QStringList>
+#include <QRegularExpression>
 
 namespace qtmux {
 
@@ -82,6 +85,10 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
 
     connect(m_backend.get(), &ITerminalBackend::dataReceived,
             m_screen.get(), &VtScreen::inputWrite);
+    // Beim ersten Output den Fallback-Timer fürs Login-Script bewaffnen (greift, wenn
+    // keine OSC-133-Shell-Integration vorhanden ist).
+    connect(m_backend.get(), &ITerminalBackend::dataReceived, this,
+            [this](const QByteArray &) { armLoginScript(); });
     connect(m_screen.get(), &VtScreen::outputToPty,
             m_backend.get(), &ITerminalBackend::write);
     connect(m_screen.get(), &VtScreen::titleChanged, this, &Session::setTitle);
@@ -177,6 +184,9 @@ void Session::onPromptMarker(char kind, int exitCode) {
     case 'A':                       // neue Prompt
     case 'B':                       // Prompt bereit für Eingabe
         if (m_activity == Activity::Error) setActivity(Activity::Running);
+        // Shell-Integration meldet die erste Eingabebereitschaft → exakter Zeitpunkt
+        // fürs Login-Script (sicherer als der Fallback-Timer, z. B. nach Passwortabfrage).
+        runLoginScript();
         break;
     default:
         break;
@@ -226,6 +236,36 @@ void Session::observeInput(const QByteArray &data) {
             m_inputLine.clear();
         }
     }
+}
+
+void Session::setLoginScript(const QString &s) {
+    m_loginScript = s;
+    m_loginScriptPending = !s.trimmed().isEmpty();
+}
+
+void Session::armLoginScript() {
+    // Einmalig nach dem ersten Output einen Fallback-Timer starten: feuert das
+    // Login-Script auch ohne Shell-Integration. Kommt vorher ein OSC-133-Prompt,
+    // läuft das Script schon dort (runLoginScript leert m_loginScriptPending).
+    if (!m_loginScriptPending || m_loginArmed) return;
+    m_loginArmed = true;
+    QTimer::singleShot(800, this, [this]() { runLoginScript(); });
+}
+
+void Session::runLoginScript() {
+    if (!m_loginScriptPending) return;
+    m_loginScriptPending = false;   // genau einmal senden
+    // Jede nicht-leere Zeile als Befehl + Enter (CR) senden. Direkt ans Backend,
+    // nicht über write() — automatisierte Eingabe braucht keine Tipp-Beobachtung.
+    QByteArray out;
+    const QStringList lines =
+        m_loginScript.split(QRegularExpression(QStringLiteral("\r\n|\r|\n")));
+    for (const QString &ln : lines) {
+        if (ln.trimmed().isEmpty()) continue;
+        out += ln.toUtf8();
+        out += '\r';
+    }
+    if (!out.isEmpty() && m_backend) m_backend->write(out);
 }
 
 void Session::resize(int cols, int rows) {
