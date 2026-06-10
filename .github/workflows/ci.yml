@@ -1,0 +1,82 @@
+name: CI
+
+# Baut QTmux auf macOS, Windows und Linux und führt die Tests aus.
+# Nimmt einen Teil der manuellen Plattform-Verifikation ab (u. a. GPU-Glyph-Atlas
+# QTMUX-6 auf den jeweiligen RHI-Backends, Clink-Code QTMUX-25 auf Windows).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  QT_VERSION: 6.8.1
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS,   os: macos-latest,   host: mac,     arch: clang_64 }
+          - { name: Windows, os: windows-latest, host: windows, arch: win64_msvc2022_64 }
+          - { name: Linux,   os: ubuntu-latest,  host: linux,   arch: linux_gcc_64 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Linux: System-Bibliotheken für Qt Quick/RHI + Build-Tooling.
+      - name: Linux-Systempakete
+        if: matrix.host == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
+            libxcb-cursor0 libfontconfig1-dev libfreetype-dev
+
+      - name: Ninja einrichten
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      # Windows: MSVC-Umgebung (vcvars) in den PATH, damit Ninja + cl gefunden werden.
+      - name: MSVC-Umgebung (Windows)
+        if: matrix.host == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # Qt inkl. der von QTmux benötigten Module:
+      #   qtserialport  -> SerialBackend
+      #   qtshadertools -> qsb / qt_add_shaders (GPU-Glyph-Atlas, QTMUX-6)
+      - name: Qt installieren
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: ${{ matrix.host }}
+          target: desktop
+          arch: ${{ matrix.arch }}
+          modules: qtserialport qtshadertools
+          cache: true
+
+      - name: Konfigurieren
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
+
+      - name: Bauen
+        run: cmake --build build --parallel
+
+      # Tests headless (offscreen-Plattform → kein Display/GPU nötig). Auf Windows
+      # hängen die ConPTY-PTY-Tests an der CI-Konsole (siehe CLAUDE.md) → dort
+      # nicht blockierend, nur informativ.
+      - name: Tests (macOS/Linux)
+        if: matrix.host != 'windows'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure --timeout 120
+
+      - name: Tests (Windows, informativ)
+        if: matrix.host == 'windows'
+        continue-on-error: true
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure --timeout 120
