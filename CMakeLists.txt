@@ -148,6 +148,27 @@ qt_add_translations(qtmux
     RESOURCE_PREFIX "/i18n"
 )
 
+# Deutsch ist die QUELLSPRACHE: nach jedem lupdate-Lauf neue Einträge in
+# qtmux_de.ts automatisch als finished (Übersetzung = Quelltext) markieren —
+# sonst warnt lrelease bei jedem Build über unfinished/ignorierte Strings.
+# qt_add_translations legt die lupdate-Targets DEFERRED (am Ende des Directory-
+# Scopes) an — der Hook muss daher ebenfalls deferred laufen, sonst existiert
+# das Target noch nicht. QTmux_lupdate ist das echte lupdate-Target;
+# update_translations ist nur ein phony-Aggregator darüber.
+function(qtmux_hook_finish_source_ts)
+    if(TARGET ${PROJECT_NAME}_lupdate)
+        add_custom_command(TARGET ${PROJECT_NAME}_lupdate POST_BUILD
+            COMMAND ${CMAKE_COMMAND}
+                    -DTS_FILE=${CMAKE_CURRENT_SOURCE_DIR}/i18n/qtmux_de.ts
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/FinishSourceLanguageTs.cmake
+            COMMENT "i18n: Quellsprache (de) als finished markieren"
+            VERBATIM)
+    else()
+        message(WARNING "Target ${PROJECT_NAME}_lupdate fehlt — qtmux_de.ts wird nach lupdate nicht auto-finalisiert.")
+    endif()
+endfunction()
+cmake_language(DEFER CALL qtmux_hook_finish_source_ts)
+
 # macOS App-Bundle
 set_target_properties(qtmux PROPERTIES
     MACOSX_BUNDLE TRUE
