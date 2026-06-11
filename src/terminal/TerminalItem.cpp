@@ -438,16 +438,33 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
     if (!root) {
         delete oldNode;
         root = new GpuRoot;
+        // Ein QSGGeometryNode muss VOR appendChildNode Material UND Geometry
+        // besitzen (Debug-Assert in qsgnode.cpp) — daher hier sofort eine leere
+        // Geometrie setzen; uploadColored/uploadGlyph allokieren später nur um.
+        auto initColored = [](QSGGeometryNode *n) {
+            auto *g = new QSGGeometry(QSGGeometry::defaultAttributes_ColoredPoint2D(), 0);
+            g->setDrawingMode(QSGGeometry::DrawTriangles);
+            n->setGeometry(g);
+            n->setFlag(QSGNode::OwnsGeometry, true);
+        };
         root->bg = new QSGGeometryNode;
         root->bg->setMaterial(new QSGVertexColorMaterial);
         root->bg->setFlag(QSGNode::OwnsMaterial, true);
+        initColored(root->bg);
         root->glyph = new QSGGeometryNode;
         root->glyphMat = new GlyphMaterial;
         root->glyph->setMaterial(root->glyphMat);
         root->glyph->setFlag(QSGNode::OwnsMaterial, true);
+        {
+            auto *g = new QSGGeometry(glyphAttributes(), 0);
+            g->setDrawingMode(QSGGeometry::DrawTriangles);
+            root->glyph->setGeometry(g);
+            root->glyph->setFlag(QSGNode::OwnsGeometry, true);
+        }
         root->overlay = new QSGGeometryNode;
         root->overlay->setMaterial(new QSGVertexColorMaterial);
         root->overlay->setFlag(QSGNode::OwnsMaterial, true);
+        initColored(root->overlay);
         // Zeichenreihenfolge: Hintergrund → Glyphen → Overlay (Selektion/Cursor).
         root->appendChildNode(root->bg);
         root->appendChildNode(root->glyph);
