@@ -195,11 +195,29 @@ Summaries holen und Duplikate überspringen. Token nur einlesen, nie ausgeben/co
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
-## Status (Stand: 2026-06-09)
+## Status (Stand: 2026-06-11)
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. Vault→Profil-Integration (SSH-Passwort-Auto-Fill,
 > baut auf QTMUX-22) oder Phase 5 (Plugin-System) / Rest von Phase 6 (CPack-Pakete,
 > MSI-Signing). Offene Folgeschritte: libssh2/SFTP-Variante (QTMUX-7).
+> **Windows-Test-Session 2026-06-11** (alles committet + gepusht): Stand `96676c9` von
+> der Mac-Seite gepullt, Windows-Build/Tests grün gehalten und **zwei Windows-only-Bugs
+> gefixt** (`e48a581`, `6aff105`):
+> 1. **GPU-Glyph-Atlas (QTMUX-6) crashte auf Debug-Qt sofort** — Assert „QSGGeometryNode
+>    is missing geometry" (qsgnode.cpp:407): `appendChildNode` bekam einen GeometryNode
+>    ohne Geometry. Fix: jedem `QSGGeometryNode` in `updatePaintNode` beim Anlegen sofort
+>    eine leere `QSGGeometry` setzen. Release-Qt (macOS) prüft das nicht → fiel dort nie auf.
+> 2. **ConPTY-Terminals blieben unter dem VS-Code-Debugger (F5/cppvsdbg) leer** (nur Cursor,
+>    keine Eingabe), standalone lief alles. Ursache: cppvsdbg startet im Default
+>    `console:internalConsole` und **leitet die Standard-Handles um** → stört die ConPTY-
+>    Pseudo-Konsolen (Kindshell hängt nach dem Init-Frame auf Konsolen-LPC `EventPairLow`).
+>    **Fix: `.vscode/launch.json` (Windows) `"console": "externalTerminal"`** → keine
+>    Umleitung, Breakpoints bleiben; Fallback „Run Without Debugging" (Strg+F5). Diagnose-
+>    Signal: `stdout`-Handle ≠ 0 bei internalConsole, 0 bei externalTerminal. Defensiv:
+>    `FreeConsole()` in main.cpp (war hier wirkungslos, consoleWnd stets 0). **Nicht** Clink
+>    (nicht installiert), **nicht** Konsolen-Vererbung, **nicht** das Rendering.
+> Die i18n-Quellsprachen-Automatik (lupdate→`FinishSourceLanguageTs.cmake`) hat beim Pull
+> sauber gegriffen: trotz +40 neuer Strings meldet lrelease 159/159 finished, keine Warnung.
 > Session 2026-06-10: **CI-Matrix** (GitHub Actions, macOS/Windows/Linux) eingerichtet —
 > Erstlauf grün; bestätigt, dass QTMUX-6 + QTMUX-25 auf allen drei Plattformen bauen.
 > Session 2026-06-10: QTMUX-6 (GPU-Glyph-Atlas) erledigt — Scene-Graph-Renderer mit
