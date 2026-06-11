@@ -27,6 +27,7 @@ ConnectionProfile ConnectionProfileRegistry::fromMap(const QVariantMap &m) {
     p.port       = m.value(QStringLiteral("port"), 22).toInt();
     p.user       = m.value(QStringLiteral("user")).toString();
     p.identity   = m.value(QStringLiteral("identity")).toString();
+    p.passwordSecret = m.value(QStringLiteral("passwordSecret")).toString();
     p.program    = m.value(QStringLiteral("program")).toString();
     p.workingDir = m.value(QStringLiteral("workingDir")).toString();
     p.serialPort = m.value(QStringLiteral("serialPort")).toString();
@@ -43,6 +44,7 @@ QVariantMap ConnectionProfileRegistry::toMap(const ConnectionProfile &p) {
     m[QStringLiteral("port")]       = p.port;
     m[QStringLiteral("user")]       = p.user;
     m[QStringLiteral("identity")]   = p.identity;
+    m[QStringLiteral("passwordSecret")] = p.passwordSecret;
     m[QStringLiteral("program")]    = p.program;
     m[QStringLiteral("workingDir")] = p.workingDir;
     m[QStringLiteral("serialPort")] = p.serialPort;
@@ -93,6 +95,7 @@ void ConnectionProfileRegistry::load() {
         p.port       = s.value(QStringLiteral("port"), 22).toInt();
         p.user       = s.value(QStringLiteral("user")).toString();
         p.identity   = s.value(QStringLiteral("identity")).toString();
+        p.passwordSecret = s.value(QStringLiteral("passwordSecret")).toString();
         p.program    = s.value(QStringLiteral("program")).toString();
         p.workingDir = s.value(QStringLiteral("workingDir")).toString();
         p.serialPort = s.value(QStringLiteral("serialPort")).toString();
@@ -115,6 +118,7 @@ void ConnectionProfileRegistry::persist() const {
         s.setValue(QStringLiteral("port"), p.port);
         s.setValue(QStringLiteral("user"), p.user);
         s.setValue(QStringLiteral("identity"), p.identity);
+        s.setValue(QStringLiteral("passwordSecret"), p.passwordSecret);
         s.setValue(QStringLiteral("program"), p.program);
         s.setValue(QStringLiteral("workingDir"), p.workingDir);
         s.setValue(QStringLiteral("serialPort"), p.serialPort);

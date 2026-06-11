@@ -84,6 +84,20 @@ inline Cmd interactiveShell() {
 #endif
 }
 
+// Fragt "Password: " ab, liest eine Zeile und echot sie als "PWGOT:<wert>" —
+// simuliert die SSH-Passwort-Eingabeaufforderung für den Vault-Auto-Fill-Test.
+inline Cmd passwordPrompt() {
+#if defined(Q_OS_WIN)
+    return {QStringLiteral("cmd.exe"),
+            {QStringLiteral("/c"),
+             QStringLiteral("set /p p=Password: & echo PWGOT:%p%")}};
+#else
+    return {QStringLiteral("/bin/sh"),
+            {QStringLiteral("-c"),
+             QStringLiteral("printf 'Password: '; read p; echo PWGOT:$p")}};
+#endif
+}
+
 // Tastendruck "Enter", wie ihn das echte Terminal sendet (CR, plattformneutral:
 // der Unix-PTY mappt CR via ICRNL auf NL).
 inline QByteArray enterKey() { return QByteArrayLiteral("\r"); }

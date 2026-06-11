@@ -166,7 +166,7 @@ int SessionModel::createSerialSession(const QString &portName, int baud,
 
 int SessionModel::createSshSession(const QString &host, int port,
                                    const QString &user, const QString &identityFile,
-                                   const QString &loginScript) {
+                                   const QString &loginScript, const QString &password) {
     auto *s = new Session(this);
     auto *ssh = new SshBackend();
     ssh->setHost(host);
@@ -174,6 +174,7 @@ int SessionModel::createSshSession(const QString &host, int port,
     ssh->setUser(user);
     ssh->setIdentityFile(identityFile);
     s->setLoginScript(loginScript);
+    s->setSshPassword(password);   // Vault-Auto-Fill (leer = keins; nicht persistiert)
     s->attachBackend(ssh, Session::Type::Ssh, 80, 24);
     s->setTitle(ssh->target());
 

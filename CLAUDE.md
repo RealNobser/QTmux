@@ -197,9 +197,11 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 ## Status (Stand: 2026-06-11)
 
-> ⏭️ **Nächste Aufgabe:** offen — z. B. Vault→Profil-Integration (SSH-Passwort-Auto-Fill,
-> baut auf QTMUX-22) oder Phase 5 (Plugin-System) / Rest von Phase 6 (CPack-Pakete,
-> MSI-Signing). Offene Folgeschritte: libssh2/SFTP-Variante (QTMUX-7).
+> ⏭️ **Nächste Aufgabe:** offen — z. B. Phase 5 (Plugin-System) oder Rest von Phase 6
+> (CPack-Pakete, MSI-Signing). Offene Folgeschritte: libssh2/SFTP-Variante (QTMUX-7).
+> Session 2026-06-11: **Vault→Profil-Integration** erledigt — SSH-Passwort-Auto-Fill aus dem
+> Secrets-Vault (nur Geheimnis-Name im Profil; Prompt-Erkennung + einmaliges Auto-Send),
+> Unit-Test mit echtem PTY + E2E auf macOS (siehe Feature-Eintrag).
 > **Windows-Test-Session 2026-06-11** (alles committet + gepusht): Stand `96676c9` von
 > der Mac-Seite gepullt, Windows-Build/Tests grün gehalten und **zwei Windows-only-Bugs
 > gefixt** (`e48a581`, `6aff105`):
@@ -381,12 +383,33 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
     (`App.copyToClipboard`)/Bearbeiten/Löschen; Editor `secretEditDialog`; Master-Passwort-Wechsel
     `vaultChangePwDialog`. Toolbar-Schlüssel-Icon (`key.svg`, `active: Vault.unlocked`), Menü- +
     Command-Palette-Eintrag. Neuer Clipboard-Helfer `AppController::copyToClipboard`.
-  - **Scope v1:** Vault-Speicher + Verwaltung. Folgeschritt: Profil-Integration (SSH-Passwort-
-    Auto-Fill aus dem Vault). Test `tst_vault` (Anlegen, Upsert, Persistenz-Roundtrip, falsches
+  - **Scope v1:** Vault-Speicher + Verwaltung. **Profil-Integration erledigt** (siehe
+    „Vault→Profil-Integration" unten). Test `tst_vault` (Anlegen, Upsert, Persistenz-Roundtrip, falsches
     Passwort, **Manipulationserkennung**, Passwortwechsel; prüft auch, dass die Datei den
     Klartext nicht enthält) → **7 Test-Binaries grün**. E2E auf macOS verifiziert: anlegen →
     Geheimnis hinzufügen → anzeigen → sperren → mit Master-Passwort wieder entsperren (Geheimnis
     aus der verschlüsselten Datei korrekt zurückerhalten); i18n DE/EN.
+- ✅ **Vault→Profil-Integration (SSH-Passwort-Auto-Fill, QTMUX-22-Folgeschritt)** — ein SSH-
+  Profil kann auf ein **Vault-Geheimnis** verweisen, dessen Wert bei der Passwortabfrage
+  automatisch gesendet wird. **Bewusst gespeichert wird NUR der Geheimnis-Name** im Profil
+  (`ConnectionProfile::passwordSecret`, persistiert) — das Klartext-Passwort steht nie im Profil
+  und verlässt den Vault nur flüchtig zur Session.
+  - **Prompt-Erkennung** ([Session.cpp](src/core/Session.cpp), `scanForPasswordPrompt`): an
+    `dataReceived` gehängt, hält einen gleitenden 512-B-Output-Puffer und prüft (case-insensitive)
+    auf `password:` (deckt „<user>@<host>'s password:" und „Password:" ab). Bei Treffer wird das
+    Geheimnis **genau einmal** + CR direkt ans Backend geschrieben — exakt wie ein getipptes
+    Passwort (der System-`ssh` liest es von seinem PTY, Echo aus). **Einmal** senden vermeidet
+    Lockout-Schleifen bei falschem Passwort. `setSshPassword()` vor `start()`; **nicht
+    persistiert** (restaurierte Sessions füllen nicht erneut aus — wie beim Login-Script).
+  - **Durchreichung:** `SessionModel::createSshSession(...,password)` → `Session::setSshPassword`.
+    `window.connectProfile` löst `Vault.secret(p.passwordSecret)` **nur bei entsperrtem Vault**
+    auf und reicht den Klartext durch (sonst leer → keine Auto-Fill).
+  - **UI** ([qml/Main.qml](qml/Main.qml)): Profil-Editor zeigt für SSH eine Combo „Passwort
+    (Vault)" (`(keines)` + `Vault.names`; gespeicherter Name bleibt auch bei gesperrtem Vault
+    sichtbar) + Hinweis, wenn der Vault gesperrt ist. Tests: `tst_session::sshPasswordAutoFillOnPrompt`
+    (echtes PTY-Skript `printf 'Password: '; read p; echo PWGOT:$p` → Auto-Send beweist die Kette)
+    + `passwordSecret`-Roundtrip in `tst_profiles`. 7 Test-Binaries grün; E2E auf macOS verifiziert
+    (Editor zeigt die Vault-Auswahl + Sperr-Hinweis); i18n DE/EN.
 - ✅ **Login-Scripts pro Profil (QTMUX-23)** — Auto-Befehle nach Verbindungsaufbau. Das
   Profil (`ConnectionProfile`) hat ein Feld `loginScript` (eine Zeile = ein Befehl, persistiert).
   `Session::setLoginScript()` + Logik: das Script wird **einmal** gesendet, sobald die Shell

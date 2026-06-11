@@ -54,7 +54,8 @@ public:
     /// Erzeugt eine SSH-Session (System-ssh) und gibt deren Zeilenindex zurück.
     Q_INVOKABLE int createSshSession(const QString &host, int port,
                                      const QString &user, const QString &identityFile = {},
-                                     const QString &loginScript = {});
+                                     const QString &loginScript = {},
+                                     const QString &password = {});
     /// Verfügbare serielle Ports (z. B. "/dev/cu.usbserial-XYZ").
     Q_INVOKABLE QStringList availableSerialPorts() const;
     /// Session-Objekt einer Zeile (für Binding an TerminalItem.session).

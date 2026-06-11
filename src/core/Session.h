@@ -79,6 +79,13 @@ public:
     /// Verbindungen (bei einer Passwortabfrage könnte der Fallback-Timer zu früh senden).
     void setLoginScript(const QString &s);
 
+    /// SSH-Passwort-Auto-Fill (QTMUX-22-Integration): das Geheimnis wird EINMAL an die
+    /// erste erkannte Passwort-Eingabeaufforderung (`password:`) im Output gesendet —
+    /// genau wie ein getipptes Passwort (ssh liest es von seinem PTY, mit Echo aus).
+    /// Vor start() setzen; NICHT persistiert (restaurierte Sessions füllen nicht erneut
+    /// aus). Nur einmal senden vermeidet Lockout-Schleifen bei falschem Passwort.
+    void setSshPassword(const QString &pw);
+
     /// Setzt den Anzeigetitel (z. B. Portname für serielle Sessions).
     void setTitle(const QString &t);
     BackendState state() const { return m_backend ? m_backend->state() : BackendState::Closed; }
@@ -107,6 +114,7 @@ private:
     void observeInput(const QByteArray &data);  // erkennt getippte Agenten-Kommandos
     void armLoginScript();                      // Fallback-Timer beim ersten Output starten
     void runLoginScript();                      // Login-Script einmalig senden
+    void scanForPasswordPrompt(const QByteArray &data);  // SSH-Passwort-Auto-Fill
     void onBell();                              // Bell -> Aufmerksamkeit, wenn inaktiv
     void onNotify(const QString &text);         // OSC 9/777
     void onProgress(int state, int value);      // OSC 9;4
@@ -121,6 +129,9 @@ private:
     QString m_loginScript;     // Auto-Befehle nach Verbindungsaufbau (QTMUX-23)
     bool m_loginScriptPending = false;  // Login-Script noch zu senden?
     bool m_loginArmed = false;          // Fallback-Timer bereits gestartet?
+    QString m_sshPassword;              // SSH-Passwort-Auto-Fill (nur entsperrt, flüchtig)
+    bool m_sshPasswordPending = false;  // Passwort noch zu senden?
+    QByteArray m_promptScan;            // gleitender Output-Puffer für die Prompt-Erkennung
     bool m_titleFromAgent = false;
     bool m_active = false;
     bool m_needsAttention = false;

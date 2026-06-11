@@ -347,8 +347,12 @@ ApplicationWindow {
         if (!p || !p.name) return
         var row
         var ls = p.loginScript || ""
-        if (p.type === 1)
-            row = sessions.createSshSession(p.host, p.port || 22, p.user, p.identity, ls)
+        if (p.type === 1) {
+            // Passwort aus dem Vault auflösen (nur wenn entsperrt + Geheimnis gesetzt).
+            // Das Klartext-Passwort verlässt QML nur flüchtig an die Session.
+            var pw = (p.passwordSecret && Vault.unlocked) ? Vault.secret(p.passwordSecret) : ""
+            row = sessions.createSshSession(p.host, p.port || 22, p.user, p.identity, ls, pw)
+        }
         else if (p.type === 2)
             row = sessions.createSerialSession(p.serialPort, p.baud || 115200, ls)
         else
@@ -1783,6 +1787,8 @@ ApplicationWindow {
 
         // Ursprungsname: leer = neues Profil; gesetzt = Bearbeiten (Upsert-/Umbenenn-Schlüssel).
         property string originalName: ""
+        // Gewähltes Vault-Geheimnis für die SSH-Passwortabfrage (Name, nicht der Wert).
+        property string pwSecret: ""
 
         function openNew() {
             originalName = ""
@@ -1792,6 +1798,7 @@ ApplicationWindow {
             pProgram.text = ""; pWorkdir.text = ""
             pSerialPort.text = ""; pBaud.editText = "115200"
             pLogin.text = ""
+            pwSecret = ""
             open()
         }
         function openEdit(p) {
@@ -1804,6 +1811,7 @@ ApplicationWindow {
             pSerialPort.text = p.serialPort || ""
             pBaud.editText = (p.baud || 115200).toString()
             pLogin.text = p.loginScript || ""
+            pwSecret = p.passwordSecret || ""
             open()
         }
         onAccepted: {
@@ -1816,6 +1824,7 @@ ApplicationWindow {
                 name: name, type: pType.currentIndex,
                 host: pHost.text, port: parseInt(pPort.text) || 22,
                 user: pUser.text, identity: pIdentity.text,
+                passwordSecret: pwSecret,
                 program: pProgram.text, workingDir: pWorkdir.text,
                 serialPort: pSerialPort.text, baud: parseInt(pBaud.editText) || 115200,
                 loginScript: pLogin.text
@@ -1856,6 +1865,35 @@ ApplicationWindow {
                 TextField { id: pPort; Layout.fillWidth: true; text: "22" }
                 Text { text: qsTr("Identity-Datei"); color: Theme.textBright }
                 TextField { id: pIdentity; Layout.fillWidth: true; placeholderText: "~/.ssh/id_ed25519 (optional)" }
+                Text { text: qsTr("Passwort (Vault)"); color: Theme.textBright }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    // Auswahl eines Vault-Geheimnisses, dessen Wert bei der SSH-Passwort-
+                    // abfrage automatisch gesendet wird. Gespeichert wird nur der Name.
+                    AppComboBox {
+                        id: pPwSecret
+                        Layout.fillWidth: true
+                        property var opts: {
+                            var o = [ qsTr("(keines)") ]
+                            var names = Vault.names
+                            for (var i = 0; i < names.length; i++) o.push(names[i])
+                            // Bei gesperrtem Vault den gespeicherten Namen trotzdem zeigen.
+                            if (profileEditDialog.pwSecret && o.indexOf(profileEditDialog.pwSecret) < 0)
+                                o.push(profileEditDialog.pwSecret)
+                            return o
+                        }
+                        model: opts
+                        currentIndex: Math.max(0, opts.indexOf(profileEditDialog.pwSecret))
+                        onActivated: (i) => profileEditDialog.pwSecret = (i > 0 ? opts[i] : "")
+                    }
+                    Text {
+                        visible: !Vault.unlocked
+                        Layout.fillWidth: true
+                        text: qsTr("Vault gesperrt – beim Verbinden entsperren, sonst kein Auto-Fill.")
+                        color: Theme.textDim; font.pixelSize: 11; wrapMode: Text.WordWrap
+                    }
+                }
             }
 
             // Shell-Felder.

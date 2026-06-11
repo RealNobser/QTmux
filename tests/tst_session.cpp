@@ -17,6 +17,7 @@ private slots:
     void oscNotificationReachesSession();
     void osc133NonZeroExitSetsError();
     void loginScriptRunsOnConnect();
+    void sshPasswordAutoFillOnPrompt();
 };
 
 static QString rowText(const VtScreen &vt, int row) {
@@ -156,6 +157,30 @@ void TestSession::loginScriptRunsOnConnect() {
     }
     QVERIFY(found);
     sess.write("\x03");   // ^C, aufräumen
+    sess.shutdown();
+}
+
+// SSH-Passwort-Auto-Fill (QTMUX-22-Integration): ein per setSshPassword gesetztes
+// Geheimnis wird automatisch an die erste "Password:"-Abfrage gesendet. Der Prozess
+// liest es und echot "PWGOT:<wert>" — niemand tippt, also beweist das Auftauchen die
+// Auto-Send-Kette (Prompt-Erkennung -> Schreiben ans PTY).
+void TestSession::sshPasswordAutoFillOnPrompt() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    const auto cmd = qtmux_test::passwordPrompt();
+    pty->setProgram(cmd.program);
+    pty->setArguments(cmd.args);
+    sess.setSshPassword(QStringLiteral("hunter2"));
+    sess.attachBackend(pty, Session::Type::Ssh, 80, 24);
+    sess.setActive(true);
+    sess.start(80, 24);
+
+    bool found = false;
+    for (int attempt = 0; attempt < 100 && !found; ++attempt) {
+        QTest::qWait(100);
+        if (sess.screenText().contains("PWGOT:hunter2")) found = true;
+    }
+    QVERIFY(found);
     sess.shutdown();
 }
 

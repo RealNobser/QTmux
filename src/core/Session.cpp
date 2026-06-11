@@ -94,9 +94,10 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
     connect(m_backend.get(), &ITerminalBackend::dataReceived,
             m_screen.get(), &VtScreen::inputWrite);
     // Beim ersten Output den Fallback-Timer fürs Login-Script bewaffnen (greift, wenn
-    // keine OSC-133-Shell-Integration vorhanden ist).
+    // keine OSC-133-Shell-Integration vorhanden ist) und den Output auf eine SSH-
+    // Passwort-Eingabeaufforderung hin abtasten (Vault-Auto-Fill).
     connect(m_backend.get(), &ITerminalBackend::dataReceived, this,
-            [this](const QByteArray &) { armLoginScript(); });
+            [this](const QByteArray &data) { scanForPasswordPrompt(data); armLoginScript(); });
     connect(m_screen.get(), &VtScreen::outputToPty,
             m_backend.get(), &ITerminalBackend::write);
     connect(m_screen.get(), &VtScreen::titleChanged, this, &Session::setTitle);
@@ -249,6 +250,29 @@ void Session::observeInput(const QByteArray &data) {
 void Session::setLoginScript(const QString &s) {
     m_loginScript = s;
     m_loginScriptPending = !s.trimmed().isEmpty();
+}
+
+void Session::setSshPassword(const QString &pw) {
+    m_sshPassword = pw;
+    m_sshPasswordPending = !pw.isEmpty();
+}
+
+void Session::scanForPasswordPrompt(const QByteArray &data) {
+    if (!m_sshPasswordPending) return;
+    // Gleitenden Puffer der letzten Ausgabe halten (der Prompt kann über mehrere
+    // Reads zerteilt ankommen) und auf das ssh-Passwort-Muster prüfen.
+    m_promptScan.append(data);
+    if (m_promptScan.size() > 512) m_promptScan = m_promptScan.right(512);
+    const QByteArray lower = m_promptScan.toLower();
+    // Deckt "<user>@<host>'s password:" und schlichtes "Password:" ab.
+    if (!lower.contains("password:")) return;
+
+    // Genau einmal senden (kein erneutes Senden bei Fehlversuch → kein Lockout).
+    m_sshPasswordPending = false;
+    const QByteArray pw = m_sshPassword.toUtf8();
+    m_sshPassword.clear();
+    m_promptScan.clear();
+    if (m_backend) m_backend->write(pw + '\r');
 }
 
 void Session::armLoginScript() {

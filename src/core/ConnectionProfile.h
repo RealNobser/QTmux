@@ -18,6 +18,10 @@ struct ConnectionProfile {
     int port = 22;
     QString user;
     QString identity;
+    // Name eines Vault-Geheimnisses, dessen Wert bei der SSH-Passwortabfrage
+    // automatisch gesendet wird (QTMUX-22-Integration). Leer = kein Auto-Fill.
+    // Das Passwort selbst wird NIE im Profil gespeichert, nur der Geheimnis-Name.
+    QString passwordSecret;
     // Shell
     QString program;      // leer = Standard-Shell
     QString workingDir;
