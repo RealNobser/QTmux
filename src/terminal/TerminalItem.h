@@ -129,9 +129,10 @@ protected:
 private:
     void recomputeGrid();
     void applyFontFeatures();   // Ligaturen je nach m_ligatures (de)aktivieren
-    /// Effektiver Renderpfad: GPU nur, wenn aktiviert UND keine Ligaturen (die
-    /// Run-Shaping brauchen → QPainter-Fallback).
-    bool useGpu() const { return m_gpu && !m_ligatures; }
+    /// Effektiver Renderpfad: GPU, wenn aktiviert. Ligaturen laufen seit dem
+    /// Glyph-Index-Atlas + Run-Shaping (2d6c51b) ebenfalls im GPU-Pfad — nur
+    /// gpuRendering=false erzwingt noch den QPainter-Fallback.
+    bool useGpu() const { return m_gpu; }
     /// Zeichnet den kompletten Terminalinhalt in logischen Koordinaten (Fallback +
     /// gemeinsame Logik). `painter` muss bereits auf Hintergrund/Font gesetzt sein.
     void paintContents(QPainter *painter);
