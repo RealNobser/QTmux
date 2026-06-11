@@ -39,8 +39,8 @@ VtScreen (src/core/)  — libvterm-Wrapper: Screen-State, Farben, Scrollback, Cu
    │
 ITerminalBackend (src/core/)  — Abstraktion: alles, was Bytes liest/schreibt
    ├─ PtyBackend   (lokale Shell/Agenten)  [FERTIG]
-   ├─ SshBackend   (libssh2)               [Phase 4]
-   ├─ SerialBackend(QtSerialPort)          [Phase 4]
+   ├─ SshBackend   (System-ssh im PTY; SFTP via System-sftp) [FERTIG]
+   ├─ SerialBackend(QtSerialPort)          [FERTIG]
    └─ AppBackend   (Custom-Apps/MacPCAN)   [Phase 5]
    │
 Pty (src/core/)  — Pty.h + UnixPty.cpp (forkpty) / WindowsPty.cpp (ConPTY)
@@ -198,7 +198,12 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 ## Status (Stand: 2026-06-11)
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. Phase 5 (Plugin-System) oder Rest von Phase 6
-> (CPack-Pakete, MSI-Signing). Offene Folgeschritte: libssh2/SFTP-Variante (QTMUX-7).
+> (CPack-Pakete, MSI-Signing).
+> Session 2026-06-11: **SFTP-Browser (QTMUX-7-Rest)** erledigt — Dateitransfer über den
+> System-`sftp`-Client (kein libssh2/keine Krypto-Abhängigkeit), Remote-Browser mit
+> Navigation/Download/Upload. Unit-Test (ls-Parsing) + **echter E2E gegen einen lokalen
+> rootlosen sshd** + UI-E2E auf macOS (siehe Feature-Eintrag). Die programmatische
+> libssh2-Variante bleibt bewusst ungebaut (dependency-free-Linie).
 > Session 2026-06-11: **Vault→Profil-Integration** erledigt — SSH-Passwort-Auto-Fill aus dem
 > Secrets-Vault (nur Geheimnis-Name im Profil; Prompt-Erkennung + einmaliges Auto-Send),
 > Unit-Test mit echtem PTY + E2E auf macOS (siehe Feature-Eintrag).
@@ -335,7 +340,36 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   SSH läuft über den **System-`ssh`-Client im PTY** (Passwort/Key/known_hosts/ssh-config/
   Agent-Forwarding „funktionieren einfach"); `SshBackend : PtyBackend` baut die ssh-Argumente.
   Dialoge für beide unter „Datei". Persistenz inkl. host/port/user/identity. MCP
-  `create_session type=ssh`. Offen: libssh2-Variante (SFTP).
+  `create_session type=ssh`. SFTP siehe nächster Punkt (System-`sftp`).
+- ✅ **SFTP-Datei-Browser (QTMUX-7-Rest)** — Remote-Dateitransfer über den **System-`sftp`-
+  Client** statt libssh2 (konsistent mit dem System-`ssh`-Ansatz, **keine Krypto-Abhängigkeit**).
+  Kern: `src/viewmodels/SftpClient.{h,cpp}` (`QML_ELEMENT`, nutzt den `Pty`-Layer aus core).
+  - **Steuerung:** treibt `sftp` **interaktiv** im PTY; jeder Befehl wird geschrieben, die
+    Antwort bis zum nächsten **`sftp> `-Prompt** gesammelt und ausgewertet. Ablauf nach Connect:
+    `pwd` (Heimatpfad) → `ls -la`. Operationen: `cd`/`cdUp` (absolute Pfade, in `"`-Quotes),
+    `refresh`, `download`=`get`, `upload`=`put`. Auth „funktioniert einfach" (Key/Agent/
+    known_hosts); ein Passwort (z. B. aus dem Vault) wird an die `password:`-Abfrage gesendet.
+    Host-Key bei Erstkontakt via `-o StrictHostKeyChecking=accept-new` (TOFU, sonst hinge der
+    nicht-interaktive Browser an einem yes/no-Prompt). 25-s-Connect-Timeout; Fehler vor dem
+    ersten Prompt → `error()` mit der letzten Ausgabezeile.
+  - **`parseListing()`** (statisch, Gui-frei): parst `ls -la` (Größe = Feld 4, Name ab Feld 8,
+    Typ aus dem Perms-Block; „."/".." + Echo-/Prompt-/Fehlerzeilen übersprungen; Symlink-Name
+    ohne „-> Ziel"). In `tst_sftp` ohne Server getestet (macOS- **und** Linux-`ls`-Format).
+  - **UI** ([qml/Main.qml](qml/Main.qml)): `sftpDialog` mit Navigationsleiste (hoch/Pfad/
+    aktualisieren + `BusyIndicator`), `ListView` der Einträge (Ordner-/Datei-Icon + menschliche
+    Größe, Doppelklick auf Ordner = `cd`), Buttons Herunterladen (`FolderDialog` → Zielordner) /
+    Hochladen (`FileDialog` → Datei) + Status-/Fehlerzeile. Erreichbar über den **„SFTP"-Button
+    je SSH-Profil** im Verbindungen-Manager (`window.openSftp`, löst das Vault-Passwort wie beim
+    Verbinden auf). Eine prozessweite `SftpClient`-Instanz `sftpClient`.
+  - **Tests/E2E:** `tst_sftp` = Parsing (serverlos, immer) + **Live-Roundtrip** (env-gesteuert
+    `QTMUX_SFTP_HOST…`, in CI übersprungen): connect→list→cd→**upload→download**, Inhalt
+    verifiziert. **8 Test-Binaries grün.** Verifiziert gegen einen **lokalen rootlosen sshd**
+    (Port 2222, Key-Auth, `sftp-server`-Subsystem) — Core-Live-Test + UI-E2E (Browser listet
+    `/Users/nobser`, hoch-Navigation, Icons/Größen); i18n DE/EN (Kontext `SftpClient`+`Main`).
+  - **Bewusst NICHT:** programmatische libssh2-Variante (zöge OpenSSL + Build/Signing über alle
+    3 Plattformen nach → bricht die vendored/dependency-free-Linie). **Grenzen:** keine
+    Transfer-Fortschrittsanzeige (sftp-Batch); Name-Parsing bei Leerzeichen im Besitzer/Gruppe
+    theoretisch unscharf; ein interaktiver Host-Key-Wechsel würde nicht abgefragt (accept-new).
 - ✅ **Connection-Manager / Profile (QTMUX-7)** — gespeicherte, wiederverwendbare
   Verbindungsvorlagen für **Shell/SSH/Seriell**. Kern: `src/core/ConnectionProfile.{h,cpp}`
   (Gui-frei, nur Qt Core) — `struct ConnectionProfile` (name + type 0=Shell/1=Ssh/2=Serial +

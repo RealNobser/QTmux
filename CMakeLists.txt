@@ -95,6 +95,8 @@ qt_add_qml_module(qtmux
         src/terminal/GlyphAtlas.cpp
         src/viewmodels/SessionModel.h
         src/viewmodels/SessionModel.cpp
+        src/viewmodels/SftpClient.h
+        src/viewmodels/SftpClient.cpp
         src/viewmodels/Theme.h
         src/viewmodels/Theme.cpp
         src/viewmodels/AppController.h

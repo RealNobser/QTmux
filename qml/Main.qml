@@ -361,6 +361,22 @@ ApplicationWindow {
         if (window.layout) window.assignToActivePane(row)
         else window.currentRow = row
     }
+    // Öffnet den SFTP-Browser für ein SSH-Profil (löst das Vault-Passwort wie beim
+    // Verbinden auf). QTMUX-7-Rest: Dateitransfer über System-sftp.
+    function openSftp(p) {
+        if (!p || p.type !== 1) return
+        var pw = (p.passwordSecret && Vault.unlocked) ? Vault.secret(p.passwordSecret) : ""
+        sftpDialog.targetLabel = (p.user ? p.user + "@" : "") + (p.host || "")
+        sftpDialog.open()
+        sftpClient.connectTo(p.host, p.port || 22, p.user, p.identity, pw)
+    }
+    // Menschliche Größe (B/KB/MB/GB) für die SFTP-Liste.
+    function humanSize(n) {
+        if (n < 1024) return n + " B"
+        var u = ["KB","MB","GB","TB"], i = -1
+        do { n /= 1024; i++ } while (n >= 1024 && i < u.length - 1)
+        return n.toFixed(1) + " " + u[i]
+    }
     // Kurzbeschreibung eines Profils für die Listenanzeige (Ziel/Programm).
     function profileSummary(p) {
         if (!p) return ""
@@ -1753,6 +1769,11 @@ ApplicationWindow {
                             text: qsTr("Verbinden")
                             onClicked: { window.connectProfile(modelData); connectionsDialog.close() }
                         }
+                        Button {
+                            text: qsTr("SFTP")
+                            visible: modelData.type === 1   // nur SSH-Profile
+                            onClicked: { window.openSftp(modelData); connectionsDialog.close() }
+                        }
                         IconToolButton {
                             icon.source: window.icon("gear")
                             tip: qsTr("Bearbeiten")
@@ -1967,6 +1988,146 @@ ApplicationWindow {
                 font.pixelSize: 11
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
+            }
+        }
+    }
+
+    // --- SFTP-Browser (QTMUX-7-Rest) ----------------------------------------
+    SftpClient {
+        id: sftpClient
+        onError: (m) => { sftpDialog.lastError = m }
+        onTransferFinished: (ok, m) => { sftpDialog.lastError = ok ? "" : m }
+    }
+    FolderDialog {
+        id: sftpDestDialog
+        property string fileName: ""
+        title: qsTr("Zielordner für den Download")
+        onAccepted: sftpClient.download(fileName, selectedFolder.toString())
+    }
+    FileDialog {
+        id: sftpUploadDialog
+        title: qsTr("Datei zum Hochladen")
+        onAccepted: sftpClient.upload(selectedFile.toString())
+    }
+    AppDialog {
+        id: sftpDialog
+        width: 660
+        property string targetLabel: ""
+        property string lastError: ""
+        title: qsTr("SFTP – %1").arg(targetLabel)
+        standardButtons: Dialog.Close
+        onClosed: sftpClient.close()
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 8
+
+            // Navigationsleiste: hoch / Pfad / aktualisieren.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                IconToolButton {
+                    icon.source: window.icon("caret-down")   // gedreht als „hoch"
+                    rotation: 180
+                    tip: qsTr("Übergeordnetes Verzeichnis")
+                    enabled: sftpClient.connected && !sftpClient.busy
+                    onClicked: sftpClient.cdUp()
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: sftpClient.currentPath || "…"
+                    color: Theme.textBright
+                    font.family: window.terminalFontFamily
+                    elide: Text.ElideMiddle
+                }
+                BusyIndicator {
+                    running: sftpClient.busy
+                    visible: sftpClient.busy
+                    implicitWidth: 20; implicitHeight: 20
+                }
+                IconToolButton {
+                    icon.source: window.icon("plus")
+                    rotation: 45                              // „+" gedreht ≈ Refresh-Ersatz
+                    tip: qsTr("Aktualisieren")
+                    enabled: sftpClient.connected && !sftpClient.busy
+                    onClicked: sftpClient.refresh()
+                }
+            }
+
+            ListView {
+                id: sftpList
+                Layout.fillWidth: true
+                Layout.preferredHeight: 320
+                clip: true
+                model: sftpClient.entries
+                currentIndex: -1
+                delegate: Rectangle {
+                    width: ListView.view.width
+                    height: 30
+                    color: sftpList.currentIndex === index ? Theme.selection
+                                                           : (hov.hovered ? Theme.hover : "transparent")
+                    radius: 4
+                    HoverHandler { id: hov }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        Image {
+                            source: window.icon(modelData.isDir ? "terminal-window" : "copy")
+                            sourceSize.width: 16; sourceSize.height: 16
+                            opacity: 0.8
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: modelData.name + (modelData.isDir ? "/" : "")
+                            color: Theme.textBright
+                            elide: Text.ElideRight
+                        }
+                        Label {
+                            visible: !modelData.isDir
+                            text: window.humanSize(modelData.size)
+                            color: Theme.textDim
+                            font.pixelSize: 11
+                        }
+                    }
+                    TapHandler {
+                        onTapped: sftpList.currentIndex = index
+                        onDoubleTapped: {
+                            if (modelData.isDir) sftpClient.cd(modelData.name)
+                        }
+                    }
+                }
+            }
+
+            // Aktionen + Status.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                Button {
+                    text: qsTr("Herunterladen")
+                    enabled: sftpClient.connected && !sftpClient.busy
+                             && sftpList.currentIndex >= 0
+                             && !(sftpClient.entries[sftpList.currentIndex]
+                                  && sftpClient.entries[sftpList.currentIndex].isDir)
+                    onClicked: {
+                        sftpDestDialog.fileName = sftpClient.entries[sftpList.currentIndex].name
+                        sftpDestDialog.open()
+                    }
+                }
+                Button {
+                    text: qsTr("Hochladen …")
+                    enabled: sftpClient.connected && !sftpClient.busy
+                    onClicked: sftpUploadDialog.open()
+                }
+                Item { Layout.fillWidth: true }
+                Label {
+                    text: sftpDialog.lastError !== "" ? sftpDialog.lastError : sftpClient.status
+                    color: sftpDialog.lastError !== "" ? "#e5534b" : Theme.textDim
+                    font.pixelSize: 11
+                    elide: Text.ElideRight
+                    Layout.maximumWidth: 320
+                }
             }
         }
     }

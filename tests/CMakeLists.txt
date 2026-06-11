@@ -19,6 +19,14 @@ qt_add_executable(test_vault tst_vault.cpp)
 target_link_libraries(test_vault PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_vault COMMAND test_vault)
 
+# SftpClient liegt im QML-Modul; fürs Parsing (statisch, serverlos) die .cpp direkt
+# mitkompilieren (Qt6::Qml wegen qqmlintegration.h / QML_ELEMENT).
+qt_add_executable(test_sftp tst_sftp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/SftpClient.cpp)
+target_include_directories(test_sftp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels)
+target_link_libraries(test_sftp PRIVATE qtmux_core Qt6::Test Qt6::Qml)
+add_test(NAME test_sftp COMMAND test_sftp)
+
 # --- PTY-/ConPTY-E2E-Tests (starten echte Shells) ---------------------------
 qt_add_executable(test_pty tst_pty.cpp)
 target_link_libraries(test_pty PRIVATE qtmux_core Qt6::Test)
