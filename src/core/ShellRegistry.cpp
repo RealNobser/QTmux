@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QProcessEnvironment>
+#include <QSettings>
 #include <utility>   // std::as_const
 #endif
 
@@ -58,6 +59,22 @@ QString findClinkLauncher() {
     return QString();
 }
 
+/// True, wenn Clink bereits global per cmd.exe-AutoRun injiziert wird
+/// (HKCU/HKLM \Software\Microsoft\Command Processor\AutoRun verweist auf clink).
+/// Dann lädt JEDE cmd.exe Clink ohnehin — eine eigene "Eingabeaufforderung (Clink)"-
+/// Shell wäre überflüssig und ihr zusätzliches `clink inject` meldet nur
+/// "Clink already loaded in process N". In diesem Fall bieten wir sie nicht an.
+bool clinkAutoRunActive() {
+    for (auto scope : {QSettings::UserScope, QSettings::SystemScope}) {
+        QSettings s(QSettings::NativeFormat, scope,
+                    QStringLiteral("Microsoft"), QStringLiteral("Command Processor"));
+        if (s.value(QStringLiteral("AutoRun")).toString()
+                .contains(QLatin1String("clink"), Qt::CaseInsensitive))
+            return true;
+    }
+    return false;
+}
+
 } // namespace
 #endif
 
@@ -76,11 +93,12 @@ QList<ShellInfo> ShellRegistry::available() {
     if (!pwsh.isEmpty())
         list.append({QStringLiteral("pwsh.exe"), QStringLiteral("PowerShell 7")});
 
-    // Clink-Shell nur anbieten, wenn Clink installiert ist (QTMUX-25). Das "program"
-    // ist hier eine vollständige Kommandozeile; PtyBackend::start zerlegt sie. Der
-    // Anzeigename trägt "(Clink)", prettifyTitle erkennt die Kommandozeile ebenfalls.
+    // Clink-Shell nur anbieten, wenn Clink installiert ist (QTMUX-25) UND nicht schon
+    // per AutoRun global injiziert wird (sonst doppeltes inject -> "already loaded").
+    // Das "program" ist hier eine vollständige Kommandozeile; PtyBackend::start zerlegt
+    // sie. Anzeigename "(Clink)"; prettifyTitle erkennt die Kommandozeile ebenfalls.
     const QString clink = findClinkLauncher();
-    if (!clink.isEmpty()) {
+    if (!clink.isEmpty() && !clinkAutoRunActive()) {
         const QString cmdLine =
             QStringLiteral("cmd.exe /k \"%1\" inject --quiet").arg(clink);
         list.append({cmdLine,
