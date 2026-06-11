@@ -177,6 +177,10 @@ Beide Credential-Dateien liegen in der Repo-Wurzel und sind **git-ignoriert** (`
 `ancestors:[{id:<parent>}]`. Storage ist Server↔Cloud weitgehend kompatibel (Vorsicht nur bei
 Makros: Mermaid heißt on-prem `mermaid-macro`, Cloud `mermaid-cloud`). Das `children`-Makro
 funktioniert auf beiden. Bei `/feierabend` beide Seiten-Sätze mitpflegen.
+**⚠️ Entity-Falle bei Anker-basierten Edits:** die **Cloud**-Storage kodiert Umlaute als
+HTML-Entities (`n&ouml;tig`), on-prem speichert sie als UTF-8 (`nötig`) — String-Anker mit
+Umlauten matchen daher auf der Cloud-Seite nicht. Lösung: Anker zusätzlich in der
+Entity-Variante probieren (ä→`&auml;` usw.); *eingefügter* UTF-8-Text wird von beiden akzeptiert.
 
 ## CI (GitHub Actions)
 
@@ -223,9 +227,13 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 > (CPack-Pakete, MSI-Signing). Bewusst zurückgestellt: PS-5.1-Mojibake (**Untersuchung
 > abgeschlossen** — conhost/ConPTY doppelkodiert selbst, KEIN shell-seitiger Fix möglich,
 > s. Build-&-Test-Windows-Abschnitt) und native macOS-Menü-Icons (großer QApplication/
-> Widgets-Umbau, kosmetisch — eigener dedizierter Schritt). Jira: QTMUX-6 + QTMUX-25 dual
-> auf Done setzen (beide jetzt Windows-verifiziert). Noch offen: Windows-Funktionstest von
-> `Pty::currentWorkingDirectory()` (Restore ins letzte Verzeichnis).
+> Widgets-Umbau, kosmetisch — eigener dedizierter Schritt). Jira: QTMUX-6 + QTMUX-25 am
+> 2026-06-12 **dual auf Done gesetzt** (on-prem „Done"/Cloud „Erledigt", je mit Kommentar).
+> Confluence-Entwicklerdoku am 2026-06-12 **dual nachgezogen** (on-prem v11, Cloud v10):
+> GPU-Ligaturen + Verifikations-Lektion, Damage-Gating, Clink-AutoRun/erledigt, CWD-PEB,
+> Mojibake-Abschluss, neue Abschnitte Vault→Profil + SFTP-Browser.
+> Noch offen: Windows-Funktionstest von `Pty::currentWorkingDirectory()` (Restore ins
+> letzte Verzeichnis).
 > **Windows-Test-Session 2026-06-12** (Commits `f3dbc6b`…`aaf2fa5`, alles gepusht):
 > 1. **`useGpu()`-Fix (`f3dbc6b`):** Commit `2d6c51b` hatte nur den Kommentar geändert, die
 >    Bedingung blieb `m_gpu && !m_ligatures` → GPU-Ligatur-Code war toter Code (Details/Lektion
