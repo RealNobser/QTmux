@@ -25,7 +25,14 @@
       },
       "windows": {
         "type": "cppvsdbg",
-        "program": "${workspaceFolder}/build/windows/qtmux.exe"
+        "program": "${workspaceFolder}/build/windows/qtmux.exe",
+        // WICHTIG für die ConPTY-Terminals: Der Default "internalConsole" leitet die
+        // Standard-Handles der App in den Debugger um. Das stört die von QTmux per
+        // ConPTY gestarteten Pseudo-Konsolen — die Kindshells (cmd/PowerShell) hängen
+        // dann nach dem Init-Frame (Symptom: leeres Terminal, nur Cursor, keine
+        // Eingabe). "externalTerminal" startet die GUI-App ohne Handle-Umleitung →
+        // die Pseudo-Konsolen funktionieren, das Debuggen (Breakpoints) bleibt erhalten.
+        "console": "externalTerminal"
       }
     }
   ]

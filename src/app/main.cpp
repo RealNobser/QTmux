@@ -5,6 +5,10 @@
 #include <QTranslator>
 #include <QQmlContext>
 
+#if defined(Q_OS_WIN)
+#  include <windows.h>
+#endif
+
 #include "AppController.h"
 #include "ColorScheme.h"
 #include "ConnectionProfile.h"
@@ -36,6 +40,17 @@ void applyLanguage(QGuiApplication &app, QQmlApplicationEngine &engine,
 
 int main(int argc, char *argv[])
 {
+#if defined(Q_OS_WIN)
+    // Windows/ConPTY: QTmux ist eine GUI-App und sollte KEINE Konsole besitzen.
+    // Manche Starter könnten dem Prozess dennoch eine anhängen; die per ConPTY
+    // gestarteten Kindshells würden sich dann an diese geerbte Konsole binden statt
+    // an die Pseudo-Konsole. Vor dem Start jeglicher PTYs lösen wir sie daher.
+    // (Hinweis: Der VS-Code-Debugger braucht zusätzlich console=externalTerminal in
+    // launch.json, sonst stört die Handle-Umleitung von "internalConsole" die
+    // ConPTY-Datenflüsse — siehe dortigen Kommentar.)
+    if (GetConsoleWindow()) FreeConsole();
+#endif
+
     // macOS blendet Icons in (nativen) Menüs sonst aus -> explizit erlauben,
     // damit unsere Phosphor-Icons auch in der nativen Menüleiste erscheinen.
     QCoreApplication::setAttribute(Qt::AA_DontShowIconsInMenus, false);
