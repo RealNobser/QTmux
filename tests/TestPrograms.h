@@ -88,9 +88,12 @@ inline Cmd interactiveShell() {
 // simuliert die SSH-Passwort-Eingabeaufforderung für den Vault-Auto-Fill-Test.
 inline Cmd passwordPrompt() {
 #if defined(Q_OS_WIN)
+    // /v:on (Delayed Expansion) ist zwingend: in `set /p p=… & echo …%p%` würde cmd
+    // %p% schon beim PARSEN der Zeile expandieren (vor dem set /p) → immer leer. Mit
+    // !p! und /v:on wird der frisch gelesene Wert erst zur Ausführungszeit eingesetzt.
     return {QStringLiteral("cmd.exe"),
-            {QStringLiteral("/c"),
-             QStringLiteral("set /p p=Password: & echo PWGOT:%p%")}};
+            {QStringLiteral("/v:on"), QStringLiteral("/c"),
+             QStringLiteral("set /p p=Password: & echo PWGOT:!p!")}};
 #else
     return {QStringLiteral("/bin/sh"),
             {QStringLiteral("-c"),
