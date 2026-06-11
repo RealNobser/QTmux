@@ -61,7 +61,11 @@ ApplicationWindow {
         id: mcp
         sessions: sessions
         port: 7345
-        onFocusRequested: (row) => window.currentRow = row
+        // Nicht nur currentRow (Sidebar-Markierung) setzen, sondern die Session auch
+        // ins aktive Pane laden — sonst zeigt das Terminal nach MCP-create/focus_session
+        // weiter die alte Session, bis das Fenster aktiviert wird. assignToActivePane
+        // fällt vor dem Layout-Aufbau sauber auf reines currentRow zurück.
+        onFocusRequested: (row) => window.assignToActivePane(row)
         onSetThemeRequested: (mode) => Theme.mode = mode
         Component.onCompleted: start()
     }
