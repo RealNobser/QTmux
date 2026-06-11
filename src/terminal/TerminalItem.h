@@ -158,6 +158,10 @@ private:
     int m_pointSize = 13;
     bool m_ligatures = false;   // Programmier-Ligaturen (Run-Rendering) opt-in
     bool m_gpu = true;          // GPU-Glyph-Atlas (Standard) vs. QPainter-Fallback
+    // GPU-Pfad: Inhalt (Hintergrund/Glyphen/Unterstreichung) nur neu aufbauen, wenn
+    // sich der Inhalt geändert hat. Cursor-/Selektions-Updates rebuilden nur das
+    // (billige) dynamische Overlay. Gesetzt von Damage/Scroll/Resize/Font/Farbe.
+    bool m_geomDirty = true;
     GlyphAtlas m_atlas;         // genutzt vom GPU-Pfad (in updatePaintNode)
     qreal m_cellW = 8;
     qreal m_cellH = 16;

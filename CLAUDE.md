@@ -471,12 +471,20 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
     (`find_package(... ShaderTools)`). Der Fragment-Shader multipliziert die **Atlas-Deckung
     (Alpha) mit der Per-Vertex-Vordergrundfarbe** → **ein Atlas färbt beliebige fg-Farben**.
     Custom-Vertex-Layout (pos `vec2` + tex `vec2` + color `ubyte4` normalisiert).
-  - **`updatePaintNode`** baut drei Geometrie-Knoten in Zeichenreihenfolge: **Hintergrund**
+  - **`updatePaintNode`** baut vier Geometrie-Knoten in Zeichenreihenfolge: **Hintergrund**
     (ganzflächiger Default-bg + Nicht-Default-Zellen, `QSGVertexColorMaterial`), **Glyphen**
-    (eigenes Material, Atlas-Textur), **Overlay** (Selektion/Cursor/Unterstreichung/Scrollbalken,
-    `QSGVertexColorMaterial`). Vertexfarben **vormultipliziert** (Scene-Graph-Konvention).
-    Glyph-Quads werden zunächst mit **Pixel-UV** gesammelt und erst **nach** der Schleife mit der
-    endgültigen Atlas-Größe normalisiert (der Atlas kann während der Schleife wachsen).
+    (eigenes Material, Atlas-Textur), **Unterstreichung** (`QSGVertexColorMaterial`, liegt über
+    den Glyphen) und **Overlay** (Selektion/Cursor/Scrollbalken, `QSGVertexColorMaterial`).
+    Vertexfarben **vormultipliziert** (Scene-Graph-Konvention). Glyph-Quads werden zunächst mit
+    **Pixel-UV** gesammelt und erst **nach** der Schleife mit der endgültigen Atlas-Größe
+    normalisiert (der Atlas kann während der Schleife wachsen).
+  - **Damage-Gating (Optimierung):** Der teure **Inhalt** (Hintergrund/Glyphen/Unterstreichung,
+    iteriert alle Zellen + Atlas-Lookups) wird nur neu gebaut, wenn `m_geomDirty` gesetzt ist
+    (Damage/Scroll/Resize/Font/Farbe). Das **dynamische Overlay** (Selektion/Cursor/Scrollbalken)
+    wird bei JEDEM Update neu gebaut, ist aber **zell-zugriffsfrei** — die Selektion als ein
+    Quad **je Zeile** über den Spaltenbereich (Zeilen-Span), Cursor/Scrollbalken als Einzelquads.
+    So kosten Cursor-Bewegung und Maus-Selektion keinen Glyph-/Atlas-Aufbau. E2E verifiziert
+    (Selektion über Wide-Chars korrekt, Unterstreichung im eigenen Knoten, Inhalt intakt).
   - **🔑 Schlüssel-Lektion (Bug):** bei einem **eigenen** Material muss die Textur selbst per
     **`QSGTexture::commitTextureOperations(state.rhi(), state.resourceUpdateBatch())`** in
     `updateSampledImage` auf die GPU geladen werden — `QSGSimpleTextureNode` macht das intern,
@@ -699,8 +707,10 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
 ## Offene technische Notizen
 
 - Rendering: GPU-Glyph-Atlas über den Scene-Graph (QTMUX-6, erledigt) mit umschaltbarem
-  QPainter-Fallback. Mögliche Folge-Optimierungen: Geometrie nur bei Damage neu bauen statt
-  jeden Frame; Ligaturen auch im GPU-Pfad (Run-Shaping → Glyph-Index-Atlas).
+  QPainter-Fallback. **Damage-gating umgesetzt:** Inhalt (Hintergrund/Glyphen/Unterstreichung)
+  wird nur bei `m_geomDirty` neu gebaut (Damage/Scroll/Resize/Font/Farbe), Cursor-/Selektions-
+  Updates rebuilden nur das billige Overlay (Selektion als Zeilen-Spans). Offene Folge-
+  Optimierung: Ligaturen auch im GPU-Pfad (Run-Shaping → Glyph-Index-Atlas).
 - Scrollback wird in `VtScreen` gespeichert und gerendert/gescrollt (QTMUX-5).
 - Font: `QFontDatabase::systemFont(FixedFont)`; offscreen warnt über fehlende Family „Monospace" (harmlos).
 - **GPU-Atlas/Custom-Material:** Atlas-Textur in `updateSampledImage` per `commitTextureOperations`
