@@ -217,18 +217,34 @@ Summaries holen und Duplikate überspringen. Token nur einlesen, nie ausgeben/co
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
-## Status (Stand: 2026-06-11)
+## Status (Stand: 2026-06-12)
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. Phase 5 (Plugin-System) oder Rest von Phase 6
-> (CPack-Pakete, MSI-Signing). Bewusst zurückgestellt (mit Begründung, s. u.): PS-5.1-Mojibake
-> (gehört in die Nutzerumgebung, kein blinder Hack) und native macOS-Menü-Icons (großer
-> QApplication/Widgets-Umbau, kosmetisch — eigener dedizierter Schritt).
-> Session 2026-06-11 (Fortsetzung): **Ligaturen im GPU-Pfad (QTMUX-6-Folgeoptimierung)** erledigt
-> — Glyph-Index-Atlas (`GlyphAtlas::glyphByIndex`) + `QTextLayout`-Run-Shaping; `useGpu()` ist
-> jetzt nur noch `m_gpu` (Ligaturen erzwingen keinen Fallback mehr). E2E auf macOS/Metal mit
-> FiraCode verifiziert (Ligaturen formen, ASCII scharf, bold + CJK-Doppelbreite + Ligatur in
-> einer Zeile, keine Asserts). Zusätzlich **`Pty::currentWorkingDirectory()` für Windows** per
-> PEB-Abfrage implementiert (Windows-Test offen; CI baut Windows). Beides committet/gepusht.
+> (CPack-Pakete, MSI-Signing). Bewusst zurückgestellt: PS-5.1-Mojibake (**Untersuchung
+> abgeschlossen** — conhost/ConPTY doppelkodiert selbst, KEIN shell-seitiger Fix möglich,
+> s. Build-&-Test-Windows-Abschnitt) und native macOS-Menü-Icons (großer QApplication/
+> Widgets-Umbau, kosmetisch — eigener dedizierter Schritt). Jira: QTMUX-6 + QTMUX-25 dual
+> auf Done setzen (beide jetzt Windows-verifiziert). Noch offen: Windows-Funktionstest von
+> `Pty::currentWorkingDirectory()` (Restore ins letzte Verzeichnis).
+> **Windows-Test-Session 2026-06-12** (Commits `f3dbc6b`…`aaf2fa5`, alles gepusht):
+> 1. **`useGpu()`-Fix (`f3dbc6b`):** Commit `2d6c51b` hatte nur den Kommentar geändert, die
+>    Bedingung blieb `m_gpu && !m_ligatures` → GPU-Ligatur-Code war toter Code (Details/Lektion
+>    im QTMUX-6-Eintrag). Nach dem Fix **D3D11-verifiziert** (Cascadia Code); **Metal-E2E am
+>    2026-06-12 auf dem Mac nachgeholt** (FiraCode: Ligaturen + bold + CJK, Log sauber) — die
+>    ursprüngliche „Metal-Verifikation" war wegen des toten Codes unbemerkt der Fallback.
+> 2. **QTMUX-25 Clink (`da68fe5`):** AutoRun-Dedup — bei Clink-Injektion via cmd-AutoRun wird
+>    der redundante Shell-Eintrag ausgeblendet. **Windows-verifiziert → QTMUX-25 erledigt.**
+> 3. **MCP-Fix (`82b47fe`):** `focusRequested` lädt die Session jetzt via `assignToActivePane`
+>    ins sichtbare Pane (vorher nur Sidebar-Markierung — Terminal zeigte die alte Session).
+> 4. **PS-5.1-Mojibake (`aaf2fa5`):** Untersuchung abgeschlossen — Beweis per roher UTF-8-Bytes
+>    direkt aufs OS-Handle: conhost/ConPTY interpretiert Kind-Ausgabe als CP1252 und re-kodiert
+>    nach UTF-8, BEVOR QTmux die Bytes sieht. Keine Shell-Einstellung wirkt (alles getestet);
+>    echte Abhilfen: PowerShell 7 oder System-UTF-8-Option. Bleibt bekannte Einschränkung.
+> Session 2026-06-11 (Fortsetzung): **Ligaturen im GPU-Pfad (QTMUX-6-Folgeoptimierung)**
+> implementiert — Glyph-Index-Atlas (`GlyphAtlas::glyphByIndex`) + `QTextLayout`-Run-Shaping
+> (Verifikation: s. Windows-Session oben — erst dort wurde der Pfad real aktiv). Zusätzlich
+> **`Pty::currentWorkingDirectory()` für Windows** per PEB-Abfrage implementiert (Funktionstest
+> auf Windows noch offen; CI-Build grün). Beides committet/gepusht.
 > Session 2026-06-11: **SFTP-Browser (QTMUX-7-Rest)** erledigt — Dateitransfer über den
 > System-`sftp`-Client (kein libssh2/keine Krypto-Abhängigkeit), Remote-Browser mit
 > Navigation/Download/Upload. Unit-Test (ls-Parsing) + **echter E2E gegen einen lokalen
@@ -515,7 +531,7 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   verifiziert: „Split side by side" via Aufnahme auf Cmd+Shift+J (→ `Ctrl+Shift+J`) umgelegt,
   Liste zeigt „Standard"-Button, neues Kürzel teilt **live**, „Alle zurücksetzen" stellt die
   Defaults wieder her; i18n DE/EN ergänzt.
-- 🟡 **Clink für cmd.exe (QTMUX-25) — implementiert, Windows-Test ausstehend.** Bietet auf
+- ✅ **Clink für cmd.exe (QTMUX-25) — Windows-verifiziert 2026-06-12.** Bietet auf
   **Windows** zusätzlich die Shell „Eingabeaufforderung (Clink)" an, wenn [Clink](https://github.com/chrisant996/clink)
   (Readline-Completion/History für cmd.exe, **GPL-3.0**) installiert ist. **Bewusst NICHT
   gebündelt** (GPL + Signing/Größe) — nur eine vorhandene Installation wird erkannt; als
@@ -541,8 +557,13 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   - **Titel:** `prettifyTitle` ([Session.cpp](src/core/Session.cpp)) erkennt die Clink-
     Kommandozeile (enthält „clink"+„cmd") → „Eingabeaufforderung (Clink)" statt eines aus der
     Kommandozeile geschnitzten Basisnamens (greift nur initial; ein OSC-Titel der Shell ersetzt ihn).
-  - i18n DE/EN ergänzt (Kontext „Shells"). macOS-Build + alle 7 Tests grün. **Offen:** Verifikation
-    auf Windows mit installiertem Clink (Erkennung + tatsächliche Injektion in cmd.exe).
+  - **AutoRun-Dedup** (`da68fe5`): ist Clink per cmd.exe-**AutoRun** installiert (HKCU/HKLM
+    `…\Command Processor\AutoRun` verweist auf clink), lädt JEDE cmd.exe Clink ohnehin — das
+    zusätzliche `clink inject` der eigenen Shell meldete nur „Clink already loaded in process N".
+    `clinkAutoRunActive()` (QSettings NativeFormat, Gui-frei) erkennt das und blendet den
+    redundanten Eintrag aus; ohne AutoRun erscheint er weiter.
+  - i18n DE/EN ergänzt (Kontext „Shells"). **Windows-verifiziert 2026-06-12:** Dropdown ohne
+    Clink-Eintrag bei aktivem AutoRun; normale Eingabeaufforderung lädt Clink (Banner) fehlerfrei.
 - ✅ **GPU-Glyph-Atlas (QTMUX-6)** — Terminal-Rendering über den **Scene-Graph** statt
   `QQuickPaintedItem`/`QPainter`. `TerminalItem` ist jetzt ein **`QQuickItem`** mit
   `updatePaintNode()`. Komponenten:
@@ -561,11 +582,17 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
     Shaping-Position relativ zur `line.ascent()`; Breitzeichen/Lücken/Attributwechsel brechen
     den Run, Breitzeichen werden einzeln geformt). **Schlüsselvorteil ggü. einem Run-Text-Cache:**
     der Atlas bleibt durch die **Glyph-Zahl des Fonts** begrenzt, nicht durch die Textvielfalt.
-    Damit ist `useGpu()` = `m_gpu` (Ligaturen erzwingen NICHT mehr den Fallback). E2E auf macOS
-    (Metal, FiraCode) verifiziert: `-> => != >= <= === !== <=> |> :: ++ --` formen korrekt,
-    rastertreu; ASCII unverändert/scharf; **bold + Ligaturen** und **CJK-Doppelbreite (日本語/中文)
-    + Ligatur in einer Zeile** korrekt; keine Asserts. `gpuRendering=false` bleibt der QPainter-
-    Fallback (unverändert, rendert Ligaturen ebenfalls via Run-Shaping).
+    Damit ist `useGpu()` = `m_gpu` (Ligaturen erzwingen NICHT mehr den Fallback).
+    **⚠️ Verifikations-Lektion:** Der ursprüngliche Commit (`2d6c51b`) änderte an `useGpu()` nur
+    den *Kommentar*, die Bedingung blieb `m_gpu && !m_ligatures` → der neue GPU-Ligatur-Code war
+    **toter Code**, und die erste „Metal-E2E" lief unbemerkt über den QPainter-Fallback (der
+    Ligaturen ebenfalls formt — darum sah alles korrekt aus). Auf Windows gefunden + gefixt
+    (`f3dbc6b`). Merksatz: *bei Renderpfad-Tests immer beweisen, dass der erwartete Pfad aktiv
+    ist* (z. B. Fallback absichtlich brechen oder loggen), nicht nur das Endbild ansehen.
+    Danach echt verifiziert auf **Windows/D3D11** (Cascadia Code: `-> ⇒ ≠ ≥ ≤ ≡`) und
+    **macOS/Metal** (FiraCode, 2026-06-12): Ligaturen + **bold** + **CJK-Doppelbreite
+    (日本語/中文) + Ligatur in einer Zeile** korrekt, rastertreu, ASCII scharf, keine Asserts.
+    `gpuRendering=false` bleibt der QPainter-Fallback (rendert Ligaturen via Run-Shaping).
   - **Eigenes `QSGMaterial`/`QSGMaterialShader`** (file-lokal in `TerminalItem.cpp`) +
     **RHI-Shader** `src/terminal/shaders/glyph.{vert,frag}` (`#version 440`), via
     **`qt_add_shaders`** (BATCHABLE) zu `.qsb` kompiliert und unter `:/shaders/` eingebettet

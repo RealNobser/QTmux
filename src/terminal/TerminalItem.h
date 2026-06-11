@@ -22,9 +22,9 @@ class VtScreen;
 ///
 /// Rendering über den Scene-Graph mit GPU-Glyph-Atlas (QTMUX-6): Hintergrund/Cursor/
 /// Selektion als farbige Quads, Glyphen als texturierte Quads aus einem dynamischen
-/// Atlas (siehe GlyphAtlas + Glyph-Material). Als Rückfallnetz existiert ein
-/// QPainter-in-QImage-Pfad (`gpuRendering=false` bzw. automatisch bei aktiven
-/// Ligaturen, die Run-Shaping brauchen).
+/// Atlas (siehe GlyphAtlas + Glyph-Material); Ligaturen laufen ebenfalls im GPU-Pfad
+/// (Glyph-Index-Atlas + Run-Shaping). Als Rückfallnetz existiert ein
+/// QPainter-in-QImage-Pfad (`gpuRendering=false`).
 /// Besitzt die Session NICHT — die gehört dem SessionModel (ermöglicht Split-Panes
 /// und Session-Wechsel ohne Neustart).
 class TerminalItem : public QQuickItem {
