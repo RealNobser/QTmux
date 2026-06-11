@@ -122,10 +122,29 @@ alle 3 Plattformen identisch & abhängigkeitsfrei. Wichtig: `project(... LANGUAG
   echte GUI-App; sauberer Shutdown (Prozessbaum) bestätigt.
 - Offen (kosmetisch): Umlaute der **PowerShell-5.1**-Ausgabe erscheinen als Mojibake
   („für"→„fÃ¼r"). Analyse: die empfangenen Bytes sind bereits **doppelt-kodiertes UTF-8**
-  (`C3 83 C2 BC`) — eine Codepage-Verwechslung in PowerShell 5.1/conhost. `VtScreen`
+  (`C3 83 C2 BC`) — eine Codepage-Verwechslung in conhost/ConPTY. `VtScreen`
   (libvterm `vterm_set_utf8(1)`, `QString::fromUcs4`) dekodiert das Empfangene korrekt; der
-  Fehler entsteht VOR QTmux. Mögliche spätere Milderung: ConPTY/Shell auf UTF-8 zwingen
-  (`chcp 65001` bzw. UTF-8-CP), oder PowerShell 7 nutzen. ASCII ist unbetroffen.
+  Fehler entsteht VOR QTmux. ASCII ist unbetroffen.
+  **Untersuchung 2026-06-12 (Windows, abgeschlossen — kein sauberer Fix shell-seitig):**
+  - Umfeld: `chcp` 850, `[Console]::OutputEncoding`/`InputEncoding` = 850, `$OutputEncoding`
+    = US-ASCII, **System-ACP = 1252** (UTF-8-Beta „weltweit" ist AUS, also nicht der Auslöser).
+  - **Milderungen wirkungslos** (Ausgabe blieb `Ã¤Ã¶Ã¼Ã`): (a) `chcp 65001` (mid-session UND
+    als Startkommando), (b) `[Console]::OutputEncoding=[Text.Encoding]::UTF8` (mid UND Start),
+    (a)+(b) kombiniert, sowie zusätzlich `InputEncoding=UTF8`.
+  - **Entscheidender Test:** rohe UTF-8-Bytes `C3 A4` (=ä) per `[Console]::OpenStandardOutput().Write`
+    direkt aufs OS-Handle (PS-Encoding komplett umgangen) erscheinen in QTmux ebenfalls als `Ã¤`.
+    → Die Doppelkodierung passiert in der **conhost/ConPTY-Übersetzungsschicht** (sie interpretiert
+    die Kind-Ausgabe als System-ANSI **CP1252** — `C3`→`Ã`, `A4`→`¤` — und re-kodiert nach UTF-8),
+    **bevor** die Bytes QTmux erreichen. `chcp`/`SetConsoleOutputCP` aus dem Kind ändern diese
+    Übersetzung in der Pseudo-Konsole NICHT. Daher kann **keine** Shell-Einstellung es beheben.
+  - **Folgerung:** Der naheliegende ShellRegistry-Fix (PS mit
+    `-Command "[Console]::OutputEncoding=...UTF8"` starten) wurde **getestet und wirkt nicht** —
+    nicht umgesetzt. Ein Daten­strom-Dekodier-Hack in QTmux ist unerwünscht (QTmux dekodiert
+    korrekt; der Fehler liegt davor). **Empfohlene echte Abhilfen:** PowerShell 7 (`pwsh`, nutzt
+    UTF-8 nativ — auf dieser Maschine nicht installiert, daher nicht gegengeprüft) **oder** die
+    System-Option „UTF-8 für weltweite Sprachunterstützung" (setzt ACP=65001 → conhost würde
+    die Kind-Bytes dann als UTF-8 interpretieren; zu verifizieren, da systemweit + Reboot).
+    Bleibt sonst als bekannte kosmetische Einschränkung bei PS 5.1 bestehen.
 - `Pty::currentWorkingDirectory()` auf Windows **implementiert** (PEB-Abfrage via
   `NtQueryInformationProcess` + `ReadProcessMemory`, s. „Session-Persistenz") — **Windows-Test
   ausstehend** (am Mac nur durch `#ifdef` mitkompiliert, nicht ausführbar; CI baut Windows).
