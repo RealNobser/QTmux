@@ -19,6 +19,7 @@
 #include "ProcessInfo.h"
 
 #include <windows.h>
+#include <winternl.h>   // PEB, PROCESS_BASIC_INFORMATION, NtQueryInformationProcess
 
 #include <QMap>
 #include <QMetaObject>
@@ -324,11 +325,51 @@ void Pty::terminate() {
 }
 
 QString Pty::currentWorkingDirectory() const {
-    // Das Arbeitsverzeichnis eines fremden Prozesses lässt sich auf Windows nur
-    // über das PEB (NtQueryInformationProcess + ReadProcessMemory) ermitteln —
-    // bewusst zurückgestellt. Folge: Beim Neustart startet die Shell im Home,
-    // nicht im zuletzt genutzten Verzeichnis.
-    return {};
+    // Arbeitsverzeichnis der Shell live aus ihrem PEB lesen (analog zum Unix-Pfad,
+    // der proc_pidinfo/`/proc/<pid>/cwd` nutzt). cmd.exe/PowerShell aktualisieren beim
+    // `cd` ihr eigenes PEB → wir bekommen das ZULETZT genutzte Verzeichnis, nicht nur
+    // das Start-CWD. Kette: NtQueryInformationProcess → PEB → ProcessParameters →
+    // CurrentDirectory.DosPath (UNICODE_STRING). NtQueryInformationProcess wird per
+    // GetProcAddress aus ntdll geholt (kein zusätzliches Link-Abhängigkeit).
+    if (!d->pi.hProcess) return {};
+
+    using NtQIP_t = NTSTATUS(NTAPI *)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
+    static const NtQIP_t NtQIP = reinterpret_cast<NtQIP_t>(
+        GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQueryInformationProcess"));
+    if (!NtQIP) return {};
+
+    PROCESS_BASIC_INFORMATION pbi {};
+    if (NtQIP(d->pi.hProcess, ProcessBasicInformation, &pbi, sizeof(pbi), nullptr) != 0
+        || !pbi.PebBaseAddress)
+        return {};
+
+    // PEB lesen → Zeiger auf RTL_USER_PROCESS_PARAMETERS.
+    PEB peb {};
+    if (!ReadProcessMemory(d->pi.hProcess, pbi.PebBaseAddress, &peb, sizeof(peb), nullptr)
+        || !peb.ProcessParameters)
+        return {};
+
+    // CurrentDirectory.DosPath (UNICODE_STRING) liegt bei Offset 0x38 in
+    // RTL_USER_PROCESS_PARAMETERS (x64). winternl.h legt nur ImagePathName/CommandLine
+    // offen, daher der feste Offset. Gilt für den x64↔x64-Fall (unser GUI-Prozess und
+    // die Shell sind 64-bit); WOW64-Cross-Bitness wird bewusst nicht behandelt.
+    constexpr SIZE_T kCurDirOffset = 0x38;
+    UNICODE_STRING us {};
+    const auto paramsAddr = reinterpret_cast<const char *>(peb.ProcessParameters);
+    if (!ReadProcessMemory(d->pi.hProcess, paramsAddr + kCurDirOffset, &us, sizeof(us), nullptr)
+        || !us.Buffer || us.Length == 0 || us.Length > 0x8000)
+        return {};
+
+    std::wstring buf(us.Length / sizeof(wchar_t), L'\0');
+    if (!ReadProcessMemory(d->pi.hProcess, us.Buffer, buf.data(), us.Length, nullptr))
+        return {};
+
+    QString path = QString::fromWCharArray(buf.data(), int(us.Length / sizeof(wchar_t)));
+    // Das CurrentDirectory endet konventionell mit „\" — bis auf den Laufwerks-Root
+    // („C:\") abschneiden, damit es zum Start-workingDir-Format passt.
+    while (path.endsWith(QLatin1Char('\\')) && path.size() > 3)
+        path.chop(1);
+    return path;
 }
 
 } // namespace qtmux
