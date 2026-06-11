@@ -8,7 +8,11 @@
 #include <QWheelEvent>
 #include <QFontDatabase>
 #include <QFontMetricsF>
+#include <QGlyphRun>
 #include <QGuiApplication>
+#include <QRawFont>
+#include <QTextLayout>
+#include <QTextLine>
 #include <QClipboard>
 #include <QQuickWindow>
 #include <QSGGeometry>
@@ -523,6 +527,44 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
         // Ganzflächiger Standard-Hintergrund.
         pushColoredQuad(bgVerts, 0, 0, width(), height(), m_defaultBg);
 
+        // Shaping-Pfad (nur bei aktiven Ligaturen): eine Zell-Folge wird per
+        // QTextLayout geformt (Ligaturen entstehen), die geformten Glyphen landen
+        // einzeln als texturierte Quads über den Glyph-Index-Atlas. Der Atlas bleibt
+        // dadurch durch die Glyph-Zahl des Fonts begrenzt (kein Run-Text-Cache).
+        // Platzierung in LOGISCHEN Koordinaten; Baseline robust auf rowY+m_baseline
+        // verankert (per-Glyph-Versatz aus den Shaping-Positionen relativ zur Ascent).
+        auto emitRun = [&](const QString &runText, int startCol, qreal rowY,
+                           const QColor &fg, bool bold, bool italic) {
+            if (runText.isEmpty()) return;
+            QFont f = m_font;
+            if (bold) f.setBold(true);
+            if (italic) f.setItalic(true);
+            QTextLayout layout(runText, f);
+            layout.setCacheEnabled(true);
+            layout.beginLayout();
+            QTextLine line = layout.createLine();
+            if (!line.isValid()) { layout.endLayout(); return; }
+            line.setLineWidth(1e7);
+            layout.endLayout();
+
+            const qreal runX = startCol * m_cellW;
+            const qreal ascent = line.ascent();
+            const uchar fr = uchar(fg.red()), fgc = uchar(fg.green()), fb = uchar(fg.blue());
+            for (const QGlyphRun &gr : line.glyphRuns()) {
+                const QRawFont rf = gr.rawFont();
+                const QList<quint32> idx = gr.glyphIndexes();
+                const QList<QPointF> pos = gr.positions();
+                for (int i = 0; i < idx.size(); ++i) {
+                    const GlyphAtlas::IndexedEntry &e = m_atlas.glyphByIndex(rf, idx[i], dpr);
+                    if (!e.valid || e.empty) continue;
+                    const float gx = float(runX + pos[i].x() + e.offset.x());
+                    const float gy = float(rowY + m_baseline + (pos[i].y() - ascent) + e.offset.y());
+                    glyphQuads.push_back({gx, gy, float(e.sizeLogical.width()),
+                                          float(e.sizeLogical.height()), e.rect, fr, fgc, fb});
+                }
+            }
+        };
+
         if (sc) {
             for (int row = 0; row < m_rows; ++row) {
                 const qreal y = row * m_cellH;
@@ -530,6 +572,14 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
                 const bool isSb = viewportSource(row, sbIndex, liveRow);
                 const std::vector<Cell> *sbLine =
                     isSb && sbIndex < sc->scrollbackCount() ? &sc->scrollbackLine(sbIndex) : nullptr;
+
+                // Run-Akkumulator für den Ligatur-Pfad (sonst ungenutzt).
+                QString run; int runStart = 0; QColor runFg; bool runBold = false, runItalic = false;
+                auto flushRun = [&]() {
+                    if (run.isEmpty()) return;
+                    emitRun(run, runStart, y, runFg, runBold, runItalic);
+                    run.clear();
+                };
 
                 for (int col = 0; col < m_cols; ++col) {
                     Cell c;
@@ -543,20 +593,41 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
                                         QColor::fromRgb(c.bg));
 
                     const bool visible = !c.text.isEmpty() && c.text != QStringLiteral(" ");
-                    if (visible) {
-                        const QColor fg = c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg);
-                        const GlyphAtlas::Entry &e = m_atlas.glyph(c.text, c.bold, c.italic, wUnits);
-                        if (e.valid)
-                            glyphQuads.push_back({float(x), float(y),
-                                                  float(m_cellW * wUnits), float(m_cellH), e.rect,
-                                                  uchar(fg.red()), uchar(fg.green()), uchar(fg.blue())});
-                        if (c.underline) {
-                            const qreal uy = y + m_baseline + 1;
-                            pushColoredQuad(ulVerts, x, uy, m_cellW * wUnits,
-                                            std::max(1.0, dpr), fg);
-                        }
+                    const QColor fg = c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg);
+
+                    if (visible && c.underline) {
+                        const qreal uy = y + m_baseline + 1;
+                        pushColoredQuad(ulVerts, x, uy, m_cellW * wUnits, std::max(1.0, dpr), fg);
                     }
+
+                    if (!m_ligatures) {
+                        // Zellweiser Atlas (Standardpfad, maximal cachebar).
+                        if (visible) {
+                            const GlyphAtlas::Entry &e = m_atlas.glyph(c.text, c.bold, c.italic, wUnits);
+                            if (e.valid)
+                                glyphQuads.push_back({float(x), float(y),
+                                                      float(m_cellW * wUnits), float(m_cellH), e.rect,
+                                                      uchar(fg.red()), uchar(fg.green()), uchar(fg.blue())});
+                        }
+                        continue;
+                    }
+
+                    // Ligatur-Pfad: Run aus einbreiten, gleich attributierten Zellen bilden;
+                    // Lücken/Breitzeichen/Attributwechsel brechen den Run (geformt separat).
+                    if (!visible || c.width != 1) {
+                        flushRun();
+                        if (visible) emitRun(c.text, col, y, fg, c.bold, c.italic);
+                        continue;
+                    }
+                    if (!run.isEmpty() && (fg != runFg || c.bold != runBold
+                                           || c.italic != runItalic))
+                        flushRun();
+                    if (run.isEmpty()) {
+                        runStart = col; runFg = fg; runBold = c.bold; runItalic = c.italic;
+                    }
+                    run += c.text;
                 }
+                flushRun();
             }
         }
 

@@ -3,7 +3,10 @@
 #include <QFont>
 #include <QHash>
 #include <QImage>
+#include <QPointF>
+#include <QRawFont>
 #include <QRect>
+#include <QSizeF>
 #include <QString>
 
 namespace qtmux {
@@ -37,6 +40,21 @@ public:
     /// (valid=false) bedeutet „nichts zu zeichnen" (Leerzeichen).
     const Entry &glyph(const QString &text, bool bold, bool italic, int cellWidthUnits);
 
+    /// Kachel für eine **einzelne, bereits geformte Glyphe** (per Glyph-Index aus einer
+    /// QRawFont) — der Ligatur-/Shaping-Pfad (QTMUX-6-Folgeoptimierung). Anders als
+    /// glyph() ist die Kachel NICHT zellgerastert, sondern exakt das Glyph-Ink-Rechteck;
+    /// `offset`/`sizeLogical` geben die Platzierung relativ zum Pen (Baseline-Ursprung)
+    /// in LOGISCHEN Einheiten. So bleibt der Atlas durch die Glyph-Zahl des Fonts
+    /// begrenzt (nicht durch die Textvielfalt wie ein Run-Cache).
+    struct IndexedEntry {
+        QRect rect;            ///< Kachel in der Atlas-Textur (Geräte-Pixel)
+        QPointF offset;        ///< Pen → Kachel-Ecke oben-links (logisch)
+        QSizeF sizeLogical;    ///< Kachelgröße in logischen Einheiten
+        bool valid = false;    ///< gültiger Eintrag (auch leer kann gültig sein)
+        bool empty = false;    ///< keine Tinte (z. B. Leerzeichen) → nichts zeichnen
+    };
+    const IndexedEntry &glyphByIndex(const QRawFont &rawFont, quint32 glyphIndex, qreal dpr);
+
     const QImage &image() const { return m_image; }
     int width() const { return m_image.width(); }
     int height() const { return m_image.height(); }
@@ -59,6 +77,7 @@ private:
 
     QImage m_image;
     QHash<QString, Entry> m_cache;
+    QHash<QString, IndexedEntry> m_indexCache;   ///< Glyph-Index-Pfad (Ligaturen/Shaping)
     int m_penX = 0, m_penY = 0, m_rowH = 0;    ///< Shelf-Packer-Zustand
     quint64 m_generation = 0;
     bool m_contentDirty = false;

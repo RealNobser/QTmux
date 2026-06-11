@@ -26,7 +26,8 @@ Detaillierter Plan: `~/.claude/plans/neue-projekt-idee-eine-qt-version-radiant-w
 2. **Rendering via Scene-Graph + GPU-Glyph-Atlas** (QTMUX-6, erledigt): `TerminalItem` ist
    ein `QQuickItem` mit eigenem RHI-Shader-Material (Atlas-Alpha × Vertex-Farbe). Der frühere
    `QQuickPaintedItem`/`QPainter`-Pfad bleibt als umschaltbarer **Fallback** erhalten
-   (`gpuRendering=false` bzw. bei aktiven Ligaturen, die Run-Shaping brauchen).
+   (`gpuRendering=false`). Ligaturen werden inzwischen **auch im GPU-Pfad** über einen
+   Glyph-Index-Atlas + Run-Shaping unterstützt (s. QTMUX-6-Eintrag).
 
 ## Architektur-Schichten
 
@@ -125,7 +126,9 @@ alle 3 Plattformen identisch & abhängigkeitsfrei. Wichtig: `project(... LANGUAG
   (libvterm `vterm_set_utf8(1)`, `QString::fromUcs4`) dekodiert das Empfangene korrekt; der
   Fehler entsteht VOR QTmux. Mögliche spätere Milderung: ConPTY/Shell auf UTF-8 zwingen
   (`chcp 65001` bzw. UTF-8-CP), oder PowerShell 7 nutzen. ASCII ist unbetroffen.
-- Offen: `Pty::currentWorkingDirectory()` auf Windows noch leer (PEB-Abfrage zurückgestellt).
+- `Pty::currentWorkingDirectory()` auf Windows **implementiert** (PEB-Abfrage via
+  `NtQueryInformationProcess` + `ReadProcessMemory`, s. „Session-Persistenz") — **Windows-Test
+  ausstehend** (am Mac nur durch `#ifdef` mitkompiliert, nicht ausführbar; CI baut Windows).
 
 Konventionen: deutsche Kommentare/Kommunikation; `qtmux_core` bleibt **Gui-frei**
 (nur Qt6::Core) → Farben als `quint32` 0xRRGGBB, nicht `QRgb`. Code-Referenzen als
@@ -198,7 +201,15 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 ## Status (Stand: 2026-06-11)
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. Phase 5 (Plugin-System) oder Rest von Phase 6
-> (CPack-Pakete, MSI-Signing).
+> (CPack-Pakete, MSI-Signing). Bewusst zurückgestellt (mit Begründung, s. u.): PS-5.1-Mojibake
+> (gehört in die Nutzerumgebung, kein blinder Hack) und native macOS-Menü-Icons (großer
+> QApplication/Widgets-Umbau, kosmetisch — eigener dedizierter Schritt).
+> Session 2026-06-11 (Fortsetzung): **Ligaturen im GPU-Pfad (QTMUX-6-Folgeoptimierung)** erledigt
+> — Glyph-Index-Atlas (`GlyphAtlas::glyphByIndex`) + `QTextLayout`-Run-Shaping; `useGpu()` ist
+> jetzt nur noch `m_gpu` (Ligaturen erzwingen keinen Fallback mehr). E2E auf macOS/Metal mit
+> FiraCode verifiziert (Ligaturen formen, ASCII scharf, bold + CJK-Doppelbreite + Ligatur in
+> einer Zeile, keine Asserts). Zusätzlich **`Pty::currentWorkingDirectory()` für Windows** per
+> PEB-Abfrage implementiert (Windows-Test offen; CI baut Windows). Beides committet/gepusht.
 > Session 2026-06-11: **SFTP-Browser (QTMUX-7-Rest)** erledigt — Dateitransfer über den
 > System-`sftp`-Client (kein libssh2/keine Krypto-Abhängigkeit), Remote-Browser mit
 > Navigation/Download/Upload. Unit-Test (ls-Parsing) + **echter E2E gegen einen lokalen
@@ -267,9 +278,10 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   via `installer/QTmux.wxs` + `installer/build-msi.ps1`; Artefakte unter `dist/` (git-ignoriert):
   `QTmux-0.1.0-win64.msi` + `…-portable.zip`. Signing offen (Authenticode, Early-Adopter-Build).
 - **Offen/zurückgestellt**: Umlaut-Mojibake bei **PowerShell 5.1** (doppelkodiertes UTF-8 vom
-  conhost — kein QTmux-Bug, ASCII unbetroffen; Milderung: UTF-8-CP/PowerShell 7);
-  `Pty::currentWorkingDirectory()` auf Windows leer (PEB-Abfrage); Confluence/Jira-Doku noch
-  nicht für diese Session nachgezogen (Dual-Pflege bei Bedarf).
+  conhost — kein QTmux-Bug, ASCII unbetroffen; Milderung gehört in die Nutzerumgebung:
+  UTF-8-CP/PowerShell 7 — ein blinder Daten-Strom-Hack würde legitime Sequenzen gefährden, daher
+  bewusst NICHT eingebaut); `Pty::currentWorkingDirectory()` auf Windows **inzwischen
+  implementiert** (PEB, Windows-Test offen); Confluence/Jira-Doku bei Bedarf nachziehen.
 
 - ✅ **Phase 0** — Gerüst (CMake/Presets, Qt-Quick-Shell, .vscode; libvterm vendored, kein vcpkg)
 - ✅ **Phase 1** — Terminal-Kern: PTY + libvterm + TerminalItem; 3 Tests grün; läuft auf macOS
@@ -285,8 +297,8 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   `TerminateProcess` (+ `CancelSynchronousIo`), dann `descendantPids`-Baum beenden.
   **Schlüssel-Lektion:** qtmux ist `WIN32_EXECUTABLE` (GUI-Subsystem) — als Konsolen-App
   erben die ConPTY-Kindshells eine Konsole und das Terminal bleibt stumm. Details +
-  Test-Setup s. Abschnitt „Build & Test (Windows)". Offen: `currentWorkingDirectory()`
-  (PEB-Abfrage zurückgestellt → Shell startet im Home), Umlaut-Codepage (kosmetisch).
+  Test-Setup s. Abschnitt „Build & Test (Windows)". `currentWorkingDirectory()` inzwischen
+  per PEB implementiert (Windows-Test offen); Umlaut-Codepage (kosmetisch) weiterhin offen.
 - 🟡 **Phase 2** — Session + SessionModel + datengetriebene Sidebar + Session-Wechsel: FERTIG.
   Sidebar-**Split-Button** „+ &lt;Typ&gt;" mit ▾-Dropdown (Shell/SSH/Seriell, gemerkt via Settings).
   Split-Panes + Sidebar-Reorder FERTIG (siehe unten).
@@ -519,9 +531,22 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
     **zellweise** per `QPainter` als Alpha-Maske in eine gemeinsame Textur (ARGB32-Premultiplied,
     weiß auf transparent) und cached ihr **Pixel-Rechteck**. Shelf-Packer, feste Breite (1024),
     wächst in der Höhe (alten Inhalt erhaltend → Pixel-Rechtecke bleiben gültig, nur die Textur-
-    `generation` steigt). DPR-genau (Kacheln in Geräte-Pixeln). Zellweise = maximal cachebar;
-    **Ligaturen brauchen Run-Shaping und laufen daher über den Fallback** (`useGpu()` =
-    `m_gpu && !m_ligatures`).
+    `generation` steigt). DPR-genau (Kacheln in Geräte-Pixeln). Zellweise = maximal cachebar.
+  - **Ligaturen im GPU-Pfad (Folgeoptimierung, erledigt):** zusätzlich zum zellweisen Cache
+    rastert `GlyphAtlas::glyphByIndex()` **einzelne, bereits geformte Glyphen per Glyph-Index**
+    (aus einer `QRawFont`, via `QPainter::drawGlyphRun` weiß in eine **tinte-enge** Kachel;
+    `IndexedEntry` merkt Pixel-Rechteck + **logischen Pen-Versatz/Größe**). Bei `m_ligatures`
+    formt `updatePaintNode` jede Zell-Folge (gleiche fg/bold/italic, einbreite Zellen) per
+    `QTextLayout`/`QTextLine::glyphRuns()` und legt die geformten Glyphen einzeln über den
+    Index-Atlas ab (Baseline robust auf `rowY+m_baseline` verankert, per-Glyph-Versatz aus der
+    Shaping-Position relativ zur `line.ascent()`; Breitzeichen/Lücken/Attributwechsel brechen
+    den Run, Breitzeichen werden einzeln geformt). **Schlüsselvorteil ggü. einem Run-Text-Cache:**
+    der Atlas bleibt durch die **Glyph-Zahl des Fonts** begrenzt, nicht durch die Textvielfalt.
+    Damit ist `useGpu()` = `m_gpu` (Ligaturen erzwingen NICHT mehr den Fallback). E2E auf macOS
+    (Metal, FiraCode) verifiziert: `-> => != >= <= === !== <=> |> :: ++ --` formen korrekt,
+    rastertreu; ASCII unverändert/scharf; **bold + Ligaturen** und **CJK-Doppelbreite (日本語/中文)
+    + Ligatur in einer Zeile** korrekt; keine Asserts. `gpuRendering=false` bleibt der QPainter-
+    Fallback (unverändert, rendert Ligaturen ebenfalls via Run-Shaping).
   - **Eigenes `QSGMaterial`/`QSGMaterialShader`** (file-lokal in `TerminalItem.cpp`) +
     **RHI-Shader** `src/terminal/shaders/glyph.{vert,frag}` (`#version 440`), via
     **`qt_add_shaders`** (BATCHABLE) zu `.qsb` kompiliert und unter `:/shaders/` eingebettet
@@ -754,8 +779,11 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   Baud, **Arbeitsverzeichnis**) + aktive Zeile via QSettings bei jeder Änderung + `onClosing`;
   `restoreState()` beim Start. Fenstergeometrie via QML `Settings` (QtCore).
   **CWD-Wiederherstellung:** `Pty::currentWorkingDirectory()` fragt das Verzeichnis des
-  Shell-Prozesses live ab (macOS `libproc`/`proc_pidinfo`, Linux `/proc/<pid>/cwd`);
-  beim Neustart startet die Shell wieder dort. Terminal-*Inhalt* bleibt nicht erhalten.
+  Shell-Prozesses live ab (macOS `libproc`/`proc_pidinfo`, Linux `/proc/<pid>/cwd`,
+  **Windows** via PEB: `NtQueryInformationProcess` → PEB → `ProcessParameters` →
+  `CurrentDirectory.DosPath` mit `ReadProcessMemory`, Offset 0x38, x64↔x64; **implementiert,
+  Windows-Test ausstehend**); beim Neustart startet die Shell wieder dort. Terminal-*Inhalt*
+  bleibt nicht erhalten.
   Shell-Sessions ohne gespeichertes Verzeichnis starten im Home (`QDir::homePath()`).
   MCP `create_session` akzeptiert zusätzlich `cwd`.
 - ⬜ **Phase 5** — Plugin-System (QPluginLoader), MacPCAN-Integration
@@ -766,8 +794,9 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
 - Rendering: GPU-Glyph-Atlas über den Scene-Graph (QTMUX-6, erledigt) mit umschaltbarem
   QPainter-Fallback. **Damage-gating umgesetzt:** Inhalt (Hintergrund/Glyphen/Unterstreichung)
   wird nur bei `m_geomDirty` neu gebaut (Damage/Scroll/Resize/Font/Farbe), Cursor-/Selektions-
-  Updates rebuilden nur das billige Overlay (Selektion als Zeilen-Spans). Offene Folge-
-  Optimierung: Ligaturen auch im GPU-Pfad (Run-Shaping → Glyph-Index-Atlas).
+  Updates rebuilden nur das billige Overlay (Selektion als Zeilen-Spans). **Ligaturen im
+  GPU-Pfad erledigt** (Glyph-Index-Atlas `glyphByIndex` + `QTextLayout`-Run-Shaping; Atlas durch
+  die Glyph-Zahl des Fonts begrenzt, nicht durch die Textvielfalt — s. QTMUX-6-Eintrag).
 - Scrollback wird in `VtScreen` gespeichert und gerendert/gescrollt (QTMUX-5).
 - Font: `QFontDatabase::systemFont(FixedFont)`; offscreen warnt über fehlende Family „Monospace" (harmlos).
 - **GPU-Atlas/Custom-Material:** Atlas-Textur in `updateSampledImage` per `commitTextureOperations`

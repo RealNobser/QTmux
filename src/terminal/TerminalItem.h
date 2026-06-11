@@ -58,8 +58,9 @@ public:
     bool ligatures() const { return m_ligatures; }
     void setLigatures(bool on);
 
-    /// GPU-Glyph-Atlas-Rendering (Standard). Aus = QPainter-Fallback. Bei aktiven
-    /// Ligaturen wird intern immer der Fallback genutzt (Run-Shaping nötig).
+    /// GPU-Glyph-Atlas-Rendering (Standard). Aus = QPainter-Fallback. Ligaturen werden
+    /// im GPU-Pfad über einen Glyph-Index-Atlas + Run-Shaping unterstützt (QTMUX-6-
+    /// Folgeoptimierung); nur bei `gpuRendering=false` greift der QPainter-Fallback.
     bool gpuRendering() const { return m_gpu; }
     void setGpuRendering(bool on);
 

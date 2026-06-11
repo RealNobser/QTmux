@@ -1,5 +1,6 @@
 #include "GlyphAtlas.h"
 
+#include <QGlyphRun>
 #include <QPainter>
 #include <cmath>
 
@@ -34,6 +35,7 @@ void GlyphAtlas::resetImage(int w, int h) {
     m_image.setDevicePixelRatio(1.0);
     m_image.fill(Qt::transparent);
     m_cache.clear();
+    m_indexCache.clear();
     m_penX = m_penY = m_rowH = 0;
     ++m_generation;
     m_contentDirty = true;
@@ -110,6 +112,67 @@ const GlyphAtlas::Entry &GlyphAtlas::glyph(const QString &text, bool bold,
     e.rect = rect;
     e.valid = true;
     return *m_cache.insert(key, e);
+}
+
+const GlyphAtlas::IndexedEntry &
+GlyphAtlas::glyphByIndex(const QRawFont &rawFont, quint32 glyphIndex, qreal dpr) {
+    static const IndexedEntry kInvalidIdx{};
+
+    // Schlüssel: Font-Identität (Familie/Stil/Gewicht/Größe) + Glyph-Index. Der
+    // Glyph-Index allein genügt nicht — Fallback-Fonts (z. B. CJK) teilen Indizes.
+    const QString key = QStringLiteral("%1|%2|%3|%4|%5")
+                            .arg(rawFont.familyName(),
+                                 rawFont.styleName(),
+                                 QString::number(int(rawFont.weight())))
+                            .arg(int(rawFont.style()))
+                            .arg(glyphIndex);
+    auto it = m_indexCache.constFind(key);
+    if (it != m_indexCache.constEnd()) return *it;
+
+    if (!rawFont.isValid()) return *m_indexCache.insert(key, kInvalidIdx);
+
+    // In GERÄTE-Pixeln rastern: eine dpr-skalierte Kopie der RawFont liefert eine
+    // scharfe Maske; das Ink-Rechteck (boundingRect) bestimmt Kachelgröße + Offset.
+    QRawFont dev = rawFont;
+    dev.setPixelSize(rawFont.pixelSize() * dpr);
+    const QRectF bbox = dev.boundingRect(glyphIndex);   // relativ zum Pen, y nach oben negativ
+
+    IndexedEntry e;
+    e.valid = true;
+    // Logische Platzierung relativ zum Pen (Baseline-Ursprung) — Geräte-Pixel / dpr.
+    e.offset = QPointF(bbox.x() / dpr, bbox.y() / dpr);
+    e.sizeLogical = QSizeF(bbox.width() / dpr, bbox.height() / dpr);
+
+    const int tileW = int(std::ceil(bbox.width()));
+    const int tileH = int(std::ceil(bbox.height()));
+    if (tileW <= 0 || tileH <= 0) {            // Leerzeichen/tintenlose Glyphe
+        e.empty = true;
+        return *m_indexCache.insert(key, e);
+    }
+    if (!ensureRow(tileW, tileH))
+        return *m_indexCache.insert(key, kInvalidIdx);
+
+    const QRect rect(m_penX, m_penY, tileW, tileH);
+    e.rect = rect;
+
+    // Glyphe weiß in die Kachel zeichnen; der Pen wird so verschoben, dass die
+    // linke obere Ink-Ecke auf die Kachel-Ecke (0,0) fällt: origin = -bbox.topLeft().
+    {
+        QGlyphRun gr;
+        gr.setRawFont(dev);
+        gr.setGlyphIndexes(QVector<quint32>{glyphIndex});
+        gr.setPositions(QVector<QPointF>{QPointF(0, 0)});
+        QPainter p(&m_image);
+        p.setRenderHint(QPainter::TextAntialiasing, true);
+        p.setPen(Qt::white);
+        p.translate(rect.topLeft());
+        p.drawGlyphRun(QPointF(-bbox.x(), -bbox.y()), gr);
+    }
+
+    m_penX += tileW + kPad;
+    m_rowH = std::max(m_rowH, tileH);
+    m_contentDirty = true;
+    return *m_indexCache.insert(key, e);
 }
 
 } // namespace qtmux
