@@ -240,6 +240,17 @@ ApplicationWindow {
             checked: window.newSessionType === 2
             onTriggered: window.newSessionType = 2
         }
+        // Plugin-Backends (QTMUX-8): je geladenem Plugin-Typ ein Eintrag. Anders als
+        // Shell/SSH/Seriell wird hier sofort eine Session erzeugt (kein Default-Typ).
+        Repeater {
+            model: Plugins.backendTypes
+            delegate: AppMenuItem {
+                required property var modelData
+                text: qsTr("%1 (Plugin)").arg(modelData.name)
+                icon.source: window.icon("robot")
+                onTriggered: window.newPluginSession(modelData.pluginId, modelData.typeId)
+            }
+        }
     }
 
     // Kontextmenü des Terminals (Rechtsklick): Kopieren/Einfügen + Pane teilen/schließen.
@@ -343,6 +354,16 @@ ApplicationWindow {
         if (t === 1) sshDialog.open()
         else if (t === 2) serialDialog.openDialog()
         else newSession()
+    }
+
+    // Neue Plugin-Session (QTMUX-8): Backend kommt vom geladenen Plugin.
+    function newPluginSession(pluginId, typeId) {
+        const row = sessions.createPluginSession(pluginId, typeId)
+        if (row < 0) return   // Plugin/Typ nicht (mehr) verfügbar
+        if (window.layout)
+            window.assignToActivePane(row)
+        else
+            window.currentRow = row
     }
 
     // Startet eine Session aus einem gespeicherten Verbindungsprofil (Connection-

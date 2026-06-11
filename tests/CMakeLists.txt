@@ -27,6 +27,15 @@ target_include_directories(test_sftp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/
 target_link_libraries(test_sftp PRIVATE qtmux_core Qt6::Test Qt6::Qml)
 add_test(NAME test_sftp COMMAND test_sftp)
 
+# Plugin-System (QTMUX-8): lädt das echte Echo-Demo-Plugin aus <build>/plugins —
+# der Pfad kommt per Test-Env QTMUX_PLUGIN_DIR, das Plugin muss vorher gebaut sein.
+qt_add_executable(test_plugins tst_plugins.cpp)
+target_link_libraries(test_plugins PRIVATE qtmux_core Qt6::Test)
+add_dependencies(test_plugins qtmux_echo_plugin)
+add_test(NAME test_plugins COMMAND test_plugins)
+set_tests_properties(test_plugins PROPERTIES
+    ENVIRONMENT "QTMUX_PLUGIN_DIR=${CMAKE_BINARY_DIR}/plugins")
+
 # --- PTY-/ConPTY-E2E-Tests (starten echte Shells) ---------------------------
 qt_add_executable(test_pty tst_pty.cpp)
 target_link_libraries(test_pty PRIVATE qtmux_core Qt6::Test)

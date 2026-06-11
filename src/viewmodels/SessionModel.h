@@ -58,6 +58,10 @@ public:
                                      const QString &password = {});
     /// Verfügbare serielle Ports (z. B. "/dev/cu.usbserial-XYZ").
     Q_INVOKABLE QStringList availableSerialPorts() const;
+    /// Erzeugt eine Plugin-Session (QTMUX-8): das Backend liefert das Plugin
+    /// (PluginHost::createBackend). Gibt die Zeile zurück, oder -1 wenn
+    /// Plugin/Typ nicht verfügbar (z. B. Plugin nach Restore nicht installiert).
+    Q_INVOKABLE int createPluginSession(const QString &pluginId, const QString &typeId);
     /// Session-Objekt einer Zeile (für Binding an TerminalItem.session).
     Q_INVOKABLE QObject *sessionAt(int row) const;
     /// Zeilenindex einer Session-ID, oder -1.
@@ -103,6 +107,8 @@ private:
         int sshPort = 22;    // SSH
         QString user;        // SSH
         QString identity;    // SSH (Identity-Datei, optional)
+        QString pluginId;    // Plugin-Session (QTMUX-8): Plugin- und
+        QString pluginType;  // Backend-Typ-ID für die Wiederherstellung
     };
 
     QList<Session *> m_sessions;

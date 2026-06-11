@@ -217,14 +217,24 @@ Broadcast-Input, Secrets-Vault, Login-Scripts, Progress-Anzeige, Clink/cmd.exe).
 (on-prem) bzw. Cloud `POST /rest/api/3/search/jql`. Idempotent: vor dem Anlegen vorhandene
 Summaries holen und Duplikate überspringen. Token nur einlesen, nie ausgeben/committen.
 
+**Kanban-Pflege (Anwender-Vorgabe):** Tickets bei jedem Bearbeitungsfortschritt **dual eine
+Spalte weiterschieben** — Arbeitsbeginn → on-prem „In Progress" (Transition 31) / Cloud
+„In Arbeit" (21); fertig + verifiziert → „Done" (41) / „Erledigt" (41), mit Kurzkommentar.
+Transitions je Issue via `GET /rest/api/<2|3>/issue/<key>/transitions` ermitteln (IDs können
+je Workflow abweichen).
+
 **MCP:** Atlassian bietet einen Remote-MCP-Server, aber **nur für Cloud** und mit interaktivem
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
 ## Status (Stand: 2026-06-12)
 
-> ⏭️ **Nächste Aufgabe:** offen — z. B. Phase 5 (Plugin-System) oder Rest von Phase 6
-> (CPack-Pakete, MSI-Signing). Bewusst zurückgestellt: PS-5.1-Mojibake (**Untersuchung
+> ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
+> (CPack-Pakete, MSI-Signing).
+> Session 2026-06-12: **Plugin-System (QTMUX-8) erledigt** — SDK (`QTmuxPlugin.h`) +
+> `PluginHost` (QPluginLoader) + Echo-Demo-Plugin + Session/QML-Integration inkl.
+> Persistenz-Restore; 9 Test-Binaries grün, E2E auf macOS (Details im Feature-Eintrag).
+> Bewusst zurückgestellt: PS-5.1-Mojibake (**Untersuchung
 > abgeschlossen** — conhost/ConPTY doppelkodiert selbst, KEIN shell-seitiger Fix möglich,
 > s. Build-&-Test-Windows-Abschnitt) und native macOS-Menü-Icons (großer QApplication/
 > Widgets-Umbau, kosmetisch — eigener dedizierter Schritt). Jira: QTMUX-6 + QTMUX-25 am
@@ -840,7 +850,44 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   bleibt nicht erhalten.
   Shell-Sessions ohne gespeichertes Verzeichnis starten im Home (`QDir::homePath()`).
   MCP `create_session` akzeptiert zusätzlich `cwd`.
-- ⬜ **Phase 5** — Plugin-System (QPluginLoader), MacPCAN-Integration
+- 🟡 **Phase 5 — Plugin-System (QTMUX-8) FERTIG; MacPCAN-Integration offen.**
+  Plugin-Host + SDK; ein Plugin liefert **AppBackends** (neue Session-Typen), die wie
+  Shell/SSH/Seriell laufen — Sidebar/Rendering/Splits funktionieren automatisch (alles
+  über `ITerminalBackend`). Komponenten:
+  - **SDK** ([src/plugins/QTmuxPlugin.h](src/plugins/QTmuxPlugin.h)): `PluginInterface`
+    (id/name/backendTypes/createBackend) + `PluginBackendType` + IID
+    `com.qtmux.PluginInterface/1.0` (`Q_DECLARE_INTERFACE`; bei inkompatiblen Änderungen
+    hochzählen). Plugin = Qt-Plugin (`Q_PLUGIN_METADATA` + `Q_INTERFACES`), linkt
+    `qtmux_core` statisch (liefert das Meta-Objekt von `ITerminalBackend`).
+  - **PluginHost** ([src/plugins/PluginHost.{h,cpp}](src/plugins/PluginHost.cpp), Gui-frei,
+    in `qtmux_core`): Singleton, `loadAll()` (idempotent; Duplikate über kanonischen
+    Dateipfad + Plugin-ID erkannt), Suchpfade: `QTMUX_PLUGIN_DIR` (Env, Dev/Tests) →
+    `<App>/plugins` → macOS `Contents/PlugIns` → `<AppData>/plugins`. Q_PROPERTYs
+    `backendTypes`/`plugins` (QVariantList) für QML; `createBackend(pluginId, typeId)`.
+    Context-Property **`Plugins`** in `main.cpp` (loadAll VOR dem QML-Laden → Menü +
+    Restore kennen die Typen sofort).
+  - **Demo-Plugin** ([plugins/echo/](plugins/echo/EchoPlugin.cpp)): Echo-Backend
+    (spiegelt Eingaben, Strg+D beendet) — beweist die Kette und ist die Kopiervorlage
+    für echte Plugins (MacPCAN). `qt_add_plugin` (KEIN `CLASS_NAME` mit Namespace —
+    CMake lehnt `qtmux::…` ab; nur für statische Plugins relevant). Output nach
+    `<build>/plugins`; auf macOS POST_BUILD zusätzlich ins Bundle `Contents/PlugIns`
+    (Windows/Linux: `<build>/plugins` liegt neben der exe → Suchpfad 2 greift).
+  - **Integration:** `SessionModel::createPluginSession(pluginId, typeId)` →
+    `Session::Type::App` (war seit Phase 0 vorgesehen); Persistenz/Restore über
+    `pluginId`/`pluginType` in der Session-Config — fehlt das Plugin beim Restore,
+    wird der Eintrag still übersprungen (createPluginSession → -1). QML: je Plugin-Typ
+    ein Eintrag „<Name> (Plugin)" im „+"-Dropdown (erzeugt sofort, kein Default-Typ).
+  - Tests: `tst_plugins` lädt das ECHTE Demo-Plugin (Test-Env `QTMUX_PLUGIN_DIR` →
+    `<build>/plugins`, `add_dependencies` aufs Plugin): Laden/Typen/Idempotenz,
+    Backend-I/O-Roundtrip, unbekannte IDs → nullptr. **9 Test-Binaries grün.**
+    E2E auf macOS verifiziert: Dropdown zeigt „Echo (Demo) (Plugin)" (aus dem Bundle
+    geladen), Session im Pane mit Banner, Echo der Eingabe, Sidebar-Titel/Typ korrekt
+    (MCP-geprüft), Strg+D → Auto-Remove, **Persistenz-Roundtrip über App-Neustart**
+    (Echo-Session restauriert), MCP `focus_session` lädt sie ins Pane. i18n DE/EN.
+  - **Scope v1 / offen:** Backend-Provider-Plugins; kein UI-Beitrag/keine Parameter-
+    Dialoge (createBackend bekommt eine leere `params`-Map — Erweiterungspunkt), kein
+    MCP `create_session type=plugin`, kein Plugin-Manager-UI. **MacPCAN als erstes
+    echtes Plugin** ist der nächste Phase-5-Schritt (braucht die MacPCAN-Codebase).
 - ⬜ **Phase 6** — Politur & Distribution (CPack: DMG/MSI/AppImage, CI-Matrix)
 
 ## Offene technische Notizen

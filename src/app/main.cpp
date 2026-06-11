@@ -13,6 +13,7 @@
 #include "ColorScheme.h"
 #include "ConnectionProfile.h"
 #include "HotkeyRegistry.h"
+#include "PluginHost.h"
 #include "SecretsVault.h"
 #include "GlobalHotkey.h"
 
@@ -89,6 +90,13 @@ int main(int argc, char *argv[])
     // Einstellung und reagiert auf `activated` (Fenster ein-/ausblenden).
     qtmux::GlobalHotkey quakeHotkey;
     engine.rootContext()->setContextProperty(QStringLiteral("QuakeHotkey"), &quakeHotkey);
+
+    // Plugin-System (QTMUX-8): Plugins VOR dem QML-Laden einsammeln, damit das
+    // „+"-Menü die Backend-Typen sofort kennt und restoreState() Plugin-Sessions
+    // wiederherstellen kann. Gleiche Context-Property-Brücke wie oben.
+    qtmux::PluginHost::instance().loadAll();
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("Plugins"), &qtmux::PluginHost::instance());
 
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed,

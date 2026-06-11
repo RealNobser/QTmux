@@ -1,5 +1,6 @@
 #include "SessionModel.h"
 #include "Session.h"
+#include "PluginHost.h"
 #include "PtyBackend.h"
 #include "SerialBackend.h"
 #include "SshBackend.h"
@@ -197,6 +198,34 @@ int SessionModel::createSshSession(const QString &host, int port,
     return row;
 }
 
+int SessionModel::createPluginSession(const QString &pluginId, const QString &typeId) {
+    // Backend kommt vom Plugin (QTMUX-8); ohne Plugin/Typ keine Session — beim
+    // Restore mit deinstalliertem Plugin wird der Eintrag so still übersprungen.
+    ITerminalBackend *backend = PluginHost::instance().createBackend(pluginId, typeId);
+    if (!backend) return -1;
+
+    auto *s = new Session(this);
+    s->attachBackend(backend, Session::Type::App, 80, 24);
+    const QString name = PluginHost::instance().backendTypeName(pluginId, typeId);
+    s->setTitle(name.isEmpty() ? pluginId : name);
+
+    const int row = count();
+    beginInsertRows({}, row, row);
+    m_sessions.append(s);
+    SessionConfig cfg;
+    cfg.type = static_cast<int>(Session::Type::App);
+    cfg.pluginId = pluginId;
+    cfg.pluginType = typeId;
+    m_configs.append(cfg);
+    endInsertRows();
+
+    wireSession(s, row);
+    s->start(80, 24);
+    emit countChanged();
+    saveState();
+    return row;
+}
+
 QStringList SessionModel::availableSerialPorts() const {
     QStringList ports;
     const auto infos = QSerialPortInfo::availablePorts();
@@ -295,6 +324,8 @@ void SessionModel::saveState() const {
         }
         s.setValue(QStringLiteral("workingDir"), dir);
         s.setValue(QStringLiteral("program"), cfg.program);
+        s.setValue(QStringLiteral("pluginId"), cfg.pluginId);
+        s.setValue(QStringLiteral("pluginType"), cfg.pluginType);
     }
     s.endArray();
     s.setValue(QStringLiteral("sessions/activeRow"), m_activeRow);
@@ -315,6 +346,11 @@ int SessionModel::restoreState() {
                              s.value(QStringLiteral("sshPort"), 22).toInt(),
                              s.value(QStringLiteral("user")).toString(),
                              s.value(QStringLiteral("identity")).toString());
+        } else if (type == static_cast<int>(Session::Type::App)) {
+            // Plugin-Session: nur wiederherstellen, wenn das Plugin (noch) geladen
+            // ist — createPluginSession gibt sonst -1 zurück und überspringt still.
+            createPluginSession(s.value(QStringLiteral("pluginId")).toString(),
+                                s.value(QStringLiteral("pluginType")).toString());
         } else {
             createShellSession(s.value(QStringLiteral("workingDir")).toString(),
                                s.value(QStringLiteral("program")).toString());

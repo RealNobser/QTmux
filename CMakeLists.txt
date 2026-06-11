@@ -63,8 +63,11 @@ add_library(qtmux_core STATIC
     src/core/SerialBackend.cpp
     src/core/SshBackend.h
     src/core/SshBackend.cpp
+    src/plugins/QTmuxPlugin.h
+    src/plugins/PluginHost.h
+    src/plugins/PluginHost.cpp
 )
-target_include_directories(qtmux_core PUBLIC src/core)
+target_include_directories(qtmux_core PUBLIC src/core src/plugins)
 target_link_libraries(qtmux_core PUBLIC Qt6::Core Qt6::SerialPort PRIVATE vterm::vterm)
 
 # Windows: ConPTY (kernel32, default) + TCP-Tabelle/Sockets für ProcessInfo.
@@ -217,6 +220,10 @@ if(WIN32)
             VERBATIM)
     endif()
 endif()
+
+# Plugins (QTMUX-8) -----------------------------------------------------------
+# Demo-Plugin als Beweis der Plugin-Kette + Kopiervorlage; landet in <build>/plugins.
+add_subdirectory(plugins/echo)
 
 # Tests ----------------------------------------------------------------------
 if(QTMUX_BUILD_TESTS)
