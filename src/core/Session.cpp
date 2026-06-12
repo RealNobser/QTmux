@@ -136,6 +136,18 @@ void Session::setMcpController(bool on) {
     emit mcpControllerChanged();
 }
 
+void Session::refreshWorkingDirectory() {
+    // Nur Shell-Sessions haben ein sinnvolles lokales Arbeitsverzeichnis. Bei SSH
+    // wäre es das CWD des lokalen ssh-Clients (irreführend), bei Seriell/Plugin gibt
+    // es keins — daher dort nicht abfragen und leer halten.
+    if (m_type != Type::Shell) return;
+    const QString dir = currentWorkingDirectory();
+    if (dir != m_workingDir) {
+        m_workingDir = dir;
+        emit workingDirectoryChanged();
+    }
+}
+
 void Session::shutdown() {
     if (m_backend) m_backend->terminate();
 }

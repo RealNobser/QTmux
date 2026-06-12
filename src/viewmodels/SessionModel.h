@@ -5,6 +5,10 @@
 #include <QVariantList>
 #include <qqmlintegration.h>
 
+QT_BEGIN_NAMESPACE
+class QTimer;
+QT_END_NAMESPACE
+
 namespace qtmux {
 
 class Session;
@@ -27,6 +31,7 @@ public:
         ProgressActiveRole,
         ProgressStateRole,
         ProgressValueRole,
+        WorkingDirRole,
         SessionRole,
     };
     Q_ENUM(Roles)
@@ -113,6 +118,7 @@ private:
 
     QList<Session *> m_sessions;
     QList<SessionConfig> m_configs;   // parallel zu m_sessions
+    QTimer *m_cwdPoll = nullptr;      // pollt das Arbeitsverzeichnis aller Sessions
     int m_activeRow = -1;
     bool m_restoring = false;         // unterdrückt Persistierung während restoreState()
     bool m_shuttingDown = false;      // App-Quit: kein Auto-Remove/Save mehr (Zustand ist gesichert)

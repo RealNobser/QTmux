@@ -1361,8 +1361,9 @@ ApplicationWindow {
                         required property bool progressActive
                         required property int progressState
                         required property int progressValue
+                        required property string workingDir
                         width: ListView.view.width
-                        height: 48
+                        height: 52
                         radius: 8
                         color: index === window.currentRow ? Theme.sidebarSelected
                              : hover.hovered ? Theme.sidebarHover : "transparent"
@@ -1449,6 +1450,16 @@ ApplicationWindow {
                                     color: needsAttention ? Theme.accent : Theme.textDim
                                     font.pixelSize: 10
                                     elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                // Arbeitsverzeichnis (klein) — nützlich bei mehreren Agenten.
+                                // ElideLeft hält das tiefste (relevanteste) Verzeichnis sichtbar.
+                                Text {
+                                    visible: workingDir.length > 0
+                                    text: workingDir
+                                    color: Theme.textDim
+                                    font.pixelSize: 9
+                                    elide: Text.ElideLeft
                                     Layout.fillWidth: true
                                 }
                             }

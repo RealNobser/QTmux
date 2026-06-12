@@ -27,6 +27,9 @@ class Session : public QObject {
     // True, wenn in dieser Session ein Agent läuft, der sich per MCP als Controller
     // angemeldet hat (Sidebar zeigt dann einen roten Tab). Reiner Laufzeitzustand.
     Q_PROPERTY(bool mcpController READ mcpController NOTIFY mcpControllerChanged)
+    // Gecachtes Arbeitsverzeichnis (nur Shell-Sessions). Wird periodisch über
+    // refreshWorkingDirectory() aktualisiert; Sidebar zeigt es klein unter dem Titel.
+    Q_PROPERTY(QString workingDirectory READ workingDirectory NOTIFY workingDirectoryChanged)
 public:
     enum class Type { Shell, Ssh, Serial, App };
     Q_ENUM(Type)
@@ -50,6 +53,13 @@ public:
     QString currentWorkingDirectory() const {
         return m_backend ? m_backend->currentWorkingDirectory() : QString();
     }
+    /// Gecachtes Arbeitsverzeichnis (siehe refreshWorkingDirectory). Leer bei
+    /// Nicht-Shell-Sessions (SSH/Seriell/Plugin haben kein sinnvolles lokales CWD).
+    QString workingDirectory() const { return m_workingDir; }
+    /// Fragt das Arbeitsverzeichnis live ab (nur Shell) und meldet bei Änderung
+    /// workingDirectoryChanged. Vom SessionModel periodisch aufgerufen (CWD ändert
+    /// sich nur gelegentlich → günstiges Polling statt teurer Abfrage je Repaint).
+    void refreshWorkingDirectory();
     /// PID des zugrundeliegenden Prozesses (Shell), oder -1 — für MCP-Zuordnung.
     qint64 processId() const { return m_backend ? m_backend->processId() : -1; }
     QString agentId() const { return m_agentId; }
@@ -106,6 +116,7 @@ signals:
     void notificationChanged();
     void mcpControllerChanged();
     void progressChanged();
+    void workingDirectoryChanged();
     void bell();
 
 private:
@@ -124,6 +135,7 @@ private:
     std::unique_ptr<VtScreen> m_screen;
     Type m_type = Type::Shell;
     QString m_title = QStringLiteral("Shell");
+    QString m_workingDir;      // gecachtes Arbeitsverzeichnis (nur Shell)
     QString m_agentId;
     QString m_inputLine;       // Puffer der aktuell getippten Zeile
     QString m_loginScript;     // Auto-Befehle nach Verbindungsaufbau (QTMUX-23)

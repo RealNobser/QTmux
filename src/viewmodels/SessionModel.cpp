@@ -8,11 +8,22 @@
 
 #include <QSerialPortInfo>
 #include <QSettings>
+#include <QTimer>
 #include <QVariantMap>
 
 namespace qtmux {
 
-SessionModel::SessionModel(QObject *parent) : QAbstractListModel(parent) {}
+SessionModel::SessionModel(QObject *parent) : QAbstractListModel(parent) {
+    // Arbeitsverzeichnis der Shell-Sessions periodisch nachführen. CWD ändert sich
+    // nur gelegentlich (nach cd), daher genügt ein träges Intervall; jede Session
+    // meldet via workingDirectoryChanged nur echte Änderungen (kein Repaint-Spam).
+    m_cwdPoll = new QTimer(this);
+    m_cwdPoll->setInterval(1500);
+    connect(m_cwdPoll, &QTimer::timeout, this, [this]() {
+        for (Session *s : m_sessions) s->refreshWorkingDirectory();
+    });
+    m_cwdPoll->start();
+}
 
 int SessionModel::rowCount(const QModelIndex &parent) const {
     return parent.isValid() ? 0 : count();
@@ -32,6 +43,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case ProgressActiveRole: return s->progressActive();
     case ProgressStateRole: return s->progressState();
     case ProgressValueRole: return s->progressValue();
+    case WorkingDirRole: return s->workingDirectory();
     case SessionRole: return QVariant::fromValue(static_cast<QObject *>(s));
     default:          return {};
     }
@@ -49,6 +61,7 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
         {ProgressActiveRole, "progressActive"},
         {ProgressStateRole, "progressState"},
         {ProgressValueRole, "progressValue"},
+        {WorkingDirRole, "workingDir"},
         {SessionRole, "session"},
     };
 }
@@ -61,7 +74,8 @@ void SessionModel::wireSession(Session *s, int row) {
             const QModelIndex idx = index(r);
             emit dataChanged(idx, idx,
                 {TitleRole, StateRole, AgentRole, AttentionRole, NotificationRole,
-                 McpControllerRole, ProgressActiveRole, ProgressStateRole, ProgressValueRole});
+                 McpControllerRole, ProgressActiveRole, ProgressStateRole, ProgressValueRole,
+                 WorkingDirRole});
         }
     };
     connect(s, &Session::titleChanged, this, refresh);
@@ -72,6 +86,7 @@ void SessionModel::wireSession(Session *s, int row) {
     connect(s, &Session::attentionChanged, this, refresh);
     connect(s, &Session::mcpControllerChanged, this, refresh);
     connect(s, &Session::progressChanged, this, refresh);
+    connect(s, &Session::workingDirectoryChanged, this, refresh);
 
     // Steigt die Aufmerksamkeit, das Fenster informieren (Dock-/Taskbar-Alert).
     connect(s, &Session::attentionChanged, this, [this, s]() {
