@@ -18,7 +18,7 @@
     powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1
 #>
 param(
-    [string]$Version = "1.0.0",
+    [string]$Version = "1.0.1",
     [string]$QtDir   = "C:\Qt\6.11.1\msvc2022_64",
     [string]$VcVars  = "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat",
     [string]$VcRedistRoot = "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Redist\MSVC"
