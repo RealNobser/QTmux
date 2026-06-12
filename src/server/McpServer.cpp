@@ -177,7 +177,7 @@ QJsonObject McpServer::dispatchMethod(const QString &method, const QJsonObject &
         return QJsonObject{
             {"protocolVersion", kProtocolVersion},
             {"capabilities", QJsonObject{{"tools", QJsonObject{}}}},
-            {"serverInfo", QJsonObject{{"name", "QTmux"}, {"version", "0.1.0"}}},
+            {"serverInfo", QJsonObject{{"name", "QTmux"}, {"version", "0.9.0"}}},
         };
     }
     if (method == "tools/list") {

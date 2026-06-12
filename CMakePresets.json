@@ -35,11 +35,33 @@
       "inherits": "base",
       "displayName": "Linux (GCC/Clang)",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+
+    {
+      "name": "macos-release",
+      "inherits": "macos",
+      "displayName": "macOS Release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "windows-release",
+      "inherits": "windows",
+      "displayName": "Windows Release (MSVC)",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "linux-release",
+      "inherits": "linux",
+      "displayName": "Linux Release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
     }
   ],
   "buildPresets": [
     { "name": "macos", "configurePreset": "macos" },
     { "name": "windows", "configurePreset": "windows" },
-    { "name": "linux", "configurePreset": "linux" }
+    { "name": "linux", "configurePreset": "linux" },
+    { "name": "macos-release", "configurePreset": "macos-release" },
+    { "name": "windows-release", "configurePreset": "windows-release" },
+    { "name": "linux-release", "configurePreset": "linux-release" }
   ]
 }

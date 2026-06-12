@@ -100,6 +100,18 @@ ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein
 ```
 `windeployqt` läuft als Post-Build-Schritt → Qt-DLLs/QML/Plugins liegen neben der exe.
 
+**Konvention: bei jedem Build-Zyklus zusätzlich Release bauen** (unabhängig vom Installer).
+Die Standard-Presets (`windows`/`macos`/`linux`) sind **Debug** (`CMAKE_BUILD_TYPE` im `base`-Preset);
+Release-only-Probleme (Optimierung, toter/weg-optimierter Code, fehlende Asserts, RHI/Shader)
+fallen im Debug nicht auf. Dafür gibt es dedizierte Release-Presets `windows-release` /
+`macos-release` / `linux-release` (eigener binaryDir `build/<preset>`):
+```bat
+cmake --preset windows-release
+cmake --build --preset windows-release
+```
+Der Installer (`installer/build-msi.ps1`) baut weiterhin separat Release nach `build/release-win`
+(Tests aus) — unabhängig davon.
+
 **libvterm vendored:** liegt unter `third_party/libvterm/` (0.3.3, BSD, neovim-Mirror)
 und wird als kleine C-Lib mitgebaut. libvterm wurde aus vcpkg entfernt; Vendoring hält
 alle 3 Plattformen identisch & abhängigkeitsfrei. Wichtig: `project(... LANGUAGES C CXX)`
