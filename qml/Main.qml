@@ -423,16 +423,34 @@ ApplicationWindow {
         case "actNewSession":     return qsTr("Neue Session")
         case "actCloseSession":   return qsTr("Session schließen")
         case "actClosePane":      return qsTr("Pane schließen")
+        case "actNextSession":    return qsTr("Nächste Session")
+        case "actPrevSession":    return qsTr("Vorige Session")
         case "actSplitH":         return qsTr("Nebeneinander teilen")
         case "actSplitV":         return qsTr("Untereinander teilen")
         case "actCommandPalette": return qsTr("Befehlspalette")
         case "actBroadcast":      return qsTr("Eingabe an alle Sessions")
+        case "actNewSsh":         return qsTr("Neue SSH-Verbindung")
+        case "actNewSerial":      return qsTr("Neue serielle Verbindung")
+        case "actConnections":    return qsTr("Verbindungen verwalten")
+        case "actVault":          return qsTr("Secrets-Vault")
+        case "actMcpToggle":      return qsTr("MCP-Server umschalten")
         case "actZoomReset":      return qsTr("Schriftgröße zurücksetzen")
         case "actToggleTheme":    return qsTr("Design umschalten")
         case "actSettings":       return qsTr("Einstellungen")
+        case "actAbout":          return qsTr("Über QTmux")
         case "actQuit":           return qsTr("Beenden")
         }
         return id
+    }
+
+    // Nächste/vorige Session ins aktive Pane laden (mit Umlauf). dir = +1/-1.
+    function cycleSession(dir) {
+        const n = sessions.count
+        if (n <= 0) return
+        let r = (window.currentRow < 0 ? 0 : window.currentRow) + dir
+        if (r < 0) r = n - 1
+        else if (r >= n) r = 0
+        window.assignToActivePane(r)
     }
 
     // --- Pane-Steuerung (Baum-Operationen) -----------------------------------
@@ -796,6 +814,75 @@ ApplicationWindow {
         // Palette tot, wenn das Feld nach einem Befehl noch den Fokus hat.
         onTriggered: { cmdInput.forceActiveFocus(); cmdInput.selectAll(); cmdPopup.openFor() }
     }
+    // Session-Navigation (nächste/vorige, mit Umlauf).
+    Action {
+        id: actNextSession
+        text: qsTr("Nächste Session")
+        shortcut: Hotkeys.bindings["actNextSession"]
+        enabled: sessions.count > 1 && !hotkeyCaptureDialog.capturing
+        onTriggered: window.cycleSession(1)
+    }
+    Action {
+        id: actPrevSession
+        text: qsTr("Vorige Session")
+        shortcut: Hotkeys.bindings["actPrevSession"]
+        enabled: sessions.count > 1 && !hotkeyCaptureDialog.capturing
+        onTriggered: window.cycleSession(-1)
+    }
+    // Verbindungs-/Dialog-Aktionen (vorher nur Toolbar/Menü ohne Kürzel).
+    Action {
+        id: actNewSsh
+        text: qsTr("Neue SSH-Verbindung …")
+        shortcut: Hotkeys.bindings["actNewSsh"]
+        enabled: !hotkeyCaptureDialog.capturing
+        onTriggered: sshDialog.open()
+    }
+    Action {
+        id: actNewSerial
+        text: qsTr("Neue serielle Verbindung …")
+        shortcut: Hotkeys.bindings["actNewSerial"]
+        enabled: !hotkeyCaptureDialog.capturing
+        onTriggered: serialDialog.openDialog()
+    }
+    Action {
+        id: actConnections
+        text: qsTr("Verbindungen verwalten …")
+        shortcut: Hotkeys.bindings["actConnections"]
+        enabled: !hotkeyCaptureDialog.capturing
+        onTriggered: connectionsDialog.open()
+    }
+    Action {
+        id: actVault
+        text: qsTr("Secrets-Vault …")
+        shortcut: Hotkeys.bindings["actVault"]
+        enabled: !hotkeyCaptureDialog.capturing
+        onTriggered: vaultDialog.open()
+    }
+    Action {
+        id: actMcpToggle
+        text: qsTr("MCP-Server umschalten")
+        shortcut: Hotkeys.bindings["actMcpToggle"]
+        enabled: !hotkeyCaptureDialog.capturing
+        onTriggered: mcp.listening ? mcp.stop() : mcp.start()
+    }
+    Action {
+        id: actAbout
+        text: qsTr("Über QTmux")
+        shortcut: Hotkeys.bindings["actAbout"]
+        enabled: !hotkeyCaptureDialog.capturing
+        onTriggered: aboutDialog.open()
+    }
+    // Direktsprung zu Session 1..9 (feste, nicht konfigurierbare Kürzel — sonst
+    // würden 9 Einträge die Kürzel-Liste überladen). Ctrl+<N> lädt Session N.
+    Shortcut { sequence: "Ctrl+1"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 0) window.assignToActivePane(0) }
+    Shortcut { sequence: "Ctrl+2"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 1) window.assignToActivePane(1) }
+    Shortcut { sequence: "Ctrl+3"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 2) window.assignToActivePane(2) }
+    Shortcut { sequence: "Ctrl+4"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 3) window.assignToActivePane(3) }
+    Shortcut { sequence: "Ctrl+5"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 4) window.assignToActivePane(4) }
+    Shortcut { sequence: "Ctrl+6"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 5) window.assignToActivePane(5) }
+    Shortcut { sequence: "Ctrl+7"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 6) window.assignToActivePane(6) }
+    Shortcut { sequence: "Ctrl+8"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 7) window.assignToActivePane(7) }
+    Shortcut { sequence: "Ctrl+9"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 8) window.assignToActivePane(8) }
 
     // --- Toolbar oben: Schnellzugriff mit Phosphor-Icons --------------------
     header: ToolBar {
@@ -1154,26 +1241,10 @@ ApplicationWindow {
         Menu {
             title: qsTr("Datei")
             MenuItem { action: actNewSession; icon.source: window.icon("plus"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuItem {
-                text: qsTr("Neue SSH-Verbindung …")
-                icon.source: window.icon("plugs"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                onTriggered: sshDialog.open()
-            }
-            MenuItem {
-                text: qsTr("Neue serielle Verbindung …")
-                icon.source: window.icon("usb"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                onTriggered: serialDialog.openDialog()
-            }
-            MenuItem {
-                text: qsTr("Verbindungen verwalten …")
-                icon.source: window.icon("bookmark"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                onTriggered: connectionsDialog.open()
-            }
-            MenuItem {
-                text: qsTr("Secrets-Vault …")
-                icon.source: window.icon("key"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                onTriggered: vaultDialog.open()
-            }
+            MenuItem { action: actNewSsh;     icon.source: window.icon("plugs");    icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuItem { action: actNewSerial;  icon.source: window.icon("usb");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuItem { action: actConnections; icon.source: window.icon("bookmark"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuItem { action: actVault;      icon.source: window.icon("key");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator { visible: window.hasShellChoice }
             // Globale Standard-Shell (nur Windows, wo es mehrere gibt). Setzt dieselbe
@@ -1310,11 +1381,7 @@ ApplicationWindow {
         }
         Menu {
             title: qsTr("Hilfe")
-            MenuItem {
-                text: qsTr("Über QTmux")
-                icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                onTriggered: aboutDialog.open()
-            }
+            MenuItem { action: actAbout; icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
         }
     }
 
