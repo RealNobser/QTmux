@@ -258,6 +258,16 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
 > (CPack-Pakete, MSI-Signing).
+> **Windows-Session 2026-06-12 (Abend, v1.0.1-EA-Release):** Pane-Prune-Fix (`8acfd6d`)
+> **Windows-verifiziert** (Details im macOS-Abnahme-Block unten), **EA-Installer 1.0.1**
+> gebaut (`dist/QTmux-1.0.1-win64.msi` + portable ZIP) und **Firmen-Confluence-Confluence komplett
+> aktualisiert**: Hauptseite <seiten-id> (v4, 1.0.0-Anhänge GELÖSCHT → nur noch 1.0.1 +
+> Changelog), Anwender-Doku <seiten-id> (v4, stark erweitert: Splits/Profile/Vault/SFTP/
+> Broadcast/Palette/Hotkey-Tabelle/Agenten-Funktionen/EA-Einschränkungen inkl. PS-5.1-
+> Mojibake-Hinweis), **NEU Entwickler-Doku <seiten-id>** (MCP-Tools komplett + Plugin-SDK;
+> gleiche Hierarchie unter der Hauptseite). Publish-Skript `dist/_qtmux_pub2.py`
+> (löscht alte Release-Anhänge per DELETE auf die Attachment-ID). Projekteigene
+> DUAL-Doku weiterhin offen (s. u.).
 > **macOS-Abnahme-Session 2026-06-12 (nach der Windows-Welle): alles gepullt, ausgiebig
 > getestet, 3 Befunde gefixt.** Builds Debug **und** Release (neue Preset-Konvention) je 9/9
 > Tests grün. E2E auf macOS/Metal (Release-Build) verifiziert: Faint/SGR-2 (dim weiß + dim
