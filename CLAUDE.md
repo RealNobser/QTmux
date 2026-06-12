@@ -258,6 +258,51 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
 > (CPack-Pakete, MSI-Signing).
+> **Windows-Session 2026-06-12 (Menü-/MCP-/Doku-Welle, V1.0.0): committet + gepusht** (3 Commits:
+> MCP+Soft-Wrap-Copy · Menüs/Palette/i18n · Version/Installer/Release-Check/Doku). Alle Punkte
+> unten gebaut (Debug+Release) + 9/9 Tests grün + visuell in beiden Themes verifiziert.
+> **Offen:** projekteigene DUAL-Doku (confluence.intern.example + Atlassian-Cloud) zu den neuen
+> Features (MCP-Tools, Menü-Überarbeitung, v1.0.0) noch nachziehen; Jira-Abgleich bei Gelegenheit.
+> 1. **Version 1.0.0** (CMakeLists/main.cpp/MCP/Installer/About-Fallback). Installer neu gebaut
+>    (`dist/QTmux-1.0.0-win64.msi` + portable ZIP).
+> 2. **MCP erweitert** ([McpServer.cpp](src/server/McpServer.cpp)): `create_session` dokumentiert
+>    jetzt **ssh** + neuen Typ **plugin** (+ `loginScript`); `list_sessions` liefert zusätzlich
+>    `workingDir` + Progress; `send_text` kann **broadcast**; `read_screen` optional **scrollback**
+>    (neu `VtScreen::scrollbackText`/`Session::scrollbackText`); neue Discovery-Tools
+>    **list_shells / list_serial_ports / list_plugins**. Live gegen die GUI verifiziert.
+> 3. **Soft-Wrap-Copy (QTMUX-fix):** eine über Autowrap umbrochene Kommandozeile wird beim
+>    Kopieren als EINE logische Zeile behandelt (kein \n am weichen Umbruch) → Paste ergibt wieder
+>    genau einen Befehl (löste auch das „Paste landet nicht in der History"-Symptom). Umsetzung:
+>    libvterm-`sb_pushline4` (continuation-Flag) statt `sb_pushline`, `vterm_screen_callbacks_has_pushline4`,
+>    `VtScreen::lineContinuation`/`scrollbackContinuation`, `TerminalItem::selectedText` überspringt
+>    \n an Continuation-Grenzen. Test `tst_vtscreen::lineWrapContinuation`.
+> 4. **Menüs gründlich überarbeitet** (alle visuell in BEIDEN Themes verifiziert — s.
+>    [[qtmux-menu-popup-theming]]): Tastenkürzel werden in den Menüs angezeigt
+>    (`App.shortcutText` formatiert String- UND StandardKey-Shortcuts nativ; Copy/Paste via
+>    `shortcutOverride`), **dynamische Menübreite** (`window.sizeMenu` setzt `contentWidth` explizit
+>    — QQuickMenu nimmt NICHT zuverlässig das Maximum → sonst abgeschnitten/überlappend),
+>    **Icon-Farbe folgt App-Theme** (Theme::menuIcon plattformabhängig: macOS=systemDark, sonst
+>    `dark()`), **ThemedMenu** (Popups erben die ApplicationWindow-palette NICHT → eigene
+>    themengebundene palette + AppPopupBg-Hintergrund), **eigener Highlight-Hintergrund** in
+>    ShortcutMenuItem (Basic-Style nutzt sonst palette.light/midlight → schwarzer Selektionsbalken
+>    im Hell-Modus), **Alt-Mnemonics** (`&` in den Titeln: D/B/A/S/G/T/H bzw. EN F/E/V/L/G/C/H),
+>    redundanten „Helles Design"-Eintrag entfernt, Icons für die Bearbeiten-Optionen.
+> 5. **Command-Palette-Parität:** Kopieren/Einfügen, Nächste/Vorige Session, Design-Modi explizit,
+>    Sprache DE/EN, Edit-Umschalter und Plugin-Sessions ergänzt (alle Funktionen auch über die
+>    Palette erreichbar, nicht nur MCP).
+> 6. **i18n:** neue Strings via lupdate erfasst, EN vollständig übersetzt (196/196 finished).
+> 7. **Release-Visual-Check als Standard:** [tests/release-visual-check.ps1](tests/release-visual-check.ps1)
+>    startet die Release-EXE und screenshottet ALLE Menüs in Dunkel+Hell + MCP-Smoke. **Vor jedem
+>    Release laufen lassen** (Menü-/Theming-Regressionen sind unit-test-unsichtbar). Technik:
+>    UI-Automation `InvokePattern` öffnet Menüs trotz Foreground-Lock (Alt-Tastendruck löst den Lock).
+> 8. **Firmen-Confluence-Confluence-Doku (<space-key>, on-prem `<firmen-confluence>`):** Hauptseite **QTMux**
+>    (<seiten-id>) mit Kurzbeschreibung + **Download-Links/Anhängen** des Installers (MSI+ZIP);
+>    Unterseite **QTmux - Benutzerdokumentation** (<seiten-id>) mit ausführlicher Doku + 2 Screenshots.
+>    **Weg:** Python `requests` (verify=False, trust_env=False, proxies leer) wie
+>    `VisualStudioExtension/_publish.py` — curl-POST hängt hier (Expect/Harness), Python nicht.
+>    Credentials in `confluence.env` (git-ignoriert, **`*.env` in .gitignore ergänzt**). Dies ist die
+>    **Firmen-Confluence** — getrennt von der projekteigenen DUAL-Doku (confluence.intern.example +
+>    Atlassian-Cloud), die hier NICHT angefasst wurde.
 > **Windows-Session 2026-06-12 (Fortsetzung, alles gepusht):** mehrere UX-Verbesserungen
 > + Aufräumen, je Debug+Release gebaut, 9/9 Tests:
 > 1. **Faint/Dim (SGR 2)** — Claudes gedimmte Vorschläge erschienen weiß; libvterm 0.3.3

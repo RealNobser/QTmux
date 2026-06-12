@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName("QTmux");
     QGuiApplication::setOrganizationName("QTmux");
-    QGuiApplication::setApplicationVersion("0.9.0");
+    QGuiApplication::setApplicationVersion("1.0.0");
 
     QQuickStyle::setStyle("Basic");
 
