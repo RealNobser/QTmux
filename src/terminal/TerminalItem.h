@@ -148,7 +148,8 @@ private:
     /// an die eigene Session, oder im Broadcast-Modus roh an alle.
     void doPaste(const QByteArray &data);
     VtScreen *screen() const;
-    QPoint cellAt(const QPointF &pos) const;     // Pixel -> Zellkoordinate (col,row)
+    QPoint cellAt(const QPointF &pos) const;     // Pixel -> Viewport-Zelle (col, sichtbare Zeile)
+    QPoint absCellAt(const QPointF &pos) const;  // Pixel -> Selektionszelle (col, ABSOLUTE Inhalts-Zeile)
     QString selectedText() const;
     void clearSelection();
     void onDamaged();                            // Damage + Scroll-Anker nachführen
@@ -179,7 +180,10 @@ private:
     QColor m_defaultBg{0x1e, 0x1f, 0x29};
     QColor m_cursorColor{0xe6, 0xe7, 0xee};
 
-    // Maus-Selektion (Zellkoordinaten col=x, row=y; Strom-/Zeilen-Selektion).
+    // Maus-Selektion. x = Spalte, y = ABSOLUTE Inhalts-Zeile (Scrollback-Index,
+    // Live-Screen dahinter) — NICHT die sichtbare Zeile. Dadurch bleibt die Selektion
+    // beim Scrollen am Text kleben statt am Bildschirm. Umrechnung über selBase =
+    // scrollbackCount() - m_scrollOffset (absolute oberste sichtbare Zeile).
     QPoint m_selAnchor{-1, -1};
     QPoint m_selCaret{-1, -1};
     bool m_selecting = false;

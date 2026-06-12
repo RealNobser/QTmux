@@ -336,7 +336,12 @@ void TerminalItem::paintContents(QPainter *painter) {
 
     painter->setFont(m_font);
 
+    // Selektion liegt in ABSOLUTEN Inhalts-Zeilen (Scrollback-Index, Live-Screen
+    // dahinter) — so bleibt sie beim Scrollen am Text. selBase = absolute Zeile der
+    // obersten sichtbaren Zeile; damit wird die Viewport-Zeile in den Selektionsraum
+    // umgerechnet.
     int selLo = -1, selHi = -1;
+    const int selBase = sc->scrollbackCount() - m_scrollOffset;
     if (m_hasSelection) {
         const int a = m_selAnchor.y() * m_cols + m_selAnchor.x();
         const int b = m_selCaret.y() * m_cols + m_selCaret.x();
@@ -388,7 +393,7 @@ void TerminalItem::paintContents(QPainter *painter) {
                                   QColor::fromRgb(c.bg));
             }
             if (selLo >= 0) {
-                const int idx = row * m_cols + col;
+                const int idx = (selBase + row) * m_cols + col;
                 if (idx >= selLo && idx <= selHi)
                     painter->fillRect(QRectF(x, y, m_cellW * c.width, m_cellH), selColor);
             }
@@ -684,15 +689,21 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
     std::vector<QSGGeometry::ColoredPoint2D> ovVerts;
     if (sc) {
         if (m_hasSelection) {
+            // Selektion in ABSOLUTEN Inhalts-Zeilen; pro sichtbarer Zeile in
+            // Viewport-Koordinaten umrechnen (selBase = absolute oberste Zeile),
+            // damit sie beim Scrollen am Text bleibt und nur sichtbare Teile rendert.
             const int a = m_selAnchor.y() * m_cols + m_selAnchor.x();
             const int b = m_selCaret.y() * m_cols + m_selCaret.x();
             const int lo = std::min(a, b), hi = std::max(a, b);
             const int r0 = lo / m_cols, c0 = lo % m_cols;
             const int r1 = hi / m_cols, c1 = hi % m_cols;
-            for (int row = r0; row <= r1; ++row) {
-                const int from = (row == r0) ? c0 : 0;
-                const int to   = (row == r1) ? c1 : m_cols - 1;
-                pushColoredQuad(ovVerts, from * m_cellW, row * m_cellH,
+            const int selBase = sc->scrollbackCount() - m_scrollOffset;
+            for (int absRow = r0; absRow <= r1; ++absRow) {
+                const int vr = absRow - selBase;          // sichtbare Zeile
+                if (vr < 0 || vr >= m_rows) continue;
+                const int from = (absRow == r0) ? c0 : 0;
+                const int to   = (absRow == r1) ? c1 : m_cols - 1;
+                pushColoredQuad(ovVerts, from * m_cellW, vr * m_cellH,
                                 (to - from + 1) * m_cellW, m_cellH, selColor);
             }
         }
@@ -754,6 +765,18 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     if (cpMod && event->key() == Qt::Key_C) { copy();  event->accept(); return; }
     if (cpMod && event->key() == Qt::Key_V) { paste(); event->accept(); return; }
 
+#if !defined(Q_OS_MACOS)
+    // Smart Ctrl+C/V (Windows-Terminal-Stil): Ctrl+C kopiert NUR, wenn Text markiert
+    // ist, und löscht danach die Auswahl — ohne Auswahl fällt es durch zu encodeKey
+    // (\x03 = SIGINT). Ctrl+V fügt ein. Ctrl+Shift+C/V bleiben zusätzlich erhalten.
+    const bool plainCtrl = (mods & Qt::ControlModifier)
+                           && !(mods & Qt::ShiftModifier) && !(mods & Qt::AltModifier);
+    if (plainCtrl && event->key() == Qt::Key_C && m_hasSelection) {
+        copy(); clearSelection(); event->accept(); return;
+    }
+    if (plainCtrl && event->key() == Qt::Key_V) { paste(); event->accept(); return; }
+#endif
+
     if (mods & Qt::ShiftModifier) {
         const int page = std::max(m_rows - 1, 1);
         switch (event->key()) {
@@ -784,6 +807,13 @@ QPoint TerminalItem::cellAt(const QPointF &pos) const {
     return {col, row};
 }
 
+QPoint TerminalItem::absCellAt(const QPointF &pos) const {
+    const QPoint vp = cellAt(pos);            // (col, sichtbare Zeile)
+    VtScreen *sc = screen();
+    const int base = (sc ? sc->scrollbackCount() : 0) - m_scrollOffset;
+    return {vp.x(), base + vp.y()};           // (col, absolute Inhalts-Zeile)
+}
+
 void TerminalItem::clearSelection() {
     if (!m_hasSelection) return;
     m_hasSelection = false;
@@ -795,25 +825,28 @@ void TerminalItem::clearSelection() {
 QString TerminalItem::selectedText() const {
     VtScreen *sc = screen();
     if (!sc || !m_hasSelection) return {};
+    // Selektion in ABSOLUTEN Inhalts-Zeilen: row < sb -> Scrollback-Zeile, sonst
+    // Live-Screen-Zeile (row - sb). Unabhängig vom aktuellen Scroll-Offset, daher
+    // liefert Kopieren denselben Text, egal wohin gerade gescrollt ist.
     int a = m_selAnchor.y() * m_cols + m_selAnchor.x();
     int b = m_selCaret.y() * m_cols + m_selCaret.x();
     if (a > b) std::swap(a, b);
     const QPoint start(a % m_cols, a / m_cols);
     const QPoint end(b % m_cols, b / m_cols);
+    const int sb = sc->scrollbackCount();
 
     QString out;
     for (int row = start.y(); row <= end.y(); ++row) {
         const int c0 = (row == start.y()) ? start.x() : 0;
         const int c1 = (row == end.y()) ? end.x() : m_cols - 1;
-        int sbIndex = 0, liveRow = 0;
-        const bool isSb = viewportSource(row, sbIndex, liveRow);
         const std::vector<Cell> *sbLine =
-            isSb && sbIndex < sc->scrollbackCount() ? &sc->scrollbackLine(sbIndex) : nullptr;
+            (row < sb && row >= 0) ? &sc->scrollbackLine(row) : nullptr;
+        const int liveRow = row - sb;
         QString line;
         for (int col = c0; col <= c1 && col < m_cols; ++col) {
             Cell c;
-            if (isSb) { if (sbLine && col < static_cast<int>(sbLine->size())) c = (*sbLine)[col]; }
-            else c = sc->cell(liveRow, col);
+            if (sbLine) { if (col < static_cast<int>(sbLine->size())) c = (*sbLine)[col]; }
+            else if (liveRow >= 0 && liveRow < m_rows) c = sc->cell(liveRow, col);
             line += c.text.isEmpty() ? QStringLiteral(" ") : c.text;
         }
         while (line.endsWith(QLatin1Char(' '))) line.chop(1);
@@ -870,7 +903,7 @@ void TerminalItem::geometryChange(const QRectF &newGeo, const QRectF &oldGeo) {
 void TerminalItem::mousePressEvent(QMouseEvent *event) {
     forceActiveFocus();
     if (event->button() == Qt::LeftButton) {
-        m_selAnchor = m_selCaret = cellAt(event->position());
+        m_selAnchor = m_selCaret = absCellAt(event->position());
         m_selecting = true;
         m_hasSelection = false;
         emit selectionChanged();
@@ -886,7 +919,7 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
 
 void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
     if (!m_selecting) { event->ignore(); return; }
-    const QPoint cell = cellAt(event->position());
+    const QPoint cell = absCellAt(event->position());
     if (cell != m_selCaret) {
         m_selCaret = cell;
         m_hasSelection = (m_selCaret != m_selAnchor);
@@ -929,7 +962,9 @@ void TerminalItem::scrollByLines(int lines) {
     if (o == m_scrollOffset) return;
     m_scrollOffset = o;
     m_geomDirty = true;   // andere Zeilen sichtbar
-    if (m_hasSelection) clearSelection();
+    // Selektion NICHT löschen: sie liegt in absoluten Inhalts-Zeilen und bleibt
+    // beim Scrollen korrekt am Text (wird nur ein-/ausgeblendet, wenn sie den
+    // sichtbaren Bereich verlässt/betritt).
     update();
 }
 
