@@ -72,14 +72,17 @@ int cbBell(void *user) {
 int cbResize(int rows, int cols, void *user) {
     return static_cast<VtScreen *>(user)->cbResize(rows, cols) ? 1 : 0;
 }
-int cbSbPushline(int cols, const VTermScreenCell *cells, void *user) {
+// sb_pushline4 (statt sb_pushline) — liefert zusätzlich `continuation`: ist die
+// abgeschobene Zeile ein weicher Umbruch (Autowrap-Fortsetzung) der vorigen?
+// Wird nur genutzt, wenn vterm_screen_callbacks_has_pushline4() aktiviert ist.
+int cbSbPushline4(int cols, const VTermScreenCell *cells, bool continuation, void *user) {
     auto *self = static_cast<VtScreen *>(user);
     std::vector<Cell> line;
     line.reserve(cols);
     // Scrollback-Zellen haben keinen Screen-Kontext für Farbkonvertierung mehr;
     // wir nutzen denselben Screen (Palette bleibt gültig).
     for (int c = 0; c < cols; ++c) line.push_back(toCell(nullptr, cells[c]));
-    self->cbPushScrollback(std::move(line));
+    self->cbPushScrollback(std::move(line), continuation);
     return 1;
 }
 int cbSbPopline(int, VTermScreenCell *, void *) {
@@ -114,9 +117,10 @@ const VTermScreenCallbacks kScreenCallbacks = {
     /* settermprop */ cbSetTermProp,
     /* bell        */ cbBell,
     /* resize      */ cbResize,
-    /* sb_pushline */ cbSbPushline,
+    /* sb_pushline */ nullptr,   // durch sb_pushline4 ersetzt (s. has_pushline4)
     /* sb_popline  */ cbSbPopline,
     /* sb_clear    */ nullptr,
+    /* sb_pushline4*/ cbSbPushline4,
 };
 
 } // namespace
@@ -128,7 +132,10 @@ VtScreen::VtScreen(int rows, int cols, QObject *parent)
     vterm_output_set_callback(m_vt, &qtmux::cbOutput, this);
 
     m_screen = vterm_obtain_screen(m_vt);
+    m_state = vterm_obtain_state(m_vt);   // für Flow-Continuation-Abfragen
     vterm_screen_set_callbacks(m_screen, &kScreenCallbacks, this);
+    // sb_pushline4 (mit continuation-Flag) statt des 3-arg sb_pushline aktivieren.
+    vterm_screen_callbacks_has_pushline4(m_screen);
     vterm_screen_set_unrecognised_fallbacks(m_screen, &kStateFallbacks, this);
     vterm_screen_reset(m_screen, 1);
 }
@@ -162,6 +169,19 @@ QString VtScreen::screenText() const {
         lines << line;
     }
     while (!lines.isEmpty() && lines.last().isEmpty()) lines.removeLast();
+    return lines.join(QChar('\n'));
+}
+
+QString VtScreen::scrollbackText() const {
+    QStringList lines;
+    lines.reserve(static_cast<int>(m_scrollback.size()));
+    for (const SbLine &row : m_scrollback) {
+        QString line;
+        for (const Cell &c : row.cells)
+            line += c.text.isEmpty() ? QStringLiteral(" ") : c.text;
+        while (line.endsWith(QChar(' '))) line.chop(1);  // rechte Leerzeichen entfernen
+        lines << line;
+    }
     return lines.join(QChar('\n'));
 }
 
@@ -199,11 +219,17 @@ void VtScreen::cbSetTitle(const QString &title) {
     emit titleChanged(title);
 }
 
-void VtScreen::cbPushScrollback(std::vector<Cell> &&line) {
-    m_scrollback.push_back(std::move(line));
+void VtScreen::cbPushScrollback(std::vector<Cell> &&line, bool continuation) {
+    m_scrollback.push_back(SbLine{std::move(line), continuation});
     while (static_cast<int>(m_scrollback.size()) > kMaxScrollback) {
         m_scrollback.pop_front();
     }
+}
+
+bool VtScreen::lineContinuation(int row) const {
+    if (!m_state || row < 0 || row >= m_rows) return false;
+    const VTermLineInfo *info = vterm_state_get_lineinfo(m_state, row);
+    return info && info->continuation;
 }
 
 void VtScreen::cbOutput(const QByteArray &data) { emit outputToPty(data); }

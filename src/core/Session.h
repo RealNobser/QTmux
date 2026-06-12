@@ -49,6 +49,8 @@ public:
     QString title() const { return m_title; }
     /// Sichtbarer Bildschirm als Klartext (für externe Steuerung / MCP).
     QString screenText() const;
+    /// Gesamte Scrollback-Historie als Klartext (für externe Steuerung / MCP).
+    QString scrollbackText() const;
     /// Aktuelles Arbeitsverzeichnis des Backends (für Persistenz).
     QString currentWorkingDirectory() const {
         return m_backend ? m_backend->currentWorkingDirectory() : QString();

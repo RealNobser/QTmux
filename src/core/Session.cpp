@@ -82,6 +82,10 @@ QString Session::screenText() const {
     return m_screen ? m_screen->screenText() : QString();
 }
 
+QString Session::scrollbackText() const {
+    return m_screen ? m_screen->scrollbackText() : QString();
+}
+
 void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int rows) {
     m_type = type;
     m_cols = cols;

@@ -2,6 +2,7 @@
 #include "SessionModel.h"
 #include "Session.h"
 #include "ProcessInfo.h"
+#include "PluginHost.h"
 
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -10,6 +11,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QChar>
 
 namespace qtmux {
 
@@ -177,7 +179,7 @@ QJsonObject McpServer::dispatchMethod(const QString &method, const QJsonObject &
         return QJsonObject{
             {"protocolVersion", kProtocolVersion},
             {"capabilities", QJsonObject{{"tools", QJsonObject{}}}},
-            {"serverInfo", QJsonObject{{"name", "QTmux"}, {"version", "0.9.0"}}},
+            {"serverInfo", QJsonObject{{"name", "QTmux"}, {"version", "1.0.0"}}},
         };
     }
     if (method == "tools/list") {
@@ -227,18 +229,35 @@ static QJsonObject tool(const QString &name, const QString &desc,
 
 QJsonObject McpServer::toolsList() const {
     QJsonArray tools;
-    tools.append(tool("list_sessions", "Listet alle offenen Sessions mit Status.",
+    tools.append(tool("list_sessions",
+                      "Listet alle offenen Sessions mit Status (id, title, type, activity, "
+                      "agentId, needsAttention, lastNotification, mcpController, workingDir, "
+                      "progress).",
                       {}, {}));
-    tools.append(tool("create_session", "Erstellt eine Session. type: 'shell' (Standard) oder 'serial'.",
-                      QJsonObject{{"type", strProp("'shell' oder 'serial'")},
-                                  {"program", strProp("Programm für Shell (optional)")},
-                                  {"cwd", strProp("Startverzeichnis für Shell (optional)")},
-                                  {"port", strProp("serieller Port (bei type=serial)")},
-                                  {"baud", intProp("Baudrate (bei type=serial)")}},
+    tools.append(tool("create_session",
+                      "Erstellt eine Session. type: 'shell' (Standard), 'ssh', 'serial' oder "
+                      "'plugin'. Je nach Typ die passenden Felder füllen (siehe unten). Gibt die "
+                      "neue Session-ID zurück.",
+                      QJsonObject{{"type", strProp("'shell' | 'ssh' | 'serial' | 'plugin'")},
+                                  // Shell
+                                  {"program", strProp("Shell: Programm/Kommandozeile (optional, leer = Standard-Shell). Siehe list_shells.")},
+                                  {"cwd", strProp("Shell: Startverzeichnis (optional)")},
+                                  // SSH
+                                  {"host", strProp("ssh: Zielhost")},
+                                  {"user", strProp("ssh: Benutzername (optional)")},
+                                  {"identity", strProp("ssh: Identity-/Key-Datei (optional)")},
+                                  // Serial
+                                  {"port", strProp("serial: Portname (z. B. COM3). ssh: Port (Zahl als String). Siehe list_serial_ports.")},
+                                  {"baud", intProp("serial: Baudrate (Standard 115200)")},
+                                  // Plugin
+                                  {"pluginId", strProp("plugin: Plugin-ID (siehe list_plugins)")},
+                                  {"typeId", strProp("plugin: Backend-Typ-ID des Plugins (siehe list_plugins)")},
+                                  // Gemeinsam
+                                  {"loginScript", strProp("optional: Befehle nach Verbindungsaufbau (eine Zeile = ein Befehl)")}},
                       {}));
     tools.append(tool("close_session", "Schließt eine Session per ID.",
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
-    tools.append(tool("focus_session", "Fokussiert eine Session (macht sie sichtbar).",
+    tools.append(tool("focus_session", "Fokussiert eine Session und lädt sie ins aktive Pane.",
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
     tools.append(tool("attach_controller",
                       "Markiert die Session mit dieser ID als steuernde MCP-Controller-Session "
@@ -246,16 +265,34 @@ QJsonObject McpServer::toolsList() const {
                       "und ruft dieses Tool mit diesem Wert auf.",
                       QJsonObject{{"id", intProp("Session-ID des steuernden Agenten")}},
                       QJsonArray{"id"}));
-    tools.append(tool("send_text", "Sendet Text an eine Session (optional mit Enter).",
-                      QJsonObject{{"id", intProp("Session-ID")},
+    tools.append(tool("send_text",
+                      "Sendet Text an eine Session (optional mit Enter). Mit broadcast=true "
+                      "geht der Text an ALLE Sessions (id wird dann ignoriert).",
+                      QJsonObject{{"id", intProp("Session-ID (entfällt bei broadcast)")},
                                   {"text", strProp("zu sendender Text")},
-                                  {"enter", boolProp("Enter anhängen (Standard true)")}},
-                      QJsonArray{"id", "text"}));
-    tools.append(tool("read_screen", "Liest den sichtbaren Bildschirm einer Session als Text.",
-                      QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
+                                  {"enter", boolProp("Enter anhängen (Standard true)")},
+                                  {"broadcast", boolProp("an alle Sessions senden (Standard false)")}},
+                      QJsonArray{"text"}));
+    tools.append(tool("read_screen",
+                      "Liest den Bildschirm einer Session als Text. Mit scrollback=true zusätzlich "
+                      "die gesamte Historie (Scrollback) vor dem sichtbaren Bereich.",
+                      QJsonObject{{"id", intProp("Session-ID")},
+                                  {"scrollback", boolProp("Scrollback-Historie mitliefern (Standard false)")}},
+                      QJsonArray{"id"}));
     tools.append(tool("set_theme", "Setzt das Design: 'system', 'light' oder 'dark'.",
                       QJsonObject{{"mode", strProp("'system' | 'light' | 'dark'")}},
                       QJsonArray{"mode"}));
+    // Discovery (read-only): was kann create_session erzeugen?
+    tools.append(tool("list_shells",
+                      "Listet die auf dieser Plattform verfügbaren Shells ({program, name}) "
+                      "für create_session type=shell.", {}, {}));
+    tools.append(tool("list_serial_ports",
+                      "Listet die verfügbaren seriellen Ports für create_session type=serial.",
+                      {}, {}));
+    tools.append(tool("list_plugins",
+                      "Listet die von geladenen Plugins angebotenen Backend-Typen "
+                      "({pluginId, typeId, name, description}) für create_session type=plugin.",
+                      {}, {}));
     return QJsonObject{{"tools", tools}};
 }
 
@@ -278,6 +315,10 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             {"needsAttention", s->needsAttention()},
             {"lastNotification", s->lastNotification()},
             {"mcpController", s->mcpController()},
+            {"workingDir", s->workingDirectory()},
+            {"progressActive", s->progressActive()},
+            {"progressState", s->progressState()},
+            {"progressValue", s->progressValue()},
         };
     };
 
@@ -287,25 +328,61 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         text = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
         return {};
     }
+    if (name == "list_shells") {
+        text = QString::fromUtf8(QJsonDocument(
+            QJsonArray::fromVariantList(m_sessions->availableShells())).toJson(QJsonDocument::Compact));
+        return {};
+    }
+    if (name == "list_serial_ports") {
+        QJsonArray arr;
+        for (const QString &p : m_sessions->availableSerialPorts()) arr.append(p);
+        text = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+        return {};
+    }
+    if (name == "list_plugins") {
+        text = QString::fromUtf8(QJsonDocument(
+            QJsonArray::fromVariantList(PluginHost::instance().backendTypesVariant()))
+                                     .toJson(QJsonDocument::Compact));
+        return {};
+    }
     if (name == "create_session") {
         const QString type = args.value("type").toString(QStringLiteral("shell"));
+        const QString loginScript = args.value("loginScript").toString();
         int row = -1;
         if (type == "serial") {
             row = m_sessions->createSerialSession(args.value("port").toString(),
-                                                  args.value("baud").toInt(115200));
+                                                  args.value("baud").toInt(115200),
+                                                  loginScript);
         } else if (type == "ssh") {
+            // 'port' kann als Zahl oder String kommen; default 22.
+            const int sshPort = args.value("port").isDouble()
+                                    ? args.value("port").toInt(22)
+                                    : args.value("port").toString().toInt();
             row = m_sessions->createSshSession(args.value("host").toString(),
-                                               args.value("port").toInt(22),
+                                               sshPort > 0 ? sshPort : 22,
                                                args.value("user").toString(),
-                                               args.value("identity").toString());
+                                               args.value("identity").toString(),
+                                               loginScript);
+        } else if (type == "plugin") {
+            row = m_sessions->createPluginSession(args.value("pluginId").toString(),
+                                                  args.value("typeId").toString());
         } else {
             row = m_sessions->createShellSession(args.value("cwd").toString(),
-                                                 args.value("program").toString());
+                                                 args.value("program").toString(),
+                                                 loginScript);
         }
         if (row < 0) { isError = true; text = QStringLiteral("Erstellung fehlgeschlagen."); return {}; }
         auto *s = static_cast<Session *>(m_sessions->sessionAt(row));
         emit focusRequested(row);
         text = QString::number(s ? s->id() : -1);
+        return {};
+    }
+    if (name == "send_text" && args.value("broadcast").toBool(false)) {
+        // Broadcast: an alle Sessions, ohne id (Sync-Input-Modus, QTMUX-21).
+        QByteArray data = args.value("text").toString().toUtf8();
+        if (args.value("enter").toBool(true)) data += '\r';
+        m_sessions->writeToAll(data);
+        text = QStringLiteral("ok");
         return {};
     }
 
@@ -342,7 +419,12 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
     }
     if (name == "read_screen") {
         if (!s) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
-        text = s->screenText();
+        if (args.value("scrollback").toBool(false)) {
+            const QString sb = s->scrollbackText();
+            text = sb.isEmpty() ? s->screenText() : sb + QChar('\n') + s->screenText();
+        } else {
+            text = s->screenText();
+        }
         return {};
     }
     if (name == "set_theme") {

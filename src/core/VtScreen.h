@@ -10,6 +10,7 @@
 
 struct VTerm;
 struct VTermScreen;
+struct VTermState;
 
 namespace qtmux {
 
@@ -50,6 +51,9 @@ public:
 
     /// Sichtbarer Bildschirm als Klartext (Zeilen mit \n, rechte Leerzeichen entfernt).
     QString screenText() const;
+    /// Gesamte Scrollback-Historie als Klartext (älteste Zeile zuerst), ohne den
+    /// sichtbaren Bildschirm. Leer, wenn kein Scrollback vorhanden.
+    QString scrollbackText() const;
 
     QPoint cursor() const { return m_cursor; }
     bool cursorVisible() const { return m_cursorVisible; }
@@ -57,7 +61,12 @@ public:
 
     int scrollbackCount() const { return static_cast<int>(m_scrollback.size()); }
     /// Scrollback-Zeile (0 = älteste).
-    const std::vector<Cell> &scrollbackLine(int index) const { return m_scrollback[index]; }
+    const std::vector<Cell> &scrollbackLine(int index) const { return m_scrollback[index].cells; }
+    /// Ist die Scrollback-Zeile ein weicher Umbruch (Flow-Fortsetzung) der vorigen?
+    /// (Für Copy: an solchen Grenzen KEIN \n einfügen — eine logische Zeile.)
+    bool scrollbackContinuation(int index) const { return m_scrollback[index].continuation; }
+    /// Ist die sichtbare Zeile `row` eine Flow-Fortsetzung der vorigen Zeile?
+    bool lineContinuation(int row) const;
 
     /// Bracketed-Paste-Markierungen (ESC[200~ / ESC[201~) ausgeben — libvterm sendet
     /// sie über die Output-Callback NUR, wenn die Anwendung DECSET 2004 aktiviert hat.
@@ -95,7 +104,7 @@ public:
     void cbBell();
     bool cbResize(int rows, int cols);
     void cbSetTitle(const QString &title);
-    void cbPushScrollback(std::vector<Cell> &&line);
+    void cbPushScrollback(std::vector<Cell> &&line, bool continuation);
     void cbOutput(const QByteArray &data);
     /// Sammelt OSC-Fragmente (libvterm liefert sie ggf. stückweise) und parst sie.
     void cbOsc(int command, const char *str, int len, bool initial, bool final);
@@ -103,13 +112,19 @@ public:
 private:
     VTerm *m_vt = nullptr;
     VTermScreen *m_screen = nullptr;
+    VTermState *m_state = nullptr;   // für vterm_state_get_lineinfo (Flow-Continuation)
     int m_rows = 0;
     int m_cols = 0;
     QPoint m_cursor{0, 0};
     bool m_cursorVisible = true;
     QString m_title;
 
-    std::deque<std::vector<Cell>> m_scrollback;
+    // Scrollback-Zeile + ob sie ein weicher Umbruch der vorigen ist (für Copy).
+    struct SbLine {
+        std::vector<Cell> cells;
+        bool continuation = false;
+    };
+    std::deque<SbLine> m_scrollback;
     static constexpr int kMaxScrollback = 10000;
 
     int m_oscCommand = -1;     // aktuell gesammelte OSC-Nummer

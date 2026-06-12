@@ -19,6 +19,7 @@ private slots:
     void oscProgress();
     void trueColorRgb();
     void faintAttribute();
+    void lineWrapContinuation();
 };
 
 // Echtes 24-Bit-RGB (ESC[38;2;r;g;b) muss exakt durchgereicht werden.
@@ -53,6 +54,20 @@ void TestVtScreen::faintAttribute() {
         vt.inputWrite("X");
         QVERIFY(!vt.cell(0, 0).faint);
     }
+}
+
+// Eine zu lange Eingabe bricht (Autowrap) auf die nächste Zeile um; diese Zeile ist
+// dann eine Flow-Fortsetzung. Genutzt von Copy, um einen umbrochenen Befehl als EINE
+// logische Zeile (ohne \n) zu kopieren statt fälschlich als mehrzeilig.
+void TestVtScreen::lineWrapContinuation() {
+    VtScreen vt(24, 10);                 // 10 Spalten breit
+    vt.inputWrite("ABCDEFGHIJKLMNO");     // 15 Zeichen -> wickelt nach Spalte 10 um
+    QVERIFY(!vt.lineContinuation(0));     // erste Zeile: keine Fortsetzung
+    QVERIFY(vt.lineContinuation(1));      // zweite Zeile: weicher Umbruch der ersten
+    // Ein echter Zeilenumbruch (CRLF) erzeugt KEINE Fortsetzung.
+    VtScreen vt2(24, 10);
+    vt2.inputWrite("AB\r\nCD");
+    QVERIFY(!vt2.lineContinuation(1));
 }
 
 // Einfacher Text landet 1:1 in den Zellen.

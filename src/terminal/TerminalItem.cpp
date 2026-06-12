@@ -835,6 +835,15 @@ QString TerminalItem::selectedText() const {
     const QPoint end(b % m_cols, b / m_cols);
     const int sb = sc->scrollbackCount();
 
+    // Ist die absolute Zeile `row` ein weicher Umbruch (Autowrap-Fortsetzung) der
+    // vorigen? Dann gehört sie zur SELBEN logischen Zeile → beim Kopieren KEIN \n
+    // einfügen (sonst wird ein umbrochener Befehl fälschlich als mehrzeilig erkannt).
+    auto isContinuation = [&](int absRow) -> bool {
+        if (absRow < sb) return absRow >= 0 && sc->scrollbackContinuation(absRow);
+        const int lr = absRow - sb;
+        return lr >= 0 && lr < m_rows && sc->lineContinuation(lr);
+    };
+
     QString out;
     for (int row = start.y(); row <= end.y(); ++row) {
         const int c0 = (row == start.y()) ? start.x() : 0;
@@ -849,8 +858,11 @@ QString TerminalItem::selectedText() const {
             else if (liveRow >= 0 && liveRow < m_rows) c = sc->cell(liveRow, col);
             line += c.text.isEmpty() ? QStringLiteral(" ") : c.text;
         }
-        while (line.endsWith(QLatin1Char(' '))) line.chop(1);
-        if (row > start.y()) out += QLatin1Char('\n');
+        // Bei einer fortgesetzten (umbrochenen) Zeile rechte Leerzeichen NICHT
+        // trimmen — der Text läuft ja in der nächsten Zeile weiter.
+        if (!isContinuation(row + 1))
+            while (line.endsWith(QLatin1Char(' '))) line.chop(1);
+        if (row > start.y() && !isContinuation(row)) out += QLatin1Char('\n');
         out += line;
     }
     return out;
