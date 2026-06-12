@@ -286,7 +286,11 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 >    Splits; Baum komplett leer → ein Blatt mit der Folge-Session) und wählt das aktive
 >    Pane neu; nur noch VERBLIEBENE Blätter werden index-nachgeführt. E2E am
 >    Repro-Szenario verifiziert (exit in beiden Split-Sessions → Panes kollabieren
->    sauber auf eines, Inhalt intakt).
+>    sauber auf eines, Inhalt intakt). **Windows-verifiziert 2026-06-12** (Pull
+>    `8acfd6d`, Debug+Release je 9/9 Tests; E2E am Original-Repro gegen die
+>    Release-GUI via MCP+SendKeys: 2× Ctrl+Shift+O → exit in beiden Split-Sessions
+>    → Panes kollabieren 3→2→1 ohne Verzerrung, Screenshots `dist/panefix-check/`,
+>    Original-Session-Inhalt per read_screen intakt).
 > **Windows-Session 2026-06-12 (Menü-/MCP-/Doku-Welle, V1.0.0): committet + gepusht** (3 Commits:
 > MCP+Soft-Wrap-Copy · Menüs/Palette/i18n · Version/Installer/Release-Check/Doku). Alle Punkte
 > unten gebaut (Debug+Release) + 9/9 Tests grün + visuell in beiden Themes verifiziert.
