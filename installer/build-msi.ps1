@@ -38,15 +38,38 @@ if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item (Join-Path $build "qtmux.exe") $stage
 & cmd /c "`"$VcVars`" >nul 2>&1 && `"$QtDir\bin\windeployqt.exe`" --release --no-translations --no-system-d3d-compiler --no-opengl-sw --qmldir `"$repo\qml`" `"$stage\qtmux.exe`""
+# Eigene QTmux-Plugins (Phase 5, QTMUX-8) mitliefern, falls gebaut. windeployqt
+# kennt nur Qt-eigene Plugins; unsere Backend-Provider-Plugins liegen in
+# <build>\plugins und müssen separat nach <stage>\plugins (Suchpfad 2 des
+# PluginHost: <App>\plugins). Nicht fatal, wenn (noch) keine vorhanden sind.
+$pluginSrc = Join-Path $build "plugins"
+if (Test-Path $pluginSrc) {
+    $pluginDlls = Get-ChildItem (Join-Path $pluginSrc "*.dll") -ErrorAction SilentlyContinue
+    if ($pluginDlls) {
+        $pluginDst = Join-Path $stage "plugins"
+        New-Item -ItemType Directory -Force -Path $pluginDst | Out-Null
+        $pluginDlls | Copy-Item -Destination $pluginDst -Force
+        Write-Host ("    {0} QTmux-Plugin(s) eingebunden" -f $pluginDlls.Count)
+    }
+}
+
 # Lose VC-Runtime-DLLs (damit ohne separat installiertes Redist lauffähig).
 $crt = Get-ChildItem $VcRedistRoot -Directory | ForEach-Object { Get-ChildItem (Join-Path $_.FullName "x64") -Filter "Microsoft.VC*.CRT" -Directory -ErrorAction SilentlyContinue } | Select-Object -Last 1
 Copy-Item (Join-Path $crt.FullName "*.dll") $stage -Force
 Remove-Item (Join-Path $stage "vc_redist.x64.exe") -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $PSScriptRoot "LIESMICH.txt") $stage -Force
 
-Write-Host "==> 3/3 MSI bauen (WiX)" -ForegroundColor Cyan
+Write-Host "==> 3/3 MSI + portable ZIP bauen" -ForegroundColor Cyan
 $msi = Join-Path $repo "dist\QTmux-$Version-win64.msi"
 & $wix build (Join-Path $PSScriptRoot "QTmux.wxs") -arch x64 -d "Version=$Version" -d "PayloadDir=$stage" -o $msi
 if ($LASTEXITCODE -ne 0) { throw "WiX-Build fehlgeschlagen" }
 
-Write-Host "Fertig: $msi" -ForegroundColor Green
+# Portable Variante (ZIP) aus demselben Staging — installationsfrei, wie in der
+# LIESMICH.txt beschrieben (entpacken + qtmux.exe starten).
+$zip = Join-Path $repo "dist\QTmux-$Version-win64-portable.zip"
+if (Test-Path $zip) { Remove-Item $zip -Force }
+Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip
+
+Write-Host "Fertig:" -ForegroundColor Green
+Write-Host "  MSI:      $msi"
+Write-Host "  Portable: $zip"
