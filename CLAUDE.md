@@ -109,8 +109,9 @@ fallen im Debug nicht auf. Dafür gibt es dedizierte Release-Presets `windows-re
 cmake --preset windows-release
 cmake --build --preset windows-release
 ```
-Der Installer (`installer/build-msi.ps1`) baut weiterhin separat Release nach `build/release-win`
-(Tests aus) — unabhängig davon.
+Der Installer (`installer/build-msi.ps1`) nutzt **dasselbe** `windows-release`-Preset
+(`build/windows-release`) — es gibt also nur zwei Windows-Build-Verzeichnisse:
+`build/windows` (Debug) und `build/windows-release` (Release).
 
 **libvterm vendored:** liegt unter `third_party/libvterm/` (0.3.3, BSD, neovim-Mirror)
 und wird als kleine C-Lib mitgebaut. libvterm wurde aus vcpkg entfernt; Vendoring hält
@@ -257,6 +258,30 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
 > (CPack-Pakete, MSI-Signing).
+> **Windows-Session 2026-06-12 (Fortsetzung, alles gepusht):** mehrere UX-Verbesserungen
+> + Aufräumen, je Debug+Release gebaut, 9/9 Tests:
+> 1. **Faint/Dim (SGR 2)** — Claudes gedimmte Vorschläge erschienen weiß; libvterm 0.3.3
+>    kannte kein Faint. Vendored libvterm additiv gepatcht (s. ⚠️-Block im libvterm-Abschnitt),
+>    `Cell.faint`, `TerminalItem::effectiveFg()` dimmt 45 % Richtung bg. RGB/256 funktionierten
+>    immer. Tests `trueColorRgb`/`faintAttribute`. (Visuell auf Windows bestätigt.)
+> 2. **Arbeitsverzeichnis pro Tab** — Sidebar zeigt klein (gedimmt, ElideLeft) das CWD jeder
+>    Shell-Session; `Session::workingDirectory` (gecacht) + Poll-Timer (1,5 s) im SessionModel
+>    (`WorkingDirRole`). Nur Shell (SSH/Seriell/Plugin haben kein sinnvolles lokales CWD).
+> 3. **Attention-Tab pulsiert blau** — `needsAttention`-Tabs bekommen einen blau pulsierenden
+>    Rahmen (Theme.accent). Rot bleibt dem MCP-Controller vorbehalten.
+> 4. **Selektion scroll-fest + Smart Ctrl+C/V** — Maus-Selektion liegt jetzt in ABSOLUTEN
+>    Inhalts-Zeilen (bleibt beim Scrollen am Text); Ctrl+C kopiert bei Auswahl, sonst SIGINT,
+>    Ctrl+V fügt ein (Win/Linux; macOS Cmd). `absCellAt()` in TerminalItem.
+> 5. **Tastenkürzel für alle Funktionen** — HotkeyRegistry erweitert: Session-Nav Ctrl+Tab/
+>    Ctrl+Shift+Tab + Ctrl+1…9; SSH/Seriell/Verbindungen/Vault/MCP/Über (Ctrl+Shift+S/R/M/K/A, F1),
+>    alle in den Einstellungen konfigurierbar. Vault bewusst NICHT Ctrl+Shift+V (Paste-Kollision).
+> 6. **Version 0.9.0** (CMakeLists/main.cpp/MCP/Installer). **Build-Konvention:** immer auch
+>    Release bauen — dedizierte Presets `windows-release`/`macos-release`/`linux-release`. Der
+>    **Installer nutzt dasselbe `windows-release`-Preset** → nur noch 2 Win-Build-Verzeichnisse
+>    (`build/windows` Debug, `build/windows-release` Release; `build/release-win` entfernt).
+> **Offen (vom Anwender interaktiv zu testen):** das *visuelle* Drücken der neuen Kürzel und die
+> Maus-Selektion-beim-Scrollen — in der Automatisierung wegen Windows-Foreground-Lock nicht
+> auslösbar; Logik analytisch geprüft, Builds/Tests grün.
 > Session 2026-06-12: **Plugin-System (QTMUX-8) erledigt** — SDK (`QTmuxPlugin.h`) +
 > `PluginHost` (QPluginLoader) + Echo-Demo-Plugin + Session/QML-Integration inkl.
 > Persistenz-Restore; 9 Test-Binaries grün, E2E auf macOS (Details im Feature-Eintrag).

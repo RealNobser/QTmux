@@ -2,7 +2,7 @@
   Baut den unsignierten Windows-Installer (MSI) für QTmux — reproduzierbar.
 
   Pipeline:
-    1. Release-Build (separates build-Verzeichnis).
+    1. Release-Build über das windows-release-Preset (build\windows-release).
     2. Selbst-enthaltene Laufzeit per windeployqt in ein Staging-Verzeichnis
        (Qt-DLLs/QML/Plugins) + lose VC-Runtime-DLLs + LIESMICH.txt.
     3. MSI via WiX (wix build, installer\QTmux.wxs).
@@ -25,12 +25,15 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $repo = Split-Path $PSScriptRoot -Parent
-$build = Join-Path $repo "build\release-win"
+# Gemeinsames Release-Verzeichnis mit dem windows-release-Preset (kein separates
+# build\release-win mehr — das war doppelt zum Preset). So gibt es nur zwei
+# Windows-Build-Verzeichnisse: build\windows (Debug) und build\windows-release (Release).
+$build = Join-Path $repo "build\windows-release"
 $stage = Join-Path $repo "dist\QTmux"
 $wix   = Join-Path $env:USERPROFILE ".dotnet\tools\wix.exe"
 
-Write-Host "==> 1/3 Release-Build" -ForegroundColor Cyan
-& cmd /c "`"$VcVars`" >nul 2>&1 && cmake --preset windows -B `"$build`" -DCMAKE_BUILD_TYPE=Release -DQTMUX_BUILD_TESTS=OFF >nul 2>&1 && cmake --build `"$build`""
+Write-Host "==> 1/3 Release-Build (Preset windows-release)" -ForegroundColor Cyan
+& cmd /c "`"$VcVars`" >nul 2>&1 && cmake --preset windows-release >nul 2>&1 && cmake --build --preset windows-release"
 if ($LASTEXITCODE -ne 0) { throw "Build fehlgeschlagen" }
 
 Write-Host "==> 2/3 Laufzeit deployen (windeployqt + VC-Runtime)" -ForegroundColor Cyan
