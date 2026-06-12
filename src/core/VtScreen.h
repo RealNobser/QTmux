@@ -23,6 +23,7 @@ struct Cell {
     bool fgDefault = true;        // Theme-Vordergrund verwenden
     bool bgDefault = true;        // Theme-Hintergrund verwenden
     bool bold = false;
+    bool faint = false;           // SGR 2 (dim) — Vordergrund abgedunkelt rendern
     bool italic = false;
     bool underline = false;
     bool reverse = false;

@@ -312,6 +312,20 @@ void TerminalItem::recomputeGrid() {
     if (m_session) m_session->resize(m_cols, m_rows);
 }
 
+QColor TerminalItem::effectiveFg(const Cell &c) const {
+    QColor fg = c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg);
+    if (c.faint) {
+        // Faint/Dim (SGR 2): Vordergrund Richtung Hintergrund mischen (~45 %) —
+        // so rendern Terminals gedimmten/Geister-Text (z. B. Claudes Vorschläge).
+        const QColor bg = c.bgDefault ? m_defaultBg : QColor::fromRgb(c.bg);
+        constexpr qreal t = 0.45;
+        fg = QColor::fromRgbF(fg.redF()   + (bg.redF()   - fg.redF())   * t,
+                              fg.greenF() + (bg.greenF() - fg.greenF()) * t,
+                              fg.blueF()  + (bg.blueF()  - fg.blueF())  * t);
+    }
+    return fg;
+}
+
 // --- Gemeinsame Zeichenlogik (Fallback + Referenz) --------------------------
 // Zeichnet den kompletten Inhalt in LOGISCHEN Koordinaten. Im Fallback-Pfad rendert
 // dies in ein QImage; der GPU-Pfad baut dieselbe Bildbeschreibung als Geometrie.
@@ -383,11 +397,11 @@ void TerminalItem::paintContents(QPainter *painter) {
             if (!visible || c.width != 1) {
                 flush();
                 if (visible)
-                    drawGlyph(c.text, x, y, c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg),
+                    drawGlyph(c.text, x, y, effectiveFg(c),
                               c.bold, c.italic, c.underline);
                 continue;
             }
-            const QColor fg = c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg);
+            const QColor fg = effectiveFg(c);
             if (!run.isEmpty() && (fg != runFg || c.bold != runBold
                                    || c.italic != runItalic || c.underline != runUnder))
                 flush();
@@ -593,7 +607,7 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
                                         QColor::fromRgb(c.bg));
 
                     const bool visible = !c.text.isEmpty() && c.text != QStringLiteral(" ");
-                    const QColor fg = c.fgDefault ? m_defaultFg : QColor::fromRgb(c.fg);
+                    const QColor fg = effectiveFg(c);
 
                     if (visible && c.underline) {
                         const qreal uy = y + m_baseline + 1;

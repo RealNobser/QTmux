@@ -170,6 +170,7 @@ INTERNAL void vterm_state_newpen(VTermState *state)
 INTERNAL void vterm_state_resetpen(VTermState *state)
 {
   state->pen.bold = 0;      setpenattr_bool(state, VTERM_ATTR_BOLD, 0);
+  state->pen.faint = 0;     setpenattr_bool(state, VTERM_ATTR_FAINT, 0); /* QTMUX */
   state->pen.underline = 0; setpenattr_int (state, VTERM_ATTR_UNDERLINE, 0);
   state->pen.italic = 0;    setpenattr_bool(state, VTERM_ATTR_ITALIC, 0);
   state->pen.blink = 0;     setpenattr_bool(state, VTERM_ATTR_BLINK, 0);
@@ -193,6 +194,7 @@ INTERNAL void vterm_state_savepen(VTermState *state, int save)
     state->pen = state->saved.pen;
 
     setpenattr_bool(state, VTERM_ATTR_BOLD,      state->pen.bold);
+    setpenattr_bool(state, VTERM_ATTR_FAINT,     state->pen.faint); /* QTMUX */
     setpenattr_int (state, VTERM_ATTR_UNDERLINE, state->pen.underline);
     setpenattr_bool(state, VTERM_ATTR_ITALIC,    state->pen.italic);
     setpenattr_bool(state, VTERM_ATTR_BLINK,     state->pen.blink);
@@ -301,6 +303,11 @@ INTERNAL void vterm_state_setpen(VTermState *state, const long args[], int argco
       break;
     }
 
+    case 2: // Faint/dim on   /* QTMUX: faint/dim support (SGR 2) */
+      state->pen.faint = 1;
+      setpenattr_bool(state, VTERM_ATTR_FAINT, 1);
+      break;
+
     case 3: // Italic on
       state->pen.italic = 1;
       setpenattr_bool(state, VTERM_ATTR_ITALIC, 1);
@@ -359,9 +366,11 @@ INTERNAL void vterm_state_setpen(VTermState *state, const long args[], int argco
       setpenattr_int(state, VTERM_ATTR_UNDERLINE, state->pen.underline);
       break;
 
-    case 22: // Bold off
+    case 22: // Normal intensity (bold off + faint off)
       state->pen.bold = 0;
       setpenattr_bool(state, VTERM_ATTR_BOLD, 0);
+      state->pen.faint = 0;   /* QTMUX: SGR 22 hebt auch Faint auf */
+      setpenattr_bool(state, VTERM_ATTR_FAINT, 0);
       break;
 
     case 23: // Italic and Gothic (currently unsupported) off
@@ -553,6 +562,10 @@ int vterm_state_get_penattr(const VTermState *state, VTermAttr attr, VTermValue 
   switch(attr) {
   case VTERM_ATTR_BOLD:
     val->boolean = state->pen.bold;
+    return 1;
+
+  case VTERM_ATTR_FAINT:   /* QTMUX: faint/dim support */
+    val->boolean = state->pen.faint;
     return 1;
 
   case VTERM_ATTR_UNDERLINE:

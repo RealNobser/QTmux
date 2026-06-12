@@ -34,6 +34,7 @@ Cell toCell(VTermScreen *screen, const VTermScreenCell &vc) {
     }
     cell.width = static_cast<quint8>(vc.width > 0 ? vc.width : 1);
     cell.bold = vc.attrs.bold;
+    cell.faint = vc.attrs.faint;
     cell.italic = vc.attrs.italic;
     cell.underline = vc.attrs.underline != 0;
     cell.reverse = vc.attrs.reverse;

@@ -18,6 +18,7 @@ typedef struct
   VTermColor   fg, bg;
 
   unsigned int bold      : 1;
+  unsigned int faint     : 1; /* QTMUX: faint/dim support (SGR 2) */
   unsigned int underline : 2;
   unsigned int italic    : 1;
   unsigned int blink     : 1;
@@ -425,6 +426,9 @@ static int setpenattr(VTermAttr attr, VTermValue *val, void *user)
   case VTERM_ATTR_BOLD:
     screen->pen.bold = val->boolean;
     return 1;
+  case VTERM_ATTR_FAINT:   /* QTMUX: faint/dim support */
+    screen->pen.faint = val->boolean;
+    return 1;
   case VTERM_ATTR_UNDERLINE:
     screen->pen.underline = val->number;
     return 1;
@@ -707,6 +711,7 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int new_rows, int new
         }
 
         dst->pen.bold      = src->attrs.bold;
+        dst->pen.faint     = src->attrs.faint; /* QTMUX: faint/dim support */
         dst->pen.underline = src->attrs.underline;
         dst->pen.italic    = src->attrs.italic;
         dst->pen.blink     = src->attrs.blink;
@@ -999,6 +1004,7 @@ int vterm_screen_get_cell(const VTermScreen *screen, VTermPos pos, VTermScreenCe
   }
 
   cell->attrs.bold      = intcell->pen.bold;
+  cell->attrs.faint     = intcell->pen.faint; /* QTMUX: faint/dim support */
   cell->attrs.underline = intcell->pen.underline;
   cell->attrs.italic    = intcell->pen.italic;
   cell->attrs.blink     = intcell->pen.blink;
@@ -1120,6 +1126,8 @@ void vterm_screen_set_damage_merge(VTermScreen *screen, VTermDamageSize size)
 static int attrs_differ(VTermAttrMask attrs, ScreenCell *a, ScreenCell *b)
 {
   if((attrs & VTERM_ATTR_BOLD_MASK)       && (a->pen.bold != b->pen.bold))
+    return 1;
+  if((attrs & VTERM_ATTR_FAINT_MASK)      && (a->pen.faint != b->pen.faint)) /* QTMUX */
     return 1;
   if((attrs & VTERM_ATTR_UNDERLINE_MASK)  && (a->pen.underline != b->pen.underline))
     return 1;

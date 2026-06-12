@@ -17,6 +17,7 @@ namespace qtmux {
 
 class Session;
 class VtScreen;
+struct Cell;
 
 /// QML-Item, das eine zugewiesene Session darstellt.
 ///
@@ -129,6 +130,9 @@ protected:
 private:
     void recomputeGrid();
     void applyFontFeatures();   // Ligaturen je nach m_ligatures (de)aktivieren
+    /// Effektive Vordergrundfarbe einer Zelle: Default→Theme-fg bzw. explizite
+    /// RGB-Farbe, bei Faint (SGR 2) Richtung Hintergrund abgedunkelt.
+    QColor effectiveFg(const Cell &c) const;
     /// Effektiver Renderpfad: GPU, wenn aktiviert. Ligaturen laufen seit dem
     /// Glyph-Index-Atlas + Run-Shaping (2d6c51b) ebenfalls im GPU-Pfad — nur
     /// gpuRendering=false erzwingt noch den QPainter-Fallback.

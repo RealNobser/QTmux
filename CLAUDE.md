@@ -105,6 +105,20 @@ und wird als kleine C-Lib mitgebaut. libvterm wurde aus vcpkg entfernt; Vendorin
 alle 3 Plattformen identisch & abhängigkeitsfrei. Wichtig: `project(... LANGUAGES C CXX)`
 (ohne `C` ignoriert CMake die `.c`-Dateien → leere `vterm.lib` → Linkfehler).
 
+> **⚠️ Lokaler libvterm-Patch — bei einem Update NICHT verlieren:** libvterm 0.3.3 kennt
+> **kein Faint/Dim** (SGR 2) — kein Bit in `VTermScreenCellAttrs`, kein `case 2` im SGR-Parser.
+> Dadurch erschien gedimmter Text (z. B. Claudes Eingabe-Vorschläge) in voller Default-Helligkeit
+> = weiß. Wir haben Faint **additiv** ergänzt (alle Stellen mit `QTMUX:`-Kommentar markiert,
+> `grep -rn "QTMUX:" third_party/libvterm`): Bit `faint` in `VTermScreenCellAttrs`
+> (include/vterm.h) + den internen Pens (vterm_internal.h, screen.c `ScreenPen`),
+> `VTERM_ATTR_FAINT`(+`_MASK`) **ans Enum-Ende angehängt** (ABI-stabil), SGR `2` (Faint an) und
+> erweitertes SGR `22` (hebt Bold **und** Faint auf) in pen.c, plus Durchreichung in
+> `resetpen`/`savepen`/`get_penattr`/screen `setpenattr`/Pen-Copy/`get_cell`/`attrs_differ`.
+> `VtScreen` liest `vc.attrs.faint` → `Cell.faint`; `TerminalItem::effectiveFg()` dimmt die
+> fg dann 45 % Richtung bg (beide Render-Pfade). Echtes 24-Bit-RGB/256-Farben funktionierten
+> immer — der Fehler war ausschließlich das verworfene Faint-Attribut. Tests: `tst_vtscreen`
+> `trueColorRgb`/`faintAttribute`.
+
 **Windows-Lektionen (ConPTY, Prio 1 — teuer erkauft):**
 - **qtmux MUSS `WIN32_EXECUTABLE` (GUI-Subsystem) sein.** Eine Konsolen-App (CUI) erbt/
   erhält eine Konsole, an die sich die per ConPTY gestarteten Kindshells hängen statt an

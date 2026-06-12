@@ -41,6 +41,7 @@ struct VTermPen
   VTermColor fg;
   VTermColor bg;
   unsigned int bold:1;
+  unsigned int faint:1; /* QTMUX: faint/dim support (SGR 2) */
   unsigned int underline:2;
   unsigned int italic:1;
   unsigned int blink:1;

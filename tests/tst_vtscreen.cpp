@@ -17,7 +17,43 @@ private slots:
     void oscNotification();
     void oscPromptMarkers();
     void oscProgress();
+    void trueColorRgb();
+    void faintAttribute();
 };
+
+// Echtes 24-Bit-RGB (ESC[38;2;r;g;b) muss exakt durchgereicht werden.
+void TestVtScreen::trueColorRgb() {
+    VtScreen vt(24, 80);
+    vt.inputWrite("\x1b[38;2;136;136;136mX");
+    const Cell c = vt.cell(0, 0);
+    QVERIFY(!c.fgDefault);
+    QCOMPARE(c.fg, quint32(0x888888));   // unverfälscht, kein Quantisieren auf die Palette
+}
+
+// Faint/Dim (SGR 2) wird erkannt und über SGR 22 wieder aufgehoben (libvterm-Patch).
+// Ohne den Patch ging das Attribut verloren -> gedimmter Text rendert weiß.
+void TestVtScreen::faintAttribute() {
+    {   // SGR 2 auf Default-Vordergrund: faint gesetzt, fg bleibt Default.
+        VtScreen vt(24, 80);
+        vt.inputWrite("\x1b[2mX");
+        const Cell c = vt.cell(0, 0);
+        QVERIFY(c.faint);
+        QVERIFY(c.fgDefault);            // Abdunklung passiert erst beim Rendern (Theme-fg)
+        QVERIFY(!c.bold);
+    }
+    {   // SGR 22 (normale Intensität) hebt Faint UND Bold auf.
+        VtScreen vt(24, 80);
+        vt.inputWrite("\x1b[1;2mX\x1b[22mY");
+        QVERIFY(vt.cell(0, 0).faint);    // X: faint
+        QVERIFY(!vt.cell(0, 1).faint);   // Y: nach 22 nicht mehr
+        QVERIFY(!vt.cell(0, 1).bold);
+    }
+    {   // Normaler Text ist nicht faint.
+        VtScreen vt(24, 80);
+        vt.inputWrite("X");
+        QVERIFY(!vt.cell(0, 0).faint);
+    }
+}
 
 // Einfacher Text landet 1:1 in den Zellen.
 void TestVtScreen::plainText() {

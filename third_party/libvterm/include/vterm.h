@@ -245,6 +245,7 @@ typedef enum {
   VTERM_ATTR_BACKGROUND, // color:  40-49 100-107
   VTERM_ATTR_SMALL,      // bool:   73, 74, 75
   VTERM_ATTR_BASELINE,   // number: 73, 74, 75
+  VTERM_ATTR_FAINT,      // bool:   2, 22   /* QTMUX: faint/dim (angehaengt, ABI-stabil) */
 
   VTERM_N_ATTRS
 } VTermAttr;
@@ -502,6 +503,7 @@ void vterm_state_send_selection(VTermState *state, VTermSelectionMask mask, VTer
 
 typedef struct {
     unsigned int bold      : 1;
+    unsigned int faint     : 1; /* QTMUX: faint/dim support (SGR 2) */
     unsigned int underline : 2;
     unsigned int italic    : 1;
     unsigned int blink     : 1;
@@ -597,6 +599,7 @@ typedef enum {
   VTERM_ATTR_CONCEAL_MASK    = 1 << 9,
   VTERM_ATTR_SMALL_MASK      = 1 << 10,
   VTERM_ATTR_BASELINE_MASK   = 1 << 11,
+  VTERM_ATTR_FAINT_MASK      = 1 << 12, /* QTMUX: faint/dim (angehaengt, ABI-stabil) */
 
   VTERM_ALL_ATTRS_MASK = (1 << 12) - 1
 } VTermAttrMask;
