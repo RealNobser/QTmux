@@ -57,10 +57,18 @@ bool Theme::systemDark() const {
     return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
 }
 
-// Tönung für Icons in NATIVEN Menüs: folgt dem OS-Schema, nicht dem App-Theme,
-// damit Icons auf der (immer system-gefärbten) macOS-Menüleiste sichtbar bleiben.
+// Tönung für Menü-Icons. macOS rendert eine NATIVE Menüleiste, die immer dem
+// OS-Schema folgt → dort muss die Icon-Tönung an systemDark hängen. Auf Windows/
+// Linux ist die Menüleiste eine In-Window-QML-MenuBar, die dem APP-Theme folgt →
+// dort an dark() hängen (sonst sind die Icons z. B. bei App=Dunkel/System=Hell
+// dunkel auf dunklem Grund und kaum sichtbar).
 QColor Theme::menuIcon() const {
-    return systemDark() ? QColor(0xEC, 0xEC, 0xEC) : QColor(0x26, 0x26, 0x26);
+#ifdef Q_OS_MACOS
+    const bool d = systemDark();
+#else
+    const bool d = dark();
+#endif
+    return d ? QColor(0xEC, 0xEC, 0xEC) : QColor(0x26, 0x26, 0x26);
 }
 
 void Theme::toggle() { setMode(dark() ? Light : Dark); }

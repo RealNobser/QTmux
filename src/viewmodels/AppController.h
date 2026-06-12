@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QVariant>
 #include <qqmlintegration.h>
 
 namespace qtmux {
@@ -30,6 +31,12 @@ public:
     /// (QtGui) — hier korrekt, da AppController im Gui-Target lebt; die HotkeyRegistry
     /// bleibt dadurch Gui-frei.
     Q_INVOKABLE QString keyChord(int key, int modifiers) const;
+
+    /// Wandelt einen Action-Shortcut (Q_PROPERTY `shortcut`, ein QVariant) in lesbaren,
+    /// plattformkorrekten Anzeigetext für die Menüs um. Akzeptiert sowohl einen
+    /// Sequenz-String ("Ctrl+T", aus Hotkeys.bindings) als auch ein StandardKey-Enum
+    /// (int, z. B. ZoomIn/Copy). Liefert "" für leere/unbekannte Shortcuts.
+    Q_INVOKABLE QString shortcutText(const QVariant &seq) const;
 
     /// Kopiert Text in die System-Zwischenablage (z. B. ein Vault-Geheimnis).
     Q_INVOKABLE void copyToClipboard(const QString &text) const;

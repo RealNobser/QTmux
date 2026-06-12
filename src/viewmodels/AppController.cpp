@@ -48,6 +48,24 @@ QString AppController::keyChord(int key, int modifiers) const {
     return QKeySequence(mods | key).toString(QKeySequence::PortableText);
 }
 
+QString AppController::shortcutText(const QVariant &seq) const {
+    QKeySequence ks;
+    // String-Form (z. B. "Ctrl+Shift+E" aus Hotkeys.bindings).
+    if (seq.typeId() == QMetaType::QString) {
+        const QString s = seq.toString().trimmed();
+        if (s.isEmpty()) return QString();
+        ks = QKeySequence(s, QKeySequence::PortableText);
+    } else if (seq.canConvert<int>()) {
+        // StandardKey-Enum (z. B. ZoomIn/Copy). 0 = leer/kein Shortcut.
+        const int v = seq.toInt();
+        if (v == 0) return QString();
+        ks = QKeySequence(static_cast<QKeySequence::StandardKey>(v));
+    }
+    if (ks.isEmpty()) return QString();
+    // NativeText: plattformüblich (Windows/Linux "Ctrl+…", macOS ⌘/⌥/⇧-Symbole).
+    return ks.toString(QKeySequence::NativeText);
+}
+
 QStringList AppController::monospaceFonts() const {
     QStringList out;
     const QStringList all = QFontDatabase::families(QFontDatabase::Latin);

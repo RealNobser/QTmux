@@ -118,17 +118,55 @@ ApplicationWindow {
         ToolTip.text: tip
     }
 
-    // Themen-Menüeintrag (In-Window): abgerundetes Highlight, app-getöntes Icon.
-    component AppMenuItem: MenuItem {
+    // Menüeintrag mit Kürzel-Anzeige rechts.
+    // Bewusst wird das contentItem NICHT ersetzt: das Default-IconLabel des Basic-Styles
+    // rendert Icon (getönt via icon.color) + Text korrekt UND treibt die Menübreite
+    // zuverlässig (eigene Versuche mit RowLayout/anchor-Item als contentItem führten zu
+    // abgeschnittenem/überlappendem Text, weil deren implicitWidth nicht sauber in den
+    // QQuickMenu-Breitenalgorithmus propagiert). Stattdessen:
+    //   - rightPadding um die Kürzelbreite erhöhen → implicitWidth (= contentItem + Padding)
+    //     wächst, das Menü wird breit genug;
+    //   - das Kürzel als angedocktes Label in diese reservierte rechte Zone legen
+    //     (liegt außerhalb des contentItem → kann den Text nie überlappen).
+    // Icon-Farbe folgt damit wieder Theme.menuIcon (app-theme-korrekt, s. Theme::menuIcon).
+    component ShortcutMenuItem: MenuItem {
+        id: smi
+        implicitHeight: 32
+        // Explizit gesetztes Kürzel (für Aktionen, deren Shortcut NICHT an der Action hängt,
+        // z. B. das im TerminalItem fest verdrahtete Strg+C/Strg+V). Sonst aus der Action.
+        property string shortcutOverride: ""
+        readonly property string shortcutText: shortcutOverride.length > 0
+                                                ? App.shortcutText(shortcutOverride)
+                                                : (smi.action ? App.shortcutText(smi.action.shortcut) : "")
+        TextMetrics { id: smiTmShort; font.pixelSize: 12; text: smi.shortcutText }
+        rightPadding: 16 + (shortcutText.length > 0 ? Math.ceil(smiTmShort.width) + 22 : 0)
+        // Eigener, themengebundener Highlight-Hintergrund. WICHTIG: der Basic-Style
+        // färbt das Highlight sonst über palette.light/midlight — die in einem Menü-Popup
+        // NICHT vom App-Theme stammen (Popups erben die Palette nicht), was im Hell-Modus
+        // einen schwarzen Selektionsbalken mit unsichtbarem Text ergab. Daher hier explizit.
+        background: Rectangle {
+            radius: 6
+            color: smi.highlighted ? Theme.sidebarHover : "transparent"
+        }
+        Label {
+            visible: smi.shortcutText.length > 0
+            anchors.right: parent.right
+            anchors.rightMargin: 14
+            anchors.verticalCenter: parent.verticalCenter
+            text: smi.shortcutText
+            font.pixelSize: 12
+            color: Theme.textDim
+        }
+    }
+
+    // Themen-Menüeintrag (In-Window): app-getöntes Icon, höher. Highlight-Hintergrund
+    // und Kürzel-Anzeige kommen von ShortcutMenuItem.
+    component AppMenuItem: ShortcutMenuItem {
         id: ami
         implicitHeight: 34
         icon.color: Theme.textBright
         icon.width: 16
         icon.height: 16
-        background: Rectangle {
-            radius: 6
-            color: ami.highlighted ? Theme.sidebarHover : "transparent"
-        }
     }
 
     // Themen-Popup-Hintergrund (Menüs/ComboBox): abgerundet, erhoben, gerahmt.
@@ -137,6 +175,21 @@ ApplicationWindow {
         border.color: Theme.border
         border.width: 1
         radius: 8
+    }
+
+    // Themengebundenes Menü für die MenuBar. Qt-Quick-Menü-Popups erben die
+    // überschriebene palette des ApplicationWindow NICHT (sie nutzen sonst eine feste,
+    // oft dunkle Palette → im Hell-Modus dunkles Menü). Daher hier die Palette explizit
+    // ans Theme binden + AppPopupBg-Hintergrund + automatische Breite (sizeMenu).
+    component ThemedMenu: Menu {
+        padding: 4
+        onAboutToShow: window.sizeMenu(this)
+        palette.window: Theme.bgElevated
+        palette.windowText: Theme.textBright
+        palette.text: Theme.textBright
+        palette.highlight: Theme.sidebarHover
+        palette.highlightedText: Theme.textBright
+        background: AppPopupBg {}
     }
 
     // Themen-ComboBox: gerahmtes Feld, Caret-Icon, abgerundetes Popup.
@@ -210,6 +263,12 @@ ApplicationWindow {
     Menu {
         id: typeMenu
         padding: 4
+        onAboutToShow: window.sizeMenu(this)
+        palette.window: Theme.bgElevated
+        palette.windowText: Theme.textBright
+        palette.text: Theme.textBright
+        palette.highlight: Theme.sidebarHover
+        palette.highlightedText: Theme.textBright
         background: AppPopupBg { implicitWidth: 200 }
         Repeater {
             model: sessions.availableShells()
@@ -257,6 +316,12 @@ ApplicationWindow {
     Menu {
         id: termContextMenu
         padding: 4
+        onAboutToShow: window.sizeMenu(this)
+        palette.window: Theme.bgElevated
+        palette.windowText: Theme.textBright
+        palette.text: Theme.textBright
+        palette.highlight: Theme.sidebarHover
+        palette.highlightedText: Theme.textBright
         background: AppPopupBg { implicitWidth: 200 }
         AppMenuItem { action: actCopy;  icon.source: window.icon("copy") }
         AppMenuItem { action: actPaste; icon.source: window.icon("clipboard") }
@@ -451,6 +516,19 @@ ApplicationWindow {
         if (r < 0) r = n - 1
         else if (r >= n) r = 0
         window.assignToActivePane(r)
+    }
+
+    // Setzt die Breite eines Menüs explizit auf das Maximum der Item-implicitWidths.
+    // Nötig, weil QQuickMenu (Qt 6.11) die contentWidth NICHT zuverlässig als Maximum
+    // aller Einträge bestimmt → lange Texte/Kürzel wurden sonst abgeschnitten/überlappten.
+    // Wird je Menü an onAboutToShow gehängt; die Einträge sind dann bereits instanziiert.
+    function sizeMenu(menu) {
+        let w = 0
+        for (let i = 0; i < menu.count; ++i) {
+            const it = menu.itemAt(i)
+            if (it && it.implicitWidth > w) w = it.implicitWidth
+        }
+        if (w > 0) menu.contentWidth = w
     }
 
     // --- Pane-Steuerung (Baum-Operationen) -----------------------------------
@@ -1083,9 +1161,28 @@ ApplicationWindow {
                             { title: qsTr("Design umschalten"),          sub: "Ctrl+D",       icon: "moon",            run: function(){ Theme.toggle() } },
                             { title: qsTr("Einstellungen …"),            sub: "Ctrl+,",       icon: "gear",            run: function(){ settingsDialog.open() } },
                             { title: qsTr("MCP-Server umschalten"),      sub: "",             icon: "broadcast",       run: function(){ mcp.listening ? mcp.stop() : mcp.start() } },
+                            { title: qsTr("Kopieren"),                   sub: "Ctrl+C",       icon: "copy",            run: function(){ if (window.activeTerminal) window.activeTerminal.copy() } },
+                            { title: qsTr("Einfügen"),                   sub: "Ctrl+V",       icon: "clipboard",       run: function(){ if (window.activeTerminal) window.activeTerminal.paste() } },
+                            { title: qsTr("Nächste Session"),            sub: "Ctrl+Tab",     icon: "terminal-window", run: function(){ window.cycleSession(1) } },
+                            { title: qsTr("Vorige Session"),             sub: "Ctrl+Shift+Tab", icon: "terminal-window", run: function(){ window.cycleSession(-1) } },
+                            { title: qsTr("Auswahl automatisch kopieren"), sub: "",           icon: "copy",            run: function(){ window.copyOnSelect = !window.copyOnSelect } },
+                            { title: qsTr("Rechtsklick fügt ein"),       sub: "",             icon: "clipboard",       run: function(){ window.rightClickPaste = !window.rightClickPaste } },
+                            { title: qsTr("Vor mehrzeiligem Einfügen warnen"), sub: "",       icon: "info",            run: function(){ window.pasteWarnMultiline = !window.pasteWarnMultiline } },
+                            { title: qsTr("Design: Wie System"),         sub: "",             icon: "gear",            run: function(){ Theme.mode = Theme.System } },
+                            { title: qsTr("Design: Hell"),               sub: "",             icon: "sun",             run: function(){ Theme.mode = Theme.Light } },
+                            { title: qsTr("Design: Dunkel"),             sub: "",             icon: "moon",            run: function(){ Theme.mode = Theme.Dark } },
+                            { title: qsTr("Sprache: Deutsch"),           sub: "",             icon: "translate",       run: function(){ App.language = "de" } },
+                            { title: qsTr("Sprache: English"),           sub: "",             icon: "translate",       run: function(){ App.language = "en" } },
                             { title: qsTr("Über QTmux"),                 sub: "",             icon: "info",            run: function(){ aboutDialog.open() } },
                             { title: qsTr("Beenden"),                    sub: "Ctrl+Q",       icon: "x",               run: function(){ Qt.quit() } },
                         ]
+                        // Je geladenem Plugin-Backend ein Eintrag (wie im „+"-Menü).
+                        var pts = Plugins.backendTypes
+                        for (var k = 0; k < pts.length; ++k) {
+                            c.push({ title: qsTr("%1 (Plugin)").arg(pts[k].name), sub: qsTr("Neue Plugin-Session"),
+                                     icon: "robot",
+                                     run: (function(pt){ return function(){ window.newPluginSession(pt.pluginId, pt.typeId) } })(pts[k]) })
+                        }
                         // Je gespeichertem Profil ein Schnellverbinden.
                         var profs = Profiles.profiles
                         for (var j = 0; j < profs.length; ++j) {
@@ -1238,23 +1335,23 @@ ApplicationWindow {
 
     // --- Menüleiste: bietet alle Oberflächen-Befehle ------------------------
     menuBar: MenuBar {
-        Menu {
-            title: qsTr("Datei")
-            MenuItem { action: actNewSession; icon.source: window.icon("plus"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuItem { action: actNewSsh;     icon.source: window.icon("plugs");    icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuItem { action: actNewSerial;  icon.source: window.icon("usb");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuItem { action: actConnections; icon.source: window.icon("bookmark"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuItem { action: actVault;      icon.source: window.icon("key");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+        ThemedMenu {
+            title: qsTr("&Datei")
+            ShortcutMenuItem { action: actNewSession; icon.source: window.icon("plus"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actNewSsh;     icon.source: window.icon("plugs");    icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actNewSerial;  icon.source: window.icon("usb");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actConnections; icon.source: window.icon("bookmark"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actVault;      icon.source: window.icon("key");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator { visible: window.hasShellChoice }
             // Globale Standard-Shell (nur Windows, wo es mehrere gibt). Setzt dieselbe
             // Property wie die Schnellwahl im „+"-Menü → beide bleiben synchron.
-            Menu {
+            ThemedMenu {
                 title: qsTr("Standard-Shell")
                 visible: window.hasShellChoice
                 Repeater {
                     model: sessions.availableShells()
-                    delegate: MenuItem {
+                    delegate: ShortcutMenuItem {
                         required property var modelData
                         text: modelData.name
                         icon.source: window.icon("terminal-window")
@@ -1266,79 +1363,83 @@ ApplicationWindow {
                 }
             }
             MenuSeparator {}
-            MenuItem { action: actQuit }
+            ShortcutMenuItem { action: actQuit }
         }
-        Menu {
-            title: qsTr("Bearbeiten")
-            MenuItem { action: actCopy;  icon.source: window.icon("copy");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuItem { action: actPaste; icon.source: window.icon("clipboard"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+        ThemedMenu {
+            title: qsTr("&Bearbeiten")
+            // Strg+C/Strg+V sind im TerminalItem fest verdrahtet (Smart-Copy: kopiert bei
+            // Auswahl, sonst SIGINT) — daher als Override anzeigen. macOS nutzt die
+            // StandardKey-Shortcuts der Action (Cmd+C/V).
+            ShortcutMenuItem { action: actCopy;  icon.source: window.icon("copy");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                               shortcutOverride: Qt.platform.os === "osx" ? "" : "Ctrl+C" }
+            ShortcutMenuItem { action: actPaste; icon.source: window.icon("clipboard"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                               shortcutOverride: Qt.platform.os === "osx" ? "" : "Ctrl+V" }
             MenuSeparator {}
-            MenuItem {
+            ShortcutMenuItem {
                 text: qsTr("Auswahl automatisch kopieren")
+                icon.source: window.icon("copy"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 checkable: true
                 checked: window.copyOnSelect
                 onTriggered: window.copyOnSelect = !window.copyOnSelect
             }
-            MenuItem {
+            ShortcutMenuItem {
                 text: qsTr("Rechtsklick fügt ein")
+                icon.source: window.icon("clipboard"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 checkable: true
                 checked: window.rightClickPaste
                 onTriggered: window.rightClickPaste = !window.rightClickPaste
             }
-            MenuItem {
+            ShortcutMenuItem {
                 text: qsTr("Vor mehrzeiligem Einfügen warnen")
+                icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 checkable: true
                 checked: window.pasteWarnMultiline
                 onTriggered: window.pasteWarnMultiline = !window.pasteWarnMultiline
             }
         }
-        Menu {
-            title: qsTr("Ansicht")
-            MenuItem { action: actCommandPalette; icon.source: window.icon("command"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+        ThemedMenu {
+            title: qsTr("&Ansicht")
+            ShortcutMenuItem { action: actCommandPalette; icon.source: window.icon("command"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
-            MenuItem {
+            ShortcutMenuItem {
                 action: actSplitH
                 icon.source: window.icon("split-h"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
             }
-            MenuItem {
+            ShortcutMenuItem {
                 action: actSplitV
                 icon.source: window.icon("split-v"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
             }
-            MenuItem { action: actClosePane; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actClosePane; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
-            MenuItem { action: actZoomIn }
-            MenuItem { action: actZoomOut }
-            MenuItem { action: actZoomReset }
+            ShortcutMenuItem { action: actZoomIn }
+            ShortcutMenuItem { action: actZoomOut }
+            ShortcutMenuItem { action: actZoomReset }
             MenuSeparator {}
-            MenuItem {
+            ShortcutMenuItem {
                 action: actBroadcast
                 icon.source: window.icon("broadcast-input"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
             }
             MenuSeparator {}
-            MenuItem { action: actSettings; icon.source: window.icon("gear"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actSettings; icon.source: window.icon("gear"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
-            MenuItem {
-                action: actToggleTheme
-                icon.source: Theme.dark ? window.icon("sun") : window.icon("moon")
-                icon.color: Theme.menuIcon
-                icon.width: 16; icon.height: 16
-            }
-            MenuSeparator {}
-            MenuItem {
+            // (Der frühere Umschalt-Eintrag „Helles/Dunkles Design" war redundant zu den
+            //  drei expliziten Modus-Einträgen darunter — entfernt. Toggle bleibt per
+            //  Toolbar-Knopf und Strg+D erhalten.)
+            ShortcutMenuItem {
                 text: qsTr("Design: Wie System")
                 icon.source: window.icon("gear"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 checkable: true
                 checked: Theme.mode === Theme.System
                 onTriggered: Theme.mode = Theme.System
             }
-            MenuItem {
+            ShortcutMenuItem {
                 text: qsTr("Design: Hell")
                 icon.source: window.icon("sun"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 checkable: true
                 checked: Theme.mode === Theme.Light
                 onTriggered: Theme.mode = Theme.Light
             }
-            MenuItem {
+            ShortcutMenuItem {
                 text: qsTr("Design: Dunkel")
                 icon.source: window.icon("moon"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 checkable: true
@@ -1346,11 +1447,11 @@ ApplicationWindow {
                 onTriggered: Theme.mode = Theme.Dark
             }
         }
-        Menu {
-            title: qsTr("Sprache")
+        ThemedMenu {
+            title: qsTr("&Sprache")
             Repeater {
                 model: App.languageCodes()
-                MenuItem {
+                ShortcutMenuItem {
                     required property string modelData
                     text: App.languageName(modelData)
                     icon.source: window.icon("translate"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
@@ -1360,17 +1461,17 @@ ApplicationWindow {
                 }
             }
         }
-        Menu {
-            title: qsTr("Agent")
-            MenuItem {
+        ThemedMenu {
+            title: qsTr("A&gent")
+            ShortcutMenuItem {
                 text: qsTr("Neue Agent-Session …")
                 icon.source: window.icon("robot"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 onTriggered: window.newSession()
             }
         }
-        Menu {
-            title: qsTr("Agent-Steuerung")
-            MenuItem {
+        ThemedMenu {
+            title: qsTr("Agent-S&teuerung")
+            ShortcutMenuItem {
                 text: mcp.listening ? qsTr("MCP-Server: an (127.0.0.1:%1)").arg(mcp.port)
                                     : qsTr("MCP-Server: aus")
                 icon.source: window.icon("broadcast"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
@@ -1379,9 +1480,9 @@ ApplicationWindow {
                 onTriggered: mcp.listening ? mcp.stop() : mcp.start()
             }
         }
-        Menu {
-            title: qsTr("Hilfe")
-            MenuItem { action: actAbout; icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+        ThemedMenu {
+            title: qsTr("&Hilfe")
+            ShortcutMenuItem { action: actAbout; icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
         }
     }
 
@@ -2459,7 +2560,7 @@ ApplicationWindow {
             width: 380
             wrapMode: Text.WordWrap
             color: Theme.textBright
-            text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nQt %1").arg(Qt.application.version || "0.9")
+            text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nQt %1").arg(Qt.application.version || "1.0")
         }
     }
 
