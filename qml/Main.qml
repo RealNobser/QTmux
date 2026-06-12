@@ -81,8 +81,25 @@ ApplicationWindow {
                 return r
             }
             window.currentRow = adjust(window.currentRow)
-            // Alle Blätter auf gültige Session-Reihen nachführen (verschobene Indizes).
-            window.remapLeaves(adjust)
+            if (window.layout) {
+                // Panes der ENTFERNTEN Sessions schließen (Splits kollabieren) statt
+                // sie auf eine überlebende Session umzubiegen — sonst zeigen mehrere
+                // Panes dieselbe Session und kämpfen mit verschiedenen Grids um deren
+                // resize() (Symptom: alle Panes dieselbe Session, Anzeige verzerrt).
+                const emptied = window.pruneLeaves(function(l) {
+                    return l.sessionRow >= first && l.sessionRow <= last
+                })
+                if (emptied)   // ganzer Baum weg -> ein Blatt mit der Folge-Session
+                    window.layout = { paneId: window.nextPaneId++,
+                                      sessionRow: window.currentRow }
+                // Verbliebene Blätter auf die verschobenen Indizes nachführen.
+                window.remapLeaves(function(r) { return r > last ? r - removed : r })
+                // Das aktive Pane kann mit entfernt worden sein -> neu wählen.
+                if (!window.findLeaf(window.activePaneId)) {
+                    const fl = window.firstLeaf(window.layout)
+                    if (fl) { window.activePaneId = fl.paneId; window.currentRow = fl.sessionRow }
+                }
+            }
             window.rebuildLayout()
         }
         // Fenster-Alert (Dock-Hüpfen/Taskbar-Blinken), wenn QTmux nicht im Vordergrund ist.
@@ -583,6 +600,24 @@ ApplicationWindow {
     function leafCount() { let c = 0; forEachLeaf(window.layout, function() { ++c }); return c }
     function remapLeaves(fn) {
         forEachLeaf(window.layout, function(l) { l.sessionRow = fn(l.sessionRow) })
+    }
+    // Entfernt alle Blätter, auf die `pred` zutrifft, aus dem Layout-Baum und
+    // kollabiert dabei leere/einelementige Splits. true = Baum wurde komplett leer.
+    function pruneLeaves(pred) {
+        const prune = function(n) {
+            if (isLeaf(n)) return pred(n) ? null : n
+            const kept = []
+            for (let i = 0; i < n.children.length; ++i) {
+                const c = prune(n.children[i])
+                if (c) kept.push(c)
+            }
+            if (kept.length === 0) return null
+            if (kept.length === 1) return kept[0]
+            n.children = kept
+            return n
+        }
+        window.layout = prune(window.layout)
+        return !window.layout
     }
 
     // Registry Term<->paneId (Fokus nach Rebuild zurückgeben).

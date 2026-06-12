@@ -276,6 +276,17 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 > 3. **Command-Palette-Kürzel hartkodiert:** zeigten rohe Strings (auch nach Re-Binding
 >    falsch) → jetzt an `Hotkeys.bindings` gebunden + `App.shortcutText` (native ⌘-Symbole;
 >    Palette zeigt ^⇥/^⇧⇥ für die Session-Navigation).
+> 4. **Panes „übernehmen" beim Session-Entfernen eine fremde Session (User-Report,
+>    Repro: Session + 2 Splits untereinander → die neuen Sessions entfernen → Panes
+>    bleiben, zeigen alle dieselbe Rest-Session, Anzeige verzerrt):** `onRowsRemoved`
+>    bog die Blätter ENTFERNTER Sessions per `adjust()` auf eine überlebende Zeile um —
+>    mehrere Panes teilten sich dann eine Session und kämpften mit verschiedenen Grids
+>    um deren `resize()` (daher die Verzerrung). Fix: neuer Helfer `pruneLeaves(pred)`
+>    entfernt die Blätter der gelöschten Sessions aus dem Layout-Baum (kollabiert
+>    Splits; Baum komplett leer → ein Blatt mit der Folge-Session) und wählt das aktive
+>    Pane neu; nur noch VERBLIEBENE Blätter werden index-nachgeführt. E2E am
+>    Repro-Szenario verifiziert (exit in beiden Split-Sessions → Panes kollabieren
+>    sauber auf eines, Inhalt intakt).
 > **Windows-Session 2026-06-12 (Menü-/MCP-/Doku-Welle, V1.0.0): committet + gepusht** (3 Commits:
 > MCP+Soft-Wrap-Copy · Menüs/Palette/i18n · Version/Installer/Release-Check/Doku). Alle Punkte
 > unten gebaut (Debug+Release) + 9/9 Tests grün + visuell in beiden Themes verifiziert.
