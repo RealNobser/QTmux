@@ -258,6 +258,24 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
 > (CPack-Pakete, MSI-Signing).
+> **macOS-Abnahme-Session 2026-06-12 (nach der Windows-Welle): alles gepullt, ausgiebig
+> getestet, 3 Befunde gefixt.** Builds Debug **und** Release (neue Preset-Konvention) je 9/9
+> Tests grün. E2E auf macOS/Metal (Release-Build) verifiziert: Faint/SGR-2 (dim weiß + dim
+> rot), Sidebar-CWD je Tab, **Soft-Wrap-Copy** (150-Zeichen-Wrap → Clipboard = 1 Zeile ohne
+> `\n`), **scroll-feste Selektion** (Copy vor/nach Scroll identisch), Attention-Pulse (Bell in
+> inaktiver Session → blau pulsierender Tab), MCP-Erweiterung komplett (list_shells/-serial_
+> ports/-plugins, `create_session type=plugin` → Echo-Session, read_screen `scrollback:true`,
+> send_text `broadcast` in alle Sessions, workingDir in list_sessions), Menü-Theming Hell +
+> Dunkel inkl. nativer Kürzel (⌘C…), Cmd+1..9-Direktsprung. **Gefundene + gefixte Befunde:**
+> 1. **Session-Navigation auf macOS wirkungslos:** Default „Ctrl+Tab" = Cmd+Tab gehört dem
+>    System-App-Switcher; physisches Ctrl+Tab ist in Qt „Meta+Tab". Fix: macOS-Default in
+>    `HotkeyRegistry` per `#ifdef` auf `Meta+Tab`/`Meta+Shift+Tab` — funktional verifiziert
+>    (Marker-Test: Vorwärts- und Rückwärts-Umlauf über MCP-read_screen bewiesen).
+> 2. **Über-Dialog zeigte „Qt 1.0.0":** `Qt.application.version` ist die App-Version, war
+>    aber mit „Qt %1" beschriftet → jetzt „Version %1" (DE+EN).
+> 3. **Command-Palette-Kürzel hartkodiert:** zeigten rohe Strings (auch nach Re-Binding
+>    falsch) → jetzt an `Hotkeys.bindings` gebunden + `App.shortcutText` (native ⌘-Symbole;
+>    Palette zeigt ^⇥/^⇧⇥ für die Session-Navigation).
 > **Windows-Session 2026-06-12 (Menü-/MCP-/Doku-Welle, V1.0.0): committet + gepusht** (3 Commits:
 > MCP+Soft-Wrap-Copy · Menüs/Palette/i18n · Version/Installer/Release-Check/Doku). Alle Punkte
 > unten gebaut (Debug+Release) + 9/9 Tests grün + visuell in beiden Themes verifiziert.

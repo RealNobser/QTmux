@@ -1143,28 +1143,31 @@ ApplicationWindow {
                     property var filtered: []
 
                     // Befehle: feste Aktionen + je offener Session ein „Wechseln zu: …".
+                    // Kürzel-Anzeige der Palette: an die LIVE-Belegung (Hotkeys.bindings)
+                    // gebunden und nativ formatiert (macOS ⌘-Symbole) — wie in den Menüs.
+                    function hk(id) { return App.shortcutText(Hotkeys.bindings[id] || "") }
                     function buildCommands() {
                         var c = [
-                            { title: qsTr("Neue Session"),               sub: "Ctrl+T",       icon: "plus",            run: function(){ window.newSession() } },
-                            { title: qsTr("Neue SSH-Verbindung …"),      sub: "",             icon: "plugs",           run: function(){ sshDialog.open() } },
-                            { title: qsTr("Neue serielle Verbindung …"), sub: "",             icon: "usb",             run: function(){ serialDialog.openDialog() } },
-                            { title: qsTr("Verbindungen verwalten …"),   sub: "",             icon: "bookmark",        run: function(){ connectionsDialog.open() } },
-                            { title: qsTr("Secrets-Vault …"),            sub: "",             icon: "key",             run: function(){ vaultDialog.open() } },
-                            { title: qsTr("Session schließen"),          sub: "Ctrl+W",       icon: "x",               run: function(){ window.closeCurrent() } },
-                            { title: qsTr("Nebeneinander teilen"),       sub: "Ctrl+Shift+E", icon: "split-h",         run: function(){ window.splitPane(Qt.Horizontal) } },
-                            { title: qsTr("Untereinander teilen"),       sub: "Ctrl+Shift+O", icon: "split-v",         run: function(){ window.splitPane(Qt.Vertical) } },
-                            { title: qsTr("Pane schließen"),             sub: "Ctrl+Shift+W", icon: "x",               run: function(){ window.closePane() } },
+                            { title: qsTr("Neue Session"),               sub: hk("actNewSession"), icon: "plus",            run: function(){ window.newSession() } },
+                            { title: qsTr("Neue SSH-Verbindung …"),      sub: hk("actNewSsh"), icon: "plugs",           run: function(){ sshDialog.open() } },
+                            { title: qsTr("Neue serielle Verbindung …"), sub: hk("actNewSerial"), icon: "usb",             run: function(){ serialDialog.openDialog() } },
+                            { title: qsTr("Verbindungen verwalten …"),   sub: hk("actConnections"), icon: "bookmark",        run: function(){ connectionsDialog.open() } },
+                            { title: qsTr("Secrets-Vault …"),            sub: hk("actVault"), icon: "key",             run: function(){ vaultDialog.open() } },
+                            { title: qsTr("Session schließen"),          sub: hk("actCloseSession"), icon: "x",               run: function(){ window.closeCurrent() } },
+                            { title: qsTr("Nebeneinander teilen"),       sub: hk("actSplitH"), icon: "split-h",         run: function(){ window.splitPane(Qt.Horizontal) } },
+                            { title: qsTr("Untereinander teilen"),       sub: hk("actSplitV"), icon: "split-v",         run: function(){ window.splitPane(Qt.Vertical) } },
+                            { title: qsTr("Pane schließen"),             sub: hk("actClosePane"), icon: "x",               run: function(){ window.closePane() } },
                             { title: qsTr("Schrift vergrößern"),         sub: "",             icon: "plus",            run: function(){ window.zoomTerminal(1) } },
                             { title: qsTr("Schrift verkleinern"),        sub: "",             icon: "x",               run: function(){ window.zoomTerminal(-1) } },
-                            { title: qsTr("Schriftgröße zurücksetzen"),  sub: "Ctrl+0",       icon: "gear",            run: function(){ window.resetTerminalZoom() } },
-                            { title: qsTr("Eingabe an alle Sessions"),   sub: "Ctrl+Shift+B", icon: "broadcast-input", run: function(){ window.broadcastInput = !window.broadcastInput } },
-                            { title: qsTr("Design umschalten"),          sub: "Ctrl+D",       icon: "moon",            run: function(){ Theme.toggle() } },
-                            { title: qsTr("Einstellungen …"),            sub: "Ctrl+,",       icon: "gear",            run: function(){ settingsDialog.open() } },
-                            { title: qsTr("MCP-Server umschalten"),      sub: "",             icon: "broadcast",       run: function(){ mcp.listening ? mcp.stop() : mcp.start() } },
-                            { title: qsTr("Kopieren"),                   sub: "Ctrl+C",       icon: "copy",            run: function(){ if (window.activeTerminal) window.activeTerminal.copy() } },
-                            { title: qsTr("Einfügen"),                   sub: "Ctrl+V",       icon: "clipboard",       run: function(){ if (window.activeTerminal) window.activeTerminal.paste() } },
-                            { title: qsTr("Nächste Session"),            sub: "Ctrl+Tab",     icon: "terminal-window", run: function(){ window.cycleSession(1) } },
-                            { title: qsTr("Vorige Session"),             sub: "Ctrl+Shift+Tab", icon: "terminal-window", run: function(){ window.cycleSession(-1) } },
+                            { title: qsTr("Schriftgröße zurücksetzen"),  sub: hk("actZoomReset"), icon: "gear",            run: function(){ window.resetTerminalZoom() } },
+                            { title: qsTr("Eingabe an alle Sessions"),   sub: hk("actBroadcast"), icon: "broadcast-input", run: function(){ window.broadcastInput = !window.broadcastInput } },
+                            { title: qsTr("Design umschalten"),          sub: hk("actToggleTheme"), icon: "moon",            run: function(){ Theme.toggle() } },
+                            { title: qsTr("Einstellungen …"),            sub: hk("actSettings"), icon: "gear",            run: function(){ settingsDialog.open() } },
+                            { title: qsTr("MCP-Server umschalten"),      sub: hk("actMcpToggle"), icon: "broadcast",       run: function(){ mcp.listening ? mcp.stop() : mcp.start() } },
+                            { title: qsTr("Kopieren"),                   sub: App.shortcutText("Ctrl+C"), icon: "copy",            run: function(){ if (window.activeTerminal) window.activeTerminal.copy() } },
+                            { title: qsTr("Einfügen"),                   sub: App.shortcutText("Ctrl+V"), icon: "clipboard",       run: function(){ if (window.activeTerminal) window.activeTerminal.paste() } },
+                            { title: qsTr("Nächste Session"),            sub: hk("actNextSession"), icon: "terminal-window", run: function(){ window.cycleSession(1) } },
+                            { title: qsTr("Vorige Session"),             sub: hk("actPrevSession"), icon: "terminal-window", run: function(){ window.cycleSession(-1) } },
                             { title: qsTr("Auswahl automatisch kopieren"), sub: "",           icon: "copy",            run: function(){ window.copyOnSelect = !window.copyOnSelect } },
                             { title: qsTr("Rechtsklick fügt ein"),       sub: "",             icon: "clipboard",       run: function(){ window.rightClickPaste = !window.rightClickPaste } },
                             { title: qsTr("Vor mehrzeiligem Einfügen warnen"), sub: "",       icon: "info",            run: function(){ window.pasteWarnMultiline = !window.pasteWarnMultiline } },
@@ -1173,8 +1176,8 @@ ApplicationWindow {
                             { title: qsTr("Design: Dunkel"),             sub: "",             icon: "moon",            run: function(){ Theme.mode = Theme.Dark } },
                             { title: qsTr("Sprache: Deutsch"),           sub: "",             icon: "translate",       run: function(){ App.language = "de" } },
                             { title: qsTr("Sprache: English"),           sub: "",             icon: "translate",       run: function(){ App.language = "en" } },
-                            { title: qsTr("Über QTmux"),                 sub: "",             icon: "info",            run: function(){ aboutDialog.open() } },
-                            { title: qsTr("Beenden"),                    sub: "Ctrl+Q",       icon: "x",               run: function(){ Qt.quit() } },
+                            { title: qsTr("Über QTmux"),                 sub: hk("actAbout"), icon: "info",            run: function(){ aboutDialog.open() } },
+                            { title: qsTr("Beenden"),                    sub: hk("actQuit"), icon: "x",               run: function(){ Qt.quit() } },
                         ]
                         // Je geladenem Plugin-Backend ein Eintrag (wie im „+"-Menü).
                         var pts = Plugins.backendTypes
@@ -2560,7 +2563,9 @@ ApplicationWindow {
             width: 380
             wrapMode: Text.WordWrap
             color: Theme.textBright
-            text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nQt %1").arg(Qt.application.version || "1.0")
+            // Qt.application.version ist die APP-Version (setApplicationVersion) —
+            // nicht die Qt-Bibliotheksversion; Label entsprechend "Version".
+            text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nVersion %1").arg(Qt.application.version || "1.0")
         }
     }
 

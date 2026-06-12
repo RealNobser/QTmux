@@ -17,8 +17,16 @@ HotkeyRegistry::HotkeyRegistry(QObject *parent) : QObject(parent) {
         {QStringLiteral("actNewSession"),     QStringLiteral("Ctrl+T")},
         {QStringLiteral("actCloseSession"),   QStringLiteral("Ctrl+W")},
         {QStringLiteral("actClosePane"),      QStringLiteral("Ctrl+Shift+W")},
+        // Session-Navigation: auf macOS heißt Qt-"Ctrl" Cmd, und Cmd+Tab gehört dem
+        // System-App-Switcher (die App sieht die Taste nie). "Meta+Tab" = PHYSISCHES
+        // Ctrl+Tab — die plattformübliche Belegung (Terminal.app/iTerm-Stil).
+#if defined(Q_OS_MACOS)
+        {QStringLiteral("actNextSession"),    QStringLiteral("Meta+Tab")},
+        {QStringLiteral("actPrevSession"),    QStringLiteral("Meta+Shift+Tab")},
+#else
         {QStringLiteral("actNextSession"),    QStringLiteral("Ctrl+Tab")},
         {QStringLiteral("actPrevSession"),    QStringLiteral("Ctrl+Shift+Tab")},
+#endif
         {QStringLiteral("actSplitH"),         QStringLiteral("Ctrl+Shift+E")},
         {QStringLiteral("actSplitV"),         QStringLiteral("Ctrl+Shift+O")},
         {QStringLiteral("actCommandPalette"), QStringLiteral("Ctrl+K")},
