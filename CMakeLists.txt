@@ -10,6 +10,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+# Position-Independent-Code für ALLE Targets. Nötig, weil die statische qtmux_core
+# (und ggf. die vendored vterm-Lib) in das per qt_add_plugin gebaute, GETEILTE
+# Plugin (.so) gelinkt wird: eine Shared Library verlangt PIC. GCC baut statische
+# Libs sonst ohne -fPIC -> Linkfehler "relocation R_X86_64_… can not be used when
+# making a shared object; recompile with -fPIC". Auf Windows (keine PIC-Semantik)
+# und macOS (clang erzeugt ohnehin PIC) ist die Option ein No-op.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 option(QTMUX_BUILD_TESTS "Build unit tests" ON)
 
 # Qt6 ------------------------------------------------------------------------
