@@ -1522,6 +1522,27 @@ ApplicationWindow {
                                 }
                             }
                         }
+
+                        // Aufmerksamkeit: der ganze Tab pulsiert mit blauem Rahmen
+                        // (Theme.accent). Rot ist bewusst dem MCP-Controller-Tab
+                        // vorbehalten. Ergänzt den ebenfalls pulsierenden Status-Ring;
+                        // der Rahmen liegt am Rand und überdeckt keinen Inhalt.
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: parent.radius
+                            color: "transparent"
+                            visible: needsAttention
+                            border.color: Theme.accent
+                            border.width: 2
+                            SequentialAnimation on opacity {
+                                running: needsAttention
+                                loops: Animation.Infinite
+                                alwaysRunToEnd: true
+                                NumberAnimation { to: 0.25; duration: 600 }
+                                NumberAnimation { to: 1.0; duration: 600 }
+                                onStopped: parent.opacity = 1.0
+                            }
+                        }
                     }
                 }
 
@@ -2371,7 +2392,7 @@ ApplicationWindow {
             width: 380
             wrapMode: Text.WordWrap
             color: Theme.textBright
-            text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nQt %1").arg(Qt.application.version || "0.1")
+            text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nQt %1").arg(Qt.application.version || "0.9")
         }
     }
 
