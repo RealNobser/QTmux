@@ -10,12 +10,15 @@ layout(std140, binding = 0) uniform buf {
     float qt_Opacity;
 };
 
-// Glyph-Atlas: speichert die Deckung (Coverage) des Glyphs im Alpha-Kanal.
+// Glyph-Atlas: Mono-Glyphen liegen weiß (Deckung im Alpha) vor; Farb-Glyphen
+// (Emoji) als echte vormultiplizierte RGBA-Pixel.
 layout(binding = 1) uniform sampler2D atlasTex;
 
 void main() {
-    float coverage = texture(atlasTex, texCoord).a;
-    // color kommt unmultipliziert (a = 1) an; Ausgabe vormultipliziert mit der
-    // Glyph-Deckung, wie es der Scene-Graph erwartet.
-    fragColor = vec4(color.rgb * coverage, coverage) * qt_Opacity;
+    vec4 tex = texture(atlasTex, texCoord);
+    // color.a ist der Glyph-Typ-Selektor (NICHT Deckung): 1 = Mono-Glyphe (mit der
+    // Per-Vertex-Vordergrundfarbe einfärben), 0 = Farb-Glyphe (Atlas-RGB direkt,
+    // bereits vormultipliziert). color.rgb kommt unmultipliziert (a-frei) an.
+    vec4 mono = vec4(color.rgb * tex.a, tex.a);   // fg × Deckung, vormultipliziert
+    fragColor = mix(tex, mono, color.a) * qt_Opacity;
 }

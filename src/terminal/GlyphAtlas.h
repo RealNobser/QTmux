@@ -27,6 +27,8 @@ public:
     struct Entry {
         QRect rect;        ///< Kachel in der Atlas-Textur
         bool valid = false;
+        bool color = false;///< Farb-Glyphe (Emoji): Kachel enthält echte RGB-Pixel,
+                           ///< der Shader nutzt sie direkt statt sie per fg zu tönen.
     };
 
     GlyphAtlas() = default;
@@ -52,6 +54,7 @@ public:
         QSizeF sizeLogical;    ///< Kachelgröße in logischen Einheiten
         bool valid = false;    ///< gültiger Eintrag (auch leer kann gültig sein)
         bool empty = false;    ///< keine Tinte (z. B. Leerzeichen) → nichts zeichnen
+        bool color = false;    ///< Farb-Glyphe (Emoji): RGB direkt nutzen, nicht tönen
     };
     const IndexedEntry &glyphByIndex(const QRawFont &rawFont, quint32 glyphIndex, qreal dpr);
 
@@ -70,6 +73,9 @@ private:
     QString keyFor(const QString &text, bool bold, bool italic) const;
     bool ensureRow(int tileW, int tileH);     ///< Platz für eine Kachel schaffen (ggf. wachsen)
     void resetImage(int w, int h);
+    /// True, wenn die Kachel echte Farbe enthält (R≠G≠B in irgendeinem Pixel) — dann
+    /// ist es eine Farb-Glyphe (Emoji), deren Pixel der Shader unverändert nutzt.
+    bool tileHasColor(const QRect &rect) const;
 
     QFont m_font;
     qreal m_cellW = 8, m_cellH = 16, m_baseline = 12, m_dpr = 1;

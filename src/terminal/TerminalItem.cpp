@@ -540,7 +540,8 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
         std::vector<GlyphVertex> glVerts;
         // Glyph-Quads zunächst mit PIXEL-UV sammeln; nach der Schleife normalisieren
         // (der Atlas kann während der Schleife wachsen → Größe ändert sich).
-        struct GQ { float x, y, w, h; QRect uv; uchar r, g, b; };
+        // `color` = Farb-Glyphe (Emoji): der Shader nutzt dann die Atlas-RGB direkt.
+        struct GQ { float x, y, w, h; QRect uv; uchar r, g, b; bool color; };
         std::vector<GQ> glyphQuads;
 
         // Ganzflächiger Standard-Hintergrund.
@@ -579,7 +580,8 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
                     const float gx = float(runX + pos[i].x() + e.offset.x());
                     const float gy = float(rowY + m_baseline + (pos[i].y() - ascent) + e.offset.y());
                     glyphQuads.push_back({gx, gy, float(e.sizeLogical.width()),
-                                          float(e.sizeLogical.height()), e.rect, fr, fgc, fb});
+                                          float(e.sizeLogical.height()), e.rect, fr, fgc, fb,
+                                          e.color});
                 }
             }
         };
@@ -626,7 +628,8 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
                             if (e.valid)
                                 glyphQuads.push_back({float(x), float(y),
                                                       float(m_cellW * wUnits), float(m_cellH), e.rect,
-                                                      uchar(fg.red()), uchar(fg.green()), uchar(fg.blue())});
+                                                      uchar(fg.red()), uchar(fg.green()), uchar(fg.blue()),
+                                                      e.color});
                         }
                         continue;
                     }
@@ -668,10 +671,13 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
             const float u0 = q.uv.x() / aw, v0 = q.uv.y() / ah;
             const float u1 = (q.uv.x() + q.uv.width()) / aw, v1 = (q.uv.y() + q.uv.height()) / ah;
             const float x0 = q.x, y0 = q.y, x1 = q.x + q.w, y1 = q.y + q.h;
+            // Vertex-Alpha ist der Shader-Selektor: 255 = Mono-Glyphe (per fg tönen),
+            // 0 = Farb-Glyphe (Emoji, Atlas-RGB direkt). NICHT Deckung/Opazität.
+            const uchar sel = q.color ? 0 : 255;
             GlyphVertex v[6] = {
-                {x0, y0, u0, v0, q.r, q.g, q.b, 255}, {x1, y0, u1, v0, q.r, q.g, q.b, 255},
-                {x0, y1, u0, v1, q.r, q.g, q.b, 255}, {x1, y0, u1, v0, q.r, q.g, q.b, 255},
-                {x1, y1, u1, v1, q.r, q.g, q.b, 255}, {x0, y1, u0, v1, q.r, q.g, q.b, 255},
+                {x0, y0, u0, v0, q.r, q.g, q.b, sel}, {x1, y0, u1, v0, q.r, q.g, q.b, sel},
+                {x0, y1, u0, v1, q.r, q.g, q.b, sel}, {x1, y0, u1, v0, q.r, q.g, q.b, sel},
+                {x1, y1, u1, v1, q.r, q.g, q.b, sel}, {x0, y1, u0, v1, q.r, q.g, q.b, sel},
             };
             for (const auto &pt : v) glVerts.push_back(pt);
         }

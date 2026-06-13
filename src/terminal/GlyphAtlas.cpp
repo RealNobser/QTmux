@@ -3,6 +3,7 @@
 #include <QGlyphRun>
 #include <QPainter>
 #include <cmath>
+#include <cstdlib>
 
 namespace qtmux {
 
@@ -44,6 +45,27 @@ void GlyphAtlas::resetImage(int w, int h) {
 QString GlyphAtlas::keyFor(const QString &text, bool bold, bool italic) const {
     // Stil in zwei führende Steuerzeichen kodieren; danach der Text selbst.
     return QString(QChar(ushort((bold ? 2 : 0) | (italic ? 1 : 0)))) + text;
+}
+
+bool GlyphAtlas::tileHasColor(const QRect &rect) const {
+    // Eine monochrome (weiß gezeichnete) Glyphe ist in ARGB32-Premultiplied grau:
+    // R==G==B==Alpha. Eine Farb-Glyphe (Emoji, z. B. Apple Color Emoji) hat dagegen
+    // Pixel mit unterschiedlichen Kanälen. Toleranz fängt Premultiply-Rundung ab.
+    const int x0 = std::max(0, rect.x());
+    const int y0 = std::max(0, rect.y());
+    const int x1 = std::min(m_image.width(), rect.x() + rect.width());
+    const int y1 = std::min(m_image.height(), rect.y() + rect.height());
+    for (int y = y0; y < y1; ++y) {
+        const QRgb *line = reinterpret_cast<const QRgb *>(m_image.constScanLine(y));
+        for (int x = x0; x < x1; ++x) {
+            const QRgb px = line[x];
+            if (qAlpha(px) == 0) continue;
+            const int r = qRed(px), g = qGreen(px), b = qBlue(px);
+            if (std::abs(r - g) > 2 || std::abs(g - b) > 2 || std::abs(r - b) > 2)
+                return true;
+        }
+    }
+    return false;
 }
 
 bool GlyphAtlas::ensureRow(int tileW, int tileH) {
@@ -111,6 +133,7 @@ const GlyphAtlas::Entry &GlyphAtlas::glyph(const QString &text, bool bold,
     Entry e;
     e.rect = rect;
     e.valid = true;
+    e.color = tileHasColor(rect);   // Farb-Emoji erkennen (Shader nutzt RGB direkt)
     return *m_cache.insert(key, e);
 }
 
@@ -172,6 +195,7 @@ GlyphAtlas::glyphByIndex(const QRawFont &rawFont, quint32 glyphIndex, qreal dpr)
     m_penX += tileW + kPad;
     m_rowH = std::max(m_rowH, tileH);
     m_contentDirty = true;
+    e.color = tileHasColor(rect);   // Farb-Emoji erkennen (Shader nutzt RGB direkt)
     return *m_indexCache.insert(key, e);
 }
 

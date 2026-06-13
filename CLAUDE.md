@@ -83,6 +83,20 @@ open ./build/macos/qtmux.app          # sichtbar starten
 QT_QPA_PLATFORM=offscreen ./build/macos/qtmux.app/Contents/MacOS/qtmux   # headless smoketest
 ```
 
+**macOS-Installer (DMG):** `installer/build-dmg.sh [version]` (analog zum Windows-
+`build-msi.ps1`). Baut das `macos-release`-Preset, stagt das Bundle nach
+`dist/stage-mac/QTmux.app`, macht es per **`macdeployqt -qmldir=qml`** self-contained
+(Qt-Frameworks + QML-Module + das Echo-Plugin in `Contents/PlugIns`), **signiert das
+Bundle ad-hoc neu** (`codesign --force --deep --sign -` — macdeployqt schreibt rpaths
+NACH seiner eigenen Signatur um → die wird ungültig, und Apple Silicon startet nur mit
+gültiger Signatur) und baut via `hdiutil` ein „Drag-to-Applications"-DMG
+→ `dist/QTmux-<version>-macos.dmg` (git-ignoriert). **Nicht notarisiert** (Early-Adopter,
+wie das unsignierte Windows-MSI) → beim ersten Start Rechtsklick→„Öffnen" bzw.
+`xattr -dr com.apple.quarantine /Applications/QTmux.app`. macdeployqt-`ERROR`-Zeilen zu
+QtVirtualKeyboard/QtMultimedia/QtPdf sind harmlos (optionale, ungenutzte QML-Module).
+Verifiziert 2026-06-13: DMG gemountet, App von dort gestartet (self-contained, ohne
+Homebrew-Qt im Env), Emoji + Rendering korrekt.
+
 ## Build & Test (Windows, MSVC) — verifiziert 2026-06-08
 
 Voraussetzungen: VS 2022 (MSVC + CMake + Ninja), Qt 6.x `msvc2022_64` **inkl.
@@ -254,10 +268,20 @@ je Workflow abweichen).
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
-## Status (Stand: 2026-06-12)
+## Status (Stand: 2026-06-13)
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
-> (CPack-Pakete, MSI-Signing).
+> (Signierung/Notarisierung der Installer, CPack/AppImage).
+> **Session 2026-06-13 (macOS):** zwei Punkte erledigt.
+> 1. **Mehrfarbige Emojis im GPU-Pfad gefixt** — der Glyph-Shader verwarf die Atlas-RGB
+>    (nur Alpha × fg) → Emojis waren einfarbige Blobs (Fallback war korrekt). `GlyphAtlas`
+>    erkennt Farb-Glyphen per Pixel-Scan; Vertex-Alpha dient als Mono/Farb-Selektor; Shader
+>    nutzt für Farb-Glyphen die Atlas-RGB direkt. Beide Pfade (zellweise + Ligatur) verifiziert
+>    (Details im QTMUX-6-Eintrag). Hinweis: der Anwender hatte GPU-Glyphen in den Settings als
+>    Workaround deaktiviert — mit dem Fix ist der GPU-Pfad (Default) wieder sicher.
+> 2. **macOS-Installer (DMG)** — `installer/build-dmg.sh`: macdeployqt-self-contained +
+>    Ad-hoc-Signatur + hdiutil-DMG (Drag-to-Applications). `dist/QTmux-1.0.1-macos.dmg`
+>    gebaut + aus dem gemounteten DMG verifiziert (s. Build-&-Test-macOS-Abschnitt).
 > **Windows-Session 2026-06-12 (Abend, v1.0.1-EA-Release):** Pane-Prune-Fix (`8acfd6d`)
 > **Windows-verifiziert** (Details im macOS-Abnahme-Block unten), **EA-Installer 1.0.1**
 > gebaut (`dist/QTmux-1.0.1-win64.msi` + portable ZIP) und **Firmen-Confluence-Confluence komplett
@@ -753,9 +777,21 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   - **Eigenes `QSGMaterial`/`QSGMaterialShader`** (file-lokal in `TerminalItem.cpp`) +
     **RHI-Shader** `src/terminal/shaders/glyph.{vert,frag}` (`#version 440`), via
     **`qt_add_shaders`** (BATCHABLE) zu `.qsb` kompiliert und unter `:/shaders/` eingebettet
-    (`find_package(... ShaderTools)`). Der Fragment-Shader multipliziert die **Atlas-Deckung
-    (Alpha) mit der Per-Vertex-Vordergrundfarbe** → **ein Atlas färbt beliebige fg-Farben**.
-    Custom-Vertex-Layout (pos `vec2` + tex `vec2` + color `ubyte4` normalisiert).
+    (`find_package(... ShaderTools)`). Der Fragment-Shader multipliziert für **Mono-Glyphen**
+    die **Atlas-Deckung (Alpha) mit der Per-Vertex-Vordergrundfarbe** → **ein Atlas färbt
+    beliebige fg-Farben**. Custom-Vertex-Layout (pos `vec2` + tex `vec2` + color `ubyte4`
+    normalisiert).
+  - **Mehrfarbige Emojis (Farb-Glyphen, Fix 2026-06-13):** Der Atlas wird via `QPainter`
+    gerastert, der **Farb-Emojis (Apple Color Emoji) bereits in Farbe** zeichnet — die echten
+    RGBA-Pixel liegen also im Atlas. Der alte Shader verwarf jedoch die Textur-RGB und nutzte
+    nur den Alpha-Kanal × fg → Emojis erschienen als **einfarbige Blobs** (im GPU-Pfad; der
+    QPainter-Fallback war immer korrekt). Fix: `GlyphAtlas::tileHasColor()` erkennt nach dem
+    Rastern eine Farb-Glyphe (irgendein Pixel mit R≠G≠B; Mono ist premultipliziert grau) und
+    setzt `Entry/IndexedEntry::color`. Der Renderer kodiert das in die **Vertex-Alpha als
+    Typ-Selektor** (255 = Mono → fg tönen, 0 = Farbe → Atlas-RGB direkt; Alpha war vorher
+    ungenutzt, Opazität kommt aus `qt_Opacity`). Shader: `mix(tex, vec4(fg*tex.a, tex.a),
+    color.a)`. Verifiziert (Metal, beide Pfade): 😀🎉🔴🚀🟢🟦 mehrfarbig, ASCII/ANSI-Farben +
+    Ligaturen unverändert getönt.
   - **`updatePaintNode`** baut vier Geometrie-Knoten in Zeichenreihenfolge: **Hintergrund**
     (ganzflächiger Default-bg + Nicht-Default-Zellen, `QSGVertexColorMaterial`), **Glyphen**
     (eigenes Material, Atlas-Textur), **Unterstreichung** (`QSGVertexColorMaterial`, liegt über
