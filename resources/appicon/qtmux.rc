@@ -1,0 +1,3 @@
+// Windows-Ressourcenskript: bindet das App-Icon in die qtmux.exe ein.
+// Die niedrigste IDI-Nummer bestimmt das Datei-Icon im Explorer/der Taskleiste.
+IDI_ICON1 ICON "qtmux.ico"

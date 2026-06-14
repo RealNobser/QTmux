@@ -89,8 +89,20 @@ if(APPLE)
 endif()
 
 # Anwendungs-Target ----------------------------------------------------------
+# App-Icon je Plattform: macOS bekommt das .icns ins Bundle (s. set_source_files_
+# properties + MACOSX_BUNDLE_ICON_FILE weiter unten), Windows kompiliert das .rc
+# (verweist auf qtmux.ico) in die .exe. Linux nutzt das PNG via .desktop (Installer).
+set(qtmux_platform_icon "")
+if(APPLE)
+    set(qtmux_macos_icon "${CMAKE_CURRENT_SOURCE_DIR}/resources/appicon/qtmux.icns")
+    set(qtmux_platform_icon "${qtmux_macos_icon}")
+elseif(WIN32)
+    set(qtmux_platform_icon "${CMAKE_CURRENT_SOURCE_DIR}/resources/appicon/qtmux.rc")
+endif()
+
 qt_add_executable(qtmux
     src/app/main.cpp
+    ${qtmux_platform_icon}
 )
 
 qt_add_qml_module(qtmux
@@ -205,7 +217,14 @@ set_target_properties(qtmux PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_BUNDLE_NAME "QTmux"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.qtmux.app"
+    MACOSX_BUNDLE_ICON_FILE "qtmux.icns"
 )
+# Das .icns landet in QTmux.app/Contents/Resources; MACOSX_BUNDLE_ICON_FILE oben
+# trägt nur den Dateinamen in die Info.plist ein.
+if(APPLE)
+    set_source_files_properties("${qtmux_macos_icon}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
+endif()
 
 # Windows: GUI-Subsystem (kein Konsolenfenster). WICHTIG nicht nur kosmetisch —
 # eine Konsolen-Subsystem-App (CUI) erbt/erhält eine Konsole, an die sich die per
