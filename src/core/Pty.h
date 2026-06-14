@@ -44,6 +44,14 @@ public:
     /// Aktuelles Arbeitsverzeichnis des Kindprozesses (leer, wenn nicht ermittelbar).
     QString currentWorkingDirectory() const;
 
+    /// App-Quit-Modus: terminate() beendet dann synchron + nicht-blockierend
+    /// (SIGKILL an den ganzen Baum, KEIN waitpid — der Prozess endet ohnehin und
+    /// das OS reapt die Zombies). So sterben auch HUP-ignorierende Nachfahren
+    /// garantiert VOR dem Prozess-Exit. Im Normalbetrieb (false) reapt terminate()
+    /// asynchron, um den GUI-Thread nie zu blockieren. Vor shutdownAll() setzen.
+    static void setQuitting(bool on) { s_quitting = on; }
+    static bool quitting() { return s_quitting; }
+
 signals:
     void readyRead(const QByteArray &data);
     /// Prozess wurde beendet (exitCode, ob normal beendet).
@@ -58,6 +66,8 @@ private:
     bool m_running = false;
     qint64 m_pid = 0;
     QString m_lastError;
+
+    static bool s_quitting;   // App-Quit: synchroner, nicht-blockierender terminate()
 };
 
 } // namespace qtmux

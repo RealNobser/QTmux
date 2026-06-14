@@ -315,6 +315,10 @@ void SessionModel::shutdownAll() {
     // m_shuttingDown verhindert, dass die dabei ausgelösten Closed-Signale die
     // (zuvor von saveState gesicherte) Session-Liste per Auto-Remove leeren.
     m_shuttingDown = true;
+    // Quit-Modus: terminate() killt den Prozessbaum synchron + nicht-blockierend,
+    // damit auch HUP-ignorierende Nachfahren VOR dem Prozess-Exit sterben (ein
+    // asynchroner Reaper-Thread liefe sonst evtl. nicht mehr rechtzeitig).
+    Pty::setQuitting(true);
     for (Session *s : m_sessions) s->shutdown();
 }
 

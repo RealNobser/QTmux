@@ -21,6 +21,7 @@
 #include <cerrno>
 #include <cstring>
 #include <vector>
+#include <thread>
 
 #if defined(Q_OS_MACOS)
 #  include <libproc.h>
@@ -171,26 +172,47 @@ void Pty::terminate() {
         d->masterFd = -1;
     }
 
-    // Kurze Gnadenfrist, dann hart beenden, was noch lebt.
-    int status = 0;
-    if (pid > 0) {
-        bool reaped = false;
-        for (int i = 0; i < 20; ++i) {                 // ~200 ms
-            if (::waitpid(pid, &status, WNOHANG) == pid) { reaped = true; break; }
-            ::usleep(10 * 1000);
-        }
-        if (!reaped) {
-            ::kill(pid, SIGKILL);
-            ::waitpid(pid, &status, 0);
+    if (s_quitting) {
+        // App-Quit: synchron + NICHT blockierend. SIGKILL sofort an Shell + Baum
+        // (kein waitpid — der Prozess endet ohnehin, das OS reapt die Zombies). So
+        // sterben auch HUP-ignorierende Nachfahren garantiert vor dem Prozess-Exit;
+        // ein detached Thread liefe sonst evtl. nicht mehr, bevor main() endet.
+        if (pid > 0) ::kill(pid, SIGKILL);
+        for (qint64 p : tree) if (p > 0) ::kill(static_cast<pid_t>(p), SIGKILL);
+    } else {
+        // Normalbetrieb: Gnadenfrist, Hart-Beenden und das ABERNTEN (waitpid) laufen
+        // in einem detached Thread — NIEMALS im aufrufenden (GUI-)Thread. Das
+        // blockierende waitpid kann Sekunden dauern: ein per SIGKILL beendeter
+        // Prozess mit vielen Threads/Mach-Ports (z. B. ein node-/Agent-Baum) hängt
+        // im Kernel-Teardown ("exiting"), und waitpid kehrt erst danach zurück.
+        // Würde das im GUI-Thread passieren (terminate wird u. a. aus ~Session via
+        // deleteLater gerufen), fröre die ganze App ein (bunter Kreisel), sobald man
+        // mehrere solche Sessions schließt. Der Thread reapt unsere direkte Shell
+        // (sonst bliebe sie Zombie); die reparenteten Nachfahren erledigt launchd
+        // nach dem SIGKILL.
+        if (pid > 0 || !tree.isEmpty()) {
+            std::thread([pid, tree]() {
+                int status = 0;
+                if (pid > 0) {
+                    bool reaped = false;
+                    for (int i = 0; i < 20; ++i) {                 // ~200 ms
+                        if (::waitpid(pid, &status, WNOHANG) == pid) { reaped = true; break; }
+                        ::usleep(10 * 1000);
+                    }
+                    if (!reaped) {
+                        ::kill(pid, SIGKILL);
+                        ::waitpid(pid, &status, 0);   // blockiert NUR diesen Thread
+                    }
+                }
+                for (qint64 p : tree) if (p > 0) ::kill(static_cast<pid_t>(p), SIGKILL);
+            }).detach();
         }
     }
-    // Überlebende Nachfahren hart beenden (sie sind nicht unsere direkten Kinder
-    // und werden von init reaped — SIGKILL genügt).
-    for (qint64 p : tree) if (p > 0) ::kill(static_cast<pid_t>(p), SIGKILL);
 
-    const int exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    // exitCode wird beim asynchronen Abernten nicht mehr ausgewertet (der Closed-
+    // Zustand hängt nicht vom genauen Code ab); -1 = "ohne bekannten Exit-Code".
     m_pid = 0;
-    emit finished(exitCode);
+    emit finished(-1);
 }
 
 QString Pty::currentWorkingDirectory() const {

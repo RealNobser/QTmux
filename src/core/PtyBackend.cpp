@@ -7,6 +7,10 @@
 
 namespace qtmux {
 
+// Plattformneutrale Definition des statischen Pty-Flags (UnixPty.cpp/WindowsPty.cpp
+// werden je nur auf einer Plattform gebaut, PtyBackend.cpp überall).
+bool Pty::s_quitting = false;
+
 PtyBackend::PtyBackend(QObject *parent) : ITerminalBackend(parent) {
     connect(&m_pty, &Pty::readyRead, this, &PtyBackend::dataReceived);
     connect(&m_pty, &Pty::finished, this, [this](int) {
