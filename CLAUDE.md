@@ -268,10 +268,74 @@ je Workflow abweichen).
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
-## Status (Stand: 2026-06-13)
+## Status (Stand: 2026-06-15)
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
-> (Signierung/Notarisierung der Installer, CPack/AppImage).
+> (Signierung/Notarisierung der Installer, CPack/AppImage). **Projekteigene DUAL-Doku**
+> (confluence.intern.example + Atlassian-Cloud) ist mit der 2026-06-15-Session aktualisiert.
+> **Session 2026-06-14/15 (macOS): drei Bugfixes + App-Icon, alle committet+gepusht
+> (`e57f928`, `a466dbc`, `de27c69`).** Befunde vom Anwender, alle E2E auf macOS verifiziert.
+> 1. **Login-Shell-Fix (`e57f928`)** — lokale Shells starteten als Nicht-Login-Shell
+>    (`argv[0]="/bin/zsh"` ohne `-`/`-l`) → `~/.zprofile`, `/etc/zprofile` (= `path_helper`/
+>    Homebrew-PATH), `~/.zlogin` wurden NICHT geladen; aus dem Finder/Dock erbte die Shell nur
+>    die magere launchd-Umgebung (PATH ohne `/opt/homebrew/bin`). Fix wie Terminal.app/iTerm:
+>    Login-Shell-Markierung über `argv[0]` mit führendem `-`. `Pty::start` bekam einen
+>    optionalen `argv0`-Parameter (UnixPty exec't via `execvp` mit separatem Such-Pfad, sodass
+>    der Name `-zsh` sein darf; WindowsPty ignoriert ihn); `PtyBackend::setLoginShell(true)`
+>    baut `-<shell>` NUR für echte Shells ohne eigene Args (SSH/Clink unberührt), gesetzt in
+>    `SessionModel::createShellSession`. Verifiziert: `$0=-zsh`, `[[ -o login ]]` true, PATH
+>    enthält Homebrew. Gilt macOS+Linux (gemeinsamer `forkpty`-Pfad).
+> 2. **Menü-Sprache folgt der App-Sprache (`e57f928`)** — bei „English" blieben manche Menüs
+>    deutsch. ZWEI Ursachen: (a) das QML wurde GELADEN, bevor der `QTranslator` installiert war
+>    → die ins native App-Menü promoteten Items (Über/Einstellungen/Beenden) landeten dort mit
+>    dem Quelltext, und `retranslate()` erreicht gerade diese promoteten Items nicht mehr (die
+>    regulären File/Edit/View schon). Fix: Translator + `singletonInstance(App)` VOR
+>    `loadFromModule`. (b) Die NATIVEN macOS-App-Menü-Standarditems (Über/Einstellungen/Dienste/
+>    Ausblenden/Beenden) lokalisiert macOS über die **AppleLanguages-Preference** (System-UI-
+>    Sprache), NICHT über unseren Translator. Fix in `main.cpp`: AppleLanguages aus `ui/language`
+>    (Default-`QSettings`, gleiche Domain wie der AppController) VOR `QGuiApplication` per
+>    `CFPreferencesSetAppValue(…, kCFPreferencesCurrentApplication)` setzen (CoreFoundation, kein
+>    ObjC). **Lektionen:** ein eingespeistes `-AppleLanguages`-**argv wirkt NICHT** (NSUserDefaults
+>    liest das ECHTE OS-Prozess-argv via `_NSGetArgv`, nicht Qts argv); der Wert persistiert in
+>    `com.qtmux.app.plist` (cfprefsd-Flush) — unkritisch, da bei jedem Start neu gesetzt.
+>    **Grenze:** ein LAUFZEIT-Sprachwechsel stellt die regulären Menüs sofort um, das native
+>    App-Menü erst nach **Neustart** (AppleLanguages wird beim Start gelesen). Per System-Events
+>    verifiziert: en+de durchgängig. (Verifikations-Falle: `defaults write`/PlistBuddy auf die
+>    plist greift wegen cfprefsd-Cache nicht zuverlässig — Sprache über das App-Menü umstellen.)
+> 3. **GUI-Freeze beim Schließen prozessbaum-schwerer Sessions (`a466dbc`)** — schloss man (z. B.
+>    via MCP) mehrere Sessions mit Claude/node + vielen Subprozessen, fror die ganze App ein
+>    (bunter Kreisel), force-quit nötig. **Per Stack-`sample` bewiesen:** der GUI-Thread hing in
+>    `__wait4` bei `UnixPty.cpp` im blockierenden `waitpid(pid,&status,0)` nach SIGKILL, aufgerufen
+>    aus `~Session` (via `deleteLater`). Ein per SIGKILL beendeter Prozess mit vielen Threads/
+>    Mach-Ports (node-Baum) hängt sekundenlang im Kernel-Teardown (Prozesszustand `?E`=„exiting"),
+>    `waitpid` kehrt erst danach zurück → GUI blockiert. Fix in `UnixPty::terminate()`: das
+>    Abernten (Gnadenfrist + SIGKILL + `waitpid`) läuft im Normalbetrieb in einem **detached
+>    Thread** (GUI-Thread sendet nur die Signale, kehrt sofort zurück; Shell wird geerntet → keine
+>    Zombies, reparentete Nachfahren erledigt launchd). **App-Quit-Sonderpfad** über das statische
+>    `Pty::s_quitting` (gesetzt in `SessionModel::shutdownAll`): synchron + nicht-blockierend
+>    (SIGKILL an den Baum, KEIN `waitpid` — der Prozess endet, das OS reapt), damit auch
+>    HUP-ignorierende Nachfahren (`nohup`) VOR dem Exit sterben (ein detached Thread liefe sonst
+>    evtl. nicht mehr, bevor `main()` endet → hätte das verifizierte nohup-Cleanup gebrochen).
+>    `emit finished(-1)` statt echtem exitCode (Closed-Zustand braucht ihn nicht; `Pty::finished`
+>    wird nur für `setState(Closed)` genutzt). Mit echten node-Bäumen verifiziert: Schließen
+>    **0,03 s statt 60 s Hang**, App responsiv, 0 Zombies; App-Quit 0,64 s inkl. `nohup`. Gilt
+>    macOS+Linux. **Windows unangetastet** (eigene synchrone Teardown-Logik mit Reader-/Waiter-
+>    Thread-Joins; `s_quitting` dort ungenutzt, schadet nicht).
+> 4. **App-Icon „Multi-Agent-Ring" (`de27c69`)** — erstes App-Icon. Design: dunkles Squircle,
+>    zentraler Prompt-Chevron `❯` + Cursor-Block in Akzent-Cyan, umgeben von drei Status-Bögen
+>    (grün/blau/orange = die cmux-Status-Ringe laufend/aktiv/wartend). Quelle `resources/appicon/
+>    qtmux.svg` → `qtmux.icns` (macOS, 10 Größen), `qtmux.ico` (Windows, 7 Größen, Vista-PNG),
+>    `qtmux.png` (Linux 512). Da KEIN rsvg/inkscape/magick auf den Build-Maschinen ist, rastert
+>    ein winziges Qt-Tool `svgrender.cpp` (QtSvg, dieselbe Engine wie die App) — `generate.sh`
+>    erzeugt alle Formate reproduzierbar. **Einbindung (`CMakeLists.txt`):** macOS `.icns` →
+>    `Contents/Resources` + `MACOSX_BUNDLE_ICON_FILE` (im Dock verifiziert); Windows `.rc`
+>    (`IDI_ICON1 ICON qtmux.ico`) in die `.exe` kompiliert — `installer/QTmux.wxs` extrahiert ihr
+>    Icon BEREITS aus der `.exe` (`SourceFile=…qtmux.exe`), MSI/Verknüpfung nutzen es ohne
+>    Änderung; DMG nimmt es übers Bundle mit; Linux-PNG für `.desktop`/AppImage (Phase 6) bereit.
+> **Build-Helfer:** ein Qt-SVG→PNG-Renderer lässt sich Homebrew-Qt direkt bauen:
+> `clang++ -std=c++17 svgrender.cpp -F$(brew --prefix qt)/lib -framework QtCore -framework QtGui
+> -framework QtSvg -Wl,-rpath,$(brew --prefix qt)/lib` (Framework-Header via `-F`, Includes als
+> `<QtGui/QGuiApplication>`; `QT_QPA_PLATFORM=offscreen`).
 > **Session 2026-06-13 (macOS):** zwei Punkte erledigt.
 > 1. **Mehrfarbige Emojis im GPU-Pfad gefixt** — der Glyph-Shader verwarf die Atlas-RGB
 >    (nur Alpha × fg) → Emojis waren einfarbige Blobs (Fallback war korrekt). `GlyphAtlas`
