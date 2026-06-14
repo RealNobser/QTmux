@@ -119,6 +119,9 @@ int SessionModel::createShellSession(const QString &workingDir, const QString &p
     auto *pty = new PtyBackend();
     if (!workingDir.isEmpty()) pty->setWorkingDirectory(workingDir);
     if (!program.isEmpty()) pty->setProgram(program);   // leer = Standard-Shell
+    // Lokale Shells als Login-Shell starten (wie Terminal.app/iTerm) → ~/.zprofile,
+    // /etc/zprofile (path_helper/Homebrew-PATH), ~/.bash_profile … werden geladen.
+    pty->setLoginShell(true);
     s->setLoginScript(loginScript);
     // Eigene Session-ID in die Shell-Umgebung legen: ein steuernder Agent liest
     // $QTMUX_SESSION_ID und meldet sich per MCP-Tool attach_controller(id) an.

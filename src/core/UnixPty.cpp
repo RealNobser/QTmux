@@ -44,7 +44,7 @@ Pty::~Pty() {
 
 bool Pty::start(const QString &program, const QStringList &args,
                 int cols, int rows, const QStringList &env,
-                const QString &workingDir) {
+                const QString &workingDir, const QString &argv0) {
     if (m_running) {
         m_lastError = QStringLiteral("PTY läuft bereits");
         return false;
@@ -76,15 +76,19 @@ bool Pty::start(const QString &program, const QStringList &args,
             }
         }
 
+        // Such-/Ausfuehrungspfad bleibt `program`; argv[0] kann fuer Login-Shells
+        // abweichen (fuehrendes '-', wie login(1)/Terminal.app). Daher execvp mit
+        // dem echten Pfad als Such-Argument, argv[0] separat aus argvStore.
+        const QByteArray execPath = program.toLocal8Bit();
         std::vector<QByteArray> argvStore;
-        argvStore.push_back(program.toLocal8Bit());
+        argvStore.push_back(argv0.isEmpty() ? execPath : argv0.toLocal8Bit());
         for (const QString &a : args) argvStore.push_back(a.toLocal8Bit());
 
         std::vector<char *> argv;
         for (auto &a : argvStore) argv.push_back(a.data());
         argv.push_back(nullptr);
 
-        ::execvp(argv[0], argv.data());
+        ::execvp(execPath.constData(), argv.data());
         // Nur erreichbar, wenn exec fehlschlägt:
         ::perror("execvp");
         ::_exit(127);

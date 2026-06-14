@@ -121,7 +121,8 @@ Pty::~Pty() {
 
 bool Pty::start(const QString &program, const QStringList &args,
                 int cols, int rows, const QStringList &env,
-                const QString &workingDir) {
+                const QString &workingDir, const QString &argv0) {
+    Q_UNUSED(argv0)   // ConPTY kennt kein argv[0]-Login-Konzept (Unix-only).
     if (m_running) {
         m_lastError = QStringLiteral("PTY läuft bereits");
         return false;

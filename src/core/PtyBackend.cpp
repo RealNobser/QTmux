@@ -3,6 +3,7 @@
 #include <QProcessEnvironment>
 #include <QProcess>
 #include <QDir>
+#include <QFileInfo>
 
 namespace qtmux {
 
@@ -50,8 +51,18 @@ bool PtyBackend::start(int cols, int rows) {
     // Leeres Startverzeichnis => Home-Verzeichnis des Nutzers.
     const QString workingDir = m_workingDir.isEmpty() ? QDir::homePath() : m_workingDir;
 
+    // Login-Shell-Markierung: argv[0] mit fuehrendem '-' (wie login(1)/Terminal.app),
+    // damit zsh/bash ihre Login-Startupdateien laden (~/.zprofile, /etc/zprofile →
+    // path_helper/Homebrew-PATH, ~/.bash_profile …). Sonst startet die Shell als
+    // Nicht-Login-Shell und erbt nur die magere GUI-Umgebung (PATH unvollstaendig).
+    // Nur fuer eine echte Shell ohne eigene Argumente; eine zerlegte Kommandozeile
+    // (z. B. Clink) oder explizite Args sollen unveraendert exec't werden.
+    QString argv0;
+    if (m_loginShell && args.isEmpty())
+        argv0 = QStringLiteral("-") + QFileInfo(program).fileName();
+
     setState(BackendState::Starting);
-    if (!m_pty.start(program, args, cols, rows, env, workingDir)) {
+    if (!m_pty.start(program, args, cols, rows, env, workingDir, argv0)) {
         setState(BackendState::Error);
         return false;
     }

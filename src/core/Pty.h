@@ -24,9 +24,14 @@ public:
     /// Startet `program` mit `args` in einem PTY der Groesse cols x rows.
     /// `env` ergaenzt/ueberschreibt Umgebungsvariablen (Form: "KEY=VALUE").
     /// `workingDir` ist das Startverzeichnis (leer = vom Elternprozess erben).
+    /// `argv0` ueberschreibt — wenn nicht leer — den an den Kindprozess
+    /// uebergebenen Namen (argv[0]), waehrend `program` weiterhin der zu
+    /// suchende/auszufuehrende Pfad bleibt. Genutzt fuer Login-Shells
+    /// (argv[0] mit fuehrendem '-', wie login(1)/Terminal.app). Nur Unix;
+    /// auf Windows ignoriert (ConPTY kennt kein argv[0]-Login-Konzept).
     bool start(const QString &program, const QStringList &args,
                int cols, int rows, const QStringList &env = {},
-               const QString &workingDir = {});
+               const QString &workingDir = {}, const QString &argv0 = {});
 
     qint64 write(const QByteArray &data);
     void resize(int cols, int rows);

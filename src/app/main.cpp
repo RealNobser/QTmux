@@ -9,6 +9,12 @@
 #  include <windows.h>
 #endif
 
+#if defined(Q_OS_MACOS)
+#  include <QSettings>
+#  include <QLocale>
+#  include <CoreFoundation/CoreFoundation.h>
+#endif
+
 #include "AppController.h"
 #include "ColorScheme.h"
 #include "ConnectionProfile.h"
@@ -56,10 +62,42 @@ int main(int argc, char *argv[])
     // damit unsere Phosphor-Icons auch in der nativen Menüleiste erscheinen.
     QCoreApplication::setAttribute(Qt::AA_DontShowIconsInMenus, false);
 
-    QGuiApplication app(argc, argv);
+    // App-Identität bereits VOR der QGuiApplication setzen (statisch erlaubt), damit
+    // QSettings unten dieselbe (Bundle-abgeleitete) Domain trifft wie der AppController.
     QGuiApplication::setApplicationName("QTmux");
     QGuiApplication::setOrganizationName("QTmux");
     QGuiApplication::setApplicationVersion("1.0.2");
+
+#if defined(Q_OS_MACOS)
+    // Die nativen App-Menü-Standarditems (Über/Einstellungen/Dienste/Ausblenden/
+    // Beenden) lokalisiert macOS über die AppleLanguages-Preference und folgt sonst
+    // der System-UI-Sprache — unabhängig von unserer App-Sprachwahl und vom
+    // QTranslator. Damit auch dieses Menü der eingestellten Sprache folgt, setzen
+    // wir AppleLanguages aus den QSettings VOR dem QGuiApplication-Ctor (der AppKit/
+    // NSApplication initialisiert und die Menü-Strings lokalisiert). Der Wert landet
+    // in der App-Preference-Domain (com.qtmux.app.plist) und wird von cfprefsd beim
+    // Prozessende persistiert — das ist unkritisch, da wir ihn bei JEDEM Start neu
+    // aus ui/language ableiten und überschreiben. Greift beim Start; ein Laufzeit-
+    // Sprachwechsel erfordert für DIESE Items einen Neustart. (Ein eingespeistes
+    // -AppleLanguages-argv wirkt NICHT: NSUserDefaults liest das echte
+    // OS-Prozess-argv, nicht Qts argv.)
+    {
+        QSettings s;   // Default-Ctor: gleiche Domain wie der AppController
+        const QString sys = QLocale::system().name().left(2);
+        const QString fallback = (sys == QLatin1String("de")) ? QStringLiteral("de")
+                                                              : QStringLiteral("en");
+        const QString lang = s.value(QStringLiteral("ui/language"), fallback).toString();
+        CFStringRef cfLang = lang.toCFString();
+        const void *items[] = { cfLang };
+        CFArrayRef langs = CFArrayCreate(nullptr, items, 1, &kCFTypeArrayCallBacks);
+        CFPreferencesSetAppValue(CFSTR("AppleLanguages"), langs,
+                                 kCFPreferencesCurrentApplication);
+        CFRelease(langs);
+        CFRelease(cfLang);
+    }
+#endif
+
+    QGuiApplication app(argc, argv);
 
     QQuickStyle::setStyle("Basic");
 
@@ -103,12 +141,21 @@ int main(int argc, char *argv[])
         &app, []() { QCoreApplication::exit(-1); },
         Qt::QueuedConnection);
 
+    // Sprache initial setzen, BEVOR das QML (und damit die native macOS-Menüleiste)
+    // gebaut wird. Sonst verschiebt das Cocoa-Plugin „Über/Einstellungen/Beenden"
+    // per MenuRole sofort mit dem Quelltext (Deutsch) ins native App-Menü, und ein
+    // späteres engine.retranslate() aktualisiert gerade diese promoteten App-Menü-
+    // Einträge nicht mehr (die regulären File/Edit/View-Menüs schon). singletonInstance
+    // erzeugt den AppController-Singleton bereits vor dem Laden von Main.qml.
+    static QTranslator *active = nullptr;
+    auto *appc = engine.singletonInstance<qtmux::AppController *>("QTmux", "App");
+    if (appc)
+        applyLanguage(app, engine, active, appc->language());
+
     engine.loadFromModule("QTmux", "Main");
 
-    // Sprache initial setzen und bei Wechsel (über das Sprachmenü) neu laden.
-    if (auto *appc = engine.singletonInstance<qtmux::AppController *>("QTmux", "App")) {
-        static QTranslator *active = nullptr;
-        applyLanguage(app, engine, active, appc->language());
+    // Laufzeitwechsel über das Sprachmenü neu laden.
+    if (appc) {
         QObject::connect(appc, &qtmux::AppController::languageChanged, &app,
                          [&app, &engine](const QString &lang) {
                              applyLanguage(app, engine, active, lang);
