@@ -268,11 +268,60 @@ je Workflow abweichen).
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
-## Status (Stand: 2026-06-15)
+## Status (Stand: 2026-06-19)
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
 > (Signierung/Notarisierung der Installer, CPack/AppImage). **Projekteigene DUAL-Doku**
 > (confluence.intern.example + Atlassian-Cloud) ist mit der 2026-06-15-Session aktualisiert.
+> **Windows-Session 2026-06-18: Inter-Agenten-Benachrichtigung (NEU, umgesetzt + verifiziert;
+> NOCH NICHT committet/gepusht).** Ein Agent/eine Shell wird benachrichtigt, wenn ein Agent in einer ANDEREN Shell
+> **fertig** ist oder eine **Frage** hat; der benachrichtigte (MCP-)Agent erhält die
+> **Quell-Session-ID** und arbeitet dort per `send_text`/`read_screen`/`focus_session` weiter.
+> Architektur (Plan `~/.claude/plans/joyful-bubbling-sketch.md`):
+> 1. **`AgentEventHub`** (neu, `src/core`, **Gui-frei** wie HotkeyRegistry; Context-Property
+>    `AgentEvents`): Ereignis-Ringpuffer (Cap 256, monotone `seq` = Long-Poll-Cursor) + Abos
+>    (Filter Quelle/Art `done|question|error|info`; leer = alle; **eigene Ereignisse nie an sich
+>    selbst**). MVP **laufzeit-flüchtig** (Session-IDs nicht neustart-stabil). Gui-Freiheit
+>    bewiesen: `test_agenteventhub` linkt nur `qtmux_core+Qt6::Test` und ist grün.
+> 2. **Quelle:** OSC-Konvention `OSC 777 ; qtmux-event ; <kind> ; <text>` (erweitert den OSC-777-
+>    Parser in `VtScreen::cbOsc` → Signal `agentEvent` → `Session::onAgentEvent` → Hub). Shell-Hook
+>    **`qtmux-event done|question|… "Text"`** in `qtmux.{bash,zsh}` (für Claude-Stop-/Notification-
+>    Hooks). Alternativ MCP-Tool **`post_event`**.
+> 3. **Zustellung:** MCP-**Long-Poll `wait_for_events`** — im `McpServer` VOR `callTool`
+>    abgezweigt (Socket bleibt offen; `PendingPoll`+`QTimer`, Default 25 s/Deckel 55 s), Wakeup
+>    über `AgentEventHub::eventPosted`; `disconnected`-Handler räumt wartende Polls ab (kein
+>    Use-after-free). Liefert `{events:[{sourceSessionId,kind,text,timestamp,seq}], nextSeq}`.
+>    Zusätzlich neue Tools `subscribe_events`/`unsubscribe_events`/`list_subscriptions`;
+>    `list_sessions`/sessionInfo um `lastAgentEvent{Kind,Text,Seq}` erweitert. Subscriber-Session
+>    via optionalem `sessionId`-Arg (`$QTMUX_SESSION_ID`) + Vorfahren-Fallback (`sessionIdForClientPort`,
+>    aus `detectController` refaktoriert). `Session` bekam `Q_PROPERTY sessionId` (für die QML-UI).
+> 4. **UI:** Einstellungen-Sektion „Agenten-Benachrichtigungen" (je Session An/Aus + Arten-Filter
+>    done/Frage/Fehler, reaktiv über `AgentEvents.subscriptionsChanged`; jede Zeile mit
+>    `#<id> · <cwd>` zur Unterscheidung gleichnamiger Sessions). i18n DE/EN.
+> **Windows-Shell-Helfer (2026-06-19):** `shell-integration/qtmux.ps1` (PowerShell: OSC-133-Prompt-
+>    Marker + `qtmux-notify` + `qtmux-event`), `qtmux-event.cmd` (cmd, OSC), und **für Hooks**
+>    `qtmux-emit.ps1`/`.cmd` (MCP `post_event` via HttpClient `UseProxy=false`, liest
+>    `$QTMUX_SESSION_ID`) + `shell-integration/README.md`. **Wichtige Erkenntnis:** der **stdout
+>    eines KI-Agenten-Hooks wird gekapselt** → OSC aus einem Hook erreicht QTmux NICHT; Hooks
+>    müssen `post_event` (HTTP) nutzen. In docs/MCP.md dokumentiert (Claude-Stop-Hook-Beispiel).
+> **Verifiziert (Windows):** Debug+Release je **10/10 ctest** (neu `test_agenteventhub` +
+> `tst_vtscreen::oscAgentEvent` + `tst_session::agentEventReachesHub`). **E2E gegen die Release-GUI
+> über MCP** (`dist/_agentnotify-e2e.ps1`): Long-Poll-Wakeup prompt (1,46 s) mit korrekter
+> `sourceSessionId`, Timeout→`events:[]`, Self-Exclusion, Client-Abbruch ohne Crash + sauberer
+> Shutdown. **Live-OSC durch die GUI** (rohe `]777;qtmux-event` aus einer Session → Subscriber).
+> **ECHTER ZWEI-CLAUDE-AGENTEN-LAUF** (`dist/agent-demo/_run.ps1`, je `claude --print --model haiku`):
+> Worker-Stop-Hook → `qtmux-emit.ps1` → `post_event done`; Supervisor ruft via QTmux-MCP
+> (`--mcp-config` + `--allowedTools`, Prompt über stdin) `subscribe_events`+`wait_for_events` und
+> meldet korrekt `sourceSessionId=1 kind=done`. (CLI-Fallen: `--settings` braucht eine DATEI, nicht
+> JSON-String; `--allowedTools` ist variadisch → Prompt via stdin. `--dangerously-skip-permissions`
+> vom Auto-Classifier geblockt → `--allowedTools` ist der saubere Weg.) **macOS-Gegenprüfung steht aus**
+> (nur `#ifdef`-neutraler Code). docs/MCP.md + README erweitert. Memory `[[qtmux-agent-notify]]`.
+> **Auf `main` committet + gepusht** (`a75876d` launch.json-Fix, `7579d43` Feature+Helfer+v1.1.0).
+> **Version 1.1.0** (Minor-Feature-Bump; CMakeLists/main.cpp/MCP-serverInfo/Installer). **EA-Installer
+> 1.1.0 gebaut** (`dist/QTmux-1.1.0-win64.msi` 28,4 MB + `…-portable.zip` 33,5 MB). **Firmen-Confluence
+> noch NICHT auf 1.1.0** aktualisiert (1.0.2 dort online) — bei Bedarf via `dist/_qtmux_pub2.py`
+> (`VER` auf 1.1.0, Changelog ergänzen). Davor stand: Pane-Prune-Fix (`8acfd6d`) Windows-verifiziert,
+> 1.0.1/1.0.2-EA-Releases in der Firmen-Confluence (s. u.).
 > **Session 2026-06-14/15 (macOS): drei Bugfixes + App-Icon, alle committet+gepusht
 > (`e57f928`, `a466dbc`, `de27c69`).** Befunde vom Anwender, alle E2E auf macOS verifiziert.
 > 1. **Login-Shell-Fix (`e57f928`)** — lokale Shells starteten als Nicht-Login-Shell
