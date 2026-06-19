@@ -8,24 +8,32 @@
       //   - Windows:     cppvsdbg (MSVC-Debugger), Programm = qtmux.exe
       // qtmux.exe findet seine Qt-DLLs über den windeployqt-Post-Build-Schritt;
       // das macOS-Bundle über die Homebrew-rpaths — kein PATH-Setup nötig.
+      //
+      // WICHTIG: Der Programmpfad leitet sich aus dem AKTIVEN Configure-Preset ab
+      // (${command:cmake.activeConfigurePresetName} → binaryDir build/<preset>), genau
+      // wie die compile_commands in settings.json. Dadurch passt das gestartete Binary
+      // IMMER zu dem, was der preLaunchTask gebaut hat — egal ob Debug-Preset (windows)
+      // oder Release-Preset (windows-release). Ein fester build/windows-Pfad führte sonst
+      // zu „program does not exist", wenn gerade ein Release-Preset aktiv war (der
+      // preLaunchTask baut dann build/windows-release, nicht build/windows).
       "name": "Debug QTmux",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/linux/qtmux",
+      "program": "${workspaceFolder}/build/${command:cmake.activeConfigurePresetName}/qtmux",
       "args": [],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "CMake: build",
       "osx": {
         "MIMode": "lldb",
-        "program": "${workspaceFolder}/build/macos/qtmux.app/Contents/MacOS/qtmux"
+        "program": "${workspaceFolder}/build/${command:cmake.activeConfigurePresetName}/qtmux.app/Contents/MacOS/qtmux"
       },
       "linux": {
         "MIMode": "gdb",
-        "program": "${workspaceFolder}/build/linux/qtmux"
+        "program": "${workspaceFolder}/build/${command:cmake.activeConfigurePresetName}/qtmux"
       },
       "windows": {
         "type": "cppvsdbg",
-        "program": "${workspaceFolder}/build/windows/qtmux.exe",
+        "program": "${workspaceFolder}/build/${command:cmake.activeConfigurePresetName}/qtmux.exe",
         // WICHTIG für die ConPTY-Terminals: Der Default "internalConsole" leitet die
         // Standard-Handles der App in den Debugger um. Das stört die von QTmux per
         // ConPTY gestarteten Pseudo-Konsolen — die Kindshells (cmd/PowerShell) hängen
