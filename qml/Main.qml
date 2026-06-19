@@ -2773,6 +2773,24 @@ ApplicationWindow {
         title: qsTr("Einstellungen")
         standardButtons: Dialog.Close
 
+        // Agenten-Benachrichtigungs-Abos (reaktiv aus dem Hub gespiegelt).
+        property var agentSubs: AgentEvents.subscriptions()
+        Connections {
+            target: AgentEvents
+            function onSubscriptionsChanged() { settingsDialog.agentSubs = AgentEvents.subscriptions() }
+        }
+        function agentSubFor(id) {
+            for (let i = 0; i < agentSubs.length; ++i)
+                if (agentSubs[i].subscriberSessionId === id) return agentSubs[i]
+            return null
+        }
+        // Arten-Checkbox-Status: kein Abo → aus; leere Arten-Liste → „alle" (alle an).
+        function agentKindChecked(id, kind) {
+            const s = agentSubFor(id)
+            if (!s) return false
+            return s.kinds.length === 0 || s.kinds.indexOf(kind) >= 0
+        }
+
         // Abschnittsüberschrift im Dialog.
         component SectionLabel: Text {
             color: Theme.textDim
@@ -2955,6 +2973,98 @@ ApplicationWindow {
                     color: Theme.textDim
                     font.pixelSize: 11
                     Layout.leftMargin: 26
+                }
+            }
+
+            SectionLabel { text: qsTr("Agenten-Benachrichtigungen") }
+            // Inter-Agenten-Benachrichtigung: eine Session wird benachrichtigt, wenn ein
+            // Agent in einer ANDEREN Session fertig ist oder eine Frage hat. Hier wird je
+            // Session ein Abo (auf alle anderen Quellen) ein-/ausgeschaltet und auf
+            // Ereignisarten gefiltert. Agenten abonnieren sich i. d. R. selbst per MCP
+            // (subscribe_events) und holen die Ereignisse per wait_for_events ab.
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                Text {
+                    text: qsTr("Wähle je Session, ob sie über Ereignisse der anderen Sessions "
+                             + "benachrichtigt wird. Feinere Quell-Filter sind über die "
+                             + "MCP-Schnittstelle verfügbar.")
+                    color: Theme.textDim
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Repeater {
+                    model: sessions
+                    delegate: ColumnLayout {
+                        required property var session
+                        required property string title
+                        required property string workingDir
+                        Layout.fillWidth: true
+                        spacing: 0
+                        // Titel + eindeutige Kennung (Session-ID, dazu CWD bei Shells),
+                        // damit gleichnamige Sessions (z. B. mehrere „Eingabeaufforderung")
+                        // unterscheidbar sind.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            CheckBox {
+                                text: title
+                                checked: settingsDialog.agentSubFor(session.sessionId) !== null
+                                onToggled: {
+                                    if (checked) AgentEvents.subscribe(session.sessionId, [], [])
+                                    else AgentEvents.unsubscribe(session.sessionId)
+                                }
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: workingDir.length > 0
+                                      ? qsTr("#%1 · %2").arg(session.sessionId).arg(workingDir)
+                                      : qsTr("#%1").arg(session.sessionId)
+                                color: Theme.textDim
+                                font.pixelSize: 11
+                                elide: Text.ElideLeft
+                            }
+                        }
+                        RowLayout {
+                            id: kindRow
+                            Layout.leftMargin: 26
+                            spacing: 10
+                            visible: settingsDialog.agentSubFor(session.sessionId) !== null
+                            property int sid: session.sessionId
+                            // Aktuelle Arten-Auswahl aus den drei Checkboxen bauen und das
+                            // Abo aktualisieren (leere Liste = alle Arten).
+                            function apply() {
+                                const ks = []
+                                if (cbDone.checked) ks.push("done")
+                                if (cbQuestion.checked) ks.push("question")
+                                if (cbError.checked) ks.push("error")
+                                AgentEvents.subscribe(sid, [], ks)
+                            }
+                            Text { text: qsTr("Arten:"); color: Theme.textDim; font.pixelSize: 11 }
+                            CheckBox {
+                                id: cbDone; text: qsTr("fertig"); font.pixelSize: 11
+                                checked: settingsDialog.agentKindChecked(kindRow.sid, "done")
+                                onToggled: kindRow.apply()
+                            }
+                            CheckBox {
+                                id: cbQuestion; text: qsTr("Frage"); font.pixelSize: 11
+                                checked: settingsDialog.agentKindChecked(kindRow.sid, "question")
+                                onToggled: kindRow.apply()
+                            }
+                            CheckBox {
+                                id: cbError; text: qsTr("Fehler"); font.pixelSize: 11
+                                checked: settingsDialog.agentKindChecked(kindRow.sid, "error")
+                                onToggled: kindRow.apply()
+                            }
+                        }
+                    }
+                }
+                Text {
+                    visible: sessions.count === 0
+                    text: qsTr("Keine Sessions geöffnet.")
+                    color: Theme.textDim
+                    font.pixelSize: 11
                 }
             }
 

@@ -3,6 +3,7 @@
 #include "Session.h"
 #include "ProcessInfo.h"
 #include "PluginHost.h"
+#include "AgentEventHub.h"
 
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -11,13 +12,18 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QTimer>
 #include <QChar>
 
 namespace qtmux {
 
 static const char *kProtocolVersion = "2024-11-05";
 
-McpServer::McpServer(QObject *parent) : QObject(parent) {}
+McpServer::McpServer(QObject *parent) : QObject(parent) {
+    // Auf neue Agenten-Ereignisse horchen → wartende Long-Polls wecken.
+    connect(AgentEventHub::instance(), &AgentEventHub::eventPosted,
+            this, &McpServer::onHubEvent);
+}
 McpServer::~McpServer() { stop(); }
 
 bool McpServer::listening() const { return m_server && m_server->isListening(); }
@@ -44,6 +50,7 @@ bool McpServer::start() {
                 connect(sock, &QTcpSocket::readyRead, this, [this, sock]() { onReadyRead(sock); });
                 connect(sock, &QTcpSocket::disconnected, this, [this, sock]() {
                     m_buffers.remove(sock);
+                    removePollsForSocket(sock);   // wartenden Long-Poll abräumen
                     sock->deleteLater();
                 });
             }
@@ -98,8 +105,27 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
         // Den verbindenden Agentenprozess seiner Session zuordnen — beim Handshake
         // UND bei Tool-Aufrufen (manche Clients halten/wechseln Verbindungen anders).
         const QString m = doc.object().value("method").toString();
-        if (m == QLatin1String("initialize") || m == QLatin1String("tools/call"))
-            detectController(static_cast<quint16>(sock->peerPort()));
+        // Den verbindenden Agentenprozess seiner Session zuordnen (einmal pro Request):
+        // markiert die Controller-Session (roter Tab) UND merkt die Caller-Session als
+        // Fallback für post_event/subscribe_events ohne explizites sessionId-Argument.
+        m_callerSessionId = -1;
+        if (m == QLatin1String("initialize") || m == QLatin1String("tools/call")) {
+            m_callerSessionId = sessionIdForClientPort(static_cast<quint16>(sock->peerPort()));
+            if (m_callerSessionId >= 0 && m_sessions)
+                if (Session *s = m_sessions->sessionById(m_callerSessionId))
+                    s->setMcpController(true);
+        }
+        // Long-Poll wait_for_events: aufgeschobene Antwort — VOR dem synchronen
+        // handleRpc abzweigen, weil der Socket hier (anders als in callTool) greifbar ist
+        // und offen bleiben muss, bis ein Ereignis vorliegt oder der Timeout greift.
+        const QJsonObject reqObj = doc.object();
+        if (m == QLatin1String("tools/call")) {
+            const QJsonObject p = reqObj.value("params").toObject();
+            if (p.value("name").toString() == QLatin1String("wait_for_events")) {
+                beginLongPoll(sock, reqObj.value("id"), p.value("arguments").toObject());
+                return;   // Antwort folgt asynchron (completePoll)
+            }
+        }
         bool isNotification = false;
         const QJsonObject resp = handleRpc(doc.object(), isNotification);
         if (isNotification) {
@@ -120,19 +146,136 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
     }
 }
 
-void McpServer::detectController(quint16 clientPort) {
-    if (!m_sessions) return;
+int McpServer::sessionIdForClientPort(quint16 clientPort) const {
+    if (!m_sessions) return -1;
     // Welcher lokale Prozess hält die Verbindung zu unserem Port?
     const qint64 pid = procinfo::pidOfTcpClient(clientPort, static_cast<quint16>(m_port));
-    if (pid <= 0) return;
+    if (pid <= 0) return -1;
     // Den Client seiner Session zuordnen: seine Vorfahrenkette enthält die
     // Shell-PID genau einer Session (Agent läuft als Kind dieser Shell).
     const QList<qint64> chain = procinfo::ancestorPids(pid);
     for (Session *s : m_sessions->sessions()) {
         const qint64 spid = s->processId();
-        if (spid > 0 && chain.contains(spid)) {
-            s->setMcpController(true);
-            break;
+        if (spid > 0 && chain.contains(spid)) return s->id();
+    }
+    return -1;
+}
+
+// --- Inter-Agenten-Benachrichtigung: Long-Poll ------------------------------
+
+int McpServer::subscriberSessionId(const QJsonObject &args, quint16 clientPort) const {
+    // Primär: explizites sessionId-Argument (Agent liest $QTMUX_SESSION_ID).
+    const int explicitId = args.value("sessionId").toInt(0);
+    if (explicitId > 0) return explicitId;
+    // Fallback: Vorfahrenketten-Heuristik über den verbindenden Client-Prozess.
+    return sessionIdForClientPort(clientPort);
+}
+
+QJsonObject McpServer::pollResult(int subscriberSessionId, quint64 afterSeq) const {
+    QJsonArray arr;
+    quint64 maxSeq = afterSeq;
+    const QList<AgentEventHub::Event> evs =
+        AgentEventHub::instance()->eventsFor(subscriberSessionId, afterSeq);
+    for (const AgentEventHub::Event &e : evs) {
+        arr.append(QJsonObject{
+            {"sourceSessionId", e.sourceSessionId},
+            {"kind", AgentEventHub::kindName(e.kind)},
+            {"text", e.text},
+            {"timestamp", static_cast<double>(e.timestampMs)},
+            {"seq", static_cast<double>(e.seq)},
+        });
+        if (e.seq > maxSeq) maxSeq = e.seq;
+    }
+    return QJsonObject{{"events", arr}, {"nextSeq", static_cast<double>(maxSeq)}};
+}
+
+void McpServer::beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId,
+                              const QJsonObject &args) {
+    auto *hub = AgentEventHub::instance();
+    const int subId = subscriberSessionId(args, static_cast<quint16>(sock->peerPort()));
+
+    // afterSeq: expliziter Cursor, sonst „ab jetzt" (nur künftige Ereignisse).
+    const bool hasCursor = args.contains(QStringLiteral("afterSeq"));
+    const quint64 afterSeq = hasCursor
+        ? static_cast<quint64>(args.value("afterSeq").toDouble(0))
+        : hub->lastSeq();
+
+    auto reply = [this, sock, rpcId](const QJsonObject &result) {
+        const QJsonObject resp{{"jsonrpc", "2.0"}, {"id", rpcId},
+            {"result", QJsonObject{
+                {"content", QJsonArray{QJsonObject{{"type", "text"},
+                    {"text", QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))}}}},
+                {"isError", false}}}};
+        sendHttpJson(sock, QJsonDocument(resp).toJson(QJsonDocument::Compact));
+    };
+
+    // Ohne gültige Subscriber-Session: leer + Fehlerhinweis (kein Warten).
+    if (subId <= 0) {
+        reply(QJsonObject{{"events", QJsonArray{}}, {"nextSeq", static_cast<double>(afterSeq)},
+                          {"error", "Keine Subscriber-Session (sessionId fehlt/unbekannt)."}});
+        return;
+    }
+
+    // Liegen bereits passende Ereignisse vor → sofort antworten (kein Aufschub).
+    const QJsonObject immediate = pollResult(subId, afterSeq);
+    if (!immediate.value("events").toArray().isEmpty()) {
+        reply(immediate);
+        return;
+    }
+
+    // Sonst Poll vormerken und Socket offen lassen (Timeout default 25 s, Deckel 55 s).
+    int timeoutMs = args.value("timeoutMs").toInt(25000);
+    timeoutMs = qBound(1000, timeoutMs, 55000);
+
+    PendingPoll poll;
+    poll.sock = sock;
+    poll.rpcId = rpcId;
+    poll.subscriberSessionId = subId;
+    poll.afterSeq = afterSeq;
+    poll.deadline = new QTimer(this);
+    poll.deadline->setSingleShot(true);
+    poll.deadline->setInterval(timeoutMs);
+    connect(poll.deadline, &QTimer::timeout, this, [this, sock]() {
+        // Timeout: Poll mit seinem (leeren) Ergebnis beantworten — completePoll liefert
+        // events:[] zurück, wenn nichts vorliegt.
+        for (int i = 0; i < m_pendingPolls.size(); ++i)
+            if (m_pendingPolls.at(i).sock == sock) { completePoll(i); break; }
+    });
+    m_pendingPolls.append(poll);
+    poll.deadline->start();
+}
+
+void McpServer::onHubEvent() {
+    // Ein Ereignis kam — alle wartenden Polls prüfen (rückwärts wg. Entfernen).
+    for (int i = m_pendingPolls.size() - 1; i >= 0; --i) {
+        const PendingPoll &p = m_pendingPolls.at(i);
+        if (!AgentEventHub::instance()->eventsFor(p.subscriberSessionId, p.afterSeq).isEmpty())
+            completePoll(i);
+    }
+}
+
+void McpServer::completePoll(int index) {
+    if (index < 0 || index >= m_pendingPolls.size()) return;
+    const PendingPoll p = m_pendingPolls.at(index);
+    m_pendingPolls.removeAt(index);
+    if (p.deadline) { p.deadline->stop(); p.deadline->deleteLater(); }
+    const QJsonObject resp{{"jsonrpc", "2.0"}, {"id", p.rpcId},
+        {"result", QJsonObject{
+            {"content", QJsonArray{QJsonObject{{"type", "text"},
+                {"text", QString::fromUtf8(QJsonDocument(
+                    pollResult(p.subscriberSessionId, p.afterSeq)).toJson(QJsonDocument::Compact))}}}},
+            {"isError", false}}}};
+    sendHttpJson(p.sock, QJsonDocument(resp).toJson(QJsonDocument::Compact));
+}
+
+void McpServer::removePollsForSocket(QTcpSocket *sock) {
+    for (int i = m_pendingPolls.size() - 1; i >= 0; --i) {
+        if (m_pendingPolls.at(i).sock == sock) {
+            if (m_pendingPolls.at(i).deadline) {
+                m_pendingPolls.at(i).deadline->stop();
+                m_pendingPolls.at(i).deadline->deleteLater();
+            }
+            m_pendingPolls.removeAt(i);
         }
     }
 }
@@ -179,7 +322,7 @@ QJsonObject McpServer::dispatchMethod(const QString &method, const QJsonObject &
         return QJsonObject{
             {"protocolVersion", kProtocolVersion},
             {"capabilities", QJsonObject{{"tools", QJsonObject{}}}},
-            {"serverInfo", QJsonObject{{"name", "QTmux"}, {"version", "1.0.0"}}},
+            {"serverInfo", QJsonObject{{"name", "QTmux"}, {"version", "1.1.0"}}},
         };
     }
     if (method == "tools/list") {
@@ -213,6 +356,10 @@ static QJsonObject intProp(const QString &desc) {
 }
 static QJsonObject boolProp(const QString &desc) {
     return QJsonObject{{"type", "boolean"}, {"description", desc}};
+}
+static QJsonObject arrProp(const QString &itemType, const QString &desc) {
+    return QJsonObject{{"type", "array"}, {"items", QJsonObject{{"type", itemType}}},
+                       {"description", desc}};
 }
 static QJsonObject tool(const QString &name, const QString &desc,
                         const QJsonObject &props, const QJsonArray &required) {
@@ -293,6 +440,42 @@ QJsonObject McpServer::toolsList() const {
                       "Listet die von geladenen Plugins angebotenen Backend-Typen "
                       "({pluginId, typeId, name, description}) für create_session type=plugin.",
                       {}, {}));
+    // Inter-Agenten-Benachrichtigung: ein Agent in einer Session wird benachrichtigt,
+    // wenn ein Agent in einer ANDEREN Session fertig ist oder eine Frage hat.
+    tools.append(tool("wait_for_events",
+                      "Long-Poll: blockiert, bis ein abonniertes Agenten-Ereignis vorliegt "
+                      "oder der Timeout greift. Liefert {events:[{sourceSessionId, kind, text, "
+                      "timestamp, seq}], nextSeq}. Mit nextSeq als afterSeq weiterpollen "
+                      "(keine Lücken/Doppel). sourceSessionId ist die Quell-Session, in der "
+                      "per send_text/read_screen/focus_session weitergearbeitet werden kann. "
+                      "Voraussetzung: zuvor subscribe_events.",
+                      QJsonObject{{"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")},
+                                  {"afterSeq", intProp("nur Ereignisse mit seq > afterSeq (Standard: ab jetzt)")},
+                                  {"timeoutMs", intProp("max. Wartezeit in ms (Standard 25000, Deckel 55000)")}},
+                      {}));
+    tools.append(tool("post_event",
+                      "Meldet ein Agenten-Ereignis aus DIESER Session (fertig/Frage/Fehler). "
+                      "Abonnierende Sessions werden benachrichtigt. Alternative zum Shell-Hook "
+                      "'qtmux-event'.",
+                      QJsonObject{{"kind", strProp("'done' | 'question' | 'error' | 'info'")},
+                                  {"text", strProp("Beschreibungstext")},
+                                  {"sessionId", intProp("Quell-Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
+                      QJsonArray{"kind"}));
+    tools.append(tool("subscribe_events",
+                      "Abonniert Agenten-Ereignisse für DIESE Session. Ohne Filter werden alle "
+                      "Ereignisse aller anderen Sessions empfangen; optional auf Quell-Sessions "
+                      "und/oder Ereignisarten einschränken. Danach mit wait_for_events abholen.",
+                      QJsonObject{{"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")},
+                                  {"sources", arrProp("integer", "nur diese Quell-Session-IDs (leer/fehlt = alle)")},
+                                  {"kinds", arrProp("string", "nur diese Arten: done/question/error/info (leer = alle)")}},
+                      {}));
+    tools.append(tool("unsubscribe_events",
+                      "Hebt das Ereignis-Abo DIESER Session wieder auf.",
+                      QJsonObject{{"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
+                      {}));
+    tools.append(tool("list_subscriptions",
+                      "Listet alle aktiven Ereignis-Abos ({subscriberSessionId, sources, kinds}).",
+                      {}, {}));
     return QJsonObject{{"tools", tools}};
 }
 
@@ -306,7 +489,7 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
     }
 
     auto sessionInfo = [](Session *s) {
-        return QJsonObject{
+        QJsonObject o{
             {"id", s->id()},
             {"title", s->title()},
             {"type", static_cast<int>(s->type())},
@@ -320,7 +503,53 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             {"progressState", s->progressState()},
             {"progressValue", s->progressValue()},
         };
+        // Jüngstes Agenten-Ereignis dieser Session als Quelle (für Polling-Clients).
+        const AgentEventHub::Event ev = AgentEventHub::instance()->latestFrom(s->id());
+        if (ev.seq > 0) {
+            o.insert("lastAgentEventKind", AgentEventHub::kindName(ev.kind));
+            o.insert("lastAgentEventText", ev.text);
+            o.insert("lastAgentEventSeq", static_cast<double>(ev.seq));
+        }
+        return o;
     };
+
+    // Inter-Agenten-Benachrichtigung: Caller-Session (explizit oder per Vorfahren-Fallback).
+    auto callerId = [this, &args]() {
+        const int explicitId = args.value("sessionId").toInt(0);
+        return explicitId > 0 ? explicitId : m_callerSessionId;
+    };
+
+    if (name == "post_event") {
+        const int srcId = callerId();
+        if (srcId <= 0) { isError = true; text = QStringLiteral("Keine Quell-Session (sessionId fehlt/unbekannt)."); return {}; }
+        const QString kind = args.value("kind").toString(QStringLiteral("info"));
+        AgentEventHub::instance()->postEvent(srcId, AgentEventHub::kindFromString(kind),
+                                             args.value("text").toString());
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "subscribe_events") {
+        const int subId = callerId();
+        if (subId <= 0) { isError = true; text = QStringLiteral("Keine Subscriber-Session (sessionId fehlt/unbekannt)."); return {}; }
+        QStringList kinds;
+        for (const QJsonValue &v : args.value("kinds").toArray()) kinds << v.toString();
+        AgentEventHub::instance()->subscribe(subId, args.value("sources").toArray().toVariantList(), kinds);
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "unsubscribe_events") {
+        const int subId = callerId();
+        if (subId <= 0) { isError = true; text = QStringLiteral("Keine Subscriber-Session (sessionId fehlt/unbekannt)."); return {}; }
+        AgentEventHub::instance()->unsubscribe(subId);
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "list_subscriptions") {
+        text = QString::fromUtf8(QJsonDocument(
+            QJsonArray::fromVariantList(AgentEventHub::instance()->subscriptions()))
+                                     .toJson(QJsonDocument::Compact));
+        return {};
+    }
 
     if (name == "list_sessions") {
         QJsonArray arr;

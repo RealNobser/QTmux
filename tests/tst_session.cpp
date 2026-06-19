@@ -3,6 +3,7 @@
 #include "PtyBackend.h"
 #include "VtScreen.h"
 #include "Session.h"
+#include "AgentEventHub.h"
 #include "TestPrograms.h"
 
 using namespace qtmux;
@@ -16,6 +17,7 @@ private slots:
     void activeSessionIgnoresBell();
     void oscNotificationReachesSession();
     void osc133NonZeroExitSetsError();
+    void agentEventReachesHub();
     void loginScriptRunsOnConnect();
     void sshPasswordAutoFillOnPrompt();
 };
@@ -133,6 +135,26 @@ void TestSession::osc133NonZeroExitSetsError() {
     QTRY_COMPARE_WITH_TIMEOUT(sess.activityInt(),
                               static_cast<int>(Session::Activity::Error), 5000);
     sess.write("\x03");  // ^C, aufräumen
+}
+
+// Inter-Agenten-Benachrichtigung: ein OSC 777;qtmux-event aus dem PTY erreicht über
+// VtScreen -> Session::onAgentEvent den AgentEventHub mit der eigenen Session-ID als Quelle.
+void TestSession::agentEventReachesHub() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    // OSC 777 ; qtmux-event ; done ; Build fertig BEL
+    const auto cmd = qtmux_test::emitRaw(QByteArrayLiteral("\033]777;qtmux-event;done;Build fertig\007"));
+    pty->setProgram(cmd.program);
+    pty->setArguments(cmd.args);
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.start(80, 24);
+
+    auto *hub = AgentEventHub::instance();
+    QTRY_VERIFY_WITH_TIMEOUT(hub->latestFrom(sess.id()).seq > 0, 5000);
+    const auto ev = hub->latestFrom(sess.id());
+    QCOMPARE(ev.kind, AgentEventHub::Kind::Done);
+    QCOMPARE(ev.text, QStringLiteral("Build fertig"));
+    QCOMPARE(ev.sourceSessionId, sess.id());
 }
 
 // Login-Script (QTMUX-23): ein per setLoginScript gesetzter Befehl wird nach dem

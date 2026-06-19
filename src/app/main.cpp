@@ -16,6 +16,7 @@
 #endif
 
 #include "AppController.h"
+#include "AgentEventHub.h"
 #include "ColorScheme.h"
 #include "ConnectionProfile.h"
 #include "HotkeyRegistry.h"
@@ -66,7 +67,7 @@ int main(int argc, char *argv[])
     // QSettings unten dieselbe (Bundle-abgeleitete) Domain trifft wie der AppController.
     QGuiApplication::setApplicationName("QTmux");
     QGuiApplication::setOrganizationName("QTmux");
-    QGuiApplication::setApplicationVersion("1.0.2");
+    QGuiApplication::setApplicationVersion("1.1.0");
 
 #if defined(Q_OS_MACOS)
     // Die nativen App-Menü-Standarditems (Über/Einstellungen/Dienste/Ausblenden/
@@ -123,6 +124,11 @@ int main(int argc, char *argv[])
     // Secrets-Vault (QTMUX-22): verschlüsselter Geheimnis-Speicher (Master-Passwort).
     engine.rootContext()->setContextProperty(
         QStringLiteral("Vault"), qtmux::SecretsVault::instance());
+
+    // Inter-Agenten-Benachrichtigung: zentraler Ereignis-Bus. QML-Dialog liest/setzt
+    // Abos; Session speist OSC-Ereignisse ein, der McpServer liefert sie per Long-Poll.
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("AgentEvents"), qtmux::AgentEventHub::instance());
 
     // Globaler Quake-Hotkey (Ctrl+`) als Context-Property; QML schaltet ihn je nach
     // Einstellung und reagiert auf `activated` (Fenster ein-/ausblenden).

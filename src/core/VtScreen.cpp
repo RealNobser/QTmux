@@ -283,6 +283,7 @@ void VtScreen::cbOsc(int command, const char *str, int len, bool initial, bool f
         break;
     }
     case 777: {  // OSC 777 ; notify ; <title> ; <body>
+                 //   bzw.  OSC 777 ; qtmux-event ; <kind> ; <text>
         const QList<QByteArray> parts = data.split(';');
         if (!parts.isEmpty() && parts.first() == "notify") {
             QString text;
@@ -291,6 +292,16 @@ void VtScreen::cbOsc(int command, const char *str, int len, bool initial, bool f
                 text += QString::fromUtf8(parts.at(i));
             }
             emit notify(text);
+        } else if (!parts.isEmpty() && parts.first() == "qtmux-event" && parts.size() >= 2) {
+            // Strukturiertes Agenten-Ereignis (Inter-Agenten-Benachrichtigung).
+            const QString kind = QString::fromUtf8(parts.at(1));
+            // Text-Token ab Index 2 wieder mit ';' joinen → tolerant gegen ';' im Text.
+            QString text;
+            for (int i = 2; i < parts.size(); ++i) {
+                if (i > 2) text += QLatin1Char(';');
+                text += QString::fromUtf8(parts.at(i));
+            }
+            emit agentEvent(kind, text);
         }
         break;
     }

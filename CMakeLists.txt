@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(QTmux
-    VERSION 1.0.2
+    VERSION 1.1.0
     DESCRIPTION "Cross-platform multi-AI-agent terminal manager"
     LANGUAGES C CXX)
 
@@ -57,6 +57,8 @@ add_library(qtmux_core STATIC
     src/core/ConnectionProfile.cpp
     src/core/HotkeyRegistry.h
     src/core/HotkeyRegistry.cpp
+    src/core/AgentEventHub.h
+    src/core/AgentEventHub.cpp
     src/core/SecretsVault.h
     src/core/SecretsVault.cpp
     src/core/GlobalHotkey.h

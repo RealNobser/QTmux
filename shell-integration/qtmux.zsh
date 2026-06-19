@@ -22,3 +22,15 @@ add-zsh-hook preexec _qtmux_preexec
 
 # Notification aus Skripten/Agenten senden:  qtmux-notify "Text"
 qtmux-notify() { printf '\e]9;%s\a' "$*"; }
+
+# Strukturiertes Agenten-Ereignis für die Inter-Agenten-Benachrichtigung senden:
+#     qtmux-event done|question|error|info "Text"
+# Gedacht für Agenten-Hooks (z. B. Claude Codes Stop-Hook -> 'qtmux-event done "…"',
+# Notification-Hook -> 'qtmux-event question "…"'). Ein abonnierender Agent in einer
+# anderen Session wird per MCP (wait_for_events) benachrichtigt und erhält diese
+# Session-ID, um hier weiterzuarbeiten. ';' im Text wird durch ',' ersetzt (Trenner).
+qtmux-event() {
+    local kind="$1"; shift
+    local text="$*"
+    printf '\e]777;qtmux-event;%s;%s\a' "$kind" "${text//;/,}"
+}

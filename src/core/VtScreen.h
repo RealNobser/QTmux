@@ -95,6 +95,9 @@ signals:
     /// Shell-Integrations-Prompt-Marker (OSC 133): kind 'A'/'B'/'C'/'D'.
     /// exitCode gilt nur für 'D' (sonst -1).
     void promptMarker(char kind, int exitCode);
+    /// Strukturiertes Agenten-Ereignis (OSC 777 ; qtmux-event ; <kind> ; <text>):
+    /// kind = done/question/error/info. Für die Inter-Agenten-Benachrichtigung.
+    void agentEvent(const QString &kind, const QString &text);
 
 public:
     // Interne Handler — von den C-Callbacks in VtScreen.cpp aufgerufen.

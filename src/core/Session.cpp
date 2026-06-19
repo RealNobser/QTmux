@@ -1,6 +1,7 @@
 #include "Session.h"
 #include "VtScreen.h"
 #include "AgentRegistry.h"
+#include "AgentEventHub.h"
 #include "ColorScheme.h"
 
 #include <QCoreApplication>
@@ -109,6 +110,7 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
     connect(m_screen.get(), &VtScreen::notify, this, &Session::onNotify);
     connect(m_screen.get(), &VtScreen::progress, this, &Session::onProgress);
     connect(m_screen.get(), &VtScreen::promptMarker, this, &Session::onPromptMarker);
+    connect(m_screen.get(), &VtScreen::agentEvent, this, &Session::onAgentEvent);
 
     // Aktuelles Farbschema anwenden und bei Wechsel automatisch neu setzen.
     auto *schemes = ColorSchemeRegistry::instance();
@@ -177,6 +179,17 @@ void Session::onBell() {
 void Session::onNotify(const QString &text) {
     // OSC 9/777: Notification-Text merken (Sidebar) und Aufmerksamkeit anfordern.
     m_lastNotification = text;
+    emit notificationChanged();
+    raiseAttention();
+}
+
+void Session::onAgentEvent(const QString &kind, const QString &text) {
+    // OSC 777;qtmux-event: strukturiertes Agenten-Ereignis (fertig/Frage/Fehler) in den
+    // Ereignis-Bus einspeisen — abonnierende Sessions werden per MCP-Long-Poll benachrichtigt.
+    // Die Quell-Identität ist die eigene Session-ID (mit der ein Agent „hier" weiterarbeitet).
+    AgentEventHub::instance()->postEvent(m_id, AgentEventHub::kindFromString(kind), text);
+    // Lokal zusätzlich als Notification spiegeln (Sidebar-Text + Aufmerksamkeit).
+    m_lastNotification = text.isEmpty() ? kind : QStringLiteral("%1: %2").arg(kind, text);
     emit notificationChanged();
     raiseAttention();
 }

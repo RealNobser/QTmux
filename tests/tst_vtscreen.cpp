@@ -17,6 +17,7 @@ private slots:
     void oscNotification();
     void oscPromptMarkers();
     void oscProgress();
+    void oscAgentEvent();
     void trueColorRgb();
     void faintAttribute();
     void lineWrapContinuation();
@@ -141,6 +142,35 @@ void TestVtScreen::oscProgress() {
     vt.inputWrite("\x1b]9;Hallo Welt\x07");  // weiterhin Notification, kein Fortschritt
     QCOMPARE(note, QStringLiteral("Hallo Welt"));
     QCOMPARE(state, 0);                       // unverändert
+}
+
+// OSC 777;qtmux-event;<kind>;<text> wird als agentEvent() ausgegeben; das
+// klassische OSC 777;notify bleibt eine Notification.
+void TestVtScreen::oscAgentEvent() {
+    VtScreen vt(24, 80);
+    QString kind, text, note;
+    QObject::connect(&vt, &VtScreen::agentEvent, [&](const QString &k, const QString &t) { kind = k; text = t; });
+    QObject::connect(&vt, &VtScreen::notify, [&](const QString &t) { note = t; });
+
+    vt.inputWrite("\x1b]777;qtmux-event;done;Build fertig\x07");
+    QCOMPARE(kind, QStringLiteral("done"));
+    QCOMPARE(text, QStringLiteral("Build fertig"));
+
+    // ';' im Text bleibt erhalten (Tokens ab Index 2 wieder gejoint).
+    vt.inputWrite("\x1b]777;qtmux-event;question;Soll ich A;B oder C?\x07");
+    QCOMPARE(kind, QStringLiteral("question"));
+    QCOMPARE(text, QStringLiteral("Soll ich A;B oder C?"));
+
+    // Leerer Text ist zulässig.
+    vt.inputWrite("\x1b]777;qtmux-event;info\x07");
+    QCOMPARE(kind, QStringLiteral("info"));
+    QCOMPARE(text, QString());
+
+    // Klassisches notify bleibt Notification (kein agentEvent).
+    kind.clear();
+    vt.inputWrite("\x1b]777;notify;Titel;Text\x07");
+    QCOMPARE(note, QStringLiteral("Titel: Text"));
+    QCOMPARE(kind, QString());   // agentEvent NICHT gefeuert
 }
 
 QTEST_MAIN(TestVtScreen)

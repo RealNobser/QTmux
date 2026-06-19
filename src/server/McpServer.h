@@ -2,15 +2,17 @@
 
 #include <QObject>
 #include <QHash>
+#include <QList>
 #include <QByteArray>
+#include <QJsonValue>
 #include <qqmlintegration.h>
 
 #include "SessionModel.h"   // vollständiger Typ für Q_PROPERTY(SessionModel*)
 
 class QTcpServer;
 class QTcpSocket;
+class QTimer;
 class QJsonObject;
-class QJsonValue;
 
 namespace qtmux {
 
@@ -51,9 +53,9 @@ signals:
 private:
     void onReadyRead(QTcpSocket *sock);
     void sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status = 200);
-    /// Erkennt aus dem verbindenden Client-Prozess dessen QTmux-Session und
-    /// markiert sie als MCP-Controller (roter Tab). Aufruf beim initialize.
-    void detectController(quint16 clientPort);
+    /// Ermittelt aus dem verbindenden Client-Prozess (TCP-Port → PID → Vorfahrenkette)
+    /// die QTmux-Session, in deren Shell der Client läuft (sonst -1).
+    int sessionIdForClientPort(quint16 clientPort) const;
 
     // JSON-RPC / MCP
     QJsonObject handleRpc(const QJsonObject &req, bool &isNotification);
@@ -63,10 +65,31 @@ private:
                          bool &isError, QString &text);
     QJsonObject toolsList() const;
 
+    // Inter-Agenten-Benachrichtigung: Long-Poll wait_for_events. Der Socket bleibt
+    // offen, bis ein passendes Ereignis vorliegt oder der Timeout greift.
+    void beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId, const QJsonObject &args);
+    void onHubEvent();                       // ein Ereignis kam → wartende Polls prüfen
+    void completePoll(int index);            // Poll[index] mit seinen Events beantworten
+    void removePollsForSocket(QTcpSocket *sock);
+    QJsonObject pollResult(int subscriberSessionId, quint64 afterSeq) const;
+    int subscriberSessionId(const QJsonObject &args, quint16 clientPort) const;
+
+    struct PendingPoll {
+        QTcpSocket *sock = nullptr;
+        QJsonValue  rpcId;
+        int         subscriberSessionId = 0;
+        quint64     afterSeq = 0;
+        QTimer     *deadline = nullptr;
+    };
+
     QTcpServer *m_server = nullptr;
     SessionModel *m_sessions = nullptr;
     int m_port = 7345;
+    // Session-ID des aktuell verarbeiteten Aufrufers (für tools/call synchron gesetzt;
+    // Fallback für post_event/subscribe_events ohne explizites sessionId-Argument).
+    int m_callerSessionId = -1;
     QHash<QTcpSocket *, QByteArray> m_buffers;
+    QList<PendingPoll> m_pendingPolls;
 };
 
 } // namespace qtmux

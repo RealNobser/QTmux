@@ -15,6 +15,10 @@ qt_add_executable(test_hotkeys tst_hotkeys.cpp)
 target_link_libraries(test_hotkeys PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_hotkeys COMMAND test_hotkeys)
 
+qt_add_executable(test_agenteventhub tst_agenteventhub.cpp)
+target_link_libraries(test_agenteventhub PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_agenteventhub COMMAND test_agenteventhub)
+
 qt_add_executable(test_vault tst_vault.cpp)
 target_link_libraries(test_vault PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_vault COMMAND test_vault)

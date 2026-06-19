@@ -14,6 +14,9 @@ class VtScreen;
 /// VT-Screen und verdrahtet beide. Backend-agnostisch — die UI spricht nur mit Session.
 class Session : public QObject {
     Q_OBJECT
+    // Laufzeit-eindeutige Session-ID (Counter, konstant über die Session-Lebensdauer).
+    // Für QML lesbar (z. B. Agenten-Benachrichtigungs-Abos im Einstellungen-Dialog).
+    Q_PROPERTY(int sessionId READ id CONSTANT)
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(int state READ stateInt NOTIFY stateChanged)
     Q_PROPERTY(QString agentId READ agentId NOTIFY agentChanged)
@@ -132,6 +135,7 @@ private:
     void onNotify(const QString &text);         // OSC 9/777
     void onProgress(int state, int value);      // OSC 9;4
     void onPromptMarker(char kind, int exitCode); // OSC 133
+    void onAgentEvent(const QString &kind, const QString &text); // OSC 777;qtmux-event
 
     std::unique_ptr<ITerminalBackend> m_backend;
     std::unique_ptr<VtScreen> m_screen;
