@@ -319,9 +319,10 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 > **Auf `main` committet + gepusht** (`a75876d` launch.json-Fix, `7579d43` Feature+Helfer+v1.1.0).
 > **Version 1.1.0** (Minor-Feature-Bump; CMakeLists/main.cpp/MCP-serverInfo/Installer). **EA-Installer
 > 1.1.0 gebaut** (`dist/QTmux-1.1.0-win64.msi` 28,4 MB + `…-portable.zip` 33,5 MB). **Firmen-Confluence
-> noch NICHT auf 1.1.0** aktualisiert (1.0.2 dort online) — bei Bedarf via `dist/_qtmux_pub2.py`
-> (`VER` auf 1.1.0, Changelog ergänzen). Davor stand: Pane-Prune-Fix (`8acfd6d`) Windows-verifiziert,
-> 1.0.1/1.0.2-EA-Releases in der Firmen-Confluence (s. u.).
+> (<space-key>) auf 1.1.0 aktualisiert** (`dist/_qtmux_pub2.py`, `VER=1.1.0`): Hauptseite <seiten-id> v6
+> (alte 1.0.2-Anhänge gelöscht, Changelog), Anwender-Doku <seiten-id> v6 (neuer Abschnitt
+> „Inter-Agenten-Benachrichtigung"), Entwickler-Doku <seiten-id> v3 (5 neue MCP-Tools + Workflow +
+> Hook-Caveat). Davor: Pane-Prune-Fix (`8acfd6d`) Windows-verifiziert, 1.0.1/1.0.2-EA-Releases (s. u.).
 > **Session 2026-06-14/15 (macOS): drei Bugfixes + App-Icon, alle committet+gepusht
 > (`e57f928`, `a466dbc`, `de27c69`).** Befunde vom Anwender, alle E2E auf macOS verifiziert.
 > 1. **Login-Shell-Fix (`e57f928`)** — lokale Shells starteten als Nicht-Login-Shell
