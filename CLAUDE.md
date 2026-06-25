@@ -268,11 +268,25 @@ je Workflow abweichen).
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
-## Status (Stand: 2026-06-19)
+## Status (Stand: 2026-06-25)
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
 > (Signierung/Notarisierung der Installer, CPack/AppImage). **Projekteigene DUAL-Doku**
 > (confluence.intern.example + Atlassian-Cloud) ist mit der 2026-06-15-Session aktualisiert.
+> **Windows-Session 2026-06-25: Funktionstasten-Fix + v1.1.1 (committet + gepusht).**
+> Befund (Anwender): F-Tasten kamen NICHT an cmd/Clink an. Ursache: `TerminalItem::encodeKey`
+> ([src/terminal/TerminalItem.cpp](src/terminal/TerminalItem.cpp#L738)) kannte F1–F12 nicht →
+> leere Bytes → nichts ans PTY; zusätzlich war **F1 global als „Über"-Kürzel** belegt
+> ([HotkeyRegistry.cpp](src/core/HotkeyRegistry.cpp)). Fix: F1–F12 als xterm/VT220-Sequenzen
+> (`F1=ESC O P` … `F12=ESC[24~`; ConPTY übersetzt sie in Konsolen-Tastenereignisse) + `actAbout`
+> ohne Standard-Kürzel (F-Tasten gehören im Terminal der Shell; „Über" via Menü/Palette). **Real
+> gegen Clink verifiziert** (F7 öffnet das History-Popup, Screenshot `dist/fkey-check/`); Debug+
+> Release je 10/10 ctest. **Version 1.1.1** (CMakeLists/main.cpp/MCP-serverInfo/Installer).
+> Commits `d08205d` (F-Tasten+v1.1.1), `2201852` (launch.json: Debug-Pfad über
+> `${command:cmake.buildDirectory}` statt `…activeConfigurePresetName` — robuster gegen
+> Preset-Reload). **Installer 1.1.1 noch NICHT gebaut, Firmen-Confluence noch auf 1.1.0** (bei
+> Bedarf: `installer/build-msi.ps1` + `dist/_qtmux_pub2.py` `VER=1.1.1`). macOS-Gegenprüfung
+> (F-Tasten + Inter-Agenten-Feature) weiterhin offen.
 > **Windows-Session 2026-06-18: Inter-Agenten-Benachrichtigung (NEU, umgesetzt + verifiziert;
 > NOCH NICHT committet/gepusht).** Ein Agent/eine Shell wird benachrichtigt, wenn ein Agent in einer ANDEREN Shell
 > **fertig** ist oder eine **Frage** hat; der benachrichtigte (MCP-)Agent erhält die
