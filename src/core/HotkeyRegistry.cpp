@@ -39,7 +39,10 @@ HotkeyRegistry::HotkeyRegistry(QObject *parent) : QObject(parent) {
         {QStringLiteral("actZoomReset"),      QStringLiteral("Ctrl+0")},
         {QStringLiteral("actToggleTheme"),    QStringLiteral("Ctrl+D")},
         {QStringLiteral("actSettings"),       QStringLiteral("Ctrl+,")},
-        {QStringLiteral("actAbout"),          QStringLiteral("F1")},
+        // Bewusst OHNE Standard-Kürzel: F1 (und alle F-Tasten) gehören im Terminal der
+        // Shell/Clink. „Über" bleibt über Menü „Hilfe" + Befehlspalette erreichbar; ein
+        // eigenes Kürzel kann in den Einstellungen vergeben werden.
+        {QStringLiteral("actAbout"),          QString()},
         {QStringLiteral("actQuit"),           QStringLiteral("Ctrl+Q")},
     };
     loadOverrides();
