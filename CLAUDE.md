@@ -284,9 +284,17 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 > Release je 10/10 ctest. **Version 1.1.1** (CMakeLists/main.cpp/MCP-serverInfo/Installer).
 > Commits `d08205d` (F-Tasten+v1.1.1), `2201852` (launch.json: Debug-Pfad über
 > `${command:cmake.buildDirectory}` statt `…activeConfigurePresetName` — robuster gegen
-> Preset-Reload). **Installer 1.1.1 noch NICHT gebaut, Firmen-Confluence noch auf 1.1.0** (bei
-> Bedarf: `installer/build-msi.ps1` + `dist/_qtmux_pub2.py` `VER=1.1.1`). macOS-Gegenprüfung
-> (F-Tasten + Inter-Agenten-Feature) weiterhin offen.
+> Preset-Reload). Run&Debug danach vom Anwender **als wieder funktionierend bestätigt**.
+> **EA-Installer 1.1.1 gebaut** (`dist/QTmux-1.1.1-win64.msi` 29,8 MB + `…-portable.zip` 35,1 MB;
+> `installer/build-msi.ps1 -Version 1.1.1`). **Firmen-Confluence (<space-key>) auf 1.1.1 aktualisiert**
+> (`dist/_qtmux_pub2.py`, `VER=1.1.1`): Hauptseite <seiten-id> v7 (alte 1.1.0-Anhänge gelöscht,
+> Changelog „Änderungen in 1.1.1" = F-Tasten), Anwender-Doku <seiten-id> v7 (F-Tasten-Infobox +
+> korrigierte Hilfe/Über-Zeile), Entwickler-Doku <seiten-id> v4 (Versionsbump). **Projekteigene
+> DUAL-Doku (confluence.intern.example + Atlassian-Cloud) für 1.1.1 NOCH OFFEN** — von der
+> Firmen-Confluence-/Windows-Maschine aus NICHT machbar: die `Credential-{Confluence,Atlassian}.txt` liegen
+> hier nicht und beide Endpunkte sind unerreichbar (`confluence.intern.example` = privates Heimnetz;
+> `<cloud-instanz>.atlassian.net` übers Firmennetz geblockt). Gehört in eine macOS-/Heim-Session.
+> macOS-Gegenprüfung (F-Tasten + Inter-Agenten-Feature) weiterhin offen.
 > **Windows-Session 2026-06-18: Inter-Agenten-Benachrichtigung (NEU, umgesetzt + verifiziert;
 > NOCH NICHT committet/gepusht).** Ein Agent/eine Shell wird benachrichtigt, wenn ein Agent in einer ANDEREN Shell
 > **fertig** ist oder eine **Frage** hat; der benachrichtigte (MCP-)Agent erhält die
