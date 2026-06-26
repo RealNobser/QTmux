@@ -273,6 +273,32 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 > ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
 > (Signierung/Notarisierung der Installer, CPack/AppImage). **Projekteigene DUAL-Doku**
 > (confluence.intern.example + Atlassian-Cloud) ist mit der 2026-06-15-Session aktualisiert.
+> **Windows-Session 2026-06-26: Tastatur-Unterstützung für modale Dialoge (Enter=OK,
+> ESC=Abbrechen).** Alle modalen Dialoge basieren auf der Inline-Komponente `AppDialog`
+> ([qml/Main.qml](qml/Main.qml)). **ESC** lief schon immer über die `closePolicy`
+> (`Popup.CloseOnEscape` ist Default → `reject()`/`close()`); jetzt explizit gesetzt. **Enter=OK**
+> war der eigentliche Bedarf und brauchte ZWEI Mechanismen, weil sich Qt hier sperrt:
+> (1) **In-Dialog-`Shortcut`** (`sequences:["Return","Enter"]`, `enabled: visible && hasAccept`,
+> `onActivated: accept()`) — **innerhalb** des Dialogs deklariert, da ein **fensterweiter**
+> Shortcut über einem **modalen Popup NICHT feuert** (empirisch belegt). `hasAccept` = Dialog hat
+> Ok/Save/Yes (Close-only-Dialoge wie Einstellungen/Verbindungen bewusst ohne Enter). (2) Für
+> Dialoge mit **einzeiligem `TextField`-Fokus** greift der Shortcut NICHT, weil das fokussierte
+> Feld Return per **ShortcutOverride** selbst beansprucht → dort bestätigt **`TextField.onAccepted:
+> <dlg>.accept()`** (SSH-Felder, Geheimnis-Name/-Wert). SSH fokussiert via `onOpened` das erste
+> Feld (UX). **Mehrzeiliges `TextArea`** (Login-Skript im Profil-Editor) behält Enter für
+> Zeilenumbrüche (es beansprucht Return ebenfalls selbst), Enter bestätigt dort nur außerhalb des
+> Felds — bewusst. Aufnahme-Dialog (Tastenkürzel) behandelt Enter weiter selbst (eigene
+> `captureArea`-Logik). **Verworfene Irrwege:** fensterweiter Shortcut (feuert nicht über Modal),
+> Eltern-`Keys.onReturnPressed` (TextField propagiert Return nicht), OK-Button fokussieren
+> (Qt-Quick-`Button` reagiert im Fokus nur auf **Leertaste**, nicht Enter). **Verifikation
+> (Windows):** Debug+Release je **10/10 ctest** (ctest braucht Qt-bin im PATH, sonst
+> `0xc0000135`); **E2E** `dist/_dlgkeys-e2e.ps1` (öffnet SSH via Ctrl+Shift+S [Feld-Pfad] und
+> Seriell via Ctrl+Shift+R [Shortcut-Pfad], prüft ESC+Enter per UIA + Screenshot) **grün**;
+> visuell bestätigt (Dialog nach Enter zu). **E2E-Falle:** synthetische Tasten an die qtmux-GUI
+> nur zuverlässig mit `AttachThreadInput`-Foreground (statt blankem `SetForegroundWindow`) und
+> Warteschleife aufs `MainWindowHandle`; ein **Alt**-Stoß zum Lösen des Foreground-Locks vor einem
+> **ESC** ist tückisch (schaltet den Qt-Menümodus → ESC verlässt nur den, schließt nicht). Nur
+> QML geändert; **noch nicht committet** (auf `main`). macOS-Gegenprüfung offen.
 > **Windows-Session 2026-06-25: Funktionstasten-Fix + v1.1.1 (committet + gepusht).**
 > Befund (Anwender): F-Tasten kamen NICHT an cmd/Clink an. Ursache: `TerminalItem::encodeKey`
 > ([src/terminal/TerminalItem.cpp](src/terminal/TerminalItem.cpp#L738)) kannte F1–F12 nicht →

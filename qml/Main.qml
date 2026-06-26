@@ -254,6 +254,22 @@ ApplicationWindow {
         anchors.centerIn: parent
         modal: true
         padding: 20
+        // Tastatur-Unterstützung für modale Dialoge:
+        //  • ESC = Abbrechen/Schließen — via closePolicy (CloseOnEscape → reject()/close()).
+        //  • Enter = OK — über einen Shortcut INNERHALB des Dialogs (im Fokus-Scope des
+        //    modalen Popups; ein fensterweiter Shortcut feuert dort NICHT). Greift nur, wenn
+        //    der Dialog einen Bestätigen-Button hat. Hat ein einzeiliges TextField den Fokus,
+        //    beansprucht es Return selbst (ShortcutOverride) → dann bestätigt dessen
+        //    onAccepted; ein mehrzeiliges TextArea behält Enter für Zeilenumbrüche.
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        property bool hasAccept: (standardButtons & Dialog.Ok)
+                                 || (standardButtons & Dialog.Save)
+                                 || (standardButtons & Dialog.Yes)
+        Shortcut {
+            sequences: ["Return", "Enter"]
+            enabled: dlg.visible && dlg.hasAccept
+            onActivated: dlg.accept()
+        }
         background: Rectangle {
             color: Theme.bgElevated
             radius: 12
@@ -1862,6 +1878,9 @@ ApplicationWindow {
         width: 420
         title: qsTr("SSH-Verbindung")
         standardButtons: Dialog.Ok | Dialog.Cancel
+        // Erstes Feld fokussieren (statt des OK-Buttons); Enter aus den Feldern bestätigt
+        // über deren onAccepted.
+        onOpened: sshHost.forceActiveFocus()
 
         onAccepted: {
             if (sshHost.text.length > 0) {
@@ -1873,19 +1892,23 @@ ApplicationWindow {
         ColumnLayout {
             anchors.fill: parent
             spacing: 10
+            // Enter aus einem Eingabefeld bestätigt den Dialog (TextField.onAccepted ist
+            // der einzige Weg, der greift, solange ein Feld den Fokus hat — der fokussierte
+            // TextField beansprucht Return selbst, sodass weder der Fenster-Shortcut noch
+            // ein Eltern-Keys-Handler feuert).
             GridLayout {
                 columns: 2
                 columnSpacing: 10
                 rowSpacing: 8
                 Layout.fillWidth: true
                 Text { text: qsTr("Host"); color: Theme.textBright }
-                TextField { id: sshHost; Layout.fillWidth: true; placeholderText: "example.com" }
+                TextField { id: sshHost; Layout.fillWidth: true; placeholderText: "example.com"; onAccepted: sshDialog.accept() }
                 Text { text: qsTr("Benutzer"); color: Theme.textBright }
-                TextField { id: sshUser; Layout.fillWidth: true; placeholderText: Qt.platform.os; text: "" }
+                TextField { id: sshUser; Layout.fillWidth: true; placeholderText: Qt.platform.os; text: ""; onAccepted: sshDialog.accept() }
                 Text { text: qsTr("Port"); color: Theme.textBright }
-                TextField { id: sshPort; Layout.fillWidth: true; text: "22" }
+                TextField { id: sshPort; Layout.fillWidth: true; text: "22"; onAccepted: sshDialog.accept() }
                 Text { text: qsTr("Identity-Datei"); color: Theme.textBright }
-                TextField { id: sshIdentity; Layout.fillWidth: true; placeholderText: "~/.ssh/id_ed25519 (optional)" }
+                TextField { id: sshIdentity; Layout.fillWidth: true; placeholderText: "~/.ssh/id_ed25519 (optional)"; onAccepted: sshDialog.accept() }
             }
             Text {
                 text: qsTr("Passwort/Schlüssel werden im Terminal abgefragt (System-ssh).")
@@ -2068,6 +2091,8 @@ ApplicationWindow {
         width: 460
         title: qsTr("Verbindungsprofil")
         standardButtons: Dialog.Ok | Dialog.Cancel
+        // Enter bestätigt über den In-Dialog-Shortcut, solange kein Eingabefeld den Fokus
+        // hat; das mehrzeilige Login-Skript-Feld behält Enter für Zeilenumbrüche.
 
         // Ursprungsname: leer = neues Profil; gesetzt = Bearbeiten (Upsert-/Umbenenn-Schlüssel).
         property string originalName: ""
@@ -2552,9 +2577,9 @@ ApplicationWindow {
             GridLayout {
                 columns: 2; columnSpacing: 10; rowSpacing: 8; Layout.fillWidth: true
                 Text { text: qsTr("Name"); color: Theme.textBright }
-                TextField { id: sName; Layout.fillWidth: true; readOnly: secretEditDialog.editing; placeholderText: qsTr("z. B. ssh/prod") }
+                TextField { id: sName; Layout.fillWidth: true; readOnly: secretEditDialog.editing; placeholderText: qsTr("z. B. ssh/prod"); onAccepted: secretEditDialog.accept() }
                 Text { text: qsTr("Wert"); color: Theme.textBright }
-                TextField { id: sValue; Layout.fillWidth: true; echoMode: sReveal.checked ? TextInput.Normal : TextInput.Password; placeholderText: qsTr("Passwort / Token / Passphrase") }
+                TextField { id: sValue; Layout.fillWidth: true; echoMode: sReveal.checked ? TextInput.Normal : TextInput.Password; placeholderText: qsTr("Passwort / Token / Passphrase"); onAccepted: secretEditDialog.accept() }
             }
             CheckBox { id: sReveal; text: qsTr("Wert anzeigen") }
         }
@@ -2654,6 +2679,8 @@ ApplicationWindow {
         width: 420
         title: qsTr("Tastenkürzel ändern")
         standardButtons: Dialog.Ok | Dialog.Cancel
+        // Enter wird vom Aufnahme-Feld selbst behandelt (onOpened fokussiert es, nicht den
+        // OK-Button): bestätigt die Aufnahme bzw. ist als Akkord mit Modifier aufnehmbar.
 
         property string targetId: ""
         property string targetLabel: ""
