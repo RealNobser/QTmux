@@ -297,8 +297,11 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 > visuell bestätigt (Dialog nach Enter zu). **E2E-Falle:** synthetische Tasten an die qtmux-GUI
 > nur zuverlässig mit `AttachThreadInput`-Foreground (statt blankem `SetForegroundWindow`) und
 > Warteschleife aufs `MainWindowHandle`; ein **Alt**-Stoß zum Lösen des Foreground-Locks vor einem
-> **ESC** ist tückisch (schaltet den Qt-Menümodus → ESC verlässt nur den, schließt nicht). Nur
-> QML geändert; **noch nicht committet** (auf `main`). macOS-Gegenprüfung offen.
+> **ESC** ist tückisch (schaltet den Qt-Menümodus → ESC verlässt nur den, schließt nicht).
+> Feature `4c39486` (QML); **Version 1.1.2** (CMakeLists/main.cpp/MCP-serverInfo/Installer).
+> **EA-Installer 1.1.2 gebaut** (`dist/QTmux-1.1.2-win64.msi` 28,4 MB + `…-portable.zip` 33,5 MB).
+> **Firmen-Confluence noch auf 1.1.1** (bei Bedarf `dist/_qtmux_pub2.py` `VER=1.1.2` + Changelog).
+> macOS-Gegenprüfung (Dialog-Tastatur) offen.
 > **Windows-Session 2026-06-25: Funktionstasten-Fix + v1.1.1 (committet + gepusht).**
 > Befund (Anwender): F-Tasten kamen NICHT an cmd/Clink an. Ursache: `TerminalItem::encodeKey`
 > ([src/terminal/TerminalItem.cpp](src/terminal/TerminalItem.cpp#L738)) kannte F1–F12 nicht →

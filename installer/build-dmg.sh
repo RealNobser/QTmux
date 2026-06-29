@@ -20,7 +20,7 @@
 # Quarantäne-Attribut (`xattr -dr com.apple.quarantine /Applications/QTmux.app`).
 set -euo pipefail
 
-VERSION="${1:-1.1.1}"
+VERSION="${1:-1.1.2}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PRESET="macos-release"
 BUILD_DIR="$REPO/build/$PRESET"
