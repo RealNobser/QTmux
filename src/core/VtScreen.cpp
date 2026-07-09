@@ -62,6 +62,11 @@ int cbSetTermProp(VTermProp prop, VTermValue *val, void *user) {
         self->cbSetTitle(QString::fromUtf8(val->string.str, static_cast<int>(val->string.len)));
     } else if (prop == VTERM_PROP_CURSORVISIBLE) {
         self->cbMoveCursor(self->cursor().y(), self->cursor().x(), val->boolean != 0);
+    } else if (prop == VTERM_PROP_MOUSE) {
+        // Maus-Tracking-Modus der App (0=aus, 1=Klick, 2=Drag, 3=Move). Die App
+        // setzt ihn per DECSET 1000/1002/1003. Ist er aktiv, leitet TerminalItem
+        // Maus-/Scrollrad-Events an die App weiter, statt lokal zu scrollen.
+        self->cbSetMouse(val->number);
     }
     return 1;
 }
@@ -233,6 +238,34 @@ bool VtScreen::lineContinuation(int row) const {
 }
 
 void VtScreen::cbOutput(const QByteArray &data) { emit outputToPty(data); }
+
+void VtScreen::cbSetMouse(int mode) { m_mouseTracking = mode; }
+
+// Qt-Tastaturmodifier → VTermModifier (nur die, die libvterm für die Maus kennt).
+static VTermModifier vtModifiers(Qt::KeyboardModifiers mods) {
+    int m = VTERM_MOD_NONE;
+    if (mods & Qt::ShiftModifier)   m |= VTERM_MOD_SHIFT;
+    if (mods & Qt::AltModifier)     m |= VTERM_MOD_ALT;
+    // Auf macOS ist physisches Ctrl = MetaModifier (Cmd = ControlModifier); beide auf
+    // VTERM_MOD_CTRL abbilden, damit Ctrl-Maus in TUIs wie erwartet funktioniert.
+    if (mods & (Qt::ControlModifier | Qt::MetaModifier)) m |= VTERM_MOD_CTRL;
+    return static_cast<VTermModifier>(m);
+}
+
+void VtScreen::mouseMove(int row, int col, Qt::KeyboardModifiers mods) {
+    if (!m_vt || m_mouseTracking == 0) return;
+    // libvterm gibt nur dann eine Sequenz aus, wenn der aktive Modus die Bewegung
+    // verlangt (Drag mit gedrücktem Button bzw. Move); ansonsten ist es ein No-op.
+    vterm_mouse_move(m_vt, row, col, vtModifiers(mods));
+}
+
+void VtScreen::mouseButton(int button, bool pressed, int row, int col,
+                           Qt::KeyboardModifiers mods) {
+    if (!m_vt || m_mouseTracking == 0) return;
+    // Position vor dem Button-Event setzen, damit der Report die richtige Zelle nennt.
+    vterm_mouse_move(m_vt, row, col, vtModifiers(mods));
+    vterm_mouse_button(m_vt, button, pressed, vtModifiers(mods));
+}
 
 void VtScreen::startPaste() { if (m_vt) vterm_keyboard_start_paste(m_vt); }
 void VtScreen::endPaste()   { if (m_vt) vterm_keyboard_end_paste(m_vt); }

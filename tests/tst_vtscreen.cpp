@@ -21,6 +21,7 @@ private slots:
     void trueColorRgb();
     void faintAttribute();
     void lineWrapContinuation();
+    void mouseReporting();
 };
 
 // Echtes 24-Bit-RGB (ESC[38;2;r;g;b) muss exakt durchgereicht werden.
@@ -171,6 +172,56 @@ void TestVtScreen::oscAgentEvent() {
     vt.inputWrite("\x1b]777;notify;Titel;Text\x07");
     QCOMPARE(note, QStringLiteral("Titel: Text"));
     QCOMPARE(kind, QString());   // agentEvent NICHT gefeuert
+}
+
+// Maus-Reporting: DECSET 1000/1006 aktiviert Tracking; mouseButton/mouseMove
+// erzeugen die passenden Escape-Sequenzen über outputToPty. Ohne Tracking (oder
+// nach 1000l) darf nichts gesendet werden.
+void TestVtScreen::mouseReporting() {
+    VtScreen vt(24, 80);
+    QByteArray out;
+    QObject::connect(&vt, &VtScreen::outputToPty,
+                     [&](const QByteArray &d) { out += d; });
+
+    // Anfangs kein Tracking → mouseButton ist ein No-op.
+    QCOMPARE(vt.mouseTracking(), 0);
+    vt.mouseButton(1, true, 5, 10, Qt::NoModifier);
+    QVERIFY(out.isEmpty());
+
+    // DECSET 1000 (Klick-Tracking) einschalten.
+    vt.inputWrite("\x1b[?1000h");
+    QVERIFY(vt.mouseTracking() != 0);
+
+    // Linksklick in Zelle (row 5, col 10) → X10-Maus-Report ESC [ M ...
+    out.clear();
+    vt.mouseButton(1, true, 5, 10, Qt::NoModifier);
+    QVERIFY(!out.isEmpty());
+    QVERIFY(out.startsWith("\x1b[M"));
+    vt.mouseButton(1, false, 5, 10, Qt::NoModifier);   // Button wieder freigeben
+
+    // Zusätzlich SGR-Encoding (1006): Report als ESC [ < b ; col ; row M/m,
+    // 1-basiert. Linksklick in (row 5, col 10) → "\x1b[<0;11;6M".
+    // (libvterm entprellt: ein Press wirkt nur als Zustandswechsel, daher sauberes
+    // press→release-Paar.)
+    vt.inputWrite("\x1b[?1006h");
+    out.clear();
+    vt.mouseButton(1, true, 5, 10, Qt::NoModifier);
+    QCOMPARE(out, QByteArray("\x1b[<0;11;6M"));
+    out.clear();
+    vt.mouseButton(1, false, 5, 10, Qt::NoModifier);
+    QCOMPARE(out, QByteArray("\x1b[<0;11;6m"));
+
+    // Scrollrad hoch (Button 4) → SGR-Code 64.
+    out.clear();
+    vt.mouseButton(4, true, 5, 10, Qt::NoModifier);
+    QCOMPARE(out, QByteArray("\x1b[<64;11;6M"));
+
+    // Tracking wieder aus → keine Ausgabe mehr.
+    vt.inputWrite("\x1b[?1000l");
+    QCOMPARE(vt.mouseTracking(), 0);
+    out.clear();
+    vt.mouseButton(2, true, 5, 10, Qt::NoModifier);
+    QVERIFY(out.isEmpty());
 }
 
 QTEST_MAIN(TestVtScreen)

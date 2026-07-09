@@ -932,8 +932,32 @@ void TerminalItem::geometryChange(const QRectF &newGeo, const QRectF &oldGeo) {
     }
 }
 
+// Qt-Maustaste → libvterm-Buttonnummer (1=links, 2=mitte, 3=rechts). 0 = ignoriert.
+static int vtMouseButton(Qt::MouseButton b) {
+    switch (b) {
+    case Qt::LeftButton:   return 1;
+    case Qt::MiddleButton: return 2;
+    case Qt::RightButton:  return 3;
+    default:               return 0;
+    }
+}
+
 void TerminalItem::mousePressEvent(QMouseEvent *event) {
     forceActiveFocus();
+    VtScreen *sc = screen();
+    // App mit Maus-Tracking: Klicks an die App melden (vim/htop/tmux/…). Shift
+    // erzwingt weiterhin die lokale Text-Selektion (übliche Terminal-Konvention).
+    const int btn = vtMouseButton(event->button());
+    if (sc && sc->mouseTracking() != 0 && btn > 0
+            && !(event->modifiers() & Qt::ShiftModifier)) {
+        const QPoint c = cellAt(event->position());
+        m_lastMouseCell = c;
+        m_mouseReporting = true;
+        sc->mouseButton(btn, true, c.y(), c.x(), event->modifiers());
+        event->accept();
+        return;
+    }
+    m_mouseReporting = false;
     if (event->button() == Qt::LeftButton) {
         m_selAnchor = m_selCaret = absCellAt(event->position());
         m_selecting = true;
@@ -950,6 +974,18 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
 }
 
 void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
+    VtScreen *sc = screen();
+    // Drag an die App melden (nur wenn der Press bereits an sie ging). libvterm
+    // gibt im Drag-Modus die Bewegung aus, im reinen Klick-Modus ist es ein No-op.
+    if (m_mouseReporting && sc) {
+        const QPoint c = cellAt(event->position());
+        if (c != m_lastMouseCell) {
+            m_lastMouseCell = c;
+            sc->mouseMove(c.y(), c.x(), event->modifiers());
+        }
+        event->accept();
+        return;
+    }
     if (!m_selecting) { event->ignore(); return; }
     const QPoint cell = absCellAt(event->position());
     if (cell != m_selCaret) {
@@ -962,6 +998,17 @@ void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
+    VtScreen *sc = screen();
+    if (m_mouseReporting && sc) {
+        const int btn = vtMouseButton(event->button());
+        if (btn > 0) {
+            const QPoint c = cellAt(event->position());
+            sc->mouseButton(btn, false, c.y(), c.x(), event->modifiers());
+        }
+        m_mouseReporting = false;
+        event->accept();
+        return;
+    }
     if (m_selecting) {
         m_selecting = false;
         if (m_selCaret == m_selAnchor) clearSelection();
@@ -977,6 +1024,17 @@ void TerminalItem::wheelEvent(QWheelEvent *event) {
     if (dy == 0) { event->ignore(); return; }
     if (event->modifiers() & Qt::ControlModifier) {
         emit zoomRequested(dy > 0 ? 1 : -1);
+        event->accept();
+        return;
+    }
+    // App mit Maus-Tracking (z. B. Claude Code, vim, less, htop im Alternate Screen):
+    // das Rad als Maus-Button 4/5 an die App melden, damit SIE ihren eigenen Renderer
+    // scrollt. Ohne das täte das Rad hier nur den (im Alt-Screen leeren) lokalen
+    // Scrollback bewegen → Rad scheint „tot".
+    VtScreen *sc = screen();
+    if (sc && sc->mouseTracking() != 0) {
+        const QPoint c = cellAt(event->position());
+        sc->mouseButton(dy > 0 ? 4 : 5, true, c.y(), c.x(), event->modifiers());
         event->accept();
         return;
     }

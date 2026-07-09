@@ -188,6 +188,10 @@ private:
     QPoint m_selCaret{-1, -1};
     bool m_selecting = false;
     bool m_hasSelection = false;
+    // Maus-Weiterleitung an die App (Tracking aktiv): merkt, ob der laufende
+    // Klick/Drag an die App gemeldet wird, plus die zuletzt gemeldete Zelle.
+    bool m_mouseReporting = false;
+    QPoint m_lastMouseCell{-1, -1};
     bool m_broadcast = false;          // Eingabe an alle Sessions (siehe sendInput)
     bool m_copyOnSelect = false;       // Auswahl automatisch kopieren (PuTTY-Stil)
     bool m_rightClickPaste = false;    // Rechtsklick fügt ein statt Kontextmenü

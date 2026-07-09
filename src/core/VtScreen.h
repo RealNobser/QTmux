@@ -74,6 +74,18 @@ public:
     void startPaste();
     void endPaste();
 
+    /// Maus-Tracking-Modus der Anwendung: 0=aus, 1=Klick, 2=Drag, 3=Move (aus
+    /// DECSET 1000/1002/1003). Ist er ungleich 0, sollen Maus-/Scrollrad-Events an
+    /// die Anwendung gemeldet werden (statt lokal zu scrollen/selektieren).
+    int mouseTracking() const { return m_mouseTracking; }
+    /// Mausbewegung an die Anwendung melden (0-basierte Zelle). No-op ohne Tracking;
+    /// libvterm sendet nur, wenn der aktive Modus die Bewegung verlangt.
+    void mouseMove(int row, int col, Qt::KeyboardModifiers mods);
+    /// Maustaste an die Anwendung melden. button: 1=links, 2=mitte, 3=rechts,
+    /// 4=Rad hoch, 5=Rad runter. Setzt intern erst die Position, dann das Ereignis.
+    void mouseButton(int button, bool pressed, int row, int col,
+                     Qt::KeyboardModifiers mods);
+
     /// Setzt die libvterm-Palette (16 ANSI-Farben + Default-fg/bg) aus einem Schema
     /// und stößt eine vollständige Neuzeichnung an. Default-fg/bg rendert das
     /// TerminalItem über das Theme; hier v. a. für korrekte ANSI-/Reverse-Farben.
@@ -109,6 +121,7 @@ public:
     void cbSetTitle(const QString &title);
     void cbPushScrollback(std::vector<Cell> &&line, bool continuation);
     void cbOutput(const QByteArray &data);
+    void cbSetMouse(int mode);
     /// Sammelt OSC-Fragmente (libvterm liefert sie ggf. stückweise) und parst sie.
     void cbOsc(int command, const char *str, int len, bool initial, bool final);
 
@@ -121,6 +134,7 @@ private:
     QPoint m_cursor{0, 0};
     bool m_cursorVisible = true;
     QString m_title;
+    int m_mouseTracking = 0;   // VTERM_PROP_MOUSE: 0=aus,1=Klick,2=Drag,3=Move
 
     // Scrollback-Zeile + ob sie ein weicher Umbruch der vorigen ist (für Copy).
     struct SbLine {
