@@ -268,11 +268,43 @@ je Workflow abweichen).
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
-## Status (Stand: 2026-06-25)
+## Status (Stand: 2026-07-10)
 
 > ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
 > (Signierung/Notarisierung der Installer, CPack/AppImage). **Projekteigene DUAL-Doku**
-> (confluence.intern.example + Atlassian-Cloud) ist mit der 2026-06-15-Session aktualisiert.
+> (confluence.intern.example + Atlassian-Cloud) ist mit der 2026-07-10-Session aktualisiert.
+> **macOS-Session 2026-07-09/10: Maus-/Scrollrad-Reporting an Apps + „Neuer Tab erbt CWD",
+> committet+gepusht (`c2dbe77` v1.2.0, `5b90749`).** Zwei Anwender-Befunde, E2E verifiziert.
+> 1. **Maus-/Scrollrad-Reporting (`c2dbe77`, Version 1.2.0)** — Anwender-Frage: „Scrollback mit
+>    zsh geht nicht" bzw. „werden Scrollrad-Infos nicht in eine Fullscreen-App (Claude Code)
+>    transportiert?". **Diagnose:** der Scrollback-**Puffer** war korrekt (per MCP `read_screen
+>    scrollback:true` bewiesen: 203 Zeilen mit zsh gespeichert). Das Problem: QTmux hatte **KEIN
+>    Maus-Reporting** — `TerminalItem::wheelEvent` scrollte bedingungslos den lokalen Scrollback,
+>    der im **Alternate Screen** (den Claude Code/vim/less/htop nutzen) leer ist; `VtScreen`
+>    ignorierte `VTERM_PROP_MOUSE`. Die App bekam nie Maus-Events → Rad wirkte „tot". **Fix (volle
+>    Weiterleitung):** `VtScreen` trackt jetzt `VTERM_PROP_MOUSE` (`mouseTracking()` 0/1/2/3 aus
+>    DECSET 1000/1002/1003); neue `mouseButton()`/`mouseMove()` reichen Events an libvterm, das die
+>    X10-/SGR-Sequenzen erzeugt und über den bestehenden Output-Callback (`cbOutput`→`outputToPty`)
+>    an die PTY schickt. `TerminalItem`: `wheelEvent` + `mousePress/Move/Release` leiten bei aktivem
+>    Tracking weiter (Rad=Button 4/5, Klick/Drag=1/2/3), sonst lokaler Scrollback/Selektion;
+>    **Shift+Drag** selektiert immer lokal (Terminal-Konvention). Qt→VTermModifier (macOS: physisches
+>    Ctrl=Meta→`VTERM_MOD_CTRL`). **Lektion:** libvterm **entprellt** — ein zweites Press desselben
+>    Buttons ohne Release ist ein No-op (Tests brauchen saubere press→release-Paare). Test
+>    `tst_vtscreen::mouseReporting` (DECSET 1000/1006, SGR `\e[<0;11;6M`, Wheel-Code 64, Tracking-
+>    aus). **GUI-E2E:** Maus-Tracking-App gestartet, per CGEvent-Scroll gescrollt → App empfängt
+>    `WHEEL_UP/DOWN` korrekt; ohne Tracking keine rohe Sequenz in der Shell. **Bonus:** Maus jetzt
+>    auch in vim/htop/tmux/less. **Grenze:** reines Hover-Tracking (DECSET 1003, ohne gedrückte
+>    Taste) wird nicht gemeldet (bräuchte Hover-Events); Drag (1002) funktioniert. Beim Push
+>    Rebase auf Remote-v1.1.2 nötig (nur Versions-Konflikte → 1.2.0 gewinnt).
+> 2. **Neue Shell erbt CWD der aktiven Session (`5b90749`)** — wie „Neuer Tab" in Terminal.app/
+>    iTerm: eine neu geöffnete Shell startet im Live-Arbeitsverzeichnis der zuvor aktiven Session
+>    statt immer im Home. In `SessionModel::createShellSession`: bei leerem `workingDir` wird das
+>    `currentWorkingDirectory()` (libproc/`/proc`/PEB) der aktiven Session übernommen. Absicherungen:
+>    explizites Verzeichnis (MCP `cwd`/Profil) hat Vorrang; **nur Shell-Quellen** (SSH/Seriell/Plugin
+>    haben kein lokales CWD → Home); **nicht beim Restore** (`m_restoring`-Guard — jede Session behält
+>    ihr gespeichertes Verzeichnis); Home-Fallback ohne aktive Session/CWD. Gilt für alle Wege
+>    (Toolbar/Menü/MCP), da alle durch `createShellSession` laufen. E2E: `cd /tmp` in Session A →
+>    neue Shell startet dort; restaurierte Sessions unberührt. 10/10 Tests grün.
 > **Windows-Session 2026-06-26: Tastatur-Unterstützung für modale Dialoge (Enter=OK,
 > ESC=Abbrechen).** Alle modalen Dialoge basieren auf der Inline-Komponente `AppDialog`
 > ([qml/Main.qml](qml/Main.qml)). **ESC** lief schon immer über die `closePolicy`
