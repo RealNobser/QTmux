@@ -117,7 +117,18 @@ int SessionModel::createShellSession(const QString &workingDir, const QString &p
                                      const QString &loginScript) {
     auto *s = new Session(this);
     auto *pty = new PtyBackend();
-    if (!workingDir.isEmpty()) pty->setWorkingDirectory(workingDir);
+    // Startverzeichnis: ein explizit gewünschtes hat Vorrang. Sonst (neue Shell aus
+    // der UI/MCP ohne Verzeichnis) das LIVE-Verzeichnis der zuletzt aktiven
+    // Shell-Session übernehmen — wie „Neuer Tab" in Terminal.app/iTerm. Beim Restore
+    // NICHT (jede Session bringt ihr gespeichertes Verzeichnis mit); SSH/Seriell/
+    // Plugin haben kein sinnvolles lokales CWD → dann bleibt es beim Home-Fallback.
+    QString dir = workingDir;
+    if (dir.isEmpty() && !m_restoring && m_activeRow >= 0 && m_activeRow < count()) {
+        Session *active = m_sessions.at(m_activeRow);
+        if (active && active->type() == Session::Type::Shell)
+            dir = active->currentWorkingDirectory();
+    }
+    if (!dir.isEmpty()) pty->setWorkingDirectory(dir);
     if (!program.isEmpty()) pty->setProgram(program);   // leer = Standard-Shell
     // Lokale Shells als Login-Shell starten (wie Terminal.app/iTerm) → ~/.zprofile,
     // /etc/zprofile (path_helper/Homebrew-PATH), ~/.bash_profile … werden geladen.
