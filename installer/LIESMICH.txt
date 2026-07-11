@@ -34,6 +34,16 @@ Daten / Zurücksetzen
 - Einstellungen liegen in der Registry unter HKCU\Software\QTmux\QTmux.
   Zum vollständigen Zurücksetzen diesen Schlüssel löschen.
 
+Weitere Plattformen
+-------------------
+- macOS: "QTmux-<Version>-macos.dmg" öffnen und QTmux.app nach "Programme"
+  ziehen. Unsigniert -> beim ersten Start Rechtsklick -> "Öffnen".
+  (Gebaut mit installer/build-dmg.sh.)
+- Linux: "QTmux-<Version>-x86_64.AppImage" ausführbar machen und starten:
+     chmod +x QTmux-*-x86_64.AppImage && ./QTmux-*-x86_64.AppImage
+  Keine Installation nötig. (Gebaut mit installer/build-appimage.sh; in der CI
+  als Artefakt "QTmux-AppImage" verfügbar.)
+
 Feedback
 --------
 Rückmeldungen, Fehler und Wünsche bitte an das QTmux-Team. Danke fürs Testen!

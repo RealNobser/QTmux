@@ -97,6 +97,23 @@ QtVirtualKeyboard/QtMultimedia/QtPdf sind harmlos (optionale, ungenutzte QML-Mod
 Verifiziert 2026-06-13: DMG gemountet, App von dort gestartet (self-contained, ohne
 Homebrew-Qt im Env), Emoji + Rendering korrekt.
 
+**Linux-Installer (AppImage, QTMUX-10):** `installer/build-appimage.sh [version]` (analog
+zu DMG/MSI hand-gerollt — **AppImage ist kein CPack-Generator**; Standard-Toolchain für
+Qt ist `linuxdeploy` + `linuxdeploy-plugin-qt`). Baut das `linux-release`-Preset (oder
+nutzt `QTMUX_BUILD_DIR`, damit die CI ihr vorhandenes `build/` hereinreicht), stagt ein
+`AppDir` (qtmux-Binary + Echo-Plugin nach `usr/bin/plugins`, da PluginHost `<App>/plugins`
+sucht) und lässt `linuxdeploy --plugin qt` Qt-Frameworks + QML-Module (`QML_SOURCES_PATHS`)
++ Plattform-/Image-Plugins bündeln → `dist/QTmux-<version>-x86_64.AppImage` (git-ignoriert).
+Nutzt `installer/qtmux.desktop` (`Icon=qtmux` ← `resources/appicon/qtmux.png`). **CI-Fallen:**
+GitHub-Runner haben **kein FUSE** → `APPIMAGE_EXTRACT_AND_RUN=1` (Tool- **und** appimagetool-
+AppImages entpacken-und-ausführen); `ARCH=x86_64` für appimagetool; `qmake` via `QMAKE`/
+`QT_ROOT_DIR` gefunden. **Verifiziert 2026-07-11 in der CI** (Linux-Job baut das AppImage aus
+dem vorhandenen Build, lädt es als Artefakt `QTmux-AppImage` hoch; kein lokaler Linux-Rechner
+nötig): Artefakt 40 MB, heruntergeladen = gültiges **AppImage Typ 2** (`file`: ELF x86-64,
+Magic `41 49 02` bei Offset 8). **Nicht signiert** (Early-Adopter). macOS-DMG + Windows-MSI
+bleiben ihre getunten Skripte (PCBUSB-Einbettung/Re-Signatur bzw. ConPTY/WiX) — **bewusst
+keine CPack-Migration** (würde diese Feinheiten gefährden; AppImage füllte die Linux-Lücke).
+
 ## Build & Test (Windows, MSVC) — verifiziert 2026-06-08
 
 Voraussetzungen: VS 2022 (MSVC + CMake + Ninja), Qt 6.x `msvc2022_64` **inkl.
@@ -270,9 +287,14 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 ## Status (Stand: 2026-07-11)
 
-> ⏭️ **Nächste Aufgabe:** offen — z. B. Phase 6 (Signierung/Notarisierung der Installer,
-> CPack/AppImage) oder MacPCAN-Feinschliff (CAN-FD, ID-Filter, Konfig-Dialog statt
-> `baud`-Befehl). **QTMUX-13 (native macOS-Menü-Icons) bleibt Backlog** — am 2026-07-11
+> ⏭️ **Nächste Aufgabe:** offen — z. B. Phase-6-Rest (Signierung/Notarisierung der Installer:
+> macOS Developer-ID, Windows Authenticode) oder MacPCAN-Feinschliff (CAN-FD, ID-Filter,
+> Konfig-Dialog statt `baud`-Befehl). **Offene Jira: QTMUX-2** (Windows-CWD-PEB-Funktionstest,
+> braucht Windows) **und QTMUX-13** (native Menü-Icons, s. u.). **QTMUX-10 (Linux-AppImage /
+> Phase-6-Packaging) am 2026-07-11 erledigt** — `installer/build-appimage.sh` (linuxdeploy +
+> Qt-Plugin), CI baut+verifiziert das AppImage (Artefakt `QTmux-AppImage`, gültiges Typ-2-Image);
+> Installer damit für alle 3 Plattformen fertig (DMG/MSI/AppImage). Committet `666d426`+Doku.
+> **QTMUX-13 (native macOS-Menü-Icons) bleibt Backlog** — am 2026-07-11
 > empirisch bestätigt, dass Qt 6.11 in nativen Menüs **weder `icon.source` noch `icon.name`**
 > durchreicht (isoliert bewiesen: `QIcon::fromTheme`+qrc-Fallback löst auf, aber
 > `QQuickNativeIconLoader` gibt es nicht ans NSMenu); einziger Weg wäre der große
@@ -1314,7 +1336,11 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
     Dialoge (createBackend bekommt eine leere `params`-Map — Erweiterungspunkt), kein
     MCP `create_session type=plugin`, kein Plugin-Manager-UI. **MacPCAN als erstes
     echtes Plugin** ist der nächste Phase-5-Schritt (braucht die MacPCAN-Codebase).
-- ⬜ **Phase 6** — Politur & Distribution (CPack: DMG/MSI/AppImage, CI-Matrix)
+- 🟡 **Phase 6** — Politur & Distribution: **Installer für alle 3 Plattformen fertig**
+  — DMG (`build-dmg.sh`), MSI/ZIP (`build-msi.ps1`), **AppImage (`build-appimage.sh`,
+  QTMUX-10, CI-verifiziert)** — + CI-Matrix (QTMUX-11). **Offen:** Signierung/Notarisierung
+  (macOS Developer-ID/Notarisierung, Windows Authenticode) und optional CPack-Distro-Pakete
+  (.deb/.rpm). Bewusst hand-gerollte Skripte statt CPack (Plattform-Feinheiten).
 
 ## Offene technische Notizen
 
