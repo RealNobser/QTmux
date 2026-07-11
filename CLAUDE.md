@@ -268,11 +268,54 @@ je Workflow abweichen).
 OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die Dual-Pflege ist der
 **einheitliche REST-Weg** (oben) besser; kein Atlassian-MCP in der Session verbunden.
 
-## Status (Stand: 2026-07-10)
+## Status (Stand: 2026-07-11)
 
-> ⏭️ **Nächste Aufgabe:** offen — z. B. MacPCAN-Plugin (Phase-5-Rest) oder Phase 6
-> (Signierung/Notarisierung der Installer, CPack/AppImage). **Projekteigene DUAL-Doku**
-> (confluence.intern.example + Atlassian-Cloud) ist mit der 2026-07-10-Session aktualisiert.
+> ⏭️ **Nächste Aufgabe:** offen — z. B. Phase 6 (Signierung/Notarisierung der Installer,
+> CPack/AppImage) oder MacPCAN-Feinschliff (CAN-FD, ID-Filter, Konfig-Dialog statt
+> `baud`-Befehl). **QTMUX-13 (native macOS-Menü-Icons) bleibt Backlog** — am 2026-07-11
+> empirisch bestätigt, dass Qt 6.11 in nativen Menüs **weder `icon.source` noch `icon.name`**
+> durchreicht (isoliert bewiesen: `QIcon::fromTheme`+qrc-Fallback löst auf, aber
+> `QQuickNativeIconLoader` gibt es nicht ans NSMenu); einziger Weg wäre der große
+> Widgets/`QMenuBar`-Umbau (bewusst deferred, s. [[qtmux-native-menu-icons]]).
+>
+> **macOS-Session 2026-07-11: QTMUX-9 (MacPCAN-Plugin) erledigt — erstes echtes Plugin,
+> gegen ECHTE PCAN-USB-Hardware verifiziert.** Ein CAN-Bus als Terminal-Backend über das
+> Plugin-SDK (QTMUX-8). Liegt unter [plugins/macpcan/](plugins/macpcan/).
+> - **Aufbau:** Die Qt-freie CAN-Zugriffsschicht aus dem MacPCAN-Projekt (github …/MacPCAN)
+>   ist nach `plugins/macpcan/vendor/` **vendoriert** (6 Dateien, Namespace `mac_pcan`:
+>   `core/CanFrame.hpp`, `core/ICanDevice.hpp`, `core/CanService.{hpp,cpp}` = Producer/
+>   Consumer-Worker mit `drain()`/`send()`, `drivers/PcanDevice.{hpp,cpp}` = einzige
+>   PCBUSB-Stelle, `drivers/MockDevice.{hpp,cpp}` = synthetisch). `MacPcanPlugin.cpp` =
+>   `PluginInterface` + `CanBackend : ITerminalBackend`; `CanText.h` = testbares (PCBUSB-
+>   freies) Frame-Format/Parsing.
+> - **Zwei Backend-Typen** (im „+"-Menü, datengetrieben über `backendTypes()` — keine
+>   QML-Änderung nötig): **`pcan`** „CAN-Bus (PCAN-USB)" (echte Hardware) und **`pcan-mock`**
+>   „CAN-Bus (Demo)" (synthetische Frames, **ohne Hardware** nutz-/vorführbar). Bewusst getrennt,
+>   kein stiller Fallback (Anwender-Wahl).
+> - **Terminal-UX:** RX-Frames strömen als candump-nahe Zeilen (`  ts  #bus  ID  [len]  bytes  flags`);
+>   getippte Zeile `<hexid> b0 b1 …` (hex, bis 8 Byte, `x`-Präfix/ID>0x7FF ⇒ Extended) sendet
+>   einen Frame (`send()`), lokales Echo. Befehle: **`baud <rate>`** (125k/250k/500k/1M — öffnet
+>   das Gerät zur Laufzeit mit neuer Bitrate neu, da v1 keinen Konfig-Dialog hat), `help`,
+>   `clear`, `quit`, Strg+D. `pump()` löscht/rekonstruiert die Prompt-Zeile, damit die Eingabe
+>   beim asynchronen Frame-Zustrom erhalten bleibt.
+> - **Lizenz/Build:** **PCBUSB** (UV Software, proprietär aber redistributierbar) wird **NICHT
+>   ins Repo gelegt** (wie GPL-Clink) — CMake findet es bedingt über `QTMUX_PCBUSB_DIR`
+>   (Default: `…/MacPCAN/third_party/PCBUSB`), sonst wird das Plugin **still übersprungen**;
+>   nur `APPLE`. Die universelle `libPCBUSB.0.13.dylib` (install_name bereits `@rpath/…`) +
+>   `LICENSE`/`COPYRIGHT` werden ins Bundle kopiert; Plugin-rpath `@loader_path/../Frameworks`
+>   (Bundle) + `@loader_path` (Build-Baum). `.gitignore` um `third_party/PCBUSB/` ergänzt.
+> - **Verifiziert (macOS):** Debug **und** Release je **11/11 ctest** (neu `test_macpcan`:
+>   Frame-Format/Parser, PCBUSB-/hardwarefrei → läuft überall). **E2E über MCP gegen die GUI:**
+>   `list_plugins` zeigt beide Typen; Demo-Session streamt synthetische Frames + `123/x18DAF110`-
+>   TX + `help` + Parsefehler; **ECHTE Hardware** (PCAN-USB-FD des Anwenders): `baud 125k` → reale
+>   Bus-Frames (`200 [8] 11 22 …`), **TX auf den Bus** (`7AA [2] DE AD`, vom aktiven Bus quittiert),
+>   im GPU-Terminal sauber gerendert. **Lektion:** nur **ein** Handle pro PCAN-Kanal — eine
+>   restaurierte `pcan`-Session hält den Kanal, eine zweite bekommt „keine Hardware"; PCBUSB
+>   meldet einen Kanal ohne Hardware zudem optimistisch als „verbunden" (RX bleibt dann leer).
+> - **Bewusst v1-offen:** CAN-FD-TX/RX (PcanDevice-Gerüst da), ID-Filter, Konfig-Dialog
+>   (statt `baud`-Befehl), DBC-Decoding, Progress; **keine Versionsanhebung/kein neuer Installer**
+>   (macOS-Plugin, PCBUSB muss beim Deploy vorliegen — separater Schritt, falls EA-Release gewünscht).
+> **Vorherige Session-Notizen:**
 > **macOS-Session 2026-07-09/10: Maus-/Scrollrad-Reporting an Apps + „Neuer Tab erbt CWD",
 > committet+gepusht (`c2dbe77` v1.2.0, `5b90749`).** Zwei Anwender-Befunde, E2E verifiziert.
 > 1. **Maus-/Scrollrad-Reporting (`c2dbe77`, Version 1.2.0)** — Anwender-Frage: „Scrollback mit
@@ -1222,7 +1265,10 @@ Erstmaliger Windows-Lauf erfolgreich; Build/Tests/GUI verifiziert (MSVC, Qt 6.11
   bleibt nicht erhalten.
   Shell-Sessions ohne gespeichertes Verzeichnis starten im Home (`QDir::homePath()`).
   MCP `create_session` akzeptiert zusätzlich `cwd`.
-- 🟡 **Phase 5 — Plugin-System (QTMUX-8) FERTIG; MacPCAN-Integration offen.**
+- ✅ **Phase 5 — Plugin-System (QTMUX-8) + MacPCAN-Plugin (QTMUX-9) FERTIG.** MacPCAN
+  ist das erste echte Plugin (CAN-Bus als Terminal-Backend, gegen echte PCAN-USB-Hardware
+  verifiziert) — Details im Status-Block oben (Session 2026-07-11), Code unter
+  [plugins/macpcan/](plugins/macpcan/).
   Plugin-Host + SDK; ein Plugin liefert **AppBackends** (neue Session-Typen), die wie
   Shell/SSH/Seriell laufen — Sidebar/Rendering/Splits funktionieren automatisch (alles
   über `ITerminalBackend`). Komponenten:

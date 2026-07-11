@@ -254,6 +254,11 @@ endif()
 # Demo-Plugin als Beweis der Plugin-Kette + Kopiervorlage; landet in <build>/plugins.
 add_subdirectory(plugins/echo)
 
+# MacPCAN-Plugin (QTMUX-9): erstes echtes Plugin (CAN-Bus als Terminal-Backend).
+# Nur macOS; baut sich selbst nur, wenn die PCBUSB-Bibliothek gefunden wird
+# (sonst still übersprungen — s. plugins/macpcan/CMakeLists.txt).
+add_subdirectory(plugins/macpcan)
+
 # Tests ----------------------------------------------------------------------
 if(QTMUX_BUILD_TESTS)
     enable_testing()

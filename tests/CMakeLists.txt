@@ -23,6 +23,15 @@ qt_add_executable(test_vault tst_vault.cpp)
 target_link_libraries(test_vault PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_vault COMMAND test_vault)
 
+# MacPCAN-Plugin (QTMUX-9): Frame-Format/Parser (CanText.h + vendorierter CanFrame).
+# Bewusst PCBUSB- und hardwarefrei → läuft auf allen Plattformen, auch ohne das Plugin.
+qt_add_executable(test_macpcan tst_macpcan.cpp)
+target_include_directories(test_macpcan PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../plugins/macpcan
+    ${CMAKE_CURRENT_SOURCE_DIR}/../plugins/macpcan/vendor)
+target_link_libraries(test_macpcan PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_macpcan COMMAND test_macpcan)
+
 # SftpClient liegt im QML-Modul; fürs Parsing (statisch, serverlos) die .cpp direkt
 # mitkompilieren (Qt6::Qml wegen qqmlintegration.h / QML_ELEMENT).
 qt_add_executable(test_sftp tst_sftp.cpp

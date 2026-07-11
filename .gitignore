@@ -32,3 +32,6 @@ ui_*.h
 
 # Distributions-/Installer-Artefakte
 /dist/
+
+# Repo-lokales PCBUSB (proprietär, UV Software) — nicht einchecken (QTMUX-9)
+third_party/PCBUSB/
