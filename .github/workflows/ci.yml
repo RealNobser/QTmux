@@ -22,7 +22,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: macOS,   os: macos-latest,   host: mac,     arch: clang_64 }
+          # macos-13 (nicht macos-latest): das SDK von macOS 14/15 hat das alte
+          # AGL-Framework entfernt, das Qt 6.8.1 (via install-qt-action) noch verlinkt
+          # → „ld: framework 'AGL' not found". macos-13 enthält AGL noch (die ursprünglich
+          # grüne Umgebung). Alternativ ließe sich Qt auf eine Version ohne AGL-Referenz heben.
+          - { name: macOS,   os: macos-13,       host: mac,     arch: clang_64 }
           - { name: Windows, os: windows-latest, host: windows, arch: win64_msvc2022_64 }
           - { name: Linux,   os: ubuntu-latest,  host: linux,   arch: linux_gcc_64 }
 
