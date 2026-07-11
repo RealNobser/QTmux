@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=QTmux
+GenericName=Terminal Manager
+Comment=Plattformübergreifender Multi-KI-Agenten-Terminal-Manager
+Exec=qtmux
+Icon=qtmux
+Categories=Development;System;TerminalEmulator;
+Terminal=false
+Keywords=terminal;shell;ssh;serial;can;agent;

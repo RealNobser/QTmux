@@ -80,3 +80,21 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build --output-on-failure --timeout 120
+
+      # Linux-Installer: AppImage packen (QTMUX-10). Nutzt das bereits gebaute build/
+      # (QTMUX_BUILD_DIR) statt neu zu bauen; linuxdeploy + Qt-Plugin holt das Skript.
+      - name: AppImage packen (Linux)
+        if: matrix.host == 'linux'
+        env:
+          QTMUX_BUILD_DIR: build
+        run: |
+          sudo apt-get install -y libfuse2 || true
+          bash installer/build-appimage.sh 1.3.0
+
+      - name: AppImage-Artefakt hochladen (Linux)
+        if: matrix.host == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: QTmux-AppImage
+          path: dist/QTmux-*-x86_64.AppImage
+          if-no-files-found: error
