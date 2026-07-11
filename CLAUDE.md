@@ -313,8 +313,16 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 >   restaurierte `pcan`-Session hält den Kanal, eine zweite bekommt „keine Hardware"; PCBUSB
 >   meldet einen Kanal ohne Hardware zudem optimistisch als „verbunden" (RX bleibt dann leer).
 > - **Bewusst v1-offen:** CAN-FD-TX/RX (PcanDevice-Gerüst da), ID-Filter, Konfig-Dialog
->   (statt `baud`-Befehl), DBC-Decoding, Progress; **keine Versionsanhebung/kein neuer Installer**
->   (macOS-Plugin, PCBUSB muss beim Deploy vorliegen — separater Schritt, falls EA-Release gewünscht).
+>   (statt `baud`-Befehl), DBC-Decoding, Progress.
+> - **EA-Release v1.3.0 (2026-07-11):** Version 1.2.0→1.3.0 (CMakeLists/main.cpp/MCP/build-dmg.sh/
+>   QTmux.wxs; committet `0fd913d`, gepusht). **DMG gebaut+verifiziert** `dist/QTmux-1.3.0-macos.dmg`
+>   (56 MB): das Plugin + `libPCBUSB.0.13.dylib` + PCBUSB-Lizenz sind self-contained im Bundle
+>   (`macdeployqt` bereinigt den absoluten Dev-rpath auf `@loader_path/../Frameworks`), aus dem
+>   gemounteten DMG gestartet → MCP meldet v1.3.0 und lädt `macpcan` (beide Typen; das Laden beweist
+>   die PCBUSB-Auflösung aus dem Bundle), Demo-Frames laufen. Projekteigene DUAL-Doku: Entwickler-Doc
+>   (on-prem v14/Cloud v13) + Benutzer-Doc (v6/v5) + DMG als Anhang an beide Benutzer-Docs. **Offen:**
+>   Firmen-Confluence-Firmen-Confluence (Windows-Download-Kanal) auf 1.3.0 — von hier nicht erreichbar,
+>   Windows-/Heim-Task (wie bei früheren Releases).
 > **Vorherige Session-Notizen:**
 > **macOS-Session 2026-07-09/10: Maus-/Scrollrad-Reporting an Apps + „Neuer Tab erbt CWD",
 > committet+gepusht (`c2dbe77` v1.2.0, `5b90749`).** Zwei Anwender-Befunde, E2E verifiziert.
