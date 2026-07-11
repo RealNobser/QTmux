@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
     // QSettings unten dieselbe (Bundle-abgeleitete) Domain trifft wie der AppController.
     QGuiApplication::setApplicationName("QTmux");
     QGuiApplication::setOrganizationName("QTmux");
-    QGuiApplication::setApplicationVersion("1.2.0");
+    QGuiApplication::setApplicationVersion("1.3.0");
 
 #if defined(Q_OS_MACOS)
     // Die nativen App-Menü-Standarditems (Über/Einstellungen/Dienste/Ausblenden/
