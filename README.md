@@ -8,7 +8,9 @@ Läuft auf **macOS, Windows und Linux**.
 
 ## Status
 
-Frühe Entwicklung — siehe [Roadmap](#roadmap).
+**Funktionsreich und in aktiver Entwicklung.** Die Kernphasen (Terminal-Kern, Sessions &
+Layout, Agent-Awareness, SSH/Serial, Plugin-System) sind abgeschlossen; aktuelle Version
+**1.3.0** mit Early-Adopter-Installern für **macOS, Windows und Linux**. Siehe [Roadmap](#roadmap).
 
 ## Architektur
 
@@ -63,7 +65,7 @@ dotnet tool install --global wix --version 5.0.2   # v6/v7 verlangen die OSMF-Fe
 wix extension add -g WixToolset.UI.wixext/5.0.2     # optional (Assistent-UI)
 
 powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1
-# -> dist\QTmux-0.1.0-win64.msi (selbst-enthaltend, inkl. Qt + VC-Runtime)
+# -> dist\QTmux-1.3.0-win64.msi (selbst-enthaltend, inkl. Qt + VC-Runtime)
 ```
 
 WiX-Quelle: [`installer/QTmux.wxs`](installer/QTmux.wxs) (Installation nach
@@ -71,12 +73,45 @@ WiX-Quelle: [`installer/QTmux.wxs`](installer/QTmux.wxs) (Installation nach
 Alternativ liegt ein **portables ZIP** der gleichen Laufzeit bei. Da unsigniert,
 warnt SmartScreen beim ersten Start („Weitere Informationen → Trotzdem ausführen").
 
+### macOS-Installer (DMG)
+
+Ein self-contained **DMG** entsteht über [`installer/build-dmg.sh`](installer/build-dmg.sh)
+(Release-Build → `macdeployqt` → Ad-hoc-Signatur → `hdiutil`):
+
+```bash
+installer/build-dmg.sh 1.3.0          # -> dist/QTmux-1.3.0-macos.dmg
+```
+
+Nicht notarisiert (Early-Adopter) → beim ersten Start Rechtsklick → „Öffnen" bzw.
+`xattr -dr com.apple.quarantine /Applications/QTmux.app`.
+
+### Linux-Installer (AppImage)
+
+Ein **AppImage** entsteht über [`installer/build-appimage.sh`](installer/build-appimage.sh)
+(Standard-Qt-Toolchain `linuxdeploy` + `linuxdeploy-plugin-qt`):
+
+```bash
+installer/build-appimage.sh 1.3.0     # -> dist/QTmux-1.3.0-x86_64.AppImage
+chmod +x dist/QTmux-1.3.0-x86_64.AppImage && ./dist/QTmux-1.3.0-x86_64.AppImage
+```
+
+Die CI-Matrix baut das AppImage bei jedem Push und stellt es als Artefakt `QTmux-AppImage` bereit.
+
 ## Roadmap
 
-- [x] Phase 0 — Gerüst (CMake/Qt-Quick-Shell)
-- [ ] Phase 1 — Stabiler Terminal-Kern (libvterm + ptyqt + GPU-Rendering)
-- [ ] Phase 2 — Mehrere Sessions, Sidebar, Split-Panes
-- [ ] Phase 3 — Agent-Awareness (OSC 133/9, Status-Ringe)
-- [ ] Phase 4 — SSH & Serial
-- [ ] Phase 5 — Plugin-System (MacPCAN-Integration)
-- [ ] Phase 6 — Politur & Distribution (CPack, CI)
+Die Kernphasen (0–5) sind abgeschlossen; Phase 6 (Distribution) ist weit fortgeschritten.
+
+- [x] **Phase 0 — Gerüst** — CMake/Presets, Qt-Quick-Shell; libvterm mitgeliefert
+- [x] **Phase 1 — Terminal-Kern** — libvterm + **eigener, dependency-freier PTY-Layer**
+  (`forkpty` / **ConPTY**) + **GPU-Glyph-Atlas** (Scene-Graph/RHI, mit QPainter-Fallback).
+  Scrollback, Programmier-Ligaturen, True-Color/Faint, Zoom, Copy/Paste, Maus-/Scrollrad-Reporting
+- [x] **Phase 2 — Sessions & Layout** — datengetriebene Sidebar, verschachtelte H/V-Split-Panes,
+  Drag-Reorder (Sidebar + Panes), Command-Palette, Einstellungen, Broadcast-Input, Quake-Modus
+- [x] **Phase 3 — Agent-Awareness** — OSC 133 / 9 / 9;4 (Status-Ringe, Notifications,
+  Fortschrittsanzeige), Inter-Agenten-Benachrichtigung + eingebettete **MCP**-Steuerschnittstelle
+- [x] **Phase 4 — SSH & Serial** — System-`ssh`/`sftp` im PTY, QtSerialPort, Connection-Manager
+  (Profile), Login-Scripts, verschlüsselter Secrets-Vault, konfigurierbare Hotkeys, Color-Schemes
+- [x] **Phase 5 — Plugin-System** — SDK + `QPluginLoader`-Host; **MacPCAN** als erstes echtes
+  Plugin (CAN-Bus als Terminal-Backend, gegen echte PCAN-USB-Hardware verifiziert)
+- [ ] **Phase 6 — Politur & Distribution** *(in Arbeit)* — Installer für **alle drei Plattformen**
+  (DMG / MSI / AppImage) + CI-Matrix (macOS/Windows/Linux) ✅; **offen:** Signierung/Notarisierung
