@@ -306,13 +306,24 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 
 ## Status (Stand: 2026-07-11)
 
-> ⏭️ **Nächste Aufgabe:** offen — z. B. Phase-6-Rest (Signierung/Notarisierung der Installer:
-> macOS Developer-ID, Windows Authenticode) oder MacPCAN-Feinschliff (CAN-FD, ID-Filter,
-> Konfig-Dialog statt `baud`-Befehl). **Offene Jira: QTMUX-2** (Windows-CWD-PEB-Funktionstest,
-> braucht Windows) **und QTMUX-13** (native Menü-Icons, s. u.). **QTMUX-10 (Linux-AppImage /
-> Phase-6-Packaging) am 2026-07-11 erledigt** — `installer/build-appimage.sh` (linuxdeploy +
-> Qt-Plugin), CI baut+verifiziert das AppImage (Artefakt `QTmux-AppImage`, gültiges Typ-2-Image);
-> Installer damit für alle 3 Plattformen fertig (DMG/MSI/AppImage). Committet `666d426`+Doku.
+> ⏭️ **NÄCHSTE AUFGABE (vom Anwender beauftragt, 2026-07-19): Datei-Hygiene dieser
+> CLAUDE.md.** Sie ist auf ~1400 Zeilen gewachsen und füllt den Context zu schnell.
+> Auftrag: prüfen, welche Informationen für die WEITERE Entwicklung nötig sind
+> (Architektur, Konventionen, Lektionen/Fallen, aktueller Stand) und Altlasten
+> entfernen (alte Session-Chronologien, erledigte Detail-Verläufe). Vor dem Kürzen
+> die VOLLSTÄNDIGE bisherige Fassung als Backup in Confluence hinterlegen (DUAL,
+> z. B. als Unterseite „CLAUDE.md-Archiv" unter der Entwicklerdokumentation);
+> alternativ genügt auch die Git-Historie als Backup (Datei ist committet).
+>
+> Danach offen: SFTP-MCP-Tools (Companion-Prio 2), Phase-6-Rest (Signierung/
+> Notarisierung), MacPCAN-Feinschliff (CAN-FD, ID-Filter, Konfig-Dialog).
+> **Offene Jira: QTMUX-2** (Windows-CWD-PEB-Funktionstest, braucht Windows) **und
+> QTMUX-13** (native Menü-Icons, s. u.). Stand 2026-07-19: 22 MCP-Tools (QTMUX-29
+> erledigt), v1.3.1, CI grün auf allen 3 Plattformen (Qt 6.10.3, s. CI-Abschnitt).
+> **QTMUX-10 (Linux-AppImage / Phase-6-Packaging) am 2026-07-11 erledigt** —
+> `installer/build-appimage.sh` (linuxdeploy + Qt-Plugin), CI baut+verifiziert das
+> AppImage (Artefakt `QTmux-AppImage`, gültiges Typ-2-Image); Installer damit für
+> alle 3 Plattformen fertig (DMG/MSI/AppImage). Committet `666d426`+Doku.
 > **QTMUX-13 (native macOS-Menü-Icons) bleibt Backlog** — am 2026-07-11
 > empirisch bestätigt, dass Qt 6.11 in nativen Menüs **weder `icon.source` noch `icon.name`**
 > durchreicht (isoliert bewiesen: `QIcon::fromTheme`+qrc-Fallback löst auf, aber
