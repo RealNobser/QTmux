@@ -12,7 +12,12 @@ on:
   workflow_dispatch:
 
 env:
-  QT_VERSION: 6.8.1
+  # Qt 6.11.x: dieselbe Version wie in der lokalen Entwicklung (Homebrew) — CI und
+  # Entwickler-Builds laufen so gegen dasselbe Qt. Vorher 6.8.1: dessen CMake-Config
+  # verlinkt noch das alte AGL-Framework, das aus dem macOS-SDK der aktuellen Runner
+  # entfernt wurde → „ld: framework 'AGL' not found" (macos-13 als Ausweichrunner wird
+  # praktisch nicht mehr zugeteilt, die Jobs liefen 24 h in die Queue-Timeouts).
+  QT_VERSION: 6.11.1
 
 jobs:
   build:
@@ -22,11 +27,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macos-13 (nicht macos-latest): das SDK von macOS 14/15 hat das alte
-          # AGL-Framework entfernt, das Qt 6.8.1 (via install-qt-action) noch verlinkt
-          # → „ld: framework 'AGL' not found". macos-13 enthält AGL noch (die ursprünglich
-          # grüne Umgebung). Alternativ ließe sich Qt auf eine Version ohne AGL-Referenz heben.
-          - { name: macOS,   os: macos-13,       host: mac,     arch: clang_64 }
+          - { name: macOS,   os: macos-latest,   host: mac,     arch: clang_64 }
           - { name: Windows, os: windows-latest, host: windows, arch: win64_msvc2022_64 }
           - { name: Linux,   os: ubuntu-latest,  host: linux,   arch: linux_gcc_64 }
 
