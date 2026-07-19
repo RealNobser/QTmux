@@ -255,6 +255,25 @@ plattformübergreifend**. (Laufzeit-Verhalten — RHI-Rendering, Clink-Injektion
 manuell zu prüfen.) Hinweis: die Actions warnen über Node-20-Deprecation (ab Sept. 2026),
 unkritisch — bei Gelegenheit Action-Versionen anheben.
 
+> **⚠️ Die Qt-Version in `ci.yml` (`env.QT_VERSION`) ist bewusst gewählt — nicht blind
+> hochziehen.** Zwei gegenläufige Randbedingungen (2026-07-19 mühsam eingegrenzt):
+> - **Nicht 6.8.x:** dessen CMake-Config verlinkt noch das alte **AGL-Framework**, das aus
+>   dem macOS-SDK der aktuellen Runner entfernt wurde → `ld: framework 'AGL' not found`.
+>   Der macOS-Job war deshalb **wochenlang rot** (fiel nicht auf, weil lokal Homebrew-Qt
+>   6.11 gebaut wird, das AGL nicht referenziert). **Ausweichen auf `macos-13` funktioniert
+>   NICHT** — solche Runner werden praktisch nicht mehr zugeteilt, die Jobs liefen 24 h in
+>   den Queue-Timeout und wurden abgebrochen.
+> - **Nicht 6.11.x:** dafür sind die **Windows**-Metadaten über `aqtinstall` nicht abrufbar
+>   (`Failed to locate XML data for Qt version 6.11.1`; macOS/Linux gingen). Ein neueres
+>   aqtinstall hilft nicht: `aqtversion: ==3.*` installiert wieder **3.3.0** — das ist
+>   bereits das aktuellste 3.x.
+>
+> **Aktuell 6.10.3** — auf allen drei Plattformen auflösbar (inkl. `win64_msvc2022_64`) und
+> AGL-frei; Lauf 2026-07-19 grün auf macOS/Windows/Linux inkl. AppImage-Artefakt.
+> **Vorgehen bei künftigen Bumps:** Verfügbarkeit vorher **lokal** prüfen, statt CI-Läufe zu
+> verbrennen — `pip install "aqtinstall==3.3.*"`, dann `aqt list-qt windows desktop --arch <ver>`
+> (bzw. `mac`/`linux`). Liefert das einen Fehler, ist die Version für die Plattform unbrauchbar.
+
 ## Jira (DUAL: on-prem + Cloud)
 
 Tickets werden **parallel in beiden Jira** gepflegt (Backlog/Status synchron halten). Beide
