@@ -34,6 +34,15 @@ namespace qtmux {
 struct Pty::Private {
     int masterFd = -1;
     QSocketNotifier *notifier = nullptr;
+
+    // Ausgangspuffer (QTMUX-28): der Master ist O_NONBLOCK und nimmt pro ::write()
+    // nur den freien Kernel-Puffer (~1 KB) auf. Der Rest bleibt hier liegen und wird
+    // ueber `writeNotifier` nachgeliefert, sobald der FD wieder schreibbereit ist.
+    // `pendingPos` ist der Lesezeiger, damit nicht bei jedem Teilschreibvorgang der
+    // Pufferanfang umkopiert werden muss (sonst O(n^2) bei grossen Einfuegungen).
+    QByteArray pending;
+    int pendingPos = 0;
+    QSocketNotifier *writeNotifier = nullptr;
 };
 
 Pty::Pty(QObject *parent) : QObject(parent), d(new Private) {}
@@ -106,6 +115,13 @@ bool Pty::start(const QString &program, const QStringList &args,
     d->notifier = new QSocketNotifier(master, QSocketNotifier::Read, this);
     connect(d->notifier, &QSocketNotifier::activated, this, [this]() { onMasterReadable(); });
 
+    // Write-Notifier: nur aktiv, solange etwas im Ausgangspuffer wartet (sonst wuerde
+    // er dauernd feuern, da ein leerer FD praktisch immer schreibbereit ist).
+    d->writeNotifier = new QSocketNotifier(master, QSocketNotifier::Write, this);
+    d->writeNotifier->setEnabled(false);
+    connect(d->writeNotifier, &QSocketNotifier::activated, this,
+            [this]() { flushPendingWrites(); });
+
     m_running = true;
     return true;
 }
@@ -132,8 +148,52 @@ void Pty::onMasterReadable() {
 
 qint64 Pty::write(const QByteArray &data) {
     if (!m_running || d->masterFd < 0) return -1;
-    const ssize_t n = ::write(d->masterFd, data.constData(), static_cast<size_t>(data.size()));
-    return static_cast<qint64>(n);
+    if (data.isEmpty()) return 0;
+    // Immer erst puffern, dann so viel wie moeglich rausschreiben. Ein einzelnes
+    // ::write() wuerde bei O_NONBLOCK nur den freien Kernel-Puffer aufnehmen und den
+    // Rest verlieren (QTMUX-28) — der Aufrufer prueft den Rueckgabewert nirgends.
+    d->pending.append(data);
+    flushPendingWrites();
+    return data.size();
+}
+
+void Pty::flushPendingWrites() {
+    if (d->masterFd < 0) return;
+
+    while (d->pendingPos < d->pending.size()) {
+        const char *p = d->pending.constData() + d->pendingPos;
+        const size_t remaining = static_cast<size_t>(d->pending.size() - d->pendingPos);
+        const ssize_t n = ::write(d->masterFd, p, remaining);
+
+        if (n > 0) {
+            d->pendingPos += static_cast<int>(n);
+            continue;
+        }
+        if (n < 0) {
+            if (errno == EINTR) continue;               // unterbrochen -> erneut versuchen
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // Kernel-Puffer voll: Rest liegen lassen und aufwachen, sobald wieder
+                // Platz ist. Ohne das ginge der Rest verloren (bzw. wir wuerden spinnen).
+                if (d->writeNotifier) d->writeNotifier->setEnabled(true);
+                return;
+            }
+            // Echter Schreibfehler (z. B. Gegenseite weg) -> Puffer verwerfen.
+            d->pending.clear();
+            d->pendingPos = 0;
+            if (d->writeNotifier) d->writeNotifier->setEnabled(false);
+            return;
+        }
+        break;                                          // n == 0: nichts geschrieben
+    }
+
+    if (d->pendingPos >= d->pending.size()) {           // alles raus
+        d->pending.clear();
+        d->pendingPos = 0;
+        if (d->writeNotifier) d->writeNotifier->setEnabled(false);
+    } else if (d->pendingPos > 65536) {                 // Vorderteil gelegentlich abschneiden
+        d->pending.remove(0, d->pendingPos);
+        d->pendingPos = 0;
+    }
 }
 
 void Pty::resize(int cols, int rows) {
@@ -153,6 +213,13 @@ void Pty::terminate() {
         d->notifier->deleteLater();
         d->notifier = nullptr;
     }
+    if (d->writeNotifier) {
+        d->writeNotifier->setEnabled(false);
+        d->writeNotifier->deleteLater();
+        d->writeNotifier = nullptr;
+    }
+    d->pending.clear();
+    d->pendingPos = 0;
 
     const pid_t pid = static_cast<pid_t>(m_pid);
 

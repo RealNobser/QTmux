@@ -33,6 +33,11 @@ public:
                int cols, int rows, const QStringList &env = {},
                const QString &workingDir = {}, const QString &argv0 = {});
 
+    /// Schreibt `data` Richtung Kindprozess. Der PTY-Master ist nicht-blockierend und
+    /// nimmt pro ::write() nur den Platz im Kernel-Puffer (~1 KB) auf — der Rest wird
+    /// daher gepuffert und ueber einen Write-Notifier nachgeliefert (QTMUX-28; frueher
+    /// ging alles ueber den Puffer hinaus still verloren). Rueckgabe: die uebernommenen
+    /// Bytes (== data.size(), da vollstaendig gepuffert) bzw. -1, wenn kein PTY laeuft.
     qint64 write(const QByteArray &data);
     void resize(int cols, int rows);
     void terminate();
@@ -59,6 +64,9 @@ signals:
 
 private:
     void onMasterReadable();
+    /// Schreibt so viel wie moeglich aus dem Ausgangspuffer und (de)aktiviert den
+    /// Write-Notifier entsprechend. Auf Windows ein No-Op (WriteFile schreibt voll).
+    void flushPendingWrites();
 
     struct Private;            // plattformspezifische Felder
     Private *d = nullptr;

@@ -345,6 +345,21 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 >   (on-prem v14/Cloud v13) + Benutzer-Doc (v6/v5) + DMG als Anhang an beide Benutzer-Docs. **Offen:**
 >   Firmen-Confluence-Firmen-Confluence (Windows-Download-Kanal) auf 1.3.0 — von hier nicht erreichbar,
 >   Windows-/Heim-Task (wie bei früheren Releases).
+> **Bugfix QTMUX-28 (2026-07-11): PTY-Teilschreibvorgänge — `send_text` verlor Daten über ~1 KB.**
+> `Pty::write` machte genau EIN `::write()` auf den **O_NONBLOCK**-Master; der Kernel-Puffer nimmt
+> nur ~1 KB auf einmal, und **kein Aufrufer prüfte den Rückgabewert** (`PtyBackend::write`,
+> `Session::write` verwarfen ihn) → alles darüber hinaus ging **still** verloren. Gemessen:
+> 200 000 Bytes gesendet → **1023** angekommen. Betraf MCP `send_text`, Paste großer Inhalte,
+> Broadcast-Input, Login-Scripts und den OSC-Weg der Agenten-Ereignisse (läuft durch die PTY).
+> **Fix:** `Pty::write` puffert jetzt (`Private::pending` + `pendingPos`-Lesezeiger, damit kein
+> O(n²)-Umkopieren) und ein **Write-`QSocketNotifier`** (nur aktiv, solange etwas wartet — sonst
+> feuert er dauernd) liefert bei Schreibbereitschaft nach; `EAGAIN`/`EINTR` sauber behandelt,
+> `terminate()` räumt Puffer+Notifier ab. Windows (`WriteFile`, synchrone Pipe) schleift defensiv
+> ebenfalls; `flushPendingWrites()` ist dort ein No-Op. **Verifiziert:** neuer Regressionstest
+> `tst_pty::largeWriteIsNotTruncated` (195 KB durch eine echte Shell in eine Datei) — **Gegenprobe
+> gemacht:** mit zurückgedrehtem Fix schlägt er fehl (1014 statt 195000), mit Fix grün; 11/11 ctest;
+> E2E über MCP: 200 000 gesendet → 200 001 angekommen.
+>
 > **Vorherige Session-Notizen:**
 > **macOS-Session 2026-07-09/10: Maus-/Scrollrad-Reporting an Apps + „Neuer Tab erbt CWD",
 > committet+gepusht (`c2dbe77` v1.2.0, `5b90749`).** Zwei Anwender-Befunde, E2E verifiziert.

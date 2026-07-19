@@ -251,11 +251,24 @@ bool Pty::start(const QString &program, const QStringList &args,
 
 qint64 Pty::write(const QByteArray &data) {
     if (!m_running || !d->hInputWrite) return -1;
-    DWORD written = 0;
-    if (!WriteFile(d->hInputWrite, data.constData(),
-                   static_cast<DWORD>(data.size()), &written, nullptr))
-        return -1;
-    return static_cast<qint64>(written);
+    // Die Pipe ist synchron, WriteFile schreibt daher normalerweise vollstaendig.
+    // Trotzdem defensiv schleifen, damit ein Teilschreibvorgang nicht still den Rest
+    // verliert (analog zum Unix-Fix, QTMUX-28).
+    qint64 total = 0;
+    while (total < data.size()) {
+        DWORD written = 0;
+        if (!WriteFile(d->hInputWrite, data.constData() + total,
+                       static_cast<DWORD>(data.size() - total), &written, nullptr))
+            return total > 0 ? total : -1;
+        if (written == 0) break;               // kein Fortschritt -> Abbruch
+        total += static_cast<qint64>(written);
+    }
+    return total;
+}
+
+void Pty::flushPendingWrites() {
+    // Windows braucht keinen Ausgangspuffer: WriteFile oben schreibt synchron
+    // vollstaendig. Existiert nur, weil Pty::write() plattformneutral deklariert ist.
 }
 
 void Pty::resize(int cols, int rows) {
