@@ -27,7 +27,7 @@
       "displayName": "Windows (MSVC)",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "C:/Qt/6.11.1/msvc2022_64"
+        "CMAKE_PREFIX_PATH": "$env{QTMUX_QT_PREFIX};C:/Qt/6.11.1/msvc2022_64"
       }
     },
     {
