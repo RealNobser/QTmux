@@ -62,6 +62,11 @@ jobs:
           target: desktop
           arch: ${{ matrix.arch }}
           modules: qtserialport qtshadertools
+          # aqtinstall nicht auf der Action-Vorgabe (==3.3.*) lassen: 3.3.0 sucht die
+          # Windows-Pakete noch unter dem alten Repository-Pfad `windows_x86` und findet
+          # neuere Qt-Versionen dort nicht („Failed to locate XML data for Qt version").
+          # macOS/Linux waren davon nicht betroffen.
+          aqtversion: ==3.*
           cache: true
 
       - name: Konfigurieren
