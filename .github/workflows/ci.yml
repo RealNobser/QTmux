@@ -12,12 +12,16 @@ on:
   workflow_dispatch:
 
 env:
-  # Qt 6.11.x: dieselbe Version wie in der lokalen Entwicklung (Homebrew) — CI und
-  # Entwickler-Builds laufen so gegen dasselbe Qt. Vorher 6.8.1: dessen CMake-Config
-  # verlinkt noch das alte AGL-Framework, das aus dem macOS-SDK der aktuellen Runner
-  # entfernt wurde → „ld: framework 'AGL' not found" (macos-13 als Ausweichrunner wird
-  # praktisch nicht mehr zugeteilt, die Jobs liefen 24 h in die Queue-Timeouts).
-  QT_VERSION: 6.11.1
+  # Qt-Version bewusst gewählt (nicht beliebig aktualisierbar):
+  #  - NICHT 6.8.x: dessen CMake-Config verlinkt noch das alte AGL-Framework, das aus
+  #    dem macOS-SDK der aktuellen Runner entfernt wurde → „ld: framework 'AGL' not
+  #    found". (Ausweichen auf macos-13 scheitert: solche Runner werden praktisch nicht
+  #    mehr zugeteilt, die Jobs liefen 24 h in den Queue-Timeout.)
+  #  - NICHT 6.11.x: dafür sind die WINDOWS-Metadaten über aqtinstall nicht abrufbar
+  #    („Failed to locate XML data for Qt version 6.11.1"; macOS/Linux gingen). Ein
+  #    neueres aqtinstall hilft nicht — 3.3.0 ist bereits das aktuellste 3.x.
+  # 6.10.3 ist für alle drei Plattformen auflösbar und AGL-frei.
+  QT_VERSION: 6.10.3
 
 jobs:
   build:
@@ -62,11 +66,6 @@ jobs:
           target: desktop
           arch: ${{ matrix.arch }}
           modules: qtserialport qtshadertools
-          # aqtinstall nicht auf der Action-Vorgabe (==3.3.*) lassen: 3.3.0 sucht die
-          # Windows-Pakete noch unter dem alten Repository-Pfad `windows_x86` und findet
-          # neuere Qt-Versionen dort nicht („Failed to locate XML data for Qt version").
-          # macOS/Linux waren davon nicht betroffen.
-          aqtversion: ==3.*
           cache: true
 
       - name: Konfigurieren
