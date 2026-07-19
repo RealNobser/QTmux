@@ -20,7 +20,7 @@ Läuft auf **macOS, Windows und Linux**.
 
 **Funktionsreich und in aktiver Entwicklung.** Die Kernphasen (Terminal-Kern, Sessions &
 Layout, Agent-Awareness, SSH/Serial, Plugin-System) sind abgeschlossen; aktuelle Version
-**1.3.0** mit Early-Adopter-Installern für **macOS, Windows und Linux**. Siehe [Roadmap](#roadmap).
+**1.3.1** mit Early-Adopter-Installern für **macOS, Windows und Linux**. Siehe [Roadmap](#roadmap).
 
 ### Architektur
 
@@ -75,7 +75,7 @@ dotnet tool install --global wix --version 5.0.2   # v6/v7 verlangen die OSMF-Fe
 wix extension add -g WixToolset.UI.wixext/5.0.2     # optional (Assistent-UI)
 
 powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1
-# -> dist\QTmux-1.3.0-win64.msi (selbst-enthaltend, inkl. Qt + VC-Runtime)
+# -> dist\QTmux-1.3.1-win64.msi (selbst-enthaltend, inkl. Qt + VC-Runtime)
 ```
 
 WiX-Quelle: [`installer/QTmux.wxs`](installer/QTmux.wxs) (Installation nach
@@ -89,7 +89,7 @@ Ein self-contained **DMG** entsteht über [`installer/build-dmg.sh`](installer/b
 (Release-Build → `macdeployqt` → Ad-hoc-Signatur → `hdiutil`):
 
 ```bash
-installer/build-dmg.sh 1.3.0          # -> dist/QTmux-1.3.0-macos.dmg
+installer/build-dmg.sh 1.3.1          # -> dist/QTmux-1.3.1-macos.dmg
 ```
 
 Nicht notarisiert (Early-Adopter) → beim ersten Start Rechtsklick → „Öffnen" bzw.
@@ -101,8 +101,8 @@ Ein **AppImage** entsteht über [`installer/build-appimage.sh`](installer/build-
 (Standard-Qt-Toolchain `linuxdeploy` + `linuxdeploy-plugin-qt`):
 
 ```bash
-installer/build-appimage.sh 1.3.0     # -> dist/QTmux-1.3.0-x86_64.AppImage
-chmod +x dist/QTmux-1.3.0-x86_64.AppImage && ./dist/QTmux-1.3.0-x86_64.AppImage
+installer/build-appimage.sh 1.3.1     # -> dist/QTmux-1.3.1-x86_64.AppImage
+chmod +x dist/QTmux-1.3.1-x86_64.AppImage && ./dist/QTmux-1.3.1-x86_64.AppImage
 ```
 
 Die CI-Matrix baut das AppImage bei jedem Push und stellt es als Artefakt `QTmux-AppImage` bereit.
@@ -141,7 +141,7 @@ Runs on **macOS, Windows and Linux**.
 
 **Feature-rich and under active development.** The core phases (terminal core, sessions &
 layout, agent awareness, SSH/serial, plugin system) are complete; the current version is
-**1.3.0** with early-adopter installers for **macOS, Windows and Linux**. See the [Roadmap](#roadmap-1).
+**1.3.1** with early-adopter installers for **macOS, Windows and Linux**. See the [Roadmap](#roadmap-1).
 
 ### Architecture
 
@@ -196,7 +196,7 @@ dotnet tool install --global wix --version 5.0.2   # v6/v7 require the OSMF fee
 wix extension add -g WixToolset.UI.wixext/5.0.2     # optional (wizard UI)
 
 powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1
-# -> dist\QTmux-1.3.0-win64.msi (self-contained, incl. Qt + VC runtime)
+# -> dist\QTmux-1.3.1-win64.msi (self-contained, incl. Qt + VC runtime)
 ```
 
 WiX source: [`installer/QTmux.wxs`](installer/QTmux.wxs) (installs to `Program Files\QTmux`
@@ -210,7 +210,7 @@ A self-contained **DMG** is produced via [`installer/build-dmg.sh`](installer/bu
 (release build → `macdeployqt` → ad-hoc signing → `hdiutil`):
 
 ```bash
-installer/build-dmg.sh 1.3.0          # -> dist/QTmux-1.3.0-macos.dmg
+installer/build-dmg.sh 1.3.1          # -> dist/QTmux-1.3.1-macos.dmg
 ```
 
 Not notarized (early adopter) → on first launch right-click → "Open", or
@@ -222,8 +222,8 @@ An **AppImage** is produced via [`installer/build-appimage.sh`](installer/build-
 (the standard Qt toolchain `linuxdeploy` + `linuxdeploy-plugin-qt`):
 
 ```bash
-installer/build-appimage.sh 1.3.0     # -> dist/QTmux-1.3.0-x86_64.AppImage
-chmod +x dist/QTmux-1.3.0-x86_64.AppImage && ./dist/QTmux-1.3.0-x86_64.AppImage
+installer/build-appimage.sh 1.3.1     # -> dist/QTmux-1.3.1-x86_64.AppImage
+chmod +x dist/QTmux-1.3.1-x86_64.AppImage && ./dist/QTmux-1.3.1-x86_64.AppImage
 ```
 
 The CI matrix builds the AppImage on every push and publishes it as the `QTmux-AppImage` artifact.

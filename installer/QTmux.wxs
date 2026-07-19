@@ -4,7 +4,7 @@
 
   Bauen (WiX v4 CLI als dotnet-Tool, FREI ohne OSMF; v6/v7 verlangen die Fee):
       wix build installer\QTmux.wxs -arch x64 ^
-          -d Version=1.3.0 -d PayloadDir=<Pfad zu dist\QTmux> ^
+          -d Version=1.3.1 -d PayloadDir=<Pfad zu dist\QTmux> ^
           -o dist\QTmux-<Version>-win64.msi
 
   PayloadDir ist das per windeployqt erzeugte, selbst-enthaltene Release-
