@@ -4,6 +4,7 @@
 #include "ProcessInfo.h"
 #include "PluginHost.h"
 #include "AgentEventHub.h"
+#include "ConnectionProfile.h"
 
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -25,6 +26,14 @@ McpServer::McpServer(QObject *parent) : QObject(parent) {
             this, &McpServer::onHubEvent);
 }
 McpServer::~McpServer() { stop(); }
+
+// QML-Handler eines *Requested-Signals meldet hierüber synchron sein Ergebnis
+// (Layout-JSON, Session-ID oder Fehlermeldung) an den laufenden Tool-Aufruf zurück.
+void McpServer::provideResult(bool ok, const QString &text) {
+    m_bridgeSet = true;
+    m_bridgeOk = ok;
+    m_bridgeText = text;
+}
 
 bool McpServer::listening() const { return m_server && m_server->isListening(); }
 
@@ -440,6 +449,42 @@ QJsonObject McpServer::toolsList() const {
                       "Listet die von geladenen Plugins angebotenen Backend-Typen "
                       "({pluginId, typeId, name, description}) für create_session type=plugin.",
                       {}, {}));
+    // Layout-/Pane-Steuerung (QTMUX-29): dieselben Operationen wie die Split-Menüs
+    // der GUI — für AI-Companions, die Sessions nebeneinander anordnen wollen.
+    tools.append(tool("get_layout",
+                      "Liefert den Pane-Layout-Baum als JSON. Blatt: {paneId, sessionId, "
+                      "active}; Split: {orientation:'h'|'v', children:[…]}.",
+                      {}, {}));
+    tools.append(tool("split_pane",
+                      "Teilt das aktive Pane wie die GUI-Splits: erzeugt eine neue "
+                      "Shell-Session im neuen Pane (wird aktiv) und liefert deren Session-ID.",
+                      QJsonObject{{"orientation", strProp("'h' = nebeneinander | 'v' = untereinander")}},
+                      QJsonArray{"orientation"}));
+    tools.append(tool("close_pane",
+                      "Schließt ein Pane MITSAMT seiner Session (GUI-Semantik). Ohne paneId "
+                      "das aktive Pane; beim letzten Pane wird nur die Session geschlossen.",
+                      QJsonObject{{"paneId", intProp("Pane-ID aus get_layout (optional, sonst aktives Pane)")}},
+                      {}));
+    tools.append(tool("assign_session",
+                      "Lädt eine Session in ein Pane (macht es aktiv). Ohne paneId ins "
+                      "aktive Pane (wie ein Sidebar-Klick).",
+                      QJsonObject{{"id", intProp("Session-ID")},
+                                  {"paneId", intProp("Ziel-Pane aus get_layout (optional)")}},
+                      QJsonArray{"id"}));
+    // Verbindungsprofile (QTMUX-29): gespeicherte Verbindungen nutzbar machen.
+    // Ein Vault-Passwort wird beim Verbinden INTERN aufgelöst (gleicher Weg wie der
+    // GUI-Klick) und nie über MCP ausgegeben.
+    tools.append(tool("list_profiles",
+                      "Listet die gespeicherten Verbindungsprofile ({name, type:'shell'|'ssh'|"
+                      "'serial', …typspezifische Felder, hasPasswordSecret, hasLoginScript}). "
+                      "Geheimniswerte werden nie ausgegeben.",
+                      {}, {}));
+    tools.append(tool("connect_profile",
+                      "Verbindet ein gespeichertes Profil (wie der Verbinden-Klick im "
+                      "Connection-Manager, inkl. interner Vault-Passwort-Auflösung) und "
+                      "liefert die neue Session-ID.",
+                      QJsonObject{{"name", strProp("Profilname (siehe list_profiles)")}},
+                      QJsonArray{"name"}));
     // Inter-Agenten-Benachrichtigung: ein Agent in einer Session wird benachrichtigt,
     // wenn ein Agent in einer ANDEREN Session fertig ist oder eine Frage hat.
     tools.append(tool("wait_for_events",
@@ -661,6 +706,80 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         const int m = (mode == "light") ? 1 : (mode == "dark") ? 2 : 0;
         emit setThemeRequested(m);
         text = QStringLiteral("ok");
+        return {};
+    }
+
+    // --- Layout-/Pane-Steuerung (QTMUX-29) ---------------------------------
+    // Der Layout-Baum lebt in QML (window.layout); die Signale laufen synchron in
+    // die dortigen Handler, das Ergebnis kommt über die provideResult-Brücke zurück.
+    if (name == "get_layout") {
+        bridgedCall([this] { emit layoutRequested(); }, isError, text);
+        return {};
+    }
+    if (name == "split_pane") {
+        const QString o = args.value("orientation").toString().toLower();
+        if (o != QLatin1String("h") && o != QLatin1String("v")) {
+            isError = true;
+            text = QStringLiteral("orientation muss 'h' oder 'v' sein.");
+            return {};
+        }
+        bridgedCall([this, &o] { emit splitPaneRequested(o); }, isError, text);
+        return {};
+    }
+    if (name == "close_pane") {
+        const int paneId = args.value("paneId").toInt(-1);
+        bridgedCall([this, paneId] { emit closePaneRequested(paneId); }, isError, text);
+        return {};
+    }
+    if (name == "assign_session") {
+        const int id = args.value("id").toInt(-1);
+        const int row = m_sessions->rowForId(id);
+        if (row < 0) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        const int paneId = args.value("paneId").toInt(-1);
+        bridgedCall([this, row, paneId] { emit assignPaneRequested(row, paneId); },
+                    isError, text);
+        return {};
+    }
+
+    // --- Verbindungsprofile (QTMUX-29) -------------------------------------
+    if (name == "list_profiles") {
+        QJsonArray arr;
+        const auto profiles = ConnectionProfileRegistry::instance()->profiles();
+        for (const ConnectionProfile &p : profiles) {
+            QJsonObject o{{"name", p.name},
+                          {"type", p.type == 1 ? QStringLiteral("ssh")
+                                 : p.type == 2 ? QStringLiteral("serial")
+                                               : QStringLiteral("shell")},
+                          // Nur FLAGS — Geheimniswert/Loginscript-Inhalt bleiben intern.
+                          {"hasPasswordSecret", !p.passwordSecret.isEmpty()},
+                          {"hasLoginScript", !p.loginScript.isEmpty()}};
+            if (p.type == 1) {
+                o.insert("host", p.host);
+                o.insert("port", p.port);
+                o.insert("user", p.user);
+                o.insert("identity", p.identity);
+            } else if (p.type == 2) {
+                o.insert("serialPort", p.serialPort);
+                o.insert("baud", p.baud);
+            } else {
+                o.insert("program", p.program);
+                o.insert("workingDir", p.workingDir);
+            }
+            arr.append(o);
+        }
+        text = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+        return {};
+    }
+    if (name == "connect_profile") {
+        const QString pname = args.value("name").toString();
+        if (ConnectionProfileRegistry::instance()->profile(pname).isEmpty()) {
+            isError = true;
+            text = QStringLiteral("Unbekanntes Profil: %1").arg(pname);
+            return {};
+        }
+        // Über den QML-Weg verbinden (window.connectProfile): löst das Vault-Passwort
+        // intern auf und lädt die Session ins aktive Pane — exakt wie der GUI-Klick.
+        bridgedCall([this, &pname] { emit connectProfileRequested(pname); }, isError, text);
         return {};
     }
 

@@ -67,6 +67,52 @@ ApplicationWindow {
         // fällt vor dem Layout-Aufbau sauber auf reines currentRow zurück.
         onFocusRequested: (row) => window.assignToActivePane(row)
         onSetThemeRequested: (mode) => Theme.mode = mode
+
+        // --- Layout-/Profil-Steuerung über MCP (QTMUX-29). Die Handler laufen
+        // synchron zum Tool-Aufruf und antworten über mcp.provideResult. ---
+        onLayoutRequested: {
+            function ser(node) {
+                if (window.isLeaf(node)) {
+                    const s = sessions.sessionAt(node.sessionRow)
+                    return { paneId: node.paneId,
+                             sessionId: s ? s.sessionId : -1,
+                             active: node.paneId === window.activePaneId }
+                }
+                return { orientation: node.orientation === Qt.Vertical ? "v" : "h",
+                         children: node.children.map(ser) }
+            }
+            if (!window.layout) { mcp.provideResult(false, qsTr("Kein Layout vorhanden.")); return }
+            mcp.provideResult(true, JSON.stringify(ser(window.layout)))
+        }
+        onSplitPaneRequested: (o) => {
+            window.splitPane(o === "v" ? Qt.Vertical : Qt.Horizontal)
+            const s = sessions.sessionAt(window.currentRow)
+            mcp.provideResult(true, String(s ? s.sessionId : -1))
+        }
+        onClosePaneRequested: (paneId) => {
+            if (paneId >= 0) {
+                if (!window.findLeaf(paneId)) { mcp.provideResult(false, qsTr("Unbekannte paneId.")); return }
+                window.activePaneId = paneId
+            }
+            window.closePane()
+            mcp.provideResult(true, "ok")
+        }
+        onAssignPaneRequested: (row, paneId) => {
+            if (paneId >= 0) {
+                if (!window.findLeaf(paneId)) { mcp.provideResult(false, qsTr("Unbekannte paneId.")); return }
+                window.activePaneId = paneId
+            }
+            window.assignToActivePane(row)
+            window.focusActivePane()
+            mcp.provideResult(true, "ok")
+        }
+        onConnectProfileRequested: (name) => {
+            const p = Profiles.profile(name)
+            if (!p || !p.name) { mcp.provideResult(false, qsTr("Unbekanntes Profil.")); return }
+            window.connectProfile(p)   // löst ein Vault-Passwort intern auf (wie der GUI-Klick)
+            const s = sessions.sessionAt(window.currentRow)
+            mcp.provideResult(true, String(s ? s.sessionId : -1))
+        }
         Component.onCompleted: start()
     }
 

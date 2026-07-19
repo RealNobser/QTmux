@@ -26,6 +26,12 @@ externer KI-Agent die Anwendung fernsteuern kann — inklusive der einzelnen Ses
 | `list_subscriptions` | – | Aktive Abos (`subscriberSessionId`, `sources`, `kinds`) |
 | `post_event` | `kind`, `text?`, `sessionId?` | Ereignis dieser Session melden (fertig/Frage/Fehler) |
 | `wait_for_events` | `sessionId?`, `afterSeq?`, `timeoutMs?` | **Long-Poll**: blockiert bis ein abonniertes Ereignis vorliegt/Timeout |
+| `get_layout` | – | Pane-Layout-Baum als JSON: Blatt `{paneId, sessionId, active}`, Split `{orientation:"h"\|"v", children}` |
+| `split_pane` | `orientation` ("h"/"v") | Aktives Pane teilen (neue Shell-Session im neuen Pane, wird aktiv) → neue **Session-id** |
+| `close_pane` | `paneId?` | Pane **mitsamt Session** schließen (GUI-Semantik); ohne `paneId` das aktive Pane |
+| `assign_session` | `id`, `paneId?` | Session in ein Pane laden (ohne `paneId` ins aktive — wie ein Sidebar-Klick) |
+| `list_profiles` | – | Gespeicherte Verbindungsprofile; **ohne Geheimniswerte** (nur `hasPasswordSecret`/`hasLoginScript`-Flags) |
+| `connect_profile` | `name` | Profil verbinden — ein Vault-Passwort wird **intern** aufgelöst (nie über MCP ausgegeben) → neue **Session-id** |
 
 `activity`: 1=läuft (grün), 2=wartet, 3=Fehler (rot), 4=geschlossen.
 `type`: 0=Shell, 1=SSH, 2=Seriell, 3=App.

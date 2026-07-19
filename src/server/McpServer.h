@@ -41,6 +41,14 @@ public:
     Q_INVOKABLE bool start();
     Q_INVOKABLE void stop();
 
+    /// Ergebnis-Brücke für die Layout-/Profil-Signale (QTMUX-29): Der QML-Handler
+    /// eines *Requested-Signals läuft SYNCHRON (gleicher Thread, Direct-Connection)
+    /// und meldet sein Ergebnis hierüber zurück — nach dem `emit` liest callTool es
+    /// aus. `text` ist je nach Tool eine Session-ID, ein Layout-JSON oder eine
+    /// Fehlermeldung. Ruft kein Handler an (Signal unverbunden), bleibt die Brücke
+    /// leer und das Tool meldet einen Fehler statt zu hängen.
+    Q_INVOKABLE void provideResult(bool ok, const QString &text);
+
 signals:
     void sessionsChanged();
     void portChanged();
@@ -49,6 +57,17 @@ signals:
     void focusRequested(int row);
     /// Vom MCP angeforderter Theme-Wechsel (0=System, 1=Hell, 2=Dunkel).
     void setThemeRequested(int mode);
+    // --- Layout-/Profil-Steuerung (QTMUX-29). Handler antworten via provideResult. ---
+    /// Layout-Baum als JSON liefern (Blatt: paneId/sessionId/active; Split: orientation/children).
+    void layoutRequested();
+    /// Aktives Pane teilen ("h" = nebeneinander, "v" = untereinander).
+    void splitPaneRequested(const QString &orientation);
+    /// Pane schließen (paneId < 0 = aktives Pane). Schließt wie die GUI auch die Session.
+    void closePaneRequested(int paneId);
+    /// Session (Sidebar-Zeile `row`) in ein Pane laden (paneId < 0 = aktives Pane).
+    void assignPaneRequested(int row, int paneId);
+    /// Verbindungsprofil per Name verbinden (Vault-Auflösung passiert im QML-Weg).
+    void connectProfileRequested(const QString &name);
 
 private:
     void onReadyRead(QTcpSocket *sock);
@@ -82,8 +101,29 @@ private:
         QTimer     *deadline = nullptr;
     };
 
+    /// Setzt die Ergebnis-Brücke zurück, feuert `emitter` (synchroner QML-Handler)
+    /// und liefert das via provideResult gemeldete Ergebnis in isError/text.
+    template <typename Emit>
+    void bridgedCall(Emit emitter, bool &isError, QString &text) {
+        m_bridgeSet = false;
+        m_bridgeOk = false;
+        m_bridgeText.clear();
+        emitter();
+        if (!m_bridgeSet) {   // kein QML-Handler verbunden (z. B. headless)
+            isError = true;
+            text = QStringLiteral("UI nicht verbunden.");
+            return;
+        }
+        isError = !m_bridgeOk;
+        text = m_bridgeText;
+    }
+
     QTcpServer *m_server = nullptr;
     SessionModel *m_sessions = nullptr;
+    // Ergebnis-Brücke der *Requested-Signale (s. provideResult).
+    bool m_bridgeSet = false;
+    bool m_bridgeOk = false;
+    QString m_bridgeText;
     int m_port = 7345;
     // Session-ID des aktuell verarbeiteten Aufrufers (für tools/call synchron gesetzt;
     // Fallback für post_event/subscribe_events ohne explizites sessionId-Argument).

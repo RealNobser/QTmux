@@ -364,6 +364,31 @@ OAuth (headless unzuverlässig) — deckt die on-prem-Hälfte nicht ab. Für die
 >   (on-prem v14/Cloud v13) + Benutzer-Doc (v6/v5) + DMG als Anhang an beide Benutzer-Docs. **Offen:**
 >   Firmen-Confluence-Firmen-Confluence (Windows-Download-Kanal) auf 1.3.0 — von hier nicht erreichbar,
 >   Windows-/Heim-Task (wie bei früheren Releases).
+> **Feature QTMUX-29 (2026-07-19): MCP-Layout-/Profil-Tools — GUI-MCP-Parität für den
+> geplanten AI-Companion.** Gap-Analyse ergab: Split-Panes und Verbindungsprofile waren
+> NUR über die GUI bedienbar. Sechs neue MCP-Tools (jetzt 22): **get_layout** (Pane-Baum
+> als JSON: Blatt `{paneId, sessionId, active}`, Split `{orientation:"h"|"v", children}`),
+> **split_pane** (h|v, wie die GUI-Splits: neue Shell-Session im neuen Pane → liefert deren
+> Session-ID), **close_pane** (`paneId?`, schließt MITSAMT Session — GUI-Semantik),
+> **assign_session** (`id`, `paneId?` — wie Sidebar-Klick), **list_profiles** (OHNE
+> Geheimniswerte, nur `hasPasswordSecret`/`hasLoginScript`-Flags), **connect_profile**
+> (`name` — nutzt den QML-Weg `window.connectProfile`, d. h. ein Vault-Passwort wird
+> INTERN aufgelöst und nie über MCP ausgegeben). **Vault-Verwaltung bewusst NICHT
+> exponiert** (Sicherheitsgrenze). **Architektur:** Der Layout-Baum lebt in QML
+> (`window.layout`) — die Tools laufen über *Requested-Signale, deren QML-Handler
+> SYNCHRON (gleicher Thread, Direct-Connection) ausgeführt werden und ihr Ergebnis über
+> die neue **`provideResult`-Brücke** (`bridgedCall` in McpServer.h) an den laufenden
+> Tool-Aufruf zurückmelden; ohne verbundene UI → sauberer Fehler „UI nicht verbunden".
+> `list_profiles`/Existenzprüfung laufen rein in C++ über `ConnectionProfileRegistry`
+> (`profile(name)`, da `indexOf` privat ist). **Verifiziert:** Debug+Release je 11/11
+> ctest; E2E über MCP gegen die GUI: Einzel-Blatt → `split_pane h` → verschachteltes
+> `split_pane v` (Baum korrekt), `assign_session` mit `paneId`, Fehlerpfade (unbekannte
+> paneId/Profil), `close_pane` kollabiert den Split, `list_profiles`/`connect_profile`
+> mit Test-Profil (Shell startet in dessen workingDir, Login-Script läuft). i18n 208/208.
+> docs/MCP.md erweitert. **E2E-Falle:** nach einem Rebuild `open qtmux.app` NICHT auf eine
+> noch laufende Instanz — `open` aktiviert sie nur, das alte Binary antwortet dann mit
+> „Unbekanntes Tool" (Instanz erst beenden, dann starten).
+>
 > **Bugfix QTMUX-28 (2026-07-11): PTY-Teilschreibvorgänge — `send_text` verlor Daten über ~1 KB.**
 > `Pty::write` machte genau EIN `::write()` auf den **O_NONBLOCK**-Master; der Kernel-Puffer nimmt
 > nur ~1 KB auf einmal, und **kein Aufrufer prüfte den Rückgabewert** (`PtyBackend::write`,
