@@ -278,8 +278,15 @@ Umzug in ein öffentliches Repo unter Apache-2.0, nachdem die Historie bereinigt
 (Damit auch QTMUX-35 Windows-Installer und QTMUX-36 separater Download-Kanal erledigt.)
 Einzelheiten und Spielregeln: Abschnitt **„Repository, Release, Zusammenarbeit"**.
 
-**Offene Jira:** **QTMUX-2** (Windows-Funktionstest `currentWorkingDirectory` via PEB —
-braucht eine Windows-Session) · **QTMUX-13** (native macOS-Menü-Icons — Qt 6.11 reicht in
+**Offene Jira:** **QTMUX-38** (Shell-Helfer sind für **Installationsnutzer nicht
+erreichbar** — `qtmux-emit.*`/`qtmux-wait.*` liegen nur im Repo, in keinem Paket; genau
+der Installationsnutzer will aber den Stop-Hook einrichten. Reines Mitpaketieren löst das
+**AppImage nicht** — es wird unter wechselndem `/tmp/.mount_*` gemountet, taugt also nicht
+für eine Hook-Zeile. Abzuwägen gegen `qtmux --install-shell-integration <dir>` mit den
+Skripten als qrc-Ressource; dort aber beachten: `WIN32_EXECUTABLE` heißt **kein stdout**,
+ein „Pfad ausgeben" erreicht unter Windows niemanden) · **QTMUX-2** (Windows-Funktionstest
+`currentWorkingDirectory` via PEB — braucht eine Windows-Session) ·
+**QTMUX-13** (native macOS-Menü-Icons — Qt 6.11 reicht in
 nativen Menüs weder `icon.source` noch `icon.name` durch, empirisch bewiesen; einziger Weg
 wäre der Widgets/`QMenuBar`-Umbau, bewusst deferred, s. [[qtmux-native-menu-icons]]).
 
