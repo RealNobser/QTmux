@@ -63,7 +63,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
-| `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer (HTTP) |
+| `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer (HTTP; `.sh` = Unix, QTMUX-30) |
 | `tests/` | QtTest: 11 Binaries (pty, vtscreen, session, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan) |
 
 ## Build & Test (macOS)
@@ -237,7 +237,7 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 
 ## Status (2026-07-21)
 
-**v1.3.1.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
+**v1.4.0.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
 SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattformen fertig
 (DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 22 MCP-Tools
 (GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 208/208.

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(QTmux
-    VERSION 1.3.1
+    VERSION 1.4.0
     DESCRIPTION "Cross-platform multi-AI-agent terminal manager"
     LANGUAGES C CXX)
 

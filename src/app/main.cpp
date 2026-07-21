@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
                                             ? QStringLiteral("QTmux")
                                             : QStringLiteral("QTmux-%1").arg(profile));
     QGuiApplication::setOrganizationName("QTmux");
-    QGuiApplication::setApplicationVersion("1.3.1");
+    QGuiApplication::setApplicationVersion("1.4.0");
 
 #if defined(Q_OS_MACOS)
     // Die nativen App-Menü-Standarditems (Über/Einstellungen/Dienste/Ausblenden/
