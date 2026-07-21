@@ -1,0 +1,40 @@
+QTmux
+Copyright 2026 Norbert Richartz
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+Qt 6 — The Qt Company and contributors
+    Used under the GNU Lesser General Public License v3 (LGPLv3) and linked
+    DYNAMICALLY. The distributed packages (DMG / MSI / AppImage) bundle Qt
+    libraries and QML modules. In accordance with the LGPLv3 you may replace
+    those Qt libraries with modified versions; the application is designed to
+    keep working when they are exchanged.
+    License: https://doc.qt.io/qt-6/lgpl.html
+    Sources: https://download.qt.io/official_releases/qt/
+
+libvterm — Copyright (c) 2008 Paul Evans <leonerd@leonerd.org.uk>
+    Vendored under third_party/libvterm/ and built as part of this project.
+    Locally patched: support for the SGR 2 "faint/dim" attribute was added
+    additively (all changes are marked with a "QTMUX:" comment).
+    License: MIT — see third_party/libvterm/LICENSE
+
+Phosphor Icons — Copyright (c) 2023 Phosphor Icons
+    Icon set used in the user interface (resources/icons/).
+    License: MIT — https://github.com/phosphor-icons/homepage
+
+--------------------------------------------------------------------------------
+Optional component, NOT contained in this repository
+--------------------------------------------------------------------------------
+
+PCBUSB — Copyright (C) 2013-2024 UV Software
+    macOS library for PCAN-USB interfaces. Required only to build the optional
+    MacPCAN plugin (plugins/macpcan); CMake locates it via QTMUX_PCBUSB_DIR and
+    silently skips the plugin when it is absent. The library is proprietary and
+    governed by its own End-User License Agreement, which permits redistribution
+    provided each copy is complete and accompanied by that EULA. Where the macOS
+    package ships the library, the EULA is included alongside it.
+    Contact: https://www.mac-can.com/

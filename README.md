@@ -3,6 +3,7 @@
 [![CI](https://github.com/RealNobser/QTmux/actions/workflows/ci.yml/badge.svg)](https://github.com/RealNobser/QTmux/actions/workflows/ci.yml)
 ![Version](https://img.shields.io/badge/version-1.4.0-blue)
 ![Plattformen](https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-supported-success)
+[![Lizenz](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
 **🇩🇪 [Deutsch](#-deutsch)  ·  🇬🇧 [English](#-english)**
 
@@ -112,7 +113,8 @@ Vollständige Werkzeug-Referenz: **[`docs/MCP.md`](docs/MCP.md)**.
 - **UI:** Qt Quick / QML (Qt 6).
 - **Backend-Abstraktion `ITerminalBackend`:** lokale Shell, SSH, Serial und Plugin-Backends
   sind austauschbar — Sidebar, Layout und Rendering funktionieren für alle gleich.
-- **Lizenz:** Open Source; Qt unter LGPLv3 (dynamisch gelinkt); libvterm BSD.
+- **Lizenz:** [Apache-2.0](LICENSE) für QTmux selbst; Qt unter LGPLv3 (dynamisch
+  gelinkt), libvterm MIT — Einzelheiten in [NOTICE](NOTICE).
 
 ### Build
 
@@ -296,7 +298,8 @@ Full tool reference: **[`docs/MCP.md`](docs/MCP.md)**.
 - **UI:** Qt Quick / QML (Qt 6).
 - **`ITerminalBackend` abstraction:** local shell, SSH, serial and plugin backends are
   interchangeable — sidebar, layout and rendering work the same for all of them.
-- **License:** open source; Qt under LGPLv3 (dynamically linked); libvterm BSD.
+- **License:** [Apache-2.0](LICENSE) for QTmux itself; Qt under LGPLv3 (dynamically
+  linked), libvterm MIT — details in [NOTICE](NOTICE).
 
 ### Building
 
