@@ -35,3 +35,6 @@ ui_*.h
 
 # Repo-lokales PCBUSB (proprietär, UV Software) — nicht einchecken (QTMUX-9)
 third_party/PCBUSB/
+
+# Interne Zugänge (Hosts, Seiten-IDs) — bewusst nicht im Git
+CLAUDE.local.md

@@ -4,7 +4,7 @@
 > 2026-07-19): nur noch das für die Weiterentwicklung Nötige — Architektur, Build/CI,
 > Konventionen, Lektionen/Fallen, Status. Die vollständige Historien-Fassung (1426 Zeilen,
 > Stand `d5c96d1`) liegt als Backup in Confluence (DUAL: Seite **„CLAUDE.md-Archiv"** unter
-> der Entwicklerdokumentation, on-prem <seiten-id> / Cloud <seiten-id>, je mit Datei-Anhang)
+> der Entwicklerdokumentation, IDs in `CLAUDE.local.md`, je mit Datei-Anhang)
 > und in der Git-Historie dieser Datei.
 
 ## Was ist QTmux?
@@ -176,14 +176,15 @@ Actions warnen über Node-20-Deprecation (ab Sept. 2026) — bei Gelegenheit anh
 Bei jeder Doku-Änderung **beide** aktualisieren (identischer Storage-Inhalt). Token nur
 einlesen, **nie ausgeben/committen**; Credential-Dateien in der Repo-Wurzel, git-ignoriert.
 
-1. **On-prem** — Space **QTMUX**, `https://confluence.intern.example`,
-   `Credential-Confluence.txt` (**Bearer**, `verify_ssl=false` → `curl -k`):
-   Home <seiten-id> · Benutzerdoku <seiten-id> · Entwicklerdoku <seiten-id> ·
-   CLAUDE.md-Archiv <seiten-id>.
-2. **Cloud** — `https://<cloud-instanz>.atlassian.net`, Space-Key **`<space-key>`**,
-   `Credential-Atlassian.txt` (**Basic** `email:api_token`), Pfade unter
-   `/wiki/rest/api/content/<id>`: QTmux <seiten-id> · Benutzerdoku <seiten-id> ·
-   Entwicklerdoku <seiten-id> · CLAUDE.md-Archiv <seiten-id>.
+> **Konkrete Hosts, Space-Keys und Seiten-IDs stehen in `CLAUDE.local.md`** (ebenfalls
+> git-ignoriert). Bewusst nicht hier: Das Repo soll öffentlich werden können, ohne die
+> interne Infrastruktur preiszugeben.
+
+1. **On-prem** — Confluence Server, `Credential-Confluence.txt` (**Bearer**,
+   `verify_ssl=false` → `curl -k`); Seitenbaum: Home → Benutzerdoku ·
+   Entwicklerdoku → Unterseiten.
+2. **Cloud** — Atlassian Cloud, `Credential-Atlassian.txt` (**Basic**
+   `email:api_token`), Pfade unter `/wiki/rest/api/content/<id>`; gleicher Seitenbaum.
 
 **Update:** `GET …?expand=version` → `PUT` mit `version.number+1`, `body.storage` =
 XHTML-Storage. **Neue Seite:** `POST` mit `space.key` + `ancestors:[{id:<parent>}]`.
@@ -192,19 +193,19 @@ Makro-Differenz: Mermaid heißt on-prem `mermaid-macro`, Cloud `mermaid-cloud`.
 on-prem als UTF-8 — String-Anker mit Umlauten auf der Cloud-Seite zusätzlich in der
 Entity-Variante probieren; eingefügter UTF-8-Text wird von beiden akzeptiert.
 
-**Firmen-Confluence (Firmen-Confluence, getrennt davon):** <space-key> auf `<firmen-confluence>`
-(Hauptseite <seiten-id>, Anwender-Doku <seiten-id>, Entwickler-Doku <seiten-id>) — Windows-
-Download-Kanal, nur aus dem Firmennetz erreichbar; Publish-Skript `dist/_qtmux_pub2.py`
-(Creds `confluence.env`). **Steht auf 1.1.2-Ära** — Aktualisierung auf 1.3.x ist ein
-Windows-/Firmen-Task.
+**Firmen-Confluence (getrennt davon):** Windows-Download-Kanal, nur aus dem Firmennetz
+erreichbar; Publish-Skript `dist/_qtmux_pub2.py` (Creds `confluence.env`). Host, Space
+und Seiten-IDs in `CLAUDE.local.md`. **Steht auf 1.1.2-Ära** — Aktualisierung auf 1.4.x
+ist ein Windows-/Firmen-Task (Jira QTMUX-36).
 
 ## Jira (DUAL: on-prem + Cloud)
 
 Beide Projekte Key **QTMUX**, identischer Issue-Satz (Abgleich per Summary), Typ **Task**.
-- **On-prem** `https://jira.intern.example`, `Credential-Jira.txt` (**Bearer**-PAT,
-  `verify_ssl=false`), API `/rest/api/2/`, description = Klartext.
-- **Cloud** `https://<cloud-instanz>.atlassian.net` (Board <id>), `Credential-Atlassian.txt`
-  (**Basic**), API `/rest/api/3/`, **description braucht ADF** (`{type:doc,version:1,…}`).
+Hosts und Board-ID: `CLAUDE.local.md`.
+- **On-prem** Jira Server, `Credential-Jira.txt` (**Bearer**-PAT, `verify_ssl=false`),
+  API `/rest/api/2/`, description = Klartext.
+- **Cloud** Atlassian Cloud, `Credential-Atlassian.txt` (**Basic**), API `/rest/api/3/`,
+  **description braucht ADF** (`{type:doc,version:1,…}`).
   Suche: on-prem `GET /search?jql=…`, Cloud `POST /search/jql`.
 
 **Kanban-Konvention (Anwender-Vorgabe):** bei jedem Fortschritt **dual** weiterschieben —
@@ -258,7 +259,7 @@ wäre der Widgets/`QMenuBar`-Umbau, bewusst deferred, s. [[qtmux-native-menu-ico
 **Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) · Signierung/
 Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff (CAN-FD,
 ID-Filter, Konfig-Dialog statt `baud`-Befehl, DBC-Decoding) · CI-Action-Versionen anheben ·
-optional CPack-Distro-Pakete (.deb/.rpm) · Firmen-Confluence-Confluence auf 1.3.x (Windows-Task).
+optional CPack-Distro-Pakete (.deb/.rpm) · Firmen-Confluence auf 1.4.x (Windows-Task, QTMUX-36).
 
 ## Feature-Referenz (kompakt, mit Lektionen)
 
