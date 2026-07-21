@@ -87,7 +87,8 @@ QT_QPA_PLATFORM=offscreen ./build/macos/qtmux.app/Contents/MacOS/qtmux   # headl
 > QSettings-Domain (sonst überschreibt die Testinstanz beim Beenden die gespeicherte
 > Session-Liste der produktiven).
 
-**DMG:** `installer/build-dmg.sh [version]` — baut `macos-release`, `macdeployqt -qmldir=qml`
+**DMG:** `installer/build-dmg.sh [version]` — baut `macos-release` (oder `QTMUX_BUILD_DIR`,
+wenn aus `macos-release` gerade eine Instanz läuft), `macdeployqt -qmldir=qml`
 (self-contained inkl. Plugins/PCBUSB), dann **ad-hoc-Re-Signatur** (`codesign --force --deep
 --sign -` — macdeployqt schreibt rpaths NACH seiner Signatur um → ungültig; Apple Silicon
 startet nur signiert), `hdiutil`-DMG → `dist/QTmux-<ver>-macos.dmg`. Nicht notarisiert
@@ -445,5 +446,13 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   der Überschriften-**Pfad**, damit das zweisprachige README keinen Fehlalarm auslöst.
   `file(STRINGS)` braucht dort **`ENCODING UTF-8`** — sonst verschluckt CMake bei Zeilen
   mit Emoji den Zeilenanfang, die `##`-Marke geht verloren und der Pfad verrutscht.
+- **CMake-Skripttests (`cmake -P`) laufen ohne Policies** — ohne `cmake_minimum_required`
+  im Skript steht CMP0057 auf OLD und `IN_LIST` ist dann kein Operator, sondern ein
+  Fehler. Lokal unsichtbar, wenn die eigene CMake neuer ist als die des CI-Runners
+  (so brach `test_doc_duplicates` nur den Linux-Job, macOS/Windows waren grün).
+  In Skripttests daher `cmake_minimum_required` setzen **und** policy-unabhängige
+  Befehle bevorzugen (`list(FIND)` statt `IN_LIST`). Neue CMake-Versionen kennen das
+  OLD-Verhalten alter Policies teils nicht mehr → der CI-Zustand ist lokal nicht
+  nachstellbar; dann die Ursache strukturell ausschließen statt sie zu reproduzieren.
 - Claude-CLI-Fallen (Agenten-Demos): `--settings` braucht eine DATEI; `--allowedTools`
   ist variadisch → Prompt via stdin.
