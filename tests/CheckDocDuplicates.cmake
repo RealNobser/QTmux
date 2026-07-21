@@ -9,6 +9,12 @@
 # Aufruf: cmake -DDOC_FILES="a.md;b.md" -P CheckDocDuplicates.cmake
 # Plattformneutral (kein sh/grep), damit der Test auch unter Windows in der CI läuft.
 
+# PFLICHT im Skriptmodus (cmake -P): Ohne cmake_minimum_required stehen die Policies
+# auf OLD, und dann ist IN_LIST unten kein Operator, sondern ein unbekanntes Argument
+# (CMP0057) — der Test bricht ab. Fällt lokal leicht durch, wenn die eigene
+# CMake-Version neuer ist als die des CI-Runners.
+cmake_minimum_required(VERSION 3.24)
+
 set(_problems "")
 
 foreach(_file IN LISTS DOC_FILES)
@@ -58,7 +64,10 @@ foreach(_file IN LISTS DOC_FILES)
             endwhile()
 
             string(JOIN " > " _path ${_stack} "${_heading}")
-            if("${_path}" IN_LIST _seen)
+            # list(FIND) statt IN_LIST: funktioniert unabhängig von Policy CMP0057,
+            # die im Skriptmodus je nach CMake-Version des Runners nicht gesetzt ist.
+            list(FIND _seen "${_path}" _dup_idx)
+            if(NOT _dup_idx EQUAL -1)
                 list(APPEND _problems "${_file}: doppelte Überschrift '${_path}'")
             else()
                 list(APPEND _seen "${_path}")

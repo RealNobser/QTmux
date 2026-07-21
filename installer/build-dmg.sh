@@ -3,7 +3,9 @@
 #
 # Ablauf:
 #   1. Release bauen (Preset macos-release — DASSELBE wie für die normale
-#      Release-Konvention; kein separates Build-Verzeichnis).
+#      Release-Konvention; kein separates Build-Verzeichnis). Ausnahme:
+#      QTMUX_BUILD_DIR lenkt den Build um, falls aus build/macos-release gerade
+#      eine Instanz läuft (s. u.).
 #   2. Das .app-Bundle nach dist/stage-mac stagen und mit `macdeployqt`
 #      self-contained machen: Qt-Frameworks, QML-Module und Plugins (inkl.
 #      unseres Echo-Plugins in Contents/PlugIns) werden hineinkopiert und die
@@ -23,7 +25,13 @@ set -euo pipefail
 VERSION="${1:-1.4.0}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PRESET="macos-release"
-BUILD_DIR="$REPO/build/$PRESET"
+# Ausweich-Build-Verzeichnis wie beim AppImage-Skript (QTMUX_BUILD_DIR). Nötig, wenn
+# aus build/macos-release gerade eine QTmux-Instanz LÄUFT: Der Release-Build würde
+# deren Binary im Betrieb überschreiben und den Prozess mitsamt allen Terminal-
+# Sessions abreißen. Dann hierhin ausweichen, statt die laufende Arbeit zu verlieren:
+#   QTMUX_BUILD_DIR=build/macos-dmg installer/build-dmg.sh 1.4.0
+BUILD_DIR="${QTMUX_BUILD_DIR:-$REPO/build/$PRESET}"
+[[ "$BUILD_DIR" = /* ]] || BUILD_DIR="$REPO/$BUILD_DIR"
 APP_SRC="$BUILD_DIR/qtmux.app"
 STAGE="$REPO/dist/stage-mac"
 APP="$STAGE/QTmux.app"           # Anzeigename im Finder/Applications
@@ -37,9 +45,9 @@ if [[ -z "$MACDEPLOYQT" ]]; then
 fi
 [[ -n "$MACDEPLOYQT" ]] || { echo "FEHLER: macdeployqt nicht gefunden (Qt-bin im PATH?)." >&2; exit 1; }
 
-echo "==> 1/3  Release bauen ($PRESET)"
-cmake --preset "$PRESET" >/dev/null
-cmake --build --preset "$PRESET"
+echo "==> 1/3  Release bauen ($PRESET -> $BUILD_DIR)"
+cmake --preset "$PRESET" -B "$BUILD_DIR" >/dev/null
+cmake --build "$BUILD_DIR"
 
 echo "==> 2/3  Bundle stagen + macdeployqt"
 rm -rf "$STAGE"; mkdir -p "$STAGE"
