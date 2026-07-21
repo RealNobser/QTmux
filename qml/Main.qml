@@ -60,7 +60,9 @@ ApplicationWindow {
     McpServer {
         id: mcp
         sessions: sessions
-        port: 7345
+        // Port NICHT hart setzen: McpServer::defaultPort() liest QTMUX_MCP_PORT bzw.
+        // die Einstellung mcp/port (Vorgabe 7345). Eine Testinstanz startet damit auf
+        // einem eigenen Port, ohne der produktiven Instanz den Port wegzunehmen.
         // Nicht nur currentRow (Sidebar-Markierung) setzen, sondern die Session auch
         // ins aktive Pane laden — sonst zeigt das Terminal nach MCP-create/focus_session
         // weiter die alte Session, bis das Fenster aktiviert wird. assignToActivePane
@@ -70,10 +72,16 @@ ApplicationWindow {
 
         // --- Layout-/Profil-Steuerung über MCP (QTMUX-29). Die Handler laufen
         // synchron zum Tool-Aufruf und antworten über mcp.provideResult. ---
+        // QTMUX-33: Der Baum allein beantwortet die Frage eines Controllers nicht —
+        // er sieht nur die Panes, nicht aber, welche seiner Sessions gerade GAR NICHT
+        // sichtbar sind (die liegen nur in der Seitenleiste). Deshalb liefern wir den
+        // Baum unter "layout" plus eine Sitzungsübersicht mit Pane-Zuordnung.
         onLayoutRequested: {
+            const inPane = ({})   // sessionId -> paneId
             function ser(node) {
                 if (window.isLeaf(node)) {
                     const s = sessions.sessionAt(node.sessionRow)
+                    if (s) inPane[s.sessionId] = node.paneId
                     return { paneId: node.paneId,
                              sessionId: s ? s.sessionId : -1,
                              active: node.paneId === window.activePaneId }
@@ -82,7 +90,22 @@ ApplicationWindow {
                          children: node.children.map(ser) }
             }
             if (!window.layout) { mcp.provideResult(false, qsTr("Kein Layout vorhanden.")); return }
-            mcp.provideResult(true, JSON.stringify(ser(window.layout)))
+            const tree = ser(window.layout)
+            const list = []
+            for (let i = 0; i < sessions.rowCount(); ++i) {
+                const s = sessions.sessionAt(i)
+                if (!s) continue
+                const pid = inPane[s.sessionId]
+                list.push({ sessionId: s.sessionId,
+                            title: s.title,
+                            // Ohne Pane heißt: läuft weiter, ist aber nicht zu sehen.
+                            paneId: pid === undefined ? null : pid,
+                            visible: pid !== undefined,
+                            active: pid !== undefined && pid === window.activePaneId })
+            }
+            mcp.provideResult(true, JSON.stringify({ layout: tree,
+                                                     activePaneId: window.activePaneId,
+                                                     sessions: list }))
         }
         onSplitPaneRequested: (o) => {
             window.splitPane(o === "v" ? Qt.Vertical : Qt.Horizontal)

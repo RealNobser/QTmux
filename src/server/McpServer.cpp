@@ -15,12 +15,36 @@
 #include <QJsonValue>
 #include <QTimer>
 #include <QChar>
+#include <QSettings>
 
 namespace qtmux {
 
 static const char *kProtocolVersion = "2024-11-05";
 
-McpServer::McpServer(QObject *parent) : QObject(parent) {
+// QTMUX-30: Der Ereignis-Kanal transportiert nur, was Quellen aktiv melden. Dass das
+// nicht selbsterklärend ist, hat im echten Betrieb einen Controller seinen ganzen
+// Arbeitsablauf auf ein Aufwachen ausrichten lassen, das nie kam.
+static const char *kNoSourceHint =
+    "Bislang hat keine der abonnierten Quell-Sessions je ein Ereignis gemeldet. "
+    "Ereignisse entstehen NUR, wenn die Quelle sie selbst sendet — per MCP-Werkzeug "
+    "post_event oder per OSC 777;qtmux-event. QTmux leitet nichts aus Bildschirminhalt "
+    "oder Prozesszustand ab. Ein Claude-Code-Worker meldet von sich aus nichts; dafür "
+    "braucht er einen Stop-Hook (fertiges Beispiel in docs/MCP.md, Abschnitt "
+    "'Worker ereignisfähig machen'). Ohne das bleibt nur das Abfragen per read_screen.";
+
+int McpServer::defaultPort() {
+    // Reihenfolge: Umgebungsvariable > gespeicherte Einstellung > Vorgabe 7345.
+    // Die Env-Variable ist der Weg, eine ZWEITE Instanz zum Testen zu starten, ohne
+    // der produktiven ins Gehege zu kommen (zusammen mit QTMUX_PROFILE, s. main.cpp).
+    bool ok = false;
+    const int fromEnv = qEnvironmentVariableIntValue("QTMUX_MCP_PORT", &ok);
+    if (ok && fromEnv > 0 && fromEnv < 65536) return fromEnv;
+    const int fromSettings = QSettings().value(QStringLiteral("mcp/port"), 0).toInt();
+    if (fromSettings > 0 && fromSettings < 65536) return fromSettings;
+    return 7345;
+}
+
+McpServer::McpServer(QObject *parent) : QObject(parent), m_port(defaultPort()) {
     // Auf neue Agenten-Ereignisse horchen → wartende Long-Polls wecken.
     connect(AgentEventHub::instance(), &AgentEventHub::eventPosted,
             this, &McpServer::onHubEvent);
@@ -195,7 +219,37 @@ QJsonObject McpServer::pollResult(int subscriberSessionId, quint64 afterSeq) con
         });
         if (e.seq > maxSeq) maxSeq = e.seq;
     }
-    return QJsonObject{{"events", arr}, {"nextSeq", static_cast<double>(maxSeq)}};
+    QJsonObject out{{"events", arr}, {"nextSeq", static_cast<double>(maxSeq)}};
+    // QTMUX-30: Leerlauf einordnen statt bloß Stille zu liefern. Hat noch KEINE der
+    // abonnierten Quellen je etwas gemeldet, liegt es fast immer daran, dass auf der
+    // Quellseite niemand sendet — nicht daran, dass gerade nichts passiert.
+    if (arr.isEmpty() && eventCapableSources(subscriberSessionId) == 0)
+        out.insert(QStringLiteral("hinweis"), kNoSourceHint);
+    return out;
+}
+
+// Wie viele Quellen dieses Abos haben bislang überhaupt je ein Ereignis gemeldet?
+// Das ist der einzige ehrlich belegbare Indikator für „ereignisfähig" — QTmux kann
+// einer Session nicht ansehen, ob in ihr jemand post_event aufrufen WIRD.
+int McpServer::eventCapableSources(int subscriberSessionId) const {
+    auto *hub = AgentEventHub::instance();
+    QList<int> sources;
+    for (const QVariant &v : hub->subscriptions()) {
+        const QVariantMap m = v.toMap();
+        if (m.value(QStringLiteral("subscriberSessionId")).toInt() != subscriberSessionId)
+            continue;
+        for (const QVariant &s : m.value(QStringLiteral("sources")).toList())
+            sources << s.toInt();
+        break;
+    }
+    if (sources.isEmpty() && m_sessions) {   // kein Filter = alle anderen Sessions
+        for (Session *o : m_sessions->sessions())
+            if (o->id() != subscriberSessionId) sources << o->id();
+    }
+    int capable = 0;
+    for (int sid : sources)
+        if (hub->latestFrom(sid).seq > 0) ++capable;
+    return capable;
 }
 
 void McpServer::beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId,
@@ -222,6 +276,15 @@ void McpServer::beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId,
     if (subId <= 0) {
         reply(QJsonObject{{"events", QJsonArray{}}, {"nextSeq", static_cast<double>(afterSeq)},
                           {"error", "Keine Subscriber-Session (sessionId fehlt/unbekannt)."}});
+        return;
+    }
+
+    // QTMUX-30: Ohne Abo NICHT die volle Wartezeit stumm absitzen — das war der Grund,
+    // warum ein Controller erst nach 55 s Stille merkte, dass hier nie etwas kommt.
+    if (!hub->hasSubscription(subId)) {
+        reply(QJsonObject{{"events", QJsonArray{}}, {"nextSeq", static_cast<double>(afterSeq)},
+                          {"error", QStringLiteral("Kein Abo für Session %1 — zuerst "
+                                                   "subscribe_events aufrufen.").arg(subId)}});
         return;
     }
 
@@ -423,10 +486,15 @@ QJsonObject McpServer::toolsList() const {
                       QJsonArray{"id"}));
     tools.append(tool("send_text",
                       "Sendet Text an eine Session (optional mit Enter). Mit broadcast=true "
-                      "geht der Text an ALLE Sessions (id wird dann ignoriert).",
+                      "geht der Text an ALLE Sessions (id wird dann ignoriert). Das Enter geht "
+                      "kurz NACH dem Text raus (Standard 60 ms) — TUI-Anwendungen wie Claude "
+                      "Code werten sonst einen in einem Rutsch ankommenden Block als "
+                      "Einfügevorgang und das Enter landet als Zeilenumbruch im Eingabefeld, "
+                      "statt abzuschicken. Bei sehr trägen Oberflächen enterDelayMs erhöhen.",
                       QJsonObject{{"id", intProp("Session-ID (entfällt bei broadcast)")},
                                   {"text", strProp("zu sendender Text")},
                                   {"enter", boolProp("Enter anhängen (Standard true)")},
+                                  {"enterDelayMs", intProp("Verzögerung vor dem Enter in ms (Standard 60; 0 = sofort, im selben Block)")},
                                   {"broadcast", boolProp("an alle Sessions senden (Standard false)")}},
                       QJsonArray{"text"}));
     tools.append(tool("read_screen",
@@ -452,8 +520,12 @@ QJsonObject McpServer::toolsList() const {
     // Layout-/Pane-Steuerung (QTMUX-29): dieselben Operationen wie die Split-Menüs
     // der GUI — für AI-Companions, die Sessions nebeneinander anordnen wollen.
     tools.append(tool("get_layout",
-                      "Liefert den Pane-Layout-Baum als JSON. Blatt: {paneId, sessionId, "
-                      "active}; Split: {orientation:'h'|'v', children:[…]}.",
+                      "Liefert die Pane-Aufteilung als JSON: {layout, activePaneId, sessions}. "
+                      "'layout' ist der Baum (Blatt: {paneId, sessionId, active}; Split: "
+                      "{orientation:'h'|'v', children:[…]}). 'sessions' listet ALLE Sessions "
+                      "mit ihrer Pane-Zuordnung — paneId=null/visible=false heißt: läuft, ist "
+                      "aber gerade nicht zu sehen (nur in der Seitenleiste). Ist das Fenster "
+                      "ungeteilt, besteht 'layout' erwartungsgemäß aus einem einzigen Blatt.",
                       {}, {}));
     tools.append(tool("split_pane",
                       "Teilt das aktive Pane wie die GUI-Splits: erzeugt eine neue "
@@ -493,7 +565,12 @@ QJsonObject McpServer::toolsList() const {
                       "timestamp, seq}], nextSeq}. Mit nextSeq als afterSeq weiterpollen "
                       "(keine Lücken/Doppel). sourceSessionId ist die Quell-Session, in der "
                       "per send_text/read_screen/focus_session weitergearbeitet werden kann. "
-                      "Voraussetzung: zuvor subscribe_events.",
+                      "Voraussetzung: zuvor subscribe_events. WICHTIG: Es kommt nur an, was "
+                      "eine Quell-Session selbst per post_event oder OSC 777;qtmux-event "
+                      "meldet — aus Bildschirminhalt oder Prozesszustand wird NICHTS "
+                      "abgeleitet. Ein Claude-Code-Worker meldet ohne eingerichteten "
+                      "Stop-Hook nichts; dann bleibt nur Abfragen per read_screen "
+                      "(s. docs/MCP.md). Kommt nichts, sagt das Feld 'hinweis' warum.",
                       QJsonObject{{"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")},
                                   {"afterSeq", intProp("nur Ereignisse mit seq > afterSeq (Standard: ab jetzt)")},
                                   {"timeoutMs", intProp("max. Wartezeit in ms (Standard 25000, Deckel 55000)")}},
@@ -509,7 +586,12 @@ QJsonObject McpServer::toolsList() const {
     tools.append(tool("subscribe_events",
                       "Abonniert Agenten-Ereignisse für DIESE Session. Ohne Filter werden alle "
                       "Ereignisse aller anderen Sessions empfangen; optional auf Quell-Sessions "
-                      "und/oder Ereignisarten einschränken. Danach mit wait_for_events abholen.",
+                      "und/oder Ereignisarten einschränken. Danach mit wait_for_events abholen. "
+                      "Die Antwort nennt je Quelle, ob sie existiert und ob sie bisher je ein "
+                      "Ereignis gemeldet hat (hasPostedEvents) — denn geliefert wird nur, was "
+                      "Quellen SELBST senden (post_event / OSC 777;qtmux-event). Steht "
+                      "sourcesWithEventsSoFar auf 0, wird wait_for_events aller Voraussicht "
+                      "nach nichts bringen; dann erst die Quellseite einrichten (docs/MCP.md).",
                       QJsonObject{{"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")},
                                   {"sources", arrProp("integer", "nur diese Quell-Session-IDs (leer/fehlt = alle)")},
                                   {"kinds", arrProp("string", "nur diese Arten: done/question/error/info (leer = alle)")}},
@@ -578,8 +660,33 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         if (subId <= 0) { isError = true; text = QStringLiteral("Keine Subscriber-Session (sessionId fehlt/unbekannt)."); return {}; }
         QStringList kinds;
         for (const QJsonValue &v : args.value("kinds").toArray()) kinds << v.toString();
-        AgentEventHub::instance()->subscribe(subId, args.value("sources").toArray().toVariantList(), kinds);
-        text = QStringLiteral("ok");
+        const QJsonArray sources = args.value("sources").toArray();
+        AgentEventHub::instance()->subscribe(subId, sources.toVariantList(), kinds);
+
+        // QTMUX-30: Statt bloß „ok" auch sagen, WORAUF man da wartet. Ob eine Quelle
+        // je Ereignisse senden wird, kann QTmux nicht wissen — belegbar ist nur, ob sie
+        // es bisher getan hat. Genau diese Auskunft fehlte, als ein Controller seinen
+        // Arbeitsablauf auf ein Aufwachen ausrichtete, das nie kam.
+        QJsonArray srcInfo;
+        auto describe = [this](int sid) {
+            return QJsonObject{
+                {"sessionId", sid},
+                {"exists", m_sessions->sessionById(sid) != nullptr},
+                {"hasPostedEvents", AgentEventHub::instance()->latestFrom(sid).seq > 0}};
+        };
+        if (sources.isEmpty()) {
+            for (Session *o : m_sessions->sessions())
+                if (o->id() != subId) srcInfo.append(describe(o->id()));
+        } else {
+            for (const QJsonValue &v : sources) srcInfo.append(describe(v.toInt()));
+        }
+        const int capable = eventCapableSources(subId);
+        QJsonObject res{{"ok", true},
+                        {"subscriberSessionId", subId},
+                        {"sources", srcInfo},
+                        {"sourcesWithEventsSoFar", capable}};
+        if (capable == 0) res.insert(QStringLiteral("hinweis"), kNoSourceHint);
+        text = QString::fromUtf8(QJsonDocument(res).toJson(QJsonDocument::Compact));
         return {};
     }
     if (name == "unsubscribe_events") {
@@ -663,36 +770,69 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
     // Ab hier braucht's eine gültige Session-ID.
     const int id = args.value("id").toInt();
     Session *s = m_sessions->sessionById(id);
+
+    // QTMUX-32: „Unbekannte ID." schickte Aufrufer auf die falsche Fährte, wenn in
+    // Wahrheit nur der Parametername danebenlag. Die ANTWORTEN von list_sessions und
+    // get_layout heißen sessionId/paneId, die EINGABE heißt schlicht `id` — dieser
+    // Verwechslung antworten wir jetzt mit Klartext statt mit „gibt es nicht".
+    auto idProblem = [this, &args, id]() -> QString {
+        if (!args.contains(QStringLiteral("id"))) {
+            static const char *aliases[] = {"sessionId", "paneId", "session", "sessionID", "ID"};
+            for (const char *a : aliases) {
+                if (args.contains(QLatin1String(a)))
+                    return QStringLiteral(
+                               "Parameter 'id' fehlt (übergeben wurde '%1'). Alle "
+                               "sitzungsbezogenen Werkzeuge erwarten 'id' — auch wenn die "
+                               "Antwortfelder von list_sessions/get_layout 'sessionId' bzw. "
+                               "'paneId' heißen.")
+                        .arg(QLatin1String(a));
+            }
+            return QStringLiteral("Parameter 'id' fehlt.");
+        }
+        QStringList known;
+        for (Session *o : m_sessions->sessions()) known << QString::number(o->id());
+        return QStringLiteral("Unbekannte Session-ID: %1. Vorhanden: %2.")
+            .arg(id)
+            .arg(known.isEmpty() ? QStringLiteral("keine") : known.join(QStringLiteral(", ")));
+    };
     if (name == "close_session") {
         const int row = m_sessions->rowForId(id);
-        if (row < 0) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        if (row < 0) { isError = true; text = idProblem(); return {}; }
         m_sessions->closeSession(row);
         text = QStringLiteral("ok");
         return {};
     }
     if (name == "focus_session") {
         const int row = m_sessions->rowForId(id);
-        if (row < 0) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        if (row < 0) { isError = true; text = idProblem(); return {}; }
         emit focusRequested(row);
         text = QStringLiteral("ok");
         return {};
     }
     if (name == "attach_controller") {
-        if (!s) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        if (!s) { isError = true; text = idProblem(); return {}; }
         s->setMcpController(true);   // roter Tab; gilt bis zum Schließen der Session
         text = QStringLiteral("ok");
         return {};
     }
     if (name == "send_text") {
-        if (!s) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
-        QByteArray data = args.value("text").toString().toUtf8();
-        if (args.value("enter").toBool(true)) data += '\r';
-        s->write(data);
+        if (!s) { isError = true; text = idProblem(); return {}; }
+        const QByteArray data = args.value("text").toString().toUtf8();
+        if (args.value("enter").toBool(true)) {
+            // QTMUX-31: Enter zeitlich abgesetzt — sonst schlucken TUI-Anwendungen es
+            // als Teil eines vermeintlichen Einfügevorgangs (s. Session::writeWithEnter).
+            const int delay = args.contains(QStringLiteral("enterDelayMs"))
+                                  ? args.value("enterDelayMs").toInt(Session::kDefaultEnterDelayMs)
+                                  : Session::kDefaultEnterDelayMs;
+            s->writeWithEnter(data, delay);
+        } else if (!data.isEmpty()) {
+            s->write(data);
+        }
         text = QStringLiteral("ok");
         return {};
     }
     if (name == "read_screen") {
-        if (!s) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        if (!s) { isError = true; text = idProblem(); return {}; }
         if (args.value("scrollback").toBool(false)) {
             const QString sb = s->scrollbackText();
             text = sb.isEmpty() ? s->screenText() : sb + QChar('\n') + s->screenText();
@@ -732,9 +872,8 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         return {};
     }
     if (name == "assign_session") {
-        const int id = args.value("id").toInt(-1);
         const int row = m_sessions->rowForId(id);
-        if (row < 0) { isError = true; text = QStringLiteral("Unbekannte ID."); return {}; }
+        if (row < 0) { isError = true; text = idProblem(); return {}; }
         const int paneId = args.value("paneId").toInt(-1);
         bridgedCall([this, row, paneId] { emit assignPaneRequested(row, paneId); },
                     isError, text);

@@ -110,6 +110,16 @@ public:
 
     void start(int cols, int rows);
     void write(const QByteArray &data);
+
+    /// Schreibt `data` und schickt das abschließende Enter zeitlich abgesetzt
+    /// hinterher (QTMUX-31) — sonst schlucken TUI-Anwendungen es als Teil eines
+    /// vermeintlichen Einfügevorgangs. Bei leerem `data` oder `enterDelayMs <= 0`
+    /// geht das Enter sofort raus. Ein noch ausstehendes Enter wird vorher
+    /// nachgeholt, damit die Reihenfolge stimmt.
+    void writeWithEnter(const QByteArray &data, int enterDelayMs);
+
+    /// Standardverzögerung für das abgesetzte Enter (ms).
+    static constexpr int kDefaultEnterDelayMs = 60;
     void resize(int cols, int rows);
 
 signals:
@@ -126,6 +136,7 @@ signals:
 
 private:
     void setActivity(Activity a);
+    void flushPendingEnter();                   // ausstehendes Enter jetzt senden (QTMUX-31)
     void raiseAttention();                      // setzt needsAttention (wenn inaktiv)
     void observeInput(const QByteArray &data);  // erkennt getippte Agenten-Kommandos
     void armLoginScript();                      // Fallback-Timer beim ersten Output starten
@@ -160,6 +171,7 @@ private:
     Activity m_activity = Activity::Running;
     QString m_lastNotification;
     bool m_commandRunning = false;   // zwischen OSC 133;C und ;D
+    bool m_enterPending = false;     // abgesetztes Enter noch offen (QTMUX-31)
     int m_cols = 80;
     int m_rows = 24;
     int m_id = nextId();

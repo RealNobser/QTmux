@@ -71,3 +71,12 @@ else()
     add_test(NAME test_pty COMMAND test_pty)
     add_test(NAME test_session COMMAND test_session)
 endif()
+
+# --- Doku-Wächter (QTMUX-34) ------------------------------------------------
+# Findet doppelte Überschriften, wie sie entstehen, wenn beim Kompaktieren einer
+# langen Markdown-Datei ein Block eingefügt statt ersetzt wird. Reines CMake-Skript,
+# damit der Test auf allen drei Plattformen ohne sh/grep läuft.
+add_test(NAME test_doc_duplicates
+    COMMAND ${CMAKE_COMMAND}
+        "-DDOC_FILES=${CMAKE_SOURCE_DIR}/CLAUDE.md;${CMAKE_SOURCE_DIR}/README.md;${CMAKE_SOURCE_DIR}/docs/MCP.md"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckDocDuplicates.cmake")

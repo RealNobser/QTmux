@@ -65,7 +65,15 @@ int main(int argc, char *argv[])
 
     // App-Identität bereits VOR der QGuiApplication setzen (statisch erlaubt), damit
     // QSettings unten dieselbe (Bundle-abgeleitete) Domain trifft wie der AppController.
-    QGuiApplication::setApplicationName("QTmux");
+    // Instanz-Profil (QTMUX_PROFILE): hängt einen Suffix an den App-Namen und trennt
+    // damit die gesamte QSettings-Domain — Session-Liste, Profile, Hotkeys, Vault.
+    // Zweck: eine ZWEITE Instanz zum Testen starten, ohne den gespeicherten Zustand
+    // der produktiven zu überschreiben (die beim Beenden ihre Session-Liste sichert).
+    // Zusammen mit QTMUX_MCP_PORT ist das der saubere Weg, die MCP-Schicht zu prüfen.
+    const QString profile = qEnvironmentVariable("QTMUX_PROFILE").trimmed();
+    QGuiApplication::setApplicationName(profile.isEmpty()
+                                            ? QStringLiteral("QTmux")
+                                            : QStringLiteral("QTmux-%1").arg(profile));
     QGuiApplication::setOrganizationName("QTmux");
     QGuiApplication::setApplicationVersion("1.3.1");
 

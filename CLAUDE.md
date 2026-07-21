@@ -77,6 +77,16 @@ open ./build/macos/qtmux.app
 QT_QPA_PLATFORM=offscreen ./build/macos/qtmux.app/Contents/MacOS/qtmux   # headless
 ```
 
+> **⚠️ Läuft eine produktive Instanz aus `build/macos`, dort NICHT hineinbauen** — das
+> Überschreiben des Binaries reißt den laufenden Prozess mit (und mit ihm alle
+> Terminal-Sessions). Vorher `lsof -nP -iTCP:7345 -sTCP:LISTEN` bzw. `ps -o command`
+> prüfen und in ein eigenes Verzeichnis bauen: `cmake --preset macos -B build/macos-test`.
+> **Zweite Instanz zum Testen** (QTMUX-30 ff.): `QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`
+> — `QTMUX_MCP_PORT` wählt den MCP-Port (vor der Einstellung `mcp/port`, sonst 7345),
+> `QTMUX_PROFILE` hängt einen Suffix an den App-Namen und trennt damit die ganze
+> QSettings-Domain (sonst überschreibt die Testinstanz beim Beenden die gespeicherte
+> Session-Liste der produktiven).
+
 **DMG:** `installer/build-dmg.sh [version]` — baut `macos-release`, `macdeployqt -qmldir=qml`
 (self-contained inkl. Plugins/PCBUSB), dann **ad-hoc-Re-Signatur** (`codesign --force --deep
 --sign -` — macdeployqt schreibt rpaths NACH seiner Signatur um → ungültig; Apple Silicon
@@ -225,12 +235,19 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
-## Status (2026-07-19)
+## Status (2026-07-21)
 
 **v1.3.1.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
 SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattformen fertig
 (DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 22 MCP-Tools
 (GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 208/208.
+
+**QTMUX-30…34 erledigt (2026-07-21)** — Befunde aus dem ersten echten Mehragenten-Betrieb
+(RAFTNG steuerte über QTmux zwei Worker; Fremdbericht `docs/mcp-controller-feedback-
+2026-07-21.md`): `send_text`-Enter abgesetzt · Ereignis-Kanal ehrlich statt stumm ·
+ID-Fehlermeldungen · `get_layout` mit Sitzungsübersicht · Doku-Wächter `test_doc_duplicates`.
+MCP-Port jetzt konfigurierbar (`QTMUX_MCP_PORT`/`QTMUX_PROFILE`) — Voraussetzung, um die
+MCP-Schicht zu testen, ohne die produktive Instanz anzufassen.
 
 **Offene Jira:** **QTMUX-2** (Windows-Funktionstest `currentWorkingDirectory` via PEB —
 braucht eine Windows-Session) · **QTMUX-13** (native macOS-Menü-Icons — Qt 6.11 reicht in
@@ -389,6 +406,23 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   „UI nicht verbunden". `list_profiles` ohne Geheimniswerte (nur Flags); `connect_profile`
   löst Vault-Passwörter **intern** (nie über MCP). `ConnectionProfileRegistry::indexOf`
   ist privat → Existenzprüfung via `profile(name).isEmpty()`.
+- **QTMUX-31 (`send_text`):** Das Enter geht **zeitlich abgesetzt** raus
+  (`Session::writeWithEnter`, Vorgabe 60 ms, Tool-Parameter `enterDelayMs`). TUI-Apps
+  (belegt mit Claude Code) werten einen in EINEM Rutsch ankommenden Block als
+  Einfügevorgang → das `\r` wurde zum Zeilenumbruch im Eingabefeld statt zum Absenden,
+  und der Aufruf meldete trotzdem `ok`. Regressionstest bricht bei `enterDelayMs: 0`.
+- **QTMUX-30 (Ereignis-Kanal):** Der Kanal ist korrekt — es fehlte die **Quelle**.
+  QTmux leitet **nichts** aus Bildschirm/Prozesszustand ab (Claude-Code-Worker senden
+  von sich aus nichts, auch keine Bell/OSC 9). Belegt: Worker beendet Aufgabe → Hub
+  bleibt leer. Antwort darauf ist Ehrlichkeit statt erzwungener Ereignisse:
+  `subscribe_events` meldet je Quelle `hasPostedEvents` + `sourcesWithEventsSoFar`,
+  `wait_for_events` bricht ohne Abo **sofort** ab (statt 25 s Stille) und legt bei
+  Leerlauf einen `hinweis` bei. Worker ereignisfähig machen: Stop-Hook auf
+  `shell-integration/qtmux-emit.sh` (Unix) / `qtmux-emit.ps1` (Windows) — **als Skript,
+  nicht als curl-Einzeiler**: die dreifache Escape-Verschachtelung im Hook scheitert
+  still, und das sieht exakt aus wie „gerade passiert nichts".
+- **QTMUX-33 (`get_layout`):** liefert `{layout, activePaneId, sessions}` — der Baum
+  allein verschweigt, welche Sessions in **keinem** Pane liegen (laufen, aber unsichtbar).
 
 ## E2E-/Test-Fallen (alle Plattformen)
 
@@ -402,6 +436,14 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   schaltet den Qt-Menümodus (ESC schließt dann nur den). Menüs via UIA-`InvokePattern`
   öffnen. Synthetische Tasten erst nach Warteschleife aufs `MainWindowHandle`.
 - MCP-E2E ist der Standard-Verifikationsweg gegen die echte GUI (create_session/
-  send_text/read_screen; `read_screen scrollback:true` für Historie).
+  send_text/read_screen; `read_screen scrollback:true` für Historie). Dafür eine
+  **zweite Instanz** starten (`QTMUX_PROFILE`/`QTMUX_MCP_PORT`) — nie gegen eine
+  Instanz testen, in der jemand arbeitet.
+- **Doku-Wächter `test_doc_duplicates`** (QTMUX-34): findet doppelte Überschriften, wie
+  sie beim Kompaktieren entstehen (Block eingefügt statt ersetzt → zwei gleichnamige
+  Abschnitte mit widersprüchlichem Inhalt; in RAFTNG genau so passiert). Verglichen wird
+  der Überschriften-**Pfad**, damit das zweisprachige README keinen Fehlalarm auslöst.
+  `file(STRINGS)` braucht dort **`ENCODING UTF-8`** — sonst verschluckt CMake bei Zeilen
+  mit Emoji den Zeilenanfang, die `##`-Marke geht verloren und der Pfad verrutscht.
 - Claude-CLI-Fallen (Agenten-Demos): `--settings` braucht eine DATEI; `--allowedTools`
   ist variadisch → Prompt via stdin.

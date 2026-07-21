@@ -20,6 +20,8 @@ private slots:
     void agentEventReachesHub();
     void loginScriptRunsOnConnect();
     void sshPasswordAutoFillOnPrompt();
+    void enterIsSentSeparatelyAfterText();
+    void writeWithEnterKeepsOrderOnRapidCalls();
 };
 
 static QString rowText(const VtScreen &vt, int row) {
@@ -203,6 +205,70 @@ void TestSession::sshPasswordAutoFillOnPrompt() {
         if (sess.screenText().contains("PWGOT:hunter2")) found = true;
     }
     QVERIFY(found);
+    sess.shutdown();
+}
+
+
+// QTMUX-31: Das abschließende Enter darf NICHT im selben Schreibvorgang stehen wie der
+// Text — TUI-Anwendungen werten einen in einem Rutsch ankommenden Block als
+// Einfügevorgang und machen aus dem \r einen Zeilenumbruch im Eingabefeld statt eines
+// Absendens. Der Test belegt die Absetzung am Verhalten einer echten Shell: unmittelbar
+// nach dem Aufruf ist der Befehl noch NICHT ausgeführt, nach der Verzögerung schon.
+void TestSession::enterIsSentSeparatelyAfterText() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    const auto sh = qtmux_test::interactiveShell();
+    pty->setProgram(sh.program);
+    pty->setArguments(sh.args);
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.setActive(true);
+    sess.start(80, 24);
+    QTest::qWait(500);   // Prompt abwarten
+
+    // Die Ausgabe (Zeile ist exakt der Marker) unterscheidet sich vom getippten
+    // Befehl ("echo <marker>") — daran hängt die Unterscheidung "getippt" vs "gelaufen".
+    auto hasOutputLine = [&sess]() {
+        const QStringList rows = sess.screenText().split(QLatin1Char('\n'));
+        for (const QString &r : rows)
+            if (r.trimmed() == QLatin1String("ENTER_SEP_MARKER")) return true;
+        return false;
+    };
+
+    sess.writeWithEnter("echo ENTER_SEP_MARKER", 400);
+    QTest::qWait(150);
+    QVERIFY2(!hasOutputLine(), "Enter kam zu früh — es wurde offenbar im selben "
+                               "Schreibvorgang wie der Text gesendet");
+    QTRY_VERIFY_WITH_TIMEOUT(hasOutputLine(), 5000);
+
+    sess.write("\x03");
+    sess.shutdown();
+}
+
+// Zwei schnell aufeinanderfolgende Aufrufe an DIESELBE Session dürfen sich nicht
+// verschränken (Text2 vor Enter1) — das ausstehende Enter wird vorher nachgeholt.
+void TestSession::writeWithEnterKeepsOrderOnRapidCalls() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    const auto sh = qtmux_test::interactiveShell();
+    pty->setProgram(sh.program);
+    pty->setArguments(sh.args);
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.setActive(true);
+    sess.start(80, 24);
+    QTest::qWait(500);
+
+    // Zweiter Aufruf, bevor das erste Enter (5 s) fällig wäre.
+    sess.writeWithEnter("echo RAPID_ONE", 5000);
+    sess.writeWithEnter("echo RAPID_TWO", 50);
+
+    // Beide Befehle müssen laufen, und zwar in dieser Reihenfolge.
+    QTRY_VERIFY_WITH_TIMEOUT(sess.screenText().contains("RAPID_TWO"), 8000);
+    const QString out = sess.screenText();
+    QVERIFY2(out.contains("RAPID_ONE"), "erster Befehl wurde nie abgeschickt");
+    QVERIFY2(out.indexOf("RAPID_ONE") < out.indexOf("RAPID_TWO"),
+             "Reihenfolge vertauscht");
+
+    sess.write("\x03");
     sess.shutdown();
 }
 

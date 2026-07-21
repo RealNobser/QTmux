@@ -38,6 +38,11 @@ public:
     void setPort(int p);
     bool listening() const;
 
+    /// Vorgabe-Port: `QTMUX_MCP_PORT` > Einstellung `mcp/port` > 7345. So lässt sich
+    /// eine zweite Instanz zum Testen auf einem eigenen Port starten, ohne die
+    /// produktive zu stören (s. auch `QTMUX_PROFILE` für getrennte Einstellungen).
+    static int defaultPort();
+
     Q_INVOKABLE bool start();
     Q_INVOKABLE void stop();
 
@@ -91,6 +96,8 @@ private:
     void completePoll(int index);            // Poll[index] mit seinen Events beantworten
     void removePollsForSocket(QTcpSocket *sock);
     QJsonObject pollResult(int subscriberSessionId, quint64 afterSeq) const;
+    /// Zahl der Abo-Quellen, die bislang je ein Ereignis gemeldet haben (QTMUX-30).
+    int eventCapableSources(int subscriberSessionId) const;
     int subscriberSessionId(const QJsonObject &args, quint16 clientPort) const;
 
     struct PendingPoll {

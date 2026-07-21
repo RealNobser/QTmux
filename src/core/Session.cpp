@@ -251,6 +251,31 @@ void Session::write(const QByteArray &data) {
     if (m_backend) m_backend->write(data);
 }
 
+void Session::writeWithEnter(const QByteArray &data, int enterDelayMs) {
+    // QTMUX-31: Das abschließende Enter darf NICHT im selben Schreibvorgang wie der
+    // Text stehen. TUI-Anwendungen (belegt mit Claude Code) werten einen Byteblock,
+    // der in einem Rutsch ankommt, als Einfügevorgang und behandeln ein enthaltenes
+    // \r dann als Zeilenumbruch IM Eingabefeld statt als Absenden — der Text blieb
+    // stehen, obwohl der Aufruf Erfolg meldete. Zeitlich abgesetzt kommt das Enter
+    // als eigener Tastendruck an. Genau das tat auch die bekannte Umgehung
+    // (zweiter Aufruf mit leerem Text).
+    flushPendingEnter();   // Reihenfolge wahren, falls noch ein Enter aussteht
+    if (!data.isEmpty()) write(data);
+    if (data.isEmpty() || enterDelayMs <= 0) {
+        write(QByteArrayLiteral("\r"));   // nichts zu entzerren
+        return;
+    }
+    m_enterPending = true;
+    // An `this` gebunden: stirbt die Session vorher, entfällt das Enter.
+    QTimer::singleShot(enterDelayMs, this, [this] { flushPendingEnter(); });
+}
+
+void Session::flushPendingEnter() {
+    if (!m_enterPending) return;
+    m_enterPending = false;
+    write(QByteArrayLiteral("\r"));
+}
+
 void Session::observeInput(const QByteArray &data) {
     // Rekonstruiert die getippte Zeile zeichenweise und erkennt beim Enter
     // ein bekanntes Agenten-Kommando (z. B. "agy" -> AntiGravity).
