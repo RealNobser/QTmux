@@ -39,6 +39,9 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `read_screen` | `id` | Sichtbaren Bildschirm als Klartext lesen |
 | `attach_controller` | `id` | Markiert die Session als steuernde **MCP-Controller**-Session (roter Tab) |
 | `set_theme` | `mode` ("system"/"light"/"dark") | App-Design umschalten |
+| `list_shells` | – | Verfügbare Shells (`{program, name}`) für `create_session type=shell` |
+| `list_serial_ports` | – | Verfügbare serielle Ports für `create_session type=serial` |
+| `list_plugins` | – | Backend-Typen geladener Plugins (`{pluginId, typeId, name, description}`) |
 | `subscribe_events` | `sessionId?`, `sources?` (int[]), `kinds?` (string[]) | Agenten-Ereignisse abonnieren (leer = alle Quellen/Arten) |
 | `unsubscribe_events` | `sessionId?` | Abo dieser Session aufheben |
 | `list_subscriptions` | – | Aktive Abos (`subscriberSessionId`, `sources`, `kinds`) |
@@ -111,12 +114,14 @@ Ein Agent in Session A meldet „fertig" oder „Frage"; ein Agent in Session B 
 benachrichtigt und erhält **A's Session-ID**, um dort per `send_text`/`read_screen`/
 `focus_session` weiterzuarbeiten (Supervisor-/Peer-Muster).
 
-**Ereignis erzeugen** — zwei gleichwertige Wege:
-- **Shell-Hook (OSC):** `qtmux-event done|question|error|info "Text"` (aus
-  `shell-integration/qtmux.{bash,zsh}`). Ideal für Agenten-Hooks (z. B. Claude Codes
-  **Stop**-Hook → `qtmux-event done`, **Notification**-Hook → `qtmux-event question`).
-- **MCP:** `post_event {kind, text, sessionId?}` (Quelle = `$QTMUX_SESSION_ID` bzw. der
-  Prozess-Heuristik-Fallback).
+**Ereignis erzeugen** — zwei Wege, die sich NICHT ersetzen:
+- **Aus einem Agenten-Hook: `post_event` (HTTP)** — `post_event {kind, text, sessionId?}`
+  (Quelle = `$QTMUX_SESSION_ID` bzw. der Prozess-Heuristik-Fallback), am bequemsten über
+  die mitgelieferten `shell-integration/qtmux-emit.{sh,ps1}`. **Nur dieser Weg trägt in
+  Hooks** (Begründung unten: der stdout eines Hooks erreicht das Terminal nicht).
+- **Aus der interaktiven Shell: OSC** — `qtmux-event done|question|error|info "Text"`
+  (aus `shell-integration/qtmux.{bash,zsh,ps1}`). Für Tools, die in ihr eigenes TTY
+  schreiben; **nicht** für Agenten-Hooks geeignet.
 
 **Ereignisse empfangen** (der benachrichtigte Agent, selbst MCP-Client):
 1. Einmalig `subscribe_events {sessionId, kinds?, sources?}` — ohne Filter alle Ereignisse

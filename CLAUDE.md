@@ -3,7 +3,7 @@
 > Diese Datei wird zu Beginn jeder Session geladen. **Kompaktfassung** (Datei-Hygiene
 > 2026-07-19): nur noch das für die Weiterentwicklung Nötige — Architektur, Build/CI,
 > Konventionen, Lektionen/Fallen, Status. Die vollständige Historien-Fassung (1426 Zeilen,
-> Stand `d5c96d1`) liegt als Backup in Confluence (DUAL: Seite **„CLAUDE.md-Archiv"** unter
+> Stand vor der Kürzung) liegt als Backup in Confluence (DUAL: Seite **„CLAUDE.md-Archiv"** unter
 > der Entwicklerdokumentation, IDs in `CLAUDE.local.md`, je mit Datei-Anhang)
 > und in der Git-Historie dieser Datei.
 
@@ -13,7 +13,6 @@ Ein **plattformübergreifender Multi-KI-Agenten-Terminal-Manager** auf **Qt 6 / 
 Inspiriert von [cmux](https://cmux.com/de) (Agenten-Handling, vertikale Tabs, Status-Ringe)
 und [Tabby](https://tabby.sh/) (SSH/Serial/Telnet, Split-Panes, Plugins).
 Zielplattformen: **macOS, Windows, Linux**. Prio 1: stabile Terminal-Integration.
-Ursprungsplan: `~/.claude/plans/neue-projekt-idee-eine-qt-version-radiant-wind.md`.
 
 ## Architektur
 
@@ -64,7 +63,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer (HTTP; `.sh` = Unix, QTMUX-30) |
-| `tests/` | QtTest: 11 Binaries (pty, vtscreen, session, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan) |
+| `tests/` | 12 ctest-Tests: 11 QtTest-Binaries (pty, vtscreen, session, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
 
@@ -117,6 +116,19 @@ ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein
 `windeployqt` läuft als Post-Build. **MSI/ZIP:** `installer/build-msi.ps1 -Version <ver>`
 (WiX v5 als dotnet-Tool; nutzt dasselbe `windows-release`-Preset → nur 2 Build-Dirs:
 `build/windows` Debug, `build/windows-release` Release). Unsigniert (Early-Adopter).
+**One-Click-Release** auf der Windows-Maschine (Zugang: `CLAUDE.local.md`):
+`installer/build-release.ps1` (Desktop-Verknüpfung „Build QTmux Installer") holt den
+aktuellen Stand und baut MSI + portables ZIP; `-NoFetch` überspringt den Pull.
+- ⚠️ **Fernsteuern per SSH:** Windows-OpenSSH **beendet Kindprozesse beim Sitzungsende** —
+  einen Build also in einer *offenen* SSH-Sitzung laufen lassen, nicht per `Start-Process`
+  detachen (sonst endet er stumm mit 0-Byte-Logs).
+- ⚠️ Vor dem Bauen prüfen, worauf der Checkout steht: `_build.cmd` nutzt `-NoFetch` und
+  baut sonst klaglos eine **alte** Version (fiel erst am Dateinamen `…-1.3.1-…` auf).
+- PowerShell ist dort Standard-Shell: `&` als Trenner ist ungültig, `-Filter` nimmt nur
+  EINE Zeichenkette, `Get-CimInstance -Filter` verträgt keine verschachtelten Quotes.
+- Gegenprüfen, dass wirklich die neue Version im Paket steckt (nicht nur im Dateinamen):
+  `strings qtmux.exe` auf Version **und** ein neues Merkmal (z. B. `enterDelayMs`).
+
 Vor Windows-Releases: `tests/release-visual-check.ps1` (screenshottet alle Menüs in
 beiden Themes + MCP-Smoke — Theming-Regressionen sind unit-test-unsichtbar).
 
@@ -222,7 +234,7 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
   sind Debug) — Release-only-Probleme (Optimierung, Asserts, RHI/Shader) fallen sonst
   nicht auf.
 - **Versions-Bump-Stellen** (alle zusammen): `CMakeLists.txt` (project VERSION),
-  `src/main.cpp`, `src/server/McpServer.cpp` (serverInfo), `installer/build-dmg.sh`,
+  `src/app/main.cpp`, `src/server/McpServer.cpp` (serverInfo), `installer/build-dmg.sh`,
   `installer/build-appimage.sh`, `.github/workflows/ci.yml` (AppImage-Schritt),
   `installer/QTmux.wxs`, `README.md` (DE **und** EN).
 - **i18n:** Quellsprache Deutsch; QML `qsTr`, C++ `QCoreApplication::translate("<Kontext>",…)`.
@@ -247,6 +259,12 @@ ID-Fehlermeldungen · `get_layout` mit Sitzungsübersicht · Doku-Wächter `test
 MCP-Port jetzt konfigurierbar (`QTMUX_MCP_PORT`/`QTMUX_PROFILE`) — Voraussetzung, um die
 MCP-Schicht zu testen, ohne die produktive Instanz anzufassen.
 
+**Release 1.4.0 + öffentliches Repo (2026-07-21).** Erstes GitHub-Release mit allen vier
+Paketen (DMG · MSI · portables ZIP · AppImage), Notes zweisprachig mit SHA-256. Zugleich
+Umzug in ein öffentliches Repo unter Apache-2.0, nachdem die Historie bereinigt wurde.
+(Damit auch QTMUX-35 Windows-Installer und QTMUX-36 separater Download-Kanal erledigt.)
+Einzelheiten und Spielregeln: Abschnitt **„Repository, Release, Zusammenarbeit"**.
+
 **Offene Jira:** **QTMUX-2** (Windows-Funktionstest `currentWorkingDirectory` via PEB —
 braucht eine Windows-Session) · **QTMUX-13** (native macOS-Menü-Icons — Qt 6.11 reicht in
 nativen Menüs weder `icon.source` noch `icon.name` durch, empirisch bewiesen; einziger Weg
@@ -255,7 +273,43 @@ wäre der Widgets/`QMenuBar`-Umbau, bewusst deferred, s. [[qtmux-native-menu-ico
 **Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) · Signierung/
 Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff (CAN-FD,
 ID-Filter, Konfig-Dialog statt `baud`-Befehl, DBC-Decoding) · CI-Action-Versionen anheben ·
-optional CPack-Distro-Pakete (.deb/.rpm).
+optional CPack-Distro-Pakete (.deb/.rpm) · **LGPL-Beilagen** für das in den Installern
+gebündelte Qt (Lizenztext + Quellen-Hinweis) · Screenshot im README ·
+`enforce_admins` einschalten, falls die PR-Pflicht auch für den Owner gelten soll.
+
+## Repository, Release, Zusammenarbeit
+
+- **Öffentlich:** `github.com/RealNobser/QTmux` (Apache-2.0). Archiv: `QTmux-private`
+  (privat + archiviert = read-only; enthält als einziges noch die **unbereinigte**
+  Historie). Beide Namen sind belegt — die alte Weiterleitung ist dadurch tot.
+- **`main` ist geschützt** → Änderungen laufen über Branch + PR. Als Owner ginge ein
+  direkter Push (`enforce_admins` aus), unterläuft aber den Zweck; nur für Notfälle.
+- **Release:** `gh release create v<ver> --target <voller SHA>` — ein **Kurz-SHA wird
+  abgelehnt** (HTTP 422). Assets: DMG + MSI + portables ZIP + AppImage.
+  Das AppImage stammt aus dem CI-Lauf desselben Commits
+  (`gh run download <id> -n QTmux-AppImage`), nicht aus einem Extra-Build.
+- **Interne Zugänge** (Confluence-/Jira-Hosts, Space-Keys, Seiten-IDs, Build-Maschinen)
+  stehen **nur** in `CLAUDE.local.md` — git-ignoriert, bewusst nicht im öffentlichen Repo.
+
+## Git-/GitHub-Lektionen (teuer erkauft)
+
+- **`git filter-repo --replace-text` fasst NUR Dateiinhalte an, keine Commit-Nachrichten.**
+  Dafür braucht es `--replace-message`, für Autoren-Adressen `--mailmap`. Und: `git grep`
+  durchsucht **keine** Commit-Nachrichten — eine Verifikation nur damit übersieht sie
+  komplett. Vor einem Public-Schalten alle vier Ebenen prüfen: Dateiinhalte,
+  Commit-Nachrichten, Autor-/Committer-Metadaten, Tag-Nachrichten.
+- **Force-Push löscht nichts.** Alte Commits bleiben auf GitHub per SHA abrufbar, solange
+  etwas sie referenziert — und **jeder Actions-Lauf referenziert seinen Commit**. Deshalb
+  war ein frisches Repo der einzige verlässliche Weg, um die Historie wirklich loszuwerden.
+- **Jeder Rewrite zieht eine Kette nach sich:** Force-Push (Schutz kurz lockern und sofort
+  wieder setzen) → Tag neu → Release-Target umhängen → **alle Klone neu klonen**
+  (auch die Build-Maschine). Deshalb Textkorrekturen sammeln, nicht einzeln umschreiben.
+- **Persönliche GitHub-Repos kennen keine Collaborator-Rollen**: „In a private repository,
+  repository owners can only grant write access to collaborators." Ein Downgrade per API
+  meldet `204 No Content` und ändert **nichts**. Abgestufte Rollen gibt es nur in
+  Organisationen; Branch Protection für private Repos nur mit Pro — bei öffentlichen frei.
+- `gh api -X PUT …/protection/allow_force_pushes` existiert **nicht** (404); die
+  Einstellung geht nur über den kompletten Protection-Payload.
 
 ## Feature-Referenz (kompakt, mit Lektionen)
 
