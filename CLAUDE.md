@@ -306,6 +306,11 @@ gebündelte Qt (Lizenztext + Quellen-Hinweis) · Screenshot im README.
 - **Jeder Rewrite zieht eine Kette nach sich:** Force-Push (Schutz kurz lockern und sofort
   wieder setzen) → Tag neu → Release-Target umhängen → **alle Klone neu klonen**
   (auch die Build-Maschine). Deshalb Textkorrekturen sammeln, nicht einzeln umschreiben.
+  **Force-Push ist vom Anwender freigegeben** (2026-07-21) — keine Rückfrage nötig, aber
+  die Sorgfalt bleibt: vorher `git bundle create ~/QTmux-backup-<datum>.bundle --all`,
+  hinterher die ganze Kette abarbeiten und die Klone melden. Blockiert der
+  Sicherheitsfilter des Harness den Vorgang („Schutz lockern + force-pushen"), nicht
+  umgehen, sondern melden.
 - **Persönliche GitHub-Repos kennen keine Collaborator-Rollen**: „In a private repository,
   repository owners can only grant write access to collaborators." Ein Downgrade per API
   meldet `204 No Content` und ändert **nichts**. Abgestufte Rollen gibt es nur in
