@@ -121,11 +121,14 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;   // Cmd/Ctrl loslassen → Link-Hervorhebung aus
     void wheelEvent(QWheelEvent *event) override;
     void geometryChange(const QRectF &newGeo, const QRectF &oldGeo) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void hoverMoveEvent(QHoverEvent *event) override;
+    void hoverLeaveEvent(QHoverEvent *event) override;
 
 private:
     void recomputeGrid();
@@ -151,6 +154,18 @@ private:
     QPoint cellAt(const QPointF &pos) const;     // Pixel -> Viewport-Zelle (col, sichtbare Zeile)
     QPoint absCellAt(const QPointF &pos) const;  // Pixel -> Selektionszelle (col, ABSOLUTE Inhalts-Zeile)
     QString selectedText() const;
+    /// Text einer ABSOLUTEN Inhalts-Zeile (Scrollback oder Live), ein Zeichen je Spalte —
+    /// Grundlage der Link-Heuristik. Spalten↔Zeichen sind 1:1, solange keine Mehr-
+    /// Codepoint-Grapheme (Emoji) vor dem Treffer stehen; Links sind ASCII.
+    QString absLineText(int absRow) const;
+    /// Arbeitsverzeichnis der Session (für relative Link-Pfade); leer, wenn keine.
+    QString sessionCwd() const;
+    /// Cmd/Ctrl-Klick-Semantik: auf macOS Cmd (Control ohne Meta), sonst Ctrl.
+    static bool isLinkModifier(Qt::KeyboardModifiers mods);
+    /// Aktualisiert die Link-Hervorhebung unter `pos` (nur bei gedrücktem Link-Modifier).
+    void updateHoverLink(const QPointF &pos, Qt::KeyboardModifiers mods);
+    /// Öffnet den Link unter `pos` im verknüpften Viewer (Scheme-Whitelist); true, wenn dort einer lag.
+    bool openLinkAt(const QPointF &pos);
     void clearSelection();
     void onDamaged();                            // Damage + Scroll-Anker nachführen
     int maxScrollOffset() const;                 // = Scrollback-Zeilenzahl
@@ -201,6 +216,16 @@ private:
     // Scrollback-Ansicht: 0 = Live-Boden, >0 = so viele Zeilen in die Historie.
     int m_scrollOffset = 0;
     int m_lastSbCount = 0;   // letzter scrollbackCount() — für die Anker-Nachführung
+
+    // Klickbarer Link unter der Maus (nur solange Cmd/Ctrl gehalten wird). m_hoverRow
+    // = absolute Inhalts-Zeile (-1 = keiner), m_hoverC0..C1 = Spaltenbereich, target =
+    // aufgelöstes Ziel für den Klick. m_lastHoverPos merkt die letzte Mausposition,
+    // damit ein reines Modifier-Drücken/Loslassen (ohne Bewegung) neu bewerten kann.
+    QPointF m_lastHoverPos{-1, -1};
+    int m_hoverRow = -1;
+    int m_hoverC0 = 0;
+    int m_hoverC1 = -1;   // < C0 ⇒ kein aktiver Link
+    QString m_hoverTarget;
 };
 
 } // namespace qtmux

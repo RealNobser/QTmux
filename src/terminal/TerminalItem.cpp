@@ -1,7 +1,11 @@
 #include "TerminalItem.h"
 #include "Session.h"
 #include "VtScreen.h"
+#include "LinkDetector.h"
 
+#include <QDesktopServices>
+#include <QHoverEvent>
+#include <QUrl>
 #include <QPainter>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -173,6 +177,7 @@ TerminalItem::TerminalItem(QQuickItem *parent) : QQuickItem(parent) {
 
     setFlag(ItemHasContents, true);
     setAcceptedMouseButtons(Qt::AllButtons);
+    setAcceptHoverEvents(true);   // für Link-Hervorhebung unter der Maus
     setActiveFocusOnTab(true);
     recomputeGrid();
 }
@@ -720,6 +725,18 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
             pushColoredQuad(ovVerts, cur.x() * m_cellW, cur.y() * m_cellH, m_cellW, m_cellH, cc);
         }
 
+        // Link-Unterstreichung unter der Maus (nur bei gehaltenem Cmd/Ctrl gesetzt):
+        // dünne Linie an der Zellunterkante über den Spaltenbereich des Treffers,
+        // in Viewport-Koordinaten wie die Selektion umgerechnet.
+        if (m_hoverRow >= 0 && m_hoverC1 >= m_hoverC0) {
+            const int vr = m_hoverRow - (sc->scrollbackCount() - m_scrollOffset);
+            if (vr >= 0 && vr < m_rows) {
+                const QColor linkColor(0x4d, 0x9d, 0xff);   // Link-Blau, hell/dunkel tauglich
+                pushColoredQuad(ovVerts, m_hoverC0 * m_cellW, (vr + 1) * m_cellH - 2,
+                                (m_hoverC1 - m_hoverC0 + 1) * m_cellW, 2, linkColor);
+            }
+        }
+
         const int sb = sc->scrollbackCount();
         if (sb > 0 && m_rows > 0) {
             const qreal total = sb + m_rows;
@@ -777,6 +794,8 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     if (!m_session) { event->ignore(); return; }
 
     const Qt::KeyboardModifiers mods = event->modifiers();
+    // Cmd/Ctrl gedrückt (Maus steht still) → Link unter der letzten Position zeigen.
+    if (m_lastHoverPos.x() >= 0) updateHoverLink(m_lastHoverPos, mods);
 #if defined(Q_OS_MACOS)
     const bool cpMod = (mods & Qt::ControlModifier) && !(mods & Qt::MetaModifier);
 #else
@@ -832,6 +851,76 @@ QPoint TerminalItem::absCellAt(const QPointF &pos) const {
     VtScreen *sc = screen();
     const int base = (sc ? sc->scrollbackCount() : 0) - m_scrollOffset;
     return {vp.x(), base + vp.y()};           // (col, absolute Inhalts-Zeile)
+}
+
+bool TerminalItem::isLinkModifier(Qt::KeyboardModifiers mods) {
+#if defined(Q_OS_MACOS)
+    // macOS: Cmd = ControlModifier (physisches Ctrl = MetaModifier, das schließen wir aus).
+    return (mods & Qt::ControlModifier) && !(mods & Qt::MetaModifier);
+#else
+    return (mods & Qt::ControlModifier) && !(mods & Qt::AltModifier);
+#endif
+}
+
+QString TerminalItem::absLineText(int absRow) const {
+    VtScreen *sc = screen();
+    if (!sc || absRow < 0) return {};
+    const int sb = sc->scrollbackCount();
+    const std::vector<Cell> *sbLine =
+        (absRow < sb) ? &sc->scrollbackLine(absRow) : nullptr;
+    const int liveRow = absRow - sb;
+    QString line;
+    for (int col = 0; col < m_cols; ++col) {
+        Cell c;
+        if (sbLine) { if (col < static_cast<int>(sbLine->size())) c = (*sbLine)[col]; }
+        else if (liveRow >= 0 && liveRow < m_rows) c = sc->cell(liveRow, col);
+        line += c.text.isEmpty() ? QStringLiteral(" ") : c.text;
+    }
+    return line;
+}
+
+QString TerminalItem::sessionCwd() const {
+    return m_session ? m_session->currentWorkingDirectory() : QString();
+}
+
+void TerminalItem::updateHoverLink(const QPointF &pos, Qt::KeyboardModifiers mods) {
+    int newRow = -1, c0 = 0, c1 = -1;
+    QString target;
+    // Nur mit gehaltenem Cmd/Ctrl überhaupt nach Links suchen — ohne Modifier keine
+    // QFileInfo-Prüfungen bei jeder Mausbewegung, und kein Ablenken der Selektion.
+    if (isLinkModifier(mods) && screen() && pos.x() >= 0) {
+        const QPoint ac = absCellAt(pos);
+        const auto spans = LinkDetector::detect(absLineText(ac.y()), sessionCwd());
+        for (const auto &s : spans) {
+            if (ac.x() >= s.start && ac.x() < s.start + s.length) {
+                newRow = ac.y(); c0 = s.start; c1 = s.start + s.length - 1;
+                target = s.target;
+                break;
+            }
+        }
+    }
+    if (newRow != m_hoverRow || c0 != m_hoverC0 || c1 != m_hoverC1) {
+        m_hoverRow = newRow; m_hoverC0 = c0; m_hoverC1 = c1; m_hoverTarget = target;
+        setCursor(newRow >= 0 ? Qt::PointingHandCursor : Qt::ArrowCursor);
+        update();
+    }
+}
+
+bool TerminalItem::openLinkAt(const QPointF &pos) {
+    if (!screen()) return false;
+    const QPoint ac = absCellAt(pos);
+    const auto spans = LinkDetector::detect(absLineText(ac.y()), sessionCwd());
+    for (const auto &s : spans) {
+        if (ac.x() < s.start || ac.x() >= s.start + s.length) continue;
+        const QUrl url = (s.kind == LinkDetector::Span::FilePath)
+            ? QUrl::fromLocalFile(s.target)
+            : QUrl::fromUserInput(s.target);
+        // Doppelte Sicherung: nur freigegebene Schemata an den OS-Handler geben.
+        if (!url.scheme().isEmpty() && LinkDetector::isAllowedScheme(url.scheme()))
+            QDesktopServices::openUrl(url);
+        return true;   // Treffer verbraucht den Klick, auch wenn das Schema abgelehnt wurde
+    }
+    return false;
 }
 
 void TerminalItem::clearSelection() {
@@ -944,6 +1033,15 @@ static int vtMouseButton(Qt::MouseButton b) {
 
 void TerminalItem::mousePressEvent(QMouseEvent *event) {
     forceActiveFocus();
+    // Cmd/Ctrl+Linksklick auf einen erkannten Link öffnet ihn im verknüpften Viewer —
+    // lokal und VOR jeder App-Maus-Weiterleitung (analog dazu, wie Shift die Selektion
+    // erzwingt). Der Modifier ist die bewusste Geste, die versehentliches Öffnen von
+    // Agenten-Output verhindert.
+    if (event->button() == Qt::LeftButton && isLinkModifier(event->modifiers())
+            && openLinkAt(event->position())) {
+        event->accept();
+        return;
+    }
     VtScreen *sc = screen();
     // App mit Maus-Tracking: Klicks an die App melden (vim/htop/tmux/…). Shift
     // erzwingt weiterhin die lokale Text-Selektion (übliche Terminal-Konvention).
@@ -1017,6 +1115,29 @@ void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
         return;
     }
     event->ignore();
+}
+
+void TerminalItem::hoverMoveEvent(QHoverEvent *event) {
+    m_lastHoverPos = event->position();
+    updateHoverLink(m_lastHoverPos, event->modifiers());
+    QQuickItem::hoverMoveEvent(event);
+}
+
+void TerminalItem::hoverLeaveEvent(QHoverEvent *event) {
+    m_lastHoverPos = QPointF(-1, -1);
+    if (m_hoverRow >= 0 || m_hoverC1 >= m_hoverC0) {
+        m_hoverRow = -1; m_hoverC1 = -1; m_hoverTarget.clear();
+        setCursor(Qt::ArrowCursor);
+        update();
+    }
+    QQuickItem::hoverLeaveEvent(event);
+}
+
+void TerminalItem::keyReleaseEvent(QKeyEvent *event) {
+    // Cmd/Ctrl losgelassen → Link-Hervorhebung an der letzten Mausposition neu bewerten
+    // (verschwindet dann). Ohne Bewegung feuert sonst kein Hover-Event.
+    updateHoverLink(m_lastHoverPos, event->modifiers());
+    QQuickItem::keyReleaseEvent(event);
 }
 
 void TerminalItem::wheelEvent(QWheelEvent *event) {

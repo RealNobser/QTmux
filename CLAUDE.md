@@ -50,6 +50,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/core/Pty.h` / `UnixPty.cpp` / `WindowsPty.cpp` | PTY-Layer (forkpty/ConPTY) |
 | `src/core/PtyBackend.{h,cpp}` | Lokale Shell/Agenten; zerlegt `program` via `splitCommand` |
 | `src/core/VtScreen.{h,cpp}` | libvterm-Wrapper; `Cell` Qt-freundlich; OSC-Parser (133/9/777/Maus) |
+| `src/core/LinkDetector.{h,cpp}` | Gui-freie Link-Heuristik (URLs + existierende Dateipfade, Scheme-Whitelist) für klickbare Links (QTMUX-39) |
 | `src/core/Session.{h,cpp}` | Backend + VtScreen; Activity/Attention/Progress; Login-Script; SSH-Passwort-Auto-Fill |
 | `src/viewmodels/SessionModel.{h,cpp}` | QAbstractListModel Sidebar; Persistenz/Restore; CWD-Vererbung |
 | `src/viewmodels/Theme.{h,cpp}` | QML-Singleton `Theme.*`; leitet ALLE Chrome-Farben aus dem aktiven Color-Scheme ab |
@@ -245,12 +246,19 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
-## Status (2026-07-21)
+## Status (2026-07-22)
 
 **v1.5.0.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
 SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattformen fertig
 (DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 22 MCP-Tools
 (GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 208/208.
+
+**QTMUX-39 (2026-07-22) — Klickbare Links.** Cmd/Ctrl-Klick auf eine URL oder einen
+existierenden Dateipfad öffnet den verknüpften Viewer; Cmd/Ctrl-Hover unterstreicht.
+Heuristik (`LinkDetector`, Gui-frei, 11 Unit-Tests + VtScreen-Integrationstest), Scheme-
+Whitelist gegen KI-Output-Missbrauch. Details in der Feature-Referenz (Terminal-Verhalten).
+Der Klick selbst ist GUI-interaktiv → automatisiert ist die Logik+Datenkette abgesichert,
+der visuelle Klick bleibt manueller Abnahmeschritt. OSC 8 bewusst deferred (QTMUX-40).
 
 **QTMUX-30…34 erledigt (2026-07-21)** — Befunde aus dem ersten echten Mehragenten-Betrieb
 (RAFTNG steuerte über QTmux zwei Worker; Fremdbericht `docs/mcp-controller-feedback-
@@ -278,7 +286,14 @@ Umzug in ein öffentliches Repo unter Apache-2.0, nachdem die Historie bereinigt
 (Damit auch QTMUX-35 Windows-Installer und QTMUX-36 separater Download-Kanal erledigt.)
 Einzelheiten und Spielregeln: Abschnitt **„Repository, Release, Zusammenarbeit"**.
 
-**Offene Jira:** **QTMUX-38** (Shell-Helfer sind für **Installationsnutzer nicht
+**Offene Jira:** **QTMUX-40** (OSC-8-Hyperlinks — die *explizite* Variante zu den
+heuristischen Links aus QTMUX-39. In dieser Architektur teuer: `VtScreen` hält den
+sichtbaren Bildschirm **nicht** als Puffer (Zellen entstehen lazy aus libvterm), und
+libvterm kennt **keine** Hyperlinks → es gibt keine Zelle, an die man die Link-ID beim
+Empfang von `ESC]8` heften könnte. Bräuchte Cursor-Span-Tracking (Link-auf/-zu über
+Cursorbewegung) + neues `Cell`-Feld + Scrollback-Sonderfälle. Bewusst deferred, weil die
+Heuristik den Agenten-Fall (nackter Text) bereits abdeckt und OSC-8-emittierende Programme
+dort selten sind) · **QTMUX-38** (Shell-Helfer sind für **Installationsnutzer nicht
 erreichbar** — `qtmux-emit.*`/`qtmux-wait.*` liegen nur im Repo, in keinem Paket; genau
 der Installationsnutzer will aber den Stop-Hook einrichten. Reines Mitpaketieren löst das
 **AppImage nicht** — es wird unter wechselndem `/tmp/.mount_*` gemountet, taugt also nicht
@@ -368,6 +383,18 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   keine globalen F-Tasten-Shortcuts); Copy/Paste macOS Cmd+C/V, sonst Ctrl+Shift+C/V;
   Smart Ctrl+C (Auswahl→Copy, sonst SIGINT). Bracketed Paste + Multiline-Warnung;
   Copy-on-Select + Rechtsklick-Paste optional.
+- **Klickbare Links (QTMUX-39):** `LinkDetector` (Gui-frei, `qtmux_core`) findet in einer
+  Zeile **URLs** (Scheme-Whitelist http/https/ftp/mailto/file — KI-Output darf keinen
+  beliebigen Handler starten) und **existierende Dateipfade** (gegen Session-CWD aufgelöst;
+  die `QFileInfo::exists`-Prüfung IST der Fehlalarm-Filter, nackte Wörter ohne Trenner
+  bleiben außen vor). `TerminalItem` unterstreicht bei **Cmd/Ctrl-Hover** (Overlay-Quad wie
+  Selektion) und öffnet bei **Cmd/Ctrl-Klick** via `QDesktopServices::openUrl` — Modifier
+  ist die bewusste Geste gegen versehentliches Öffnen. Klick läuft **vor** der
+  App-Maus-Weiterleitung (wie Shift die Selektion erzwingt). Zeilentext aus
+  `absLineText(absRow)` (1 Zeichen/Spalte; Spalten↔Zeichen 1:1, solange keine Emoji davor).
+  Tests: `tst_linkdetector` (11 Fälle) + `tst_vtscreen::linkDetectionOnScreenLine`
+  (Integration VtScreen→Text→Detector). **OSC 8 (explizite Hyperlinks) bewusst NICHT** —
+  s. QTMUX-40 unten.
 
 ### PTY-Layer
 - `UnixPty`: forkpty, O_NONBLOCK-Master. **⚠️ `write()` ist gepuffert** (`pending` +

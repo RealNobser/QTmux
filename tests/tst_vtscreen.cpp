@@ -1,6 +1,8 @@
 #include <QtTest>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include "VtScreen.h"
+#include "LinkDetector.h"
 
 using namespace qtmux;
 
@@ -22,7 +24,36 @@ private slots:
     void faintAttribute();
     void lineWrapContinuation();
     void mouseReporting();
+    void linkDetectionOnScreenLine();
 };
+
+// Integration: ein per Terminal geschriebener Pfad/URL muss als exakt der String bei
+// LinkDetector ankommen. Sichert die Kette VtScreen-Zellen → Zeilentext → Heuristik,
+// die im GUI-Pfad (TerminalItem::absLineText) sonst nur manuell prüfbar wäre.
+void TestVtScreen::linkDetectionOnScreenLine() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QFile fh(dir.filePath(QStringLiteral("report.txt")));
+    QVERIFY(fh.open(QIODevice::WriteOnly)); fh.close();
+
+    VtScreen vt(24, 80);
+    vt.inputWrite("Fertig: ./report.txt und https://example.com/x");
+
+    // Zeile 0 wie im GUI zu Text zusammensetzen (ein Zeichen je Spalte).
+    QString line;
+    for (int col = 0; col < 80; ++col) {
+        const Cell c = vt.cell(0, col);
+        line += c.text.isEmpty() ? QStringLiteral(" ") : c.text;
+    }
+
+    const auto spans = LinkDetector::detect(line, dir.path());
+    QCOMPARE(spans.size(), 2);
+    QCOMPARE(spans[0].kind, LinkDetector::Span::FilePath);
+    QCOMPARE(spans[0].target,
+             QFileInfo(dir.filePath(QStringLiteral("report.txt"))).absoluteFilePath());
+    QCOMPARE(spans[1].kind, LinkDetector::Span::Url);
+    QCOMPARE(spans[1].target, QStringLiteral("https://example.com/x"));
+}
 
 // Echtes 24-Bit-RGB (ESC[38;2;r;g;b) muss exakt durchgereicht werden.
 void TestVtScreen::trueColorRgb() {
