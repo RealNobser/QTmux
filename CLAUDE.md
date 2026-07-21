@@ -274,16 +274,18 @@ wäre der Widgets/`QMenuBar`-Umbau, bewusst deferred, s. [[qtmux-native-menu-ico
 Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff (CAN-FD,
 ID-Filter, Konfig-Dialog statt `baud`-Befehl, DBC-Decoding) · CI-Action-Versionen anheben ·
 optional CPack-Distro-Pakete (.deb/.rpm) · **LGPL-Beilagen** für das in den Installern
-gebündelte Qt (Lizenztext + Quellen-Hinweis) · Screenshot im README ·
-`enforce_admins` einschalten, falls die PR-Pflicht auch für den Owner gelten soll.
+gebündelte Qt (Lizenztext + Quellen-Hinweis) · Screenshot im README.
 
 ## Repository, Release, Zusammenarbeit
 
 - **Öffentlich:** `github.com/RealNobser/QTmux` (Apache-2.0). Archiv: `QTmux-private`
   (privat + archiviert = read-only; enthält als einziges noch die **unbereinigte**
   Historie). Beide Namen sind belegt — die alte Weiterleitung ist dadurch tot.
-- **`main` ist geschützt** → Änderungen laufen über Branch + PR. Als Owner ginge ein
-  direkter Push (`enforce_admins` aus), unterläuft aber den Zweck; nur für Notfälle.
+- **`main` ist geschützt**, aber `enforce_admins` ist bewusst **aus**: Die PR-Pflicht gilt
+  **Collaborators**, nicht der eigenen Arbeit. Anwender und Claude pushen als Admins
+  **direkt auf `main`** — ausdrückliche Vorgabe, kein Notfallweg. GitHub protokolliert das
+  als „Bypassed rule violations"; das ist erwartet und kein Warnsignal.
+  (Nur ein **Force**-Push braucht das kurzzeitige Lockern der Regel, s. Git-Lektionen.)
 - **Release:** `gh release create v<ver> --target <voller SHA>` — ein **Kurz-SHA wird
   abgelehnt** (HTTP 422). Assets: DMG + MSI + portables ZIP + AppImage.
   Das AppImage stammt aus dem CI-Lauf desselben Commits
