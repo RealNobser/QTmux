@@ -109,6 +109,10 @@ nennt die Antwort die tatsächlich vorhandenen IDs.
 > aufs Aufwachen ausrichtet, wartet sonst vergeblich. `subscribe_events` meldet deshalb je
 > Quelle, ob sie bisher **je** ein Ereignis gesendet hat; steht `sourcesWithEventsSoFar`
 > auf `0`, erst die Quellseite einrichten (nächster Abschnitt).
+>
+> **Das ist nur die halbe Bedingung.** Die andere: Der Empfänger muss im Moment der
+> Meldung auch zuhören. Ein arbeitender KI-Agent tut das nicht — siehe
+> [Empfangen als KI-Agent](#empfangen-als-ki-agent-der-wichtigste-abschnitt).
 
 Ein Agent in Session A meldet „fertig" oder „Frage"; ein Agent in Session B wird
 benachrichtigt und erhält **A's Session-ID**, um dort per `send_text`/`read_screen`/
@@ -131,6 +135,18 @@ benachrichtigt und erhält **A's Session-ID**, um dort per `send_text`/`read_scr
    leer. Antwort: `{events:[{sourceSessionId, kind, text, timestamp, seq}], nextSeq}`.
    `nextSeq` beim nächsten Aufruf als `afterSeq` übergeben → keine Lücken/Doppel.
 
+> **Diese Schleife setzt einen Client voraus, der auch wirklich schleift** — ein Skript,
+> einen Daemon. Ein KI-Agent ist das nicht; für ihn gilt der Abschnitt
+> [Empfangen als KI-Agent](#empfangen-als-ki-agent-der-wichtigste-abschnitt).
+
+**Der erste `afterSeq`: `list_sessions` → `lastAgentEventSeq`.** Ohne `afterSeq` wartet
+`wait_for_events` **nur ab jetzt** und verschweigt damit alles, was zwischen zwei Abfragen
+anfiel — also genau die Ereignisse, die man verpasst hat, während man beschäftigt war.
+`list_sessions` nennt je Session `lastAgentEventSeq`; der höchste dieser Werte ist der
+Stand, den man bereits gesehen hat, und damit der saubere Einstiegs-Cursor. Danach immer
+mit dem `nextSeq` der letzten Antwort weiterpollen. (Ein `nextSeq: 0` heißt **nicht**
+„Kanal kaputt", sondern „bislang kein Ereignis im Puffer".)
+
 ```bash
 U=http://127.0.0.1:7345/mcp
 SID=$QTMUX_SESSION_ID    # eigene Session
@@ -147,6 +163,53 @@ curl -s -X POST $U -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",
 
 Hinweise: Abos sind **laufzeit-flüchtig** (Session-IDs sind nur zur Laufzeit eindeutig);
 `afterSeq` ist ein laufzeit-relativer Cursor und nicht über App-Neustarts hinweg gültig.
+
+### Empfangen als KI-Agent (der wichtigste Abschnitt)
+
+> **Auch mit eingerichtetem Stop-Hook erreicht eine Meldung einen *beschäftigten*
+> Controller nicht.** `wait_for_events` ist ein **Abholen**; es wirkt nur, *während* der
+> Empfänger darin wartet. Ein Agent, der arbeitet, wartet nicht — er führt einen Zug aus
+> und ruft Werkzeuge nur, wenn er sich dafür entscheidet. In einen laufenden Zug kann ein
+> MCP-Server nicht hineinreichen. Der eingerichtete Hook ist also nur die **halbe**
+> Bedingung; die andere Hälfte ist, dass jemand zuhört.
+
+Gemessen am laufenden System (2026-07-21): Zwei Worker meldeten `done`, die Ereignisse
+lagen mit Sequenz 32 und 41 im Server — der Controller bemerkte über eine halbe Stunde
+nichts davon, weil er in dieser Zeit baute. Kein Fehler im Kanal, sondern ein falsches
+Modell vom Empfangen. Und der Fehlerfall sieht aus wie „gerade passiert nichts" — dieselbe
+Klasse stiller Fehlfunktion wie bei QTMUX-30.
+
+**Die Lösung ist ein Hintergrundprozess**, der stellvertretend wartet und **endet**, sobald
+etwas vorliegt: Das Ende eines Hintergrundbefehls ist die eine Stelle, an der die
+Agenten-Umgebung einen arbeitenden Agenten von außen weckt. Damit wird aus dem Abholen ein
+Zustellen. Dafür liegt **`shell-integration/qtmux-wait.sh`** bei (Windows:
+`qtmux-wait.ps1` / `qtmux-wait.cmd`) — das Gegenstück zu `qtmux-emit.*`:
+
+```bash
+# im HINTERGRUND starten, dann normal weiterarbeiten
+qtmux-wait.sh --sessions 2,3 --kinds done,question &
+```
+
+Endet mit `QTMUX EVENT seq=<n>` plus dem Ereignis als JSON, sonst nach dem Deckel
+(`--max-wait`, Vorgabe ~50 min) mit `QTMUX TIMEOUT seq=<n>`, damit ein vergessener Wächter
+nicht ewig läuft. Das `seq=` der Abschlusszeile ist der Cursor für den nächsten Wächter:
+
+```bash
+qtmux-wait.sh --after 45 &      # lückenlos dort weiter, wo der letzte aufhörte
+```
+
+Das Skript legt bei Bedarf selbst ein Abo an (ohne Abo antwortet `wait_for_events` sofort
+mit einem Fehler — ein selbstgebauter Wächter würde daraus eine heiße Schleife machen).
+Mit `--sessions`/`--kinds` **ersetzt** es das Abo der Session, ohne Filter lässt es ein
+vorhandenes unangetastet.
+
+> **Nimm auch hier das Skript, nicht einen `curl`-Einzeiler.** Drei Fallstricke stecken
+> darin, jeder einzelne sorgt für einen Wächter, der stumm nichts meldet:
+> `timeoutMs` **muss unter** dem HTTP-Timeout liegen (sonst schneidet der Client den
+> Long-Poll ab, bevor der Server antwortet); `nextSeq` muss **immer** fortgeschrieben
+> werden, auch wenn nichts Passendes dabei war (sonst pollt der Wächter endlos über
+> dieselben herausgefilterten Ereignisse); und ohne Gesamt-Deckel überlebt ein vergessener
+> Wächter die Sitzung.
 
 ### Worker ereignisfähig machen (Stop-/Notification-Hook)
 

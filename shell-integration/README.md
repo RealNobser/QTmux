@@ -12,7 +12,10 @@ anderen Session **fertig** ist oder eine **Frage** hat).
 | `qtmux.bash` / `qtmux.zsh` | macOS/Linux | OSC-133-Prompt-Marker + `qtmux-notify` + `qtmux-event` (interaktive Shell) |
 | `qtmux.ps1` | Windows (pwsh & PS 5.1) | dito für PowerShell (Prompt-Marker D/A + `qtmux-notify` + `qtmux-event`) |
 | `qtmux-event.cmd` | Windows (cmd) | Einzelaufruf `qtmux-event done\|question\|error\|info "Text"` (OSC) |
-| `qtmux-emit.ps1` / `qtmux-emit.cmd` | Windows | Ereignis **aus einem Hook** via MCP `post_event` (HTTP) — siehe unten |
+| `qtmux-emit.sh` | macOS/Linux | Ereignis **aus einem Hook** via MCP `post_event` (HTTP) — siehe unten |
+| `qtmux-emit.ps1` / `qtmux-emit.cmd` | Windows | dito für Windows |
+| `qtmux-wait.sh` | macOS/Linux | **Warten** auf ein Ereignis; blockiert und endet beim ersten Treffer — siehe unten |
+| `qtmux-wait.ps1` / `qtmux-wait.cmd` | Windows | dito für Windows |
 
 Installation (interaktiv): die jeweilige Datei im Shell-Profil sourcen
 (`~/.bashrc`, `~/.zshrc`, `$PROFILE`), bzw. die `.cmd` in ein PATH-Verzeichnis legen.
@@ -49,8 +52,29 @@ Beispiel — Claude Code, `~/.claude/settings.json` (oder projektlokal `.claude/
 }
 ```
 
-macOS/Linux analog mit einem kleinen `curl`-Aufruf auf `post_event` (siehe `docs/MCP.md`).
+macOS/Linux analog mit `qtmux-emit.sh done "Aufgabe erledigt"`. **Nimm in beiden Fällen
+das Skript, nicht einen `curl`-Einzeiler im Hook**: Der bräuchte eine dreifach
+verschachtelte Maskierung (JSON in JSON in der Shell), und geht die schief, feuert der
+Hook **still** nicht — für den Empfänger ununterscheidbar von „gerade passiert nichts".
 
-Der benachrichtigte Agent (selbst MCP-Client) ruft `subscribe_events` und dann in einer
-Schleife `wait_for_events` auf und erhält `sourceSessionId` der meldenden Session, um dort
-per `send_text`/`read_screen`/`focus_session` weiterzuarbeiten.
+## ⚠️ Empfangen: ein arbeitender Agent hört nicht zu
+
+`wait_for_events` ist ein **Abholen** — es wirkt nur, *während* der Empfänger darin
+wartet. Ein KI-Agent tut das praktisch nie: Solange er arbeitet, sitzt er in keinem
+Werkzeugaufruf, und ein MCP-Server kann in einen laufenden Zug nicht hineinreichen. Ein
+eingerichteter Stop-Hook auf der Senderseite ist deshalb nur die **halbe** Bedingung.
+
+Dafür gibt es `qtmux-wait.*`: Es wartet **stellvertretend in einem Hintergrundprozess**
+und **endet**, sobald ein Ereignis vorliegt — und das Ende eines Hintergrundbefehls ist
+die eine Stelle, an der die Agenten-Umgebung einen arbeitenden Agenten weckt.
+
+```bash
+qtmux-wait.sh --sessions 2,3 --kinds done,question &   # im Hintergrund starten!
+```
+
+Ausgabe bei Treffer: `QTMUX EVENT seq=<n>` plus das Ereignis als JSON (enthält
+`sourceSessionId`, um dort per `send_text`/`read_screen`/`focus_session` weiterzuarbeiten).
+Ohne Treffer endet es nach `--max-wait` (Vorgabe ~50 min) mit `QTMUX TIMEOUT seq=<n>`.
+Das `seq=` ist der Cursor für den nächsten Wächter (`--after <n>`) — so bleibt zwischen
+zwei Wartephasen keine Lücke. Einzelheiten und der saubere Einstiegs-Cursor:
+[`docs/MCP.md`](../docs/MCP.md).

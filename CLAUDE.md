@@ -62,7 +62,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
-| `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer (HTTP; `.sh` = Unix, QTMUX-30) |
+| `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37) |
 | `tests/` | 12 ctest-Tests: 11 QtTest-Binaries (pty, vtscreen, session, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
@@ -247,7 +247,7 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 
 ## Status (2026-07-21)
 
-**v1.4.0.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
+**v1.5.0.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
 SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattformen fertig
 (DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 22 MCP-Tools
 (GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 208/208.
@@ -258,6 +258,19 @@ SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattform
 ID-Fehlermeldungen · `get_layout` mit Sitzungsübersicht · Doku-Wächter `test_doc_duplicates`.
 MCP-Port jetzt konfigurierbar (`QTMUX_MCP_PORT`/`QTMUX_PROFILE`) — Voraussetzung, um die
 MCP-Schicht zu testen, ohne die produktive Instanz anzufassen.
+
+**QTMUX-37 (2026-07-21, v1.5.0) — Empfangen von Agenten-Ereignissen.** Zweiter
+RAFTNG-Bericht: Zwei Worker meldeten `done` (seq 32/41 lagen im Server), der Controller
+bemerkte es eine halbe Stunde nicht — **weil er baute**. `wait_for_events` ist ein
+**Abholen**; es wirkt nur, während der Empfänger darin wartet, und ein arbeitender Agent
+wartet nie. Kein Code-Fehler, sondern eine falsche Annahme in der Doku („in einer
+Schleife" setzt einen Client voraus, der schleift). Antwort: **`shell-integration/
+qtmux-wait.{sh,ps1,cmd}`** — wartet stellvertretend im Hintergrund und **endet** beim
+ersten Treffer; dessen Ende weckt den Agenten (die einzige Stelle, an der das von außen
+geht). Dazu Doku-Abschnitt „Empfangen als KI-Agent" + Einstiegs-Cursor
+(`list_sessions` → `lastAgentEventSeq`). Eine echte Push-Seite ist **nicht** baubar:
+QTmux kann in den laufenden Zug eines fremden Agenten nicht hineinreichen — nur dessen
+eigene Umgebung kann ihn wecken.
 
 **Release 1.4.0 + öffentliches Repo (2026-07-21).** Erstes GitHub-Release mit allen vier
 Paketen (DMG · MSI · portables ZIP · AppImage), Notes zweisprachig mit SHA-256. Zugleich
@@ -482,6 +495,21 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   still, und das sieht exakt aus wie „gerade passiert nichts".
 - **QTMUX-33 (`get_layout`):** liefert `{layout, activePaneId, sessions}` — der Baum
   allein verschweigt, welche Sessions in **keinem** Pane liegen (laufen, aber unsichtbar).
+- **QTMUX-37 (Empfangen):** `wait_for_events` ist ein **Abholen** und erreicht einen
+  **beschäftigten** Agenten nicht — der eingerichtete Stop-Hook ist nur die halbe
+  Bedingung. QTmux kann das nicht von sich aus lösen (in einen laufenden Agenten-Zug
+  reicht kein Server hinein); wecken kann nur die Agenten-Umgebung, und die tut es beim
+  **Ende eines Hintergrundbefehls**. Daher `qtmux-wait.{sh,ps1,cmd}` als wartender
+  Wächter. Drei Fallen, jede erzeugt einen stumm nichts meldenden Wächter:
+  `timeoutMs` **unter** dem HTTP-Timeout halten (sonst schneidet der Client den Long-Poll
+  ab, bevor der Server antwortet); `nextSeq` **immer** fortschreiben, auch ohne Treffer
+  (sonst Endlos-Poll über dieselben gefilterten Ereignisse); Gesamt-Deckel gegen
+  vergessene Wächter — und diesen **auch im laufenden Poll** berücksichtigen, sonst
+  überzieht er um eine volle Poll-Länge (`--max-wait 5` wartete 45 s).
+  ⚠️ POSIX-`read` verwirft das letzte Element ohne abschließendes `\n` — `printf '%s'`
+  statt `printf '%s\n'` erzeugte so ein **leeres** `kinds`/`sources`-Array, und leer heißt
+  serverseitig „kein Filter", also alles. Der erste Test war dadurch nur zufällig grün;
+  aufgefallen ist es erst am **Gegentest** (ein nicht passendes Ereignis darf NICHT wecken).
 
 ## E2E-/Test-Fallen (alle Plattformen)
 

@@ -19,7 +19,7 @@
 # Installation; unter Wayland/X11 genügt `chmod +x QTmux-*.AppImage && ./QTmux-*.AppImage`.
 set -euo pipefail
 
-VERSION="${1:-1.4.0}"
+VERSION="${1:-1.5.0}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${QTMUX_BUILD_DIR:-$REPO/build/linux-release}"
 OUT="$REPO/dist/QTmux-$VERSION-x86_64.AppImage"

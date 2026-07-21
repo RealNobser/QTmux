@@ -22,14 +22,14 @@
 # Quarantäne-Attribut (`xattr -dr com.apple.quarantine /Applications/QTmux.app`).
 set -euo pipefail
 
-VERSION="${1:-1.4.0}"
+VERSION="${1:-1.5.0}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PRESET="macos-release"
 # Ausweich-Build-Verzeichnis wie beim AppImage-Skript (QTMUX_BUILD_DIR). Nötig, wenn
 # aus build/macos-release gerade eine QTmux-Instanz LÄUFT: Der Release-Build würde
 # deren Binary im Betrieb überschreiben und den Prozess mitsamt allen Terminal-
 # Sessions abreißen. Dann hierhin ausweichen, statt die laufende Arbeit zu verlieren:
-#   QTMUX_BUILD_DIR=build/macos-dmg installer/build-dmg.sh 1.4.0
+#   QTMUX_BUILD_DIR=build/macos-dmg installer/build-dmg.sh 1.5.0
 BUILD_DIR="${QTMUX_BUILD_DIR:-$REPO/build/$PRESET}"
 [[ "$BUILD_DIR" = /* ]] || BUILD_DIR="$REPO/$BUILD_DIR"
 APP_SRC="$BUILD_DIR/qtmux.app"
