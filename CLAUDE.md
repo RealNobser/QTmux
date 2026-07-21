@@ -193,10 +193,6 @@ Makro-Differenz: Mermaid heißt on-prem `mermaid-macro`, Cloud `mermaid-cloud`.
 on-prem als UTF-8 — String-Anker mit Umlauten auf der Cloud-Seite zusätzlich in der
 Entity-Variante probieren; eingefügter UTF-8-Text wird von beiden akzeptiert.
 
-**Firmen-Confluence (getrennt davon):** Windows-Download-Kanal, nur aus dem Firmennetz
-erreichbar; Publish-Skript `dist/_qtmux_pub2.py` (Creds `confluence.env`). Host, Space
-und Seiten-IDs in `CLAUDE.local.md`. **Steht auf 1.1.2-Ära** — Aktualisierung auf 1.4.x
-ist ein Windows-/Firmen-Task (Jira QTMUX-36).
 
 ## Jira (DUAL: on-prem + Cloud)
 
@@ -259,7 +255,7 @@ wäre der Widgets/`QMenuBar`-Umbau, bewusst deferred, s. [[qtmux-native-menu-ico
 **Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) · Signierung/
 Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff (CAN-FD,
 ID-Filter, Konfig-Dialog statt `baud`-Befehl, DBC-Decoding) · CI-Action-Versionen anheben ·
-optional CPack-Distro-Pakete (.deb/.rpm) · Firmen-Confluence auf 1.4.x (Windows-Task, QTMUX-36).
+optional CPack-Distro-Pakete (.deb/.rpm).
 
 ## Feature-Referenz (kompakt, mit Lektionen)
 
