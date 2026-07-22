@@ -251,7 +251,12 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 **v1.5.0.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
 SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattformen fertig
 (DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 22 MCP-Tools
-(GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 208/208.
+(GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 217/217.
+
+**QTMUX-41 (2026-07-22) — Rückfrage vor dem Beenden.** Cmd+Q riss bisher ohne Vorwarnung
+alle Sitzungen samt laufender Agenten/Builds/SSH-Verbindungen mit. Jetzt zählt ein Dialog
+die offenen Sitzungen auf; abschaltbar in den Einstellungen. Umsetzung und die Qt-6.5-
+Eigenheit dahinter in der Feature-Referenz (Sessions & UI).
 
 **QTMUX-39 (2026-07-22) — Klickbare Links.** Cmd/Ctrl-Klick auf eine URL oder einen
 existierenden Dateipfad öffnet den verknüpften Viewer; Cmd/Ctrl-Hover unterstreicht.
@@ -415,6 +420,14 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `m_restoring`-Guard (Restore erbt kein fremdes CWD, führt keine Login-Scripts aus).
   Neue Shell **erbt das Live-CWD** der aktiven Session (nur Shell-Quellen, explizites
   Verzeichnis hat Vorrang).
+- **Beenden mit Rückfrage (QTMUX-41):** Dialog listet die offenen Sitzungen auf, bevor
+  alles geschlossen wird; abschaltbar (`window/confirmQuit`, Einstellungen → Fenster).
+  🔑 Zentraler Wächter ist **`Window.onClosing`** (`close.accepted = false`), NICHT die
+  Beenden-Aktion: Seit **Qt 6.5** läuft auch ein Anwendungs-Quit (natives macOS-App-Menü,
+  Cmd+Q, `Qt.quit()`) über das Schließen aller Fenster und bricht ab, wenn ein Fenster
+  ablehnt — dadurch greift dieselbe Rückfrage auch für Schließkreuz und Alt+F4.
+  `quitConfirmed` schaltet die Frage für den bestätigten Durchlauf ab (sonst fragt der
+  Wächter beim `close()` aus `onAccepted` erneut).
 - **Agent-Awareness:** OSC 133 (Prompt-Marker → Activity-Ring), OSC 9/777 (Notify),
   OSC 9;4 (Progress-Balken), Bell → Attention-Pulse (blau); MCP-Controller-Tab rot.
 - **AgentEventHub** (Gui-frei, Ringpuffer 256, monotone `seq`): Inter-Agenten-Ereignisse
@@ -553,6 +566,19 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 - macOS-GUI-E2E: CGEvent-Tool braucht Pause zwischen MouseDown/Up (sonst nur Hover);
   App-Sprache über das App-Menü umstellen, nicht `defaults write` (cfprefsd-Cache);
   Details [[qtmux-gui-test-macos]].
+- **Ohne Bedienungshilfen-Recht testen:** System Events/`osascript` und CGEvent-Posting
+  scheitern dann hart (`-1719`, `AXIsProcessTrusted()` = false). Ein **Beenden** lässt
+  sich trotzdem echt auslösen — `NSRunningApplication(processIdentifier:)?.terminate()`
+  (Swift-Dreizeiler) schickt dasselbe Apple-Event wie Cmd+Q, **PID-genau** und damit
+  ohne Gefahr für eine parallel laufende produktive Instanz (`tell application` würde
+  über die Bundle-ID gehen und die falsche treffen). Beweiskraft nur mit **Gegentest**:
+  einmal mit eingeschalteter Rückfrage (Prozess muss leben), einmal mit ausgeschalteter
+  (Prozess muss enden). Einstellung dafür vor dem Start per `defaults write` in die
+  Profil-Domain (`com.qtmux.QTmux-<profil>`, Key `window.confirmQuit`) — QSettings
+  schreibt `/` als `.`.
+- ⚠️ Ein temporärer Test-Hook kann selbst der Fehler sein: `Dialog.accept()` direkt in
+  `onOpened` wird verschluckt (Popup ist mitten im Öffnen) und sah exakt aus wie ein
+  kaputter Bestätigen-Pfad. Erst ein Timer (~400 ms) zeigte die Kette vollständig.
 - Windows-E2E: Foreground nur zuverlässig mit `AttachThreadInput`; ein Alt-Stoß vor ESC
   schaltet den Qt-Menümodus (ESC schließt dann nur den). Menüs via UIA-`InvokePattern`
   öffnen. Synthetische Tasten erst nach Warteschleife aufs `MainWindowHandle`.

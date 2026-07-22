@@ -483,6 +483,19 @@ ApplicationWindow {
     property bool copyOnSelect: false       // Auswahl automatisch kopieren
     property bool rightClickPaste: false    // Rechtsklick fügt ein (statt Kontextmenü)
     property bool pasteWarnMultiline: true  // Vor mehrzeiligem Einfügen warnen
+    property bool confirmQuit: true         // Vor dem Beenden nachfragen (QTMUX-41)
+
+    // Beenden mit Rückfrage (QTMUX-41): Cmd+Q/Alt+F4 reißt sonst alle Sessions
+    // samt laufender Prozesse ohne Vorwarnung mit. `quitConfirmed` schaltet die
+    // Rückfrage für den bestätigten Durchlauf ab (sonst fragte onClosing erneut).
+    property bool quitConfirmed: false
+    function requestQuit() {
+        if (confirmQuit && !quitConfirmed && sessions.count > 0) {
+            quitConfirmDialog.open()
+            return
+        }
+        window.close()
+    }
 
     // Mehrzeilige Einfügung: das betroffene Terminal merken und nachfragen.
     property var pendingPasteTerm: null
@@ -864,9 +877,20 @@ ApplicationWindow {
     // damit man ohne Klick ins Terminal sofort tippen kann.
     onActiveChanged: if (active) focusActivePane()
 
-    // Beim Schließen erst den Zustand sichern (braucht laufende Prozesse für das
-    // aktuelle Arbeitsverzeichnis), dann alle Prozesse/Verbindungen beenden.
-    onClosing: {
+    // Beim Schließen erst nachfragen (QTMUX-41), dann den Zustand sichern (braucht
+    // laufende Prozesse für das aktuelle Arbeitsverzeichnis) und alle Prozesse/
+    // Verbindungen beenden.
+    // Dieser Handler ist der ZENTRALE Wächter: Seit Qt 6.5 läuft auch ein
+    // Anwendungs-Quit (natives macOS-Menü/Cmd+Q, Qt.quit()) über das Schließen aller
+    // Fenster — lehnt eines ab, bricht der Quit ab. Deshalb genügt es NICHT, nur die
+    // Beenden-Aktion abzufangen; umgekehrt greift die Rückfrage hier auch für das
+    // Fenster-Schließkreuz und Alt+F4.
+    onClosing: (close) => {
+        if (window.confirmQuit && !window.quitConfirmed && sessions.count > 0) {
+            close.accepted = false
+            quitConfirmDialog.open()
+            return
+        }
         sessions.saveState()
         sessions.shutdownAll()
     }
@@ -888,6 +912,7 @@ ApplicationWindow {
         property alias copyOnSelect: window.copyOnSelect
         property alias rightClickPaste: window.rightClickPaste
         property alias pasteWarnMultiline: window.pasteWarnMultiline
+        property alias confirmQuit: window.confirmQuit
     }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
@@ -917,7 +942,7 @@ ApplicationWindow {
         text: qsTr("Beenden")
         shortcut: Hotkeys.bindings["actQuit"]
         enabled: !hotkeyCaptureDialog.capturing
-        onTriggered: Qt.quit()
+        onTriggered: window.requestQuit()
     }
     // Einstellungen-Dialog öffnen (macOS: Cmd+, ; sonst Strg+,).
     Action {
@@ -1297,7 +1322,7 @@ ApplicationWindow {
                             { title: qsTr("Sprache: Deutsch"),           sub: "",             icon: "translate",       run: function(){ App.language = "de" } },
                             { title: qsTr("Sprache: English"),           sub: "",             icon: "translate",       run: function(){ App.language = "en" } },
                             { title: qsTr("Über QTmux"),                 sub: hk("actAbout"), icon: "info",            run: function(){ aboutDialog.open() } },
-                            { title: qsTr("Beenden"),                    sub: hk("actQuit"), icon: "x",               run: function(){ Qt.quit() } },
+                            { title: qsTr("Beenden"),                    sub: hk("actQuit"), icon: "x",               run: function(){ window.requestQuit() } },
                         ]
                         // Je geladenem Plugin-Backend ein Eintrag (wie im „+"-Menü).
                         var pts = Plugins.backendTypes
@@ -2739,6 +2764,59 @@ ApplicationWindow {
         }
     }
 
+    // --- Beenden bestätigen (QTMUX-41) --------------------------------------
+    // Bewusst mit Aufzählung der offenen Sitzungen: Wer mehrere Agenten laufen
+    // hat, sieht so, was er gerade mitreißen würde. Abschaltbar in den
+    // Einstellungen (Abschnitt „Fenster").
+    AppDialog {
+        id: quitConfirmDialog
+        width: 420
+        title: qsTr("QTmux beenden?")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        // `quitConfirmed` verhindert, dass der onClosing-Wächter gleich noch einmal fragt.
+        onAccepted: { window.quitConfirmed = true; window.close() }
+        ColumnLayout {
+            spacing: 8
+            Label {
+                Layout.preferredWidth: 380
+                wrapMode: Text.WordWrap
+                color: Theme.textBright
+                // Bewusst ohne Zahl im Satz: Singular/Plural wäre in jeder Sprache
+                // anders zu bilden — die Anzahl zeigt die Aufzählung darunter.
+                text: qsTr("Beim Beenden werden alle offenen Sitzungen samt ihrer laufenden Prozesse und Verbindungen geschlossen.")
+            }
+            Label {
+                text: qsTr("Offene Sitzungen:")
+                color: Theme.textBright
+                font.pixelSize: 12
+                font.bold: true
+            }
+            ColumnLayout {
+                spacing: 2
+                Layout.leftMargin: 4
+                Repeater {
+                    model: sessions
+                    delegate: Label {
+                        required property int index
+                        required property string title
+                        visible: index < 8
+                        Layout.preferredWidth: 376
+                        elide: Label.ElideRight
+                        color: Theme.textDim
+                        font.pixelSize: 12
+                        text: "• " + title
+                    }
+                }
+                Label {
+                    visible: sessions.count > 8
+                    color: Theme.textDim
+                    font.pixelSize: 12
+                    text: qsTr("… und %1 weitere").arg(Math.max(0, sessions.count - 8))
+                }
+            }
+        }
+    }
+
     // --- Tastenkürzel aufnehmen (QTMUX-15) ----------------------------------
     // Modaler Aufnahme-Dialog: erfasst gedrückte Tasten als Akkord(e). Solange er
     // offen ist (`capturing`), sind alle App-Shortcuts deaktiviert, damit die Tasten
@@ -3056,6 +3134,18 @@ ApplicationWindow {
             SectionLabel { text: qsTr("Fenster") }
             ColumnLayout {
                 spacing: 4; Layout.fillWidth: true
+                CheckBox {
+                    text: qsTr("Vor dem Beenden nachfragen")
+                    checked: window.confirmQuit
+                    onToggled: window.confirmQuit = checked
+                }
+                Text {
+                    text: qsTr("Beenden schließt alle Sitzungen samt laufender Prozesse.")
+                    color: Theme.textDim
+                    font.pixelSize: 12
+                    Layout.leftMargin: 6
+                    Layout.bottomMargin: 4
+                }
                 CheckBox {
                     text: qsTr("Quake-Modus: per globalem Hotkey ein-/ausblenden")
                     checked: window.quakeMode
