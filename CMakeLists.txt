@@ -53,6 +53,8 @@ add_library(qtmux_core STATIC
     src/core/VtScreen.cpp
     src/core/LinkDetector.h
     src/core/LinkDetector.cpp
+    src/core/KeyEncoding.h
+    src/core/KeyEncoding.cpp
     src/core/ColorScheme.h
     src/core/ColorScheme.cpp
     src/core/ConnectionProfile.h

@@ -56,7 +56,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/Theme.{h,cpp}` | QML-Singleton `Theme.*`; leitet ALLE Chrome-Farben aus dem aktiven Color-Scheme ab |
 | `src/viewmodels/AppController.{h,cpp}` | QML-Singleton `App.*`: Sprache, `shortcutText`, `keyChord`, Clipboard |
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
-| `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
+| `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
 | `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (23 Tools); Doku `docs/MCP.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
@@ -64,7 +64,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37) |
-| `tests/` | 14 ctest-Tests: 13 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan) + `test_doc_duplicates` (reines CMake-Skript) |
+| `tests/` | 15 ctest-Tests: 14 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
 
@@ -297,6 +297,15 @@ Umzug in ein öffentliches Repo unter Apache-2.0, nachdem die Historie bereinigt
 (Damit auch QTMUX-35 Windows-Installer und QTMUX-36 separater Download-Kanal erledigt.)
 Einzelheiten und Spielregeln: Abschnitt **„Repository, Release, Zusammenarbeit"**.
 
+**QTMUX-43 (2026-07-22): Shift/Alt+Enter fügt Zeilenumbruch ein.** Enter mit Shift oder
+Alt sendet jetzt `ESC CR` statt `CR` — Agenten-TUIs (Claude Code) fügen damit einen
+Umbruch ins Eingabefeld ein statt abzusenden. Encoding-Logik dafür Gui-frei nach
+`src/core/KeyEncoding.cpp` extrahiert (neuer Test `test_keyencoding`); Details/Abwägung:
+Feature-Referenz „Tasten". ⚠ Jira-Issue dual noch anzulegen (auf der Windows-Maschine
+liegen keine Jira-Credentials — `CLAUDE.local.md`/`Credential-*.txt` nur auf dem Mac).
+Referenziert als QTMUX-43 = nächste freie Nummer nach 42; sollte die Nummer bei der
+Anlage abweichen, Referenzen in Code/Doku anpassen.
+
 **Offene Jira:** **QTMUX-40** (OSC-8-Hyperlinks — die *explizite* Variante zu den
 heuristischen Links aus QTMUX-39. In dieser Architektur teuer: `VtScreen` hält den
 sichtbaren Bildschirm **nicht** als Puffer (Zellen entstehen lazy aus libvterm), und
@@ -390,10 +399,15 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   sonst lokaler Scrollback/Selektion; **Shift+Drag** selektiert immer lokal. macOS:
   Cmd=ControlModifier, physisches Ctrl=Meta. libvterm **entprellt** (Tests brauchen
   press→release-Paare). Hover-only-Tracking (1003 ohne Taste) nicht gemeldet.
-- **Tasten:** F1–F12 als xterm/VT220-Sequenzen in `encodeKey` (F-Tasten gehören der Shell —
-  keine globalen F-Tasten-Shortcuts); Copy/Paste macOS Cmd+C/V, sonst Ctrl+Shift+C/V;
-  Smart Ctrl+C (Auswahl→Copy, sonst SIGINT). Bracketed Paste + Multiline-Warnung;
-  Copy-on-Select + Rechtsklick-Paste optional.
+- **Tasten:** Übersetzungslogik Gui-frei in `src/core/KeyEncoding.cpp` (`encodeKeyBytes`,
+  Test `test_keyencoding`); `TerminalItem::encodeKey` delegiert nur. F1–F12 als
+  xterm/VT220-Sequenzen (F-Tasten gehören der Shell — keine globalen F-Tasten-Shortcuts);
+  **Shift/Alt+Enter → ESC CR** (QTMUX-43: Umbruch einfügen statt absenden in Agenten-TUIs
+  wie Claude Code — dieselbe Sequenz, die `/terminal-setup` anderswo auf Shift+Enter legt;
+  klassische Shells binden ESC CR nicht, unter ConPTY kann das ESC die Eingabe verwerfen —
+  bewusst in Kauf genommen, unmodifiziertes Enter bleibt CR). Copy/Paste macOS Cmd+C/V,
+  sonst Ctrl+Shift+C/V; Smart Ctrl+C (Auswahl→Copy, sonst SIGINT). Bracketed Paste +
+  Multiline-Warnung; Copy-on-Select + Rechtsklick-Paste optional.
 - **Klickbare Links (QTMUX-39):** `LinkDetector` (Gui-frei, `qtmux_core`) findet in einer
   Zeile **URLs** (Scheme-Whitelist http/https/ftp/mailto/file — KI-Output darf keinen
   beliebigen Handler starten) und **existierende Dateipfade** (gegen Session-CWD aufgelöst;
