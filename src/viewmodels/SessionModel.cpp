@@ -34,6 +34,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     Session *s = m_sessions.at(index.row());
     switch (role) {
     case TitleRole:   return s->title();
+    case IdRole:      return s->id();            // stabile ID (MCP-Referenz)
     case StateRole:   return s->activityInt();   // Sidebar-Ring folgt der Aktivität
     case TypeRole:    return static_cast<int>(s->type());
     case AgentRole:   return s->agentId();
@@ -53,6 +54,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
 QHash<int, QByteArray> SessionModel::roleNames() const {
     return {
         {TitleRole,   "title"},
+        {IdRole,      "sessionId"},
         {StateRole,   "runState"},
         {TypeRole,    "sessionType"},
         {AgentRole,   "agentId"},

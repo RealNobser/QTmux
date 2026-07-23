@@ -1781,6 +1781,7 @@ ApplicationWindow {
                         id: tile
                         required property int index
                         required property string title
+                        required property int sessionId
                         required property int runState
                         required property string agentId
                         required property bool needsAttention
@@ -1891,12 +1892,27 @@ ApplicationWindow {
                             ColumnLayout {
                                 spacing: 1
                                 Layout.fillWidth: true
-                                Text {
-                                    text: title
-                                    color: Theme.textBright
-                                    font.pixelSize: 13
-                                    elide: Text.ElideRight
+                                RowLayout {
                                     Layout.fillWidth: true
+                                    spacing: 6
+                                    Text {
+                                        text: title
+                                        color: Theme.textBright
+                                        font.pixelSize: 13
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                    // Stabile Session-ID, klein und monospaced — das ist die
+                                    // Nummer, mit der man die Session per MCP anspricht
+                                    // (send_text, set_session_group …). Bewusst dezent, nur
+                                    // zum Nachschlagen, nicht als Blickfang.
+                                    Text {
+                                        text: "#" + tile.sessionId
+                                        color: Theme.textDim
+                                        font.pixelSize: 10
+                                        font.family: window.terminalFontFamily
+                                        Layout.alignment: Qt.AlignVCenter
+                                    }
                                 }
                                 // Untertitel: Notification (Vorrang) oder erkannter Agent.
                                 Text {

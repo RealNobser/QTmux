@@ -22,6 +22,7 @@ class SessionModel : public QAbstractListModel {
 public:
     enum Roles {
         TitleRole = Qt::UserRole + 1,
+        IdRole,
         StateRole,
         TypeRole,
         AgentRole,

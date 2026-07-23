@@ -452,6 +452,11 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   die Kachel ans Listenende. `groups()`/`groupSize()` sind Funktionen ohne Property →
   QML-Bindungen brauchen den Anker `groupsChanged`/`window.groupsRevision`, sonst frieren
   Kopfzeile und Kontextmenü auf ihrem ersten Stand ein.
+- **Session-ID in der Kachel (QTMUX-44):** Jede Sidebar-Kachel zeigt neben dem Titel klein
+  und monospaced `#<id>` — die **stabile** `Session::id()`, also genau die Nummer, mit der
+  man die Session per MCP anspricht (`send_text`, `set_session_group` …). Model-Rolle
+  `IdRole`/`"sessionId"`; im Delegate `required property int sessionId`. Bewusst NICHT der
+  Zeilenindex (der wandert beim Umsortieren/Gruppieren).
 - **Beenden mit Rückfrage (QTMUX-41):** Dialog listet die offenen Sitzungen auf, bevor
   alles geschlossen wird; abschaltbar (`window/confirmQuit`, Einstellungen → Fenster).
   🔑 Zentraler Wächter ist **`Window.onClosing`** (`close.accepted = false`), NICHT die
