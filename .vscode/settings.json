@@ -1,5 +1,11 @@
 {
   "cmake.useCMakePresets": "always",
+  // Windows: Die Presets nutzen den Ninja-Generator + MSVC, aber ninja/cl liegen nur in
+  // der VS-Entwickler-Umgebung (vcvars64) im PATH. Ohne diese Einstellung scheitert das
+  // Configure aus einem normal gestarteten VSCode mit CMAKE_MAKE_PROGRAM-NOTFOUND —
+  // und damit der preLaunchTask von „Run und Debug". CMake Tools injiziert hiermit die
+  // VS-Developer-Umgebung selbst (Pendant zum vcvars64-Aufruf auf der Kommandozeile).
+  "cmake.useVsDeveloperEnvironment": "always",
   "cmake.options.statusBarVisibility": "visible",
   "C_Cpp.default.compileCommands": "${workspaceFolder}/build/${command:cmake.activeConfigurePresetName}/compile_commands.json",
   "files.associations": {
