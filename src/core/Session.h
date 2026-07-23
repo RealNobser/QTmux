@@ -33,6 +33,9 @@ class Session : public QObject {
     // Gecachtes Arbeitsverzeichnis (nur Shell-Sessions). Wird periodisch über
     // refreshWorkingDirectory() aktualisiert; Sidebar zeigt es klein unter dem Titel.
     Q_PROPERTY(QString workingDirectory READ workingDirectory NOTIFY workingDirectoryChanged)
+    // Frei wählbarer Gruppenname (QTMUX-42): fasst in der Sidebar die Sessions
+    // zusammen, die gemeinsam an einer Sache arbeiten. Leer = ohne Gruppe.
+    Q_PROPERTY(QString group READ group NOTIFY groupChanged)
 public:
     enum class Type { Shell, Ssh, Serial, App };
     Q_ENUM(Type)
@@ -79,6 +82,12 @@ public:
 
     /// Meldet, dass in dieser Session der steuernde MCP-Agent läuft (roter Tab).
     void setMcpController(bool on);
+
+    /// Gruppenname (QTMUX-42), leer = ohne Gruppe. Gesetzt wird er über
+    /// SessionModel::setSessionGroup — nur das Model hält die Sidebar-Reihenfolge
+    /// blockweise sortiert und persistiert die Zuordnung.
+    QString group() const { return m_group; }
+    void setGroup(const QString &g);
 
     /// Beendet den zugrundeliegenden Prozess/die Verbindung (für sauberes App-Quit).
     void shutdown();
@@ -132,6 +141,7 @@ signals:
     void mcpControllerChanged();
     void progressChanged();
     void workingDirectoryChanged();
+    void groupChanged();
     void bell();
 
 private:
@@ -154,6 +164,7 @@ private:
     QString m_title = QStringLiteral("Shell");
     QString m_workingDir;      // gecachtes Arbeitsverzeichnis (nur Shell)
     QString m_agentId;
+    QString m_group;           // Sidebar-Gruppe (QTMUX-42), leer = ohne Gruppe
     QString m_inputLine;       // Puffer der aktuell getippten Zeile
     QString m_loginScript;     // Auto-Befehle nach Verbindungsaufbau (QTMUX-23)
     bool m_loginScriptPending = false;  // Login-Script noch zu senden?

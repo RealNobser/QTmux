@@ -44,6 +44,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case ProgressStateRole: return s->progressState();
     case ProgressValueRole: return s->progressValue();
     case WorkingDirRole: return s->workingDirectory();
+    case GroupRole:   return s->group();
     case SessionRole: return QVariant::fromValue(static_cast<QObject *>(s));
     default:          return {};
     }
@@ -62,6 +63,7 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
         {ProgressStateRole, "progressState"},
         {ProgressValueRole, "progressValue"},
         {WorkingDirRole, "workingDir"},
+        {GroupRole, "group"},
         {SessionRole, "session"},
     };
 }
@@ -296,14 +298,15 @@ void SessionModel::closeSession(int row) {
     endRemoveRows();
     s->deleteLater();
     emit countChanged();
+    emit groupsChanged();
     saveState();
 }
 
-void SessionModel::moveSession(int from, int to) {
-    if (from < 0 || from >= count() || to < 0 || to >= count() || from == to) return;
+bool SessionModel::moveRowInternal(int from, int to) {
+    if (from < 0 || from >= count() || to < 0 || to >= count() || from == to) return false;
     // beginMoveRows erwartet bei Abwärtsbewegung den Zielindex +1.
     const int dest = to > from ? to + 1 : to;
-    if (!beginMoveRows({}, from, from, {}, dest)) return;
+    if (!beginMoveRows({}, from, from, {}, dest)) return false;
     m_sessions.move(from, to);
     m_configs.move(from, to);
     endMoveRows();
@@ -312,8 +315,107 @@ void SessionModel::moveSession(int from, int to) {
     if (m_activeRow == from) m_activeRow = to;
     else if (from < to && m_activeRow > from && m_activeRow <= to) --m_activeRow;
     else if (to < from && m_activeRow >= to && m_activeRow < from) ++m_activeRow;
+    return true;
+}
+
+void SessionModel::moveSession(int from, int to) {
+    if (!moveRowInternal(from, to)) return;
+
+    // Gruppe der neuen Nachbarschaft übernehmen (QTMUX-42): Wer eine Kachel in
+    // einen Gruppenblock zieht, will sie dort haben — und die Blöcke müssen
+    // zusammenhängend bleiben, sonst zerfällt die Section-Anzeige der Sidebar.
+    // Maßgeblich ist der obere Nachbar, an Position 0 der untere. Genau deshalb
+    // benutzt das Umgruppieren NICHT diesen Weg (moveRowInternal), sonst
+    // überschriebe der Nachbar die gerade gesetzte Gruppe wieder.
+    const QString neighbour = to > 0 ? m_sessions.at(to - 1)->group()
+                            : (count() > 1 ? m_sessions.at(1)->group() : QString());
+    if (m_sessions.at(to)->group() != neighbour) {
+        m_sessions.at(to)->setGroup(neighbour);
+        m_configs[to].group = m_sessions.at(to)->group();
+        const QModelIndex idx = index(to);
+        emit dataChanged(idx, idx, {GroupRole});
+        emit groupsChanged();
+    }
 
     saveState();
+}
+
+int SessionModel::regroupRow(int row) {
+    // Jede Gruppe muss ein zusammenhängender Block bleiben (die Sidebar zeigt sie
+    // über ListView-Sections). Ziel ist daher das letzte Mitglied derselben Gruppe.
+    const QString g = m_sessions.at(row)->group();
+    int last = -1;
+    for (int i = 0; i < count(); ++i)
+        if (i != row && m_sessions.at(i)->group() == g) last = i;
+
+    int to = row;
+    if (last >= 0) {
+        // Hinter das letzte Mitglied. Bei last > row rutschen die dazwischen
+        // liegenden Zeilen nach dem Entfernen hoch — dann ist `last` selbst das Ziel.
+        to = (last > row) ? last : last + 1;
+    } else if (row > 0 && row < count() - 1
+               && !m_sessions.at(row - 1)->group().isEmpty()
+               && m_sessions.at(row - 1)->group() == m_sessions.at(row + 1)->group()
+               && m_sessions.at(row - 1)->group() != g) {
+        // Erstes Mitglied einer neuen Gruppe: bleibt stehen, wo es ist — außer es
+        // würde mitten in einem fremden Block liegen und diesen zerreißen. Dann ans
+        // Listenende, sonst erschiene die fremde Gruppe in der Sidebar zweimal.
+        // Die gruppenlosen Sessions sind dabei ausdrücklich KEIN solcher Block:
+        // ihre Section ist unsichtbar, sie darf ruhig in Teile zerfallen — und die
+        // Kachel bleibt so dort, wo der Nutzer sie gerade angeklickt hat.
+        to = count() - 1;
+    }
+    if (to == row) return row;
+    return moveRowInternal(row, to) ? to : row;
+}
+
+void SessionModel::setSessionGroup(int row, const QString &name) {
+    if (row < 0 || row >= count()) return;
+    Session *s = m_sessions.at(row);
+    if (s->group() == name.trimmed()) return;
+    s->setGroup(name);
+    m_configs[row].group = s->group();
+    const QModelIndex idx = index(row);
+    emit dataChanged(idx, idx, {GroupRole});
+    regroupRow(row);
+    saveState();
+    emit groupsChanged();
+}
+
+QStringList SessionModel::groups() const {
+    QStringList out;
+    for (const Session *s : m_sessions)
+        if (!s->group().isEmpty() && !out.contains(s->group())) out << s->group();
+    return out;
+}
+
+int SessionModel::groupSize(const QString &name) const {
+    int n = 0;
+    for (const Session *s : m_sessions)
+        if (s->group() == name) ++n;
+    return n;
+}
+
+void SessionModel::renameGroup(const QString &from, const QString &to) {
+    const QString src = from.trimmed();
+    if (src.isEmpty()) return;
+    const QString dst = to.trimmed();
+    bool touched = false;
+    for (int i = 0; i < count(); ++i) {
+        if (m_sessions.at(i)->group() != src) continue;
+        m_sessions.at(i)->setGroup(dst);
+        m_configs[i].group = dst;
+        const QModelIndex idx = index(i);
+        emit dataChanged(idx, idx, {GroupRole});
+        touched = true;
+    }
+    if (!touched) return;
+    // Beim Umbenennen auf einen bereits vergebenen Namen verschmelzen die Blöcke:
+    // jede betroffene Zeile einmal an ihren (neuen) Block anschließen.
+    for (int i = 0; i < count(); ++i)
+        if (m_sessions.at(i)->group() == dst) regroupRow(i);
+    saveState();
+    emit groupsChanged();
 }
 
 void SessionModel::writeToAll(const QByteArray &data) {
@@ -359,6 +461,7 @@ void SessionModel::saveState() const {
         s.setValue(QStringLiteral("program"), cfg.program);
         s.setValue(QStringLiteral("pluginId"), cfg.pluginId);
         s.setValue(QStringLiteral("pluginType"), cfg.pluginType);
+        s.setValue(QStringLiteral("group"), cfg.group);
     }
     s.endArray();
     s.setValue(QStringLiteral("sessions/activeRow"), m_activeRow);
@@ -371,6 +474,8 @@ int SessionModel::restoreState() {
     for (int i = 0; i < n; ++i) {
         s.setArrayIndex(i);
         const int type = s.value(QStringLiteral("type")).toInt();
+        const QString group = s.value(QStringLiteral("group")).toString();
+        const int before = count();
         if (type == static_cast<int>(Session::Type::Serial)) {
             createSerialSession(s.value(QStringLiteral("serialPort")).toString(),
                                 s.value(QStringLiteral("baud"), 115200).toInt());
@@ -388,9 +493,18 @@ int SessionModel::restoreState() {
             createShellSession(s.value(QStringLiteral("workingDir")).toString(),
                                s.value(QStringLiteral("program")).toString());
         }
+        // Gruppenzuordnung (QTMUX-42) an die eben erzeugte Session hängen. Nicht
+        // über setSessionGroup: das würde umsortieren — die gespeicherte
+        // Reihenfolge ist bereits blockweise korrekt, und eine Plugin-Session
+        // kann übersprungen worden sein (dann wurde nichts angelegt).
+        if (!group.isEmpty() && count() > before) {
+            m_sessions.last()->setGroup(group);
+            m_configs.last().group = m_sessions.last()->group();
+        }
     }
     m_restoring = false;
     s.endArray();
+    emit groupsChanged();
 
     m_activeRow = s.value(QStringLiteral("sessions/activeRow"), n > 0 ? 0 : -1).toInt();
     if (m_activeRow >= count()) m_activeRow = count() - 1;

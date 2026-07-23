@@ -450,7 +450,7 @@ QJsonObject McpServer::toolsList() const {
     QJsonArray tools;
     tools.append(tool("list_sessions",
                       "Listet alle offenen Sessions mit Status (id, title, type, activity, "
-                      "agentId, needsAttention, lastNotification, mcpController, workingDir, "
+                      "agentId, needsAttention, lastNotification, mcpController, workingDir, group, "
                       "progress).",
                       {}, {}));
     tools.append(tool("create_session",
@@ -476,6 +476,14 @@ QJsonObject McpServer::toolsList() const {
                       {}));
     tools.append(tool("close_session", "Schließt eine Session per ID.",
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
+    tools.append(tool("set_session_group",
+                      "Ordnet eine Session einer Sidebar-Gruppe zu (QTMUX-42) — dort stehen "
+                      "die Sessions einer Gruppe zusammen und lassen sich gemeinsam "
+                      "einklappen. Leerer/fehlender 'group'-Wert nimmt sie aus ihrer Gruppe. "
+                      "Der Gruppenname erscheint auch in list_sessions ('group').",
+                      QJsonObject{{"id", intProp("Session-ID")},
+                                  {"group", strProp("Gruppenname (leer = ohne Gruppe)")}},
+                      QJsonArray{"id"}));
     tools.append(tool("focus_session", "Fokussiert eine Session und lädt sie ins aktive Pane.",
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
     tools.append(tool("attach_controller",
@@ -626,6 +634,7 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             {"lastNotification", s->lastNotification()},
             {"mcpController", s->mcpController()},
             {"workingDir", s->workingDirectory()},
+            {"group", s->group()},
             {"progressActive", s->progressActive()},
             {"progressState", s->progressState()},
             {"progressValue", s->progressValue()},
@@ -795,6 +804,15 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             .arg(id)
             .arg(known.isEmpty() ? QStringLiteral("keine") : known.join(QStringLiteral(", ")));
     };
+    if (name == "set_session_group") {
+        const int row = m_sessions->rowForId(id);
+        if (row < 0) { isError = true; text = idProblem(); return {}; }
+        // Leerer/fehlender Name nimmt die Session aus ihrer Gruppe — bewusst kein
+        // Fehler, damit ein Controller symmetrisch zuordnen und lösen kann.
+        m_sessions->setSessionGroup(row, args.value("group").toString());
+        text = QStringLiteral("ok");
+        return {};
+    }
     if (name == "close_session") {
         const int row = m_sessions->rowForId(id);
         if (row < 0) { isError = true; text = idProblem(); return {}; }

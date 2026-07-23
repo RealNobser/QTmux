@@ -497,6 +497,51 @@ ApplicationWindow {
         window.close()
     }
 
+    // --- Sitzungsgruppen (QTMUX-42) ----------------------------------------
+    // Die Zuordnung selbst liegt im Model (persistiert, blockweise sortiert);
+    // hier nur die Anzeige-Logik: Klappzustand, Farbe, Größe.
+    property string collapsedGroupsJson: "[]"   // persistiert (Settings)
+    property var collapsedGroups: []
+
+    // groups()/groupSize() sind Model-Funktionen ohne eigenes Änderungssignal.
+    // Bindungen darauf würden einfrieren; dieser Zähler ist ihr Anker — er wird
+    // in den Bindungen mitgelesen und bei jeder Zuordnungsänderung hochgezählt.
+    property int groupsRevision: 0
+    Connections {
+        target: sessions
+        function onGroupsChanged() { window.groupsRevision++ }
+    }
+
+    function isGroupCollapsed(name) { return collapsedGroups.indexOf(name) >= 0 }
+    function toggleGroupCollapsed(name) {
+        const list = collapsedGroups.slice()
+        const i = list.indexOf(name)
+        if (i >= 0) list.splice(i, 1); else list.push(name)
+        collapsedGroups = list
+        collapsedGroupsJson = JSON.stringify(list)
+    }
+    function groupSize(name) { return sessions.groupSize(name) }
+    // Farbe deterministisch aus dem Namen ableiten: gleiche Gruppe = gleiche Farbe,
+    // über Neustarts hinweg und ohne dass irgendwo eine Zuordnung gepflegt werden muss.
+    function groupColor(name) {
+        let h = 0
+        for (let i = 0; i < name.length; ++i) h = (h * 31 + name.charCodeAt(i)) % 360
+        return Qt.hsla(h / 360, 0.55, Theme.dark ? 0.62 : 0.45, 1.0)
+    }
+    // Zeile, deren Kachel dem übergebenen y-Mittelpunkt am nächsten liegt
+    // (`exclude` = die gerade gezogene). Ignoriert eingeklappte Kacheln (Höhe 0).
+    function rowNearestTo(cy, exclude) {
+        let best = -1, bestD = Number.MAX_VALUE
+        for (let i = 0; i < sessions.count; ++i) {
+            if (i === exclude) continue
+            const it = sessionList.itemAtIndex(i)
+            if (!it || it.height <= 0) continue
+            const d = Math.abs(it.y + it.height / 2 - cy)
+            if (d < bestD) { bestD = d; best = i }
+        }
+        return best
+    }
+
     // Mehrzeilige Einfügung: das betroffene Terminal merken und nachfragen.
     property var pendingPasteTerm: null
     function askMultilinePaste(term, lines) {
@@ -862,6 +907,11 @@ ApplicationWindow {
     Component.onCompleted: {
         if (terminalFontFamily === "") terminalFontFamily = App.defaultMonospaceFont()
         if (quakeMode) QuakeHotkey.setEnabled(true)
+        // Eingeklappte Gruppen (QTMUX-42) aus den Einstellungen holen. Als JSON-Text
+        // persistiert, weil Settings keine Listen speichert; defekter Inhalt darf den
+        // Start nicht verhindern.
+        try { window.collapsedGroups = JSON.parse(window.collapsedGroupsJson) || [] }
+        catch (e) { window.collapsedGroups = [] }
         const active = sessions.restoreState()
         if (sessions.count === 0)
             newSession()
@@ -913,6 +963,7 @@ ApplicationWindow {
         property alias rightClickPaste: window.rightClickPaste
         property alias pasteWarnMultiline: window.pasteWarnMultiline
         property alias confirmQuit: window.confirmQuit
+        property alias collapsedGroups: window.collapsedGroupsJson
     }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
@@ -1665,6 +1716,67 @@ ApplicationWindow {
                     spacing: 4
                     model: sessions
 
+                    // Gruppen (QTMUX-42) über ListView-Sections: Das Model hält die
+                    // Gruppen als zusammenhängende Blöcke, deshalb genügt hier die
+                    // Standard-Section-Mechanik. Leere Gruppe = keine Kopfzeile.
+                    section.property: "group"
+                    section.criteria: ViewSection.FullString
+                    section.delegate: Item {
+                        id: groupHeader
+                        required property string section
+                        width: sessionList.width
+                        height: section.length > 0 ? 26 : 0
+                        visible: section.length > 0
+
+                        readonly property bool collapsed: window.isGroupCollapsed(section)
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.topMargin: 4
+                            anchors.bottomMargin: 2
+                            radius: 6
+                            color: hdrHover.hovered ? Theme.sidebarHover : "transparent"
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: 6
+                                spacing: 6
+
+                                // Klapp-Pfeil, zugleich Farbmarke der Gruppe.
+                                Text {
+                                    text: groupHeader.collapsed ? "▸" : "▾"
+                                    color: window.groupColor(groupHeader.section)
+                                    font.pixelSize: 11
+                                }
+                                Text {
+                                    text: groupHeader.section
+                                    color: Theme.textBright
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    // groupsRevision wird bewusst mitgelesen: sonst
+                                    // bliebe die Zahl beim ersten Wert stehen.
+                                    text: (window.groupsRevision, window.groupSize(groupHeader.section))
+                                    color: Theme.textDim
+                                    font.pixelSize: 10
+                                }
+                            }
+                            HoverHandler { id: hdrHover }
+                            TapHandler { onTapped: window.toggleGroupCollapsed(groupHeader.section) }
+                            TapHandler {
+                                acceptedButtons: Qt.RightButton
+                                onTapped: {
+                                    groupMenu.groupName = groupHeader.section
+                                    groupMenu.popup()
+                                }
+                            }
+                        }
+                    }
+
                     delegate: Rectangle {
                         id: tile
                         required property int index
@@ -1678,8 +1790,13 @@ ApplicationWindow {
                         required property int progressState
                         required property int progressValue
                         required property string workingDir
+                        required property string group
+                        // Eingeklappte Gruppen: Kachel verschwindet, ohne dass das
+                        // Model angefasst wird (die Session läuft ja weiter).
+                        readonly property bool hidden: group.length > 0 && window.isGroupCollapsed(group)
                         width: ListView.view.width
-                        height: 52
+                        visible: !hidden
+                        height: hidden ? 0 : 52
                         radius: 8
                         color: index === window.currentRow ? Theme.sidebarSelected
                              : hover.hovered ? Theme.sidebarHover : "transparent"
@@ -1691,9 +1808,19 @@ ApplicationWindow {
 
                         HoverHandler { id: hover }
                         TapHandler { onTapped: window.assignToActivePane(index) }
+                        // Rechtsklick: Gruppenzuordnung dieser Session (QTMUX-42).
+                        TapHandler {
+                            acceptedButtons: Qt.RightButton
+                            onTapped: {
+                                sessionMenu.row = tile.index
+                                sessionMenu.currentGroup = tile.group
+                                sessionMenu.groupList = sessions.groups()
+                                sessionMenu.popup()
+                            }
+                        }
 
-                        // Drag-to-Reorder: vertikal ziehen, beim Loslassen Zielzeile
-                        // aus der Position berechnen und die Session verschieben.
+                        // Drag-to-Reorder: vertikal ziehen, beim Loslassen die Zielzeile
+                        // aus der Position bestimmen und die Session verschieben.
                         DragHandler {
                             id: dragH
                             target: tile
@@ -1701,13 +1828,27 @@ ApplicationWindow {
                             yAxis.enabled: true
                             onActiveChanged: {
                                 if (active) return
-                                const slot = tile.height + sessionList.spacing
                                 const from = tile.index
-                                let ni = Math.round(tile.y / slot)
-                                ni = Math.max(0, Math.min(sessions.count - 1, ni))
-                                if (ni !== from) window.moveSession(from, ni)
-                                tile.y = ni * slot   // ans Ziel-Slot einrasten
+                                // Zielzeile über die Layout-Positionen der übrigen Kacheln
+                                // suchen statt über eine feste Slot-Höhe: Gruppenköpfe und
+                                // eingeklappte (0 px hohe) Kacheln machen die Liste
+                                // ungleichmäßig, eine reine Division läge daneben.
+                                const ni = window.rowNearestTo(tile.y + tile.height / 2, from)
+                                if (ni >= 0 && ni !== from) window.moveSession(from, ni)
+                                sessionList.forceLayout()   // Kachel wieder einrasten lassen
                             }
+                        }
+
+                        // Farbmarke der Gruppe am linken Rand — macht auf einen Blick
+                        // sichtbar, welche Sessions zusammengehören, auch beim Scrollen.
+                        Rectangle {
+                            visible: tile.group.length > 0 && !tile.mcpController
+                            width: 3
+                            radius: 1.5
+                            color: window.groupColor(tile.group)
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            height: parent.height - 14
                         }
 
                         // Roter Tab: diese Session steuert per MCP die anderen (Controller-Agent).
@@ -2761,6 +2902,103 @@ ApplicationWindow {
             wrapMode: Text.WordWrap
             color: Theme.textBright
             text: qsTr("Der Inhalt der Zwischenablage hat %1 Zeilen und könnte mehrere Befehle ausführen. Trotzdem einfügen?").arg(pasteWarnDialog.lineCount)
+        }
+    }
+
+    // --- Gruppen-Kontextmenüs (QTMUX-42) ------------------------------------
+    // Rechtsklick auf eine Kachel: Gruppe zuordnen, wechseln oder verlassen.
+    ThemedMenu {
+        id: sessionMenu
+        property int row: -1
+        property string currentGroup: ""
+
+        MenuItem {
+            enabled: false
+            height: 26
+            contentItem: Text {
+                text: qsTr("Gruppe")
+                color: Theme.textDim
+                font.pixelSize: 10
+                font.bold: true
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: 8
+            }
+        }
+        // Bestehende Gruppen als Ziele — beim Öffnen frisch geholt (s. popup unten).
+        property var groupList: []
+        Repeater {
+            model: sessionMenu.groupList
+            delegate: AppMenuItem {
+                required property string modelData
+                text: modelData
+                checkable: true
+                checked: modelData === sessionMenu.currentGroup
+                onTriggered: sessions.setSessionGroup(sessionMenu.row, modelData)
+            }
+        }
+        AppMenuItem {
+            text: qsTr("Neue Gruppe …")
+            icon.source: window.icon("plus"); icon.color: Theme.menuIcon
+            onTriggered: groupNameDialog.start(sessionMenu.row)
+        }
+        AppMenuItem {
+            text: qsTr("Aus Gruppe entfernen")
+            enabled: sessionMenu.currentGroup.length > 0
+            icon.source: window.icon("x"); icon.color: Theme.menuIcon
+            onTriggered: sessions.setSessionGroup(sessionMenu.row, "")
+        }
+    }
+
+    // Rechtsklick auf eine Gruppen-Kopfzeile: umbenennen oder auflösen.
+    ThemedMenu {
+        id: groupMenu
+        property string groupName: ""
+        AppMenuItem {
+            text: qsTr("Gruppe umbenennen …")
+            onTriggered: groupNameDialog.startRename(groupMenu.groupName)
+        }
+        AppMenuItem {
+            text: qsTr("Gruppe auflösen")
+            icon.source: window.icon("x"); icon.color: Theme.menuIcon
+            // Auflösen betrifft nur die Zuordnung — die Sessions laufen weiter.
+            onTriggered: sessions.renameGroup(groupMenu.groupName, "")
+        }
+    }
+
+    // Name für eine neue Gruppe bzw. für das Umbenennen einer bestehenden.
+    AppDialog {
+        id: groupNameDialog
+        width: 380
+        property int row: -1          // >= 0: Session dieser Zeile zuordnen
+        property string renaming: ""  // nicht leer: bestehende Gruppe umbenennen
+        title: renaming.length > 0 ? qsTr("Gruppe umbenennen") : qsTr("Neue Gruppe")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        function start(r) { row = r; renaming = ""; groupNameField.text = ""; open() }
+        function startRename(name) { row = -1; renaming = name; groupNameField.text = name; open() }
+
+        onOpened: { groupNameField.forceActiveFocus(); groupNameField.selectAll() }
+        onAccepted: {
+            const name = groupNameField.text.trim()
+            if (name.length === 0) return
+            if (renaming.length > 0) sessions.renameGroup(renaming, name)
+            else if (row >= 0) sessions.setSessionGroup(row, name)
+        }
+        ColumnLayout {
+            spacing: 8
+            Label {
+                Layout.preferredWidth: 340
+                wrapMode: Text.WordWrap
+                color: Theme.textDim
+                font.pixelSize: 11
+                text: qsTr("Sitzungen einer Gruppe stehen in der Seitenleiste zusammen und lassen sich gemeinsam ein- und ausklappen.")
+            }
+            TextField {
+                id: groupNameField
+                Layout.preferredWidth: 340
+                placeholderText: qsTr("z. B. Release 1.5")
+                onAccepted: groupNameDialog.accept()
+            }
         }
     }
 

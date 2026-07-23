@@ -58,13 +58,13 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
-| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (22 Tools); Doku `docs/MCP.md` |
+| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (23 Tools); Doku `docs/MCP.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37) |
-| `tests/` | 12 ctest-Tests: 11 QtTest-Binaries (pty, vtscreen, session, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan) + `test_doc_duplicates` (reines CMake-Skript) |
+| `tests/` | 14 ctest-Tests: 13 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
 
@@ -246,12 +246,18 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
-## Status (2026-07-22)
+## Status (2026-07-23)
 
 **v1.5.0.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
 SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattformen fertig
-(DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 22 MCP-Tools
-(GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 217/217.
+(DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 23 MCP-Tools
+(GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 223/223.
+
+**QTMUX-42 (2026-07-23) — Sitzungsgruppen in der Sidebar.** Wer mehrere Agenten parallel
+laufen lässt, sah nur eine flache Liste gleich aussehender Shells. Jetzt lassen sich
+Sessions zu benannten, einklappbaren Gruppen zusammenfassen (Rechtsklick oder MCP), mit
+Farbmarke und Anzahl. Details und die zwei Sortier-Fallen in der Feature-Referenz
+(Sessions & UI).
 
 **QTMUX-41 (2026-07-22) — Rückfrage vor dem Beenden.** Cmd+Q riss bisher ohne Vorwarnung
 alle Sitzungen samt laufender Agenten/Builds/SSH-Verbindungen mit. Jetzt zählt ein Dialog
@@ -420,6 +426,19 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `m_restoring`-Guard (Restore erbt kein fremdes CWD, führt keine Login-Scripts aus).
   Neue Shell **erbt das Live-CWD** der aktiven Session (nur Shell-Quellen, explizites
   Verzeichnis hat Vorrang).
+- **Sitzungsgruppen (QTMUX-42):** Frei benannte Gruppen fassen in der Sidebar die
+  Sessions einer Aufgabe zusammen (Kopfzeile mit Anzahl, einklappbar, Farbmarke aus dem
+  Namen gehasht); Zuordnung per Rechtsklick oder MCP-Tool `set_session_group`, persistiert
+  mit der Sitzungsliste. 🔑 Angezeigt über **`ListView.section`** — das setzt
+  **zusammenhängende Blöcke** voraus, also sortiert das **Model** um (`setSessionGroup`
+  → `regroupRow`), nicht die View. Zwei Fallen, beide durch `tst_sessiongroups` abgesichert:
+  `moveSession` (Drag) übernimmt bewusst die Gruppe der neuen Nachbarschaft — deshalb darf
+  das Umgruppieren NICHT über `moveSession` laufen (`moveRowInternal`), sonst überschriebe
+  der Nachbar die gerade gesetzte Gruppe. Und die **gruppenlosen** Sessions sind KEIN
+  schützenswerter Block (ihre Section ist unsichtbar) — sonst springt die erste Zuordnung
+  die Kachel ans Listenende. `groups()`/`groupSize()` sind Funktionen ohne Property →
+  QML-Bindungen brauchen den Anker `groupsChanged`/`window.groupsRevision`, sonst frieren
+  Kopfzeile und Kontextmenü auf ihrem ersten Stand ein.
 - **Beenden mit Rückfrage (QTMUX-41):** Dialog listet die offenen Sitzungen auf, bevor
   alles geschlossen wird; abschaltbar (`window/confirmQuit`, Einstellungen → Fenster).
   🔑 Zentraler Wächter ist **`Window.onClosing`** (`close.accepted = false`), NICHT die
@@ -511,7 +530,7 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (22 Tools)
+### MCP-Server (23 Tools)
 `src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC auf `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
 - **Controller-Auto-Erkennung** beim `initialize`: TCP-Port → PID → **Prozess-Vorfahren-

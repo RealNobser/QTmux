@@ -142,6 +142,13 @@ void Session::setMcpController(bool on) {
     emit mcpControllerChanged();
 }
 
+void Session::setGroup(const QString &g) {
+    const QString t = g.trimmed();
+    if (t == m_group) return;
+    m_group = t;
+    emit groupChanged();
+}
+
 void Session::refreshWorkingDirectory() {
     // Nur Shell-Sessions haben ein sinnvolles lokales Arbeitsverzeichnis. Bei SSH
     // wäre es das CWD des lokalen ssh-Clients (irreführend), bei Seriell/Plugin gibt

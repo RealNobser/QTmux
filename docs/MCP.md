@@ -34,6 +34,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification) |
 | `create_session` | `type` ("shell"/"serial"/"ssh"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?` | Session anlegen → gibt neue **id** zurück |
 | `close_session` | `id` | Session schließen |
+| `set_session_group` | `id`, `group?` | Session einer **Sidebar-Gruppe** zuordnen; leerer/fehlender `group`-Wert nimmt sie heraus (s. u.) |
 | `focus_session` | `id` | Session sichtbar/fokussiert machen |
 | `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard 60) | Text in die Session tippen; Enter geht **kurz danach** raus (s. u.) |
 | `read_screen` | `id` | Sichtbaren Bildschirm als Klartext lesen |
@@ -56,9 +57,28 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 
 `activity`: 1=läuft (grün), 2=wartet, 3=Fehler (rot), 4=geschlossen.
 `type`: 0=Shell, 1=SSH, 2=Seriell, 3=App.
-`list_sessions` liefert zusätzlich `mcpController` (true = roter Controller-Tab) sowie —
-falls die Session bereits ein Agenten-Ereignis erzeugt hat — `lastAgentEventKind`,
-`lastAgentEventText`, `lastAgentEventSeq`.
+`list_sessions` liefert zusätzlich `mcpController` (true = roter Controller-Tab), `group`
+(Sidebar-Gruppe, leer = ohne) sowie — falls die Session bereits ein Agenten-Ereignis
+erzeugt hat — `lastAgentEventKind`, `lastAgentEventText`, `lastAgentEventSeq`.
+
+### `set_session_group` — zusammengehörige Worker sichtbar machen (QTMUX-42)
+
+Wer mehrere Worker parallel fahren lässt, sieht in der Sidebar sonst nur eine flache
+Liste gleich aussehender Shells. Eine Gruppe fasst die Sessions einer Aufgabe zusammen:
+Sie stehen unter einer benannten, einklappbaren Kopfzeile beieinander und tragen links
+eine gemeinsame Farbmarke. Der Controller kann seine Worker also beim Anlegen sofort
+einsortieren:
+
+```jsonc
+{"name": "set_session_group", "arguments": {"id": 7, "group": "Migration Auth"}}
+{"name": "set_session_group", "arguments": {"id": 8, "group": "Migration Auth"}}
+{"name": "set_session_group", "arguments": {"id": 7, "group": ""}}   // wieder heraus
+```
+
+Der Gruppenname ist frei wählbar; er wird mit der Sitzungsliste **persistiert** und
+überlebt einen Neustart. Das Zuordnen **sortiert die Sidebar um** (die Mitglieder einer
+Gruppe müssen zusammenhängen) — eine Session kann dadurch ihre Zeile wechseln, ihre
+`id` bleibt.
 
 ## Sessions steuern: zwei Fallen, die Erfolg melden
 

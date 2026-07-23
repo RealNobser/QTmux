@@ -57,6 +57,16 @@ set_tests_properties(test_plugins PROPERTIES
 qt_add_executable(test_pty tst_pty.cpp)
 target_link_libraries(test_pty PRIVATE qtmux_core Qt6::Test)
 
+# Sitzungsgruppen (QTMUX-42): prüft die Blockbildung im SessionModel. Das Model
+# liegt im QML-Modul (nicht in qtmux_core) → .cpp direkt mitkompilieren, wie bei
+# test_sftp. Legt echte Shell-Sessions an, deshalb in der E2E-Kategorie.
+qt_add_executable(test_sessiongroups tst_sessiongroups.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/SessionModel.cpp)
+target_include_directories(test_sessiongroups PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/plugins)
+target_link_libraries(test_sessiongroups PRIVATE qtmux_core Qt6::Test Qt6::Qml)
+
 qt_add_executable(test_session tst_session.cpp)
 target_link_libraries(test_session PRIVATE qtmux_core Qt6::Test)
 
@@ -66,14 +76,16 @@ if(WIN32)
     #  1) GUI-Subsystem  -> keine automatisch allozierte Konsole.
     #  2) run_detached.ps1 -> Start losgelöst von ctest, damit auch dessen Konsole
     #     nicht geerbt wird. Exit-Code wird durchgereicht.
-    set_target_properties(test_pty test_session PROPERTIES WIN32_EXECUTABLE TRUE)
-    foreach(t test_pty test_session)
+    set_target_properties(test_pty test_session test_sessiongroups
+                          PROPERTIES WIN32_EXECUTABLE TRUE)
+    foreach(t test_pty test_session test_sessiongroups)
         add_test(NAME ${t} COMMAND powershell -NoProfile -ExecutionPolicy Bypass
             -File "${CMAKE_CURRENT_SOURCE_DIR}/run_detached.ps1" "$<TARGET_FILE:${t}>")
     endforeach()
 else()
     add_test(NAME test_pty COMMAND test_pty)
     add_test(NAME test_session COMMAND test_session)
+    add_test(NAME test_sessiongroups COMMAND test_sessiongroups)
 endif()
 
 # --- Doku-Wächter (QTMUX-34) ------------------------------------------------

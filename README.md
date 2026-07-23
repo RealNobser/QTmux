@@ -68,9 +68,9 @@ aus einem Terminal-Manager eine **Arbeitsumgebung für mehrere Agenten** macht: 
 Steuer-Sitzung verteilt Aufgaben an Worker-Sitzungen, liest deren Bildschirme mit und
 schiebt mitten in der Arbeit Präzisierungen nach.
 
-Die 22 Werkzeuge decken ab, was man sonst in der Oberfläche klickt: Sessions auflisten,
-anlegen und schließen, Text senden, Bildschirm samt Historie lesen, Panes teilen und
-belegen, gespeicherte Verbindungsprofile starten, Design umschalten.
+Die 23 Werkzeuge decken ab, was man sonst in der Oberfläche klickt: Sessions auflisten,
+anlegen, gruppieren und schließen, Text senden, Bildschirm samt Historie lesen, Panes
+teilen und belegen, gespeicherte Verbindungsprofile starten, Design umschalten.
 
 ```bash
 U=http://127.0.0.1:7345/mcp
@@ -254,9 +254,9 @@ QTmux embeds an **MCP server** (Model Context Protocol, HTTP/JSON-RPC on
 manager into a **workspace for multiple agents**: one controller session hands out tasks to
 worker sessions, reads their screens, and refines instructions mid-flight.
 
-Its 22 tools cover what you would otherwise click in the UI: list, create and close
-sessions, send text, read the screen including history, split and populate panes, launch
-saved connection profiles, switch the theme.
+Its 23 tools cover what you would otherwise click in the UI: list, create, group and
+close sessions, send text, read the screen including history, split and populate panes,
+launch saved connection profiles, switch the theme.
 
 ```bash
 U=http://127.0.0.1:7345/mcp

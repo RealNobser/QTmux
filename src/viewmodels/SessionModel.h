@@ -32,6 +32,7 @@ public:
         ProgressStateRole,
         ProgressValueRole,
         WorkingDirRole,
+        GroupRole,
         SessionRole,
     };
     Q_ENUM(Roles)
@@ -79,8 +80,22 @@ public:
     /// Broadcast-Modus: einmal getippt → alle Sessions erhalten dieselbe Eingabe.
     Q_INVOKABLE void writeToAll(const QByteArray &data);
     /// Verschiebt die Session von `from` an die Zielposition `to` (Drag-Reorder
-    /// in der Sidebar). Persistiert die neue Reihenfolge.
+    /// in der Sidebar). Persistiert die neue Reihenfolge. Die Session übernimmt
+    /// dabei die Gruppe ihrer neuen Nachbarschaft (QTMUX-42) — Ziehen in einen
+    /// Gruppenblock ist damit zugleich das Aufnehmen in die Gruppe.
     Q_INVOKABLE void moveSession(int from, int to);
+
+    /// Ordnet die Session einer Gruppe zu (leerer Name = ohne Gruppe, QTMUX-42)
+    /// und rückt sie ans Ende ihres Gruppenblocks. Die Sidebar zeigt Gruppen über
+    /// ListView-Sections, die zusammenhängende Blöcke voraussetzen — deshalb hält
+    /// das Model die Blöcke, nicht die View.
+    Q_INVOKABLE void setSessionGroup(int row, const QString &name);
+    /// Alle vergebenen Gruppennamen in Sidebar-Reihenfolge (ohne Leereintrag).
+    Q_INVOKABLE QStringList groups() const;
+    /// Anzahl der Sessions in einer Gruppe (für die Kopfzeile der Sidebar).
+    Q_INVOKABLE int groupSize(const QString &name) const;
+    /// Benennt eine Gruppe um (alle Mitglieder). Leerer Zielname löst sie auf.
+    Q_INVOKABLE void renameGroup(const QString &from, const QString &to);
     /// Beendet alle laufenden Prozesse/Verbindungen (beim App-Quit aufzurufen,
     /// nach saveState()). Verhindert verwaiste Shells/Agenten.
     Q_INVOKABLE void shutdownAll();
@@ -95,6 +110,10 @@ public:
 
 signals:
     void countChanged();
+    /// Eine Gruppenzuordnung hat sich geändert (QTMUX-42). groups()/groupSize()
+    /// sind Funktionen, keine Properties — QML-Bindungen darauf brauchen diesen
+    /// Anker, sonst zeigen Kopfzeilen und Menüs veraltete Stände.
+    void groupsChanged();
     /// Eine (nicht-fokussierte) Session fordert Aufmerksamkeit — für Fenster-Alert.
     void attentionRaised(int row);
 
@@ -114,7 +133,14 @@ private:
         QString identity;    // SSH (Identity-Datei, optional)
         QString pluginId;    // Plugin-Session (QTMUX-8): Plugin- und
         QString pluginType;  // Backend-Typ-ID für die Wiederherstellung
+        QString group;       // Sidebar-Gruppe (QTMUX-42), leer = ohne Gruppe
     };
+
+    /// Verschiebt die Zeile ans Ende des Blocks ihrer eigenen Gruppe (bzw. für
+    /// gruppenlose Sessions ans Listenende) und meldet die neue Zeile zurück.
+    int regroupRow(int row);
+    /// Reines Verschieben ohne Gruppen-Adoption (die macht nur moveSession).
+    bool moveRowInternal(int from, int to);
 
     QList<Session *> m_sessions;
     QList<SessionConfig> m_configs;   // parallel zu m_sessions
