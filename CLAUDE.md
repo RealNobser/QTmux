@@ -301,10 +301,9 @@ Einzelheiten und Spielregeln: Abschnitt **„Repository, Release, Zusammenarbeit
 Alt sendet jetzt `ESC CR` statt `CR` — Agenten-TUIs (Claude Code) fügen damit einen
 Umbruch ins Eingabefeld ein statt abzusenden. Encoding-Logik dafür Gui-frei nach
 `src/core/KeyEncoding.cpp` extrahiert (neuer Test `test_keyencoding`); Details/Abwägung:
-Feature-Referenz „Tasten". ⚠ Jira-Issue dual noch anzulegen (auf der Windows-Maschine
-liegen keine Jira-Credentials — `CLAUDE.local.md`/`Credential-*.txt` nur auf dem Mac).
-Referenziert als QTMUX-43 = nächste freie Nummer nach 42; sollte die Nummer bei der
-Anlage abweichen, Referenzen in Code/Doku anpassen.
+Feature-Referenz „Tasten". Jira-Issue am 2026-07-23 vom Mac aus dual nachgetragen (die
+Windows-Maschine hat keine Credentials) — die dort vergebene Nummer **43** wurde in
+beiden Systemen bestätigt, Referenzen in Code/Doku stimmen also.
 
 **Offene Jira:** **QTMUX-40** (OSC-8-Hyperlinks — die *explizite* Variante zu den
 heuristischen Links aus QTMUX-39. In dieser Architektur teuer: `VtScreen` hält den
