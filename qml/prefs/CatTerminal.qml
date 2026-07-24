@@ -11,6 +11,9 @@ CatPage {
     heading: qsTr("Terminal")
     subtitle: qsTr("Schrift, Ligaturen und Rendering des Terminals.")
 
+    // Aktives Schema (das die ganze App färbt) — reaktiv über ColorSchemes.current.
+    readonly property var scheme: ColorSchemes.colors(ColorSchemes.current)
+
     GridLayout {
         columns: 2
         columnSpacing: 12
@@ -58,6 +61,81 @@ CatPage {
                 return 0
             }
             onActivated: (i) => page.host.app.defaultShellProgram = page.host.sessions.availableShells()[i].program
+        }
+    }
+
+    // --- Live-Vorschau (nicht interaktiv, QTMUX-47 Schritt 4) -------------------
+    // Spiegelt sofort Schema, Schriftart/-größe und Ligaturen wider. Bewusst ein
+    // gestylter Text-Block statt eines PTY-losen TerminalItem — sichtbares Ergebnis
+    // ist verbindlich, nicht der Weg.
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 6
+        SectionLabel { text: qsTr("Vorschau") }
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: previewCol.implicitHeight + 24
+            radius: 8
+            color: page.scheme.bg
+            border.color: Theme.border
+            border.width: 1
+            clip: true
+
+            ColumnLayout {
+                id: previewCol
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
+                spacing: 3
+
+                // Prompt-Zeile mit ANSI-Farben.
+                RowLayout {
+                    spacing: 0
+                    Text { text: "➜";            color: page.scheme.ansi[10]; font.family: page.host.app.terminalFontFamily; font.pixelSize: page.host.app.terminalFontSize }
+                    Text { text: "  ~/projects"; color: page.scheme.ansi[12]; font.family: page.host.app.terminalFontFamily; font.pixelSize: page.host.app.terminalFontSize }
+                    Text { text: " git:(";       color: page.scheme.fg;       font.family: page.host.app.terminalFontFamily; font.pixelSize: page.host.app.terminalFontSize }
+                    Text { text: "main";         color: page.scheme.ansi[9];  font.family: page.host.app.terminalFontFamily; font.pixelSize: page.host.app.terminalFontSize }
+                    Text { text: ")";            color: page.scheme.fg;       font.family: page.host.app.terminalFontFamily; font.pixelSize: page.host.app.terminalFontSize }
+                }
+                // Beispielausgabe in Vordergrundfarbe.
+                Text {
+                    text: qsTr("$ qtmux --version   # Beispieltext in der gewählten Schrift")
+                    color: page.scheme.fg
+                    font.family: page.host.app.terminalFontFamily
+                    font.pixelSize: page.host.app.terminalFontSize
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+                // ANSI-Palette (16 Farben) als Blöcke.
+                Row {
+                    spacing: 2
+                    Repeater {
+                        model: 16
+                        Rectangle {
+                            required property int index
+                            width: page.host.app.terminalFontSize
+                            height: page.host.app.terminalFontSize
+                            radius: 2
+                            color: page.scheme.ansi[index]
+                        }
+                    }
+                }
+                // Ligaturzeile — folgt der Ligatureneinstellung über font.features.
+                Text {
+                    text: "!= <= => --> === |> :: <> =~ ++"
+                    color: page.scheme.fg
+                    font.family: page.host.app.terminalFontFamily
+                    font.pixelSize: page.host.app.terminalFontSize
+                    // Programmier-Ligaturen sitzen bei den meisten Fonts in `calt`
+                    // (kontextuelle Alternativen); `liga` deckt die Standardligaturen ab.
+                    font.features: ({
+                        "liga": page.host.app.terminalLigatures ? 1 : 0,
+                        "calt": page.host.app.terminalLigatures ? 1 : 0
+                    })
+                }
+            }
         }
     }
 }
