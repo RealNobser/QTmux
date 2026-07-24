@@ -1854,8 +1854,11 @@ ApplicationWindow {
                                     sourceSize.width: 12
                                     sourceSize.height: 12
                                     // SVG ist monochrom -> über MultiEffect auf Theme-Farbe tönen.
+                                    // brightness hebt das schwarze SVG erst auf Weiß, sonst
+                                    // gewichtet die Colorization mit der Quell-Luminanz ~0.
                                     layer.enabled: true
                                     layer.effect: MultiEffect {
+                                        brightness: 1.0
                                         colorization: 1.0
                                         colorizationColor: Theme.textDim
                                     }

@@ -24,6 +24,9 @@ ComboBox {
         sourceSize.height: 14
         layer.enabled: true
         layer.effect: MultiEffect {
+            // Schwarzes SVG (fill="currentColor") erst auf Weiß heben, dann colorize —
+            // sonst gewichtet die Colorization mit der Quell-Luminanz ~0 (dunkles Icon).
+            brightness: 1.0
             colorization: 1.0
             colorizationColor: Theme.textDim
         }
