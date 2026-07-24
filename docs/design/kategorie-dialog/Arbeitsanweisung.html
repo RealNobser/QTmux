@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbeitsanweisung: Einstellungs-Dialog auf Kategorien umstellen · QTmux 1.5.0</title>
+<style>
+doc-page:not(:defined) { visibility: hidden; }
+body { margin: 0; }
+a { color: #2f6df5; text-decoration: none; }
+a:hover { color: #1b4fd0; }
+</style>
+</head>
+<body>
+
+<doc-page margin="0.8in">
+  <div slot="header" style="display:flex;align-items:baseline;gap:10px;padding-bottom:6px;border-bottom:1px solid #d8d8dc;font-family:-apple-system,'SF Pro Text','Segoe UI',system-ui,sans-serif;font-size:10px;color:#6a6e7c;letter-spacing:.04em">
+    <span style="font-weight:700;color:#1b1d26">QTmux 1.5.0</span>
+    <span>Arbeitsanweisung · Einstellungen &amp; Status-Puls</span>
+    <span style="flex:1"></span>
+    <span>intern · Übergabe an Entwicklung</span>
+  </div>
+
+  <div slot="footer" style="display:flex;align-items:center;gap:10px;padding-top:6px;border-top:1px solid #d8d8dc;font-family:-apple-system,'SF Pro Text','Segoe UI',system-ui,sans-serif;font-size:10px;color:#6a6e7c">
+    <span>Quelle: qml/Main.qml · src/viewmodels/Theme.cpp · src/core/*</span>
+    <span style="flex:1"></span>
+    <span>Entwürfe: „Einstellungen Kategorien“ (1a / 1b / 1c)</span>
+  </div>
+
+  <div style="font-family:-apple-system,'SF Pro Text','Segoe UI',system-ui,sans-serif;color:#1b1d26;font-size:15px;line-height:1.62;text-wrap:pretty">
+
+    <h1 style="margin:0 0 6px;font-size:30px;line-height:1.2;font-weight:700;letter-spacing:-.02em">Arbeitsanweisung: Einstellungs-Dialog auf Kategorien umstellen</h1>
+    <p style="margin:0 0 22px;font-size:13.5px;color:#6a6e7c">Zwei Arbeitspakete zur Übergabe — <strong style="color:#1b1d26">Teil A</strong>: Konfiguration als eigenes Kategorie-Fenster. <strong style="color:#1b1d26">Teil B</strong>: Verhalten der pulsierenden Session-Kacheln, das dadurch verbindlich wird. Bezug: Entwürfe 1a (ruhig/systemnah), 1b (Konsole), 1c (luftig mit Vorschau-Spalte).</p>
+
+    <div style="border:1px solid #d8d8dc;border-left:3px solid #2f6df5;border-radius:6px;padding:14px 16px;margin-bottom:26px;break-inside:avoid;orphans:3;widows:3">
+      <div style="font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#2f6df5;font-weight:700;margin-bottom:6px">Ausgangslage</div>
+      <p style="margin:0;font-size:14px;line-height:1.6">Der heutige Dialog (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">qml/Main.qml</span>, <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">AppDialog { id: settingsDialog }</span>) ist ein 480 px breiter, modaler Dialog mit sechs untereinander gestapelten Abschnitten in einem <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Flickable</span>. Die Höhe wird auf <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">window.height − 180</span> gedeckelt; die Tastenkürzel-Liste (19 Aktionen) und die Agenten-Abos wachsen unbegrenzt mit. Verbindungen, Vault, MCP und Plugins liegen zusätzlich in eigenen Dialogen.</p>
+    </div>
+
+    <h2 style="margin:0 0 10px;font-size:21px;font-weight:700;letter-spacing:-.01em;border-bottom:2px solid #1b1d26;padding-bottom:6px">Teil A — Konfiguration als Kategorie-Fenster</h2>
+
+    <h3 style="margin:20px 0 8px;font-size:16px;font-weight:700">A1 · Ziel und Umfang</h3>
+    <ul style="margin:0 0 14px;padding-left:20px">
+      <li style="margin-bottom:4px">Ein <strong>eigenes, nicht-modales Fenster</strong> „Einstellungen“ ersetzt <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">settingsDialog</span>.</li>
+      <li style="margin-bottom:4px">Links eine Kategorie-Liste (Icon · Label · Badge), rechts der zugehörige View.</li>
+      <li style="margin-bottom:4px">Eingezogen werden: <strong>Verbindungsprofile</strong>, <strong>Secrets-Vault</strong>, <strong>MCP-Server</strong>, <strong>Plugins</strong>. Aus fünf Einstiegen wird einer; die alten Dialoge entfallen bis auf die Bearbeitungs-Dialoge (Profil anlegen/ändern, Secret anlegen/ändern, Kürzel-Konflikt-Rückfrage), die als kleine modale Dialoge über dem Fenster bleiben.</li>
+      <li style="margin-bottom:4px">Keine funktionalen Änderungen an den Einstellungen selbst — jede heutige Option bleibt erhalten und wirkt weiterhin sofort (Zwei-Wege-Bindung an <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">window</span>-Properties, <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Theme</span>, Singletons).</li>
+    </ul>
+
+    <h3 style="margin:20px 0 8px;font-size:16px;font-weight:700">A2 · Fensterverhalten</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin-bottom:14px">
+      <thead>
+        <tr style="text-align:left;border-bottom:1.5px solid #1b1d26">
+          <th style="padding:6px 8px 6px 0;font-weight:700;width:34%">Aspekt</th>
+          <th style="padding:6px 0;font-weight:700">Vorgabe</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0;color:#4a4d5e">Typ</td><td style="padding:6px 0">Eigenes <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">Window</span> (nicht <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">Dialog</span>), nicht modal, eigener Eintrag in der Fensterliste.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0;color:#4a4d5e">Größe</td><td style="padding:6px 0">Startgröße 980 × 680 (1c: 1060 × 700), Mindestgröße 820 × 560, frei skalierbar. Position und Größe werden über <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">Settings</span> persistiert (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">ui/prefsGeometry</span>).</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0;color:#4a4d5e">Öffnen</td><td style="padding:6px 0"><span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">actSettings</span> (⌘, / Strg+,), Zahnrad in der Toolbar, Command-Palette. Ein zweiter Aufruf hebt das bestehende Fenster nach vorn statt ein neues zu öffnen; die zuletzt gewählte Kategorie wird wiederhergestellt (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">ui/prefsCategory</span>).</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0;color:#4a4d5e">Öffnen mit Ziel</td><td style="padding:6px 0">Öffentliche Funktion <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">prefs.open(categoryId, settingKey)</span> — Toolbar-Schlüsselsymbol öffnet direkt „Secrets-Vault“, „Verbindungen verwalten“ direkt „Verbindungen“.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0;color:#4a4d5e">Schließen</td><td style="padding:6px 0">Esc und ⌘W schließen das Fenster, nicht die Session im Hauptfenster. Kein „Übernehmen“ — Änderungen wirken sofort.</td></tr>
+        <tr><td style="padding:6px 8px 6px 0;color:#4a4d5e">Position</td><td style="padding:6px 0">Beim ersten Öffnen versetzt zum Hauptfenster platzieren, sodass die Sidebar sichtbar bleibt (siehe Teil B).</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin:20px 0 8px;font-size:16px;font-weight:700">A3 · Aufbau</h3>
+    <p style="margin:0 0 10px">Zwei Spalten: Rail 232–250 px (Hintergrund <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Theme.bgSidebar</span>, 1 px Trennlinie <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Theme.border</span>), rechts der View auf <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Theme.bgMain</span>. Alle Farben stammen unverändert aus <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Theme</span> und folgen damit dem aktiven Farbschema; kein Hex-Wert im neuen QML-Code außer den vorhandenen Status-Farben aus Teil B.</p>
+    <ul style="margin:0 0 14px;padding-left:20px">
+      <li style="margin-bottom:4px">Rail-Eintrag: Höhe 34–40 px, Icon 16–17 px (bestehende Phosphor-SVGs aus <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">resources/icons</span>, getönt über <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">MultiEffect</span> wie in den Menüs), Label 13 px, Badge rechts.</li>
+      <li style="margin-bottom:4px">Auswahl: <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Theme.sidebarSelected</span>, Hover <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Theme.sidebarHover</span> — identisch zur Session-Sidebar.</li>
+      <li style="margin-bottom:4px">Tastatur: ↑/↓ wechselt die Kategorie, Tab springt in den View, ⌘F fokussiert die Suche.</li>
+      <li style="margin-bottom:4px">Der View scrollt eigenständig; die Rail scrollt nie mit. Kopfzeile je Kategorie: Titel + einzeilige Erklärung.</li>
+    </ul>
+
+    <h3 style="margin:20px 0 8px;font-size:16px;font-weight:700">A4 · Kategorien und Zuordnung der heutigen Optionen</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px">
+      <thead>
+        <tr style="text-align:left;border-bottom:1.5px solid #1b1d26">
+          <th style="padding:6px 8px 6px 0;font-weight:700;width:22%">Kategorie (Icon)</th>
+          <th style="padding:6px 8px 6px 0;font-weight:700;width:14%">Badge</th>
+          <th style="padding:6px 0;font-weight:700">Inhalt — Herkunft</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:7px 8px 7px 0">Allgemein (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">gear</span>)</td><td style="padding:7px 8px 7px 0;color:#6a6e7c">—</td><td style="padding:7px 0">Sprache, Design (Wie System / Hell / Dunkel), „Vor dem Beenden nachfragen“ + Erklärtext, Quake-Modus + Hotkey-Hinweis. Aus „Erscheinungsbild“ und „Fenster“.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:7px 8px 7px 0">Erscheinungsbild (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">moon</span>)</td><td style="padding:7px 8px 7px 0;color:#6a6e7c">Schema-Name</td><td style="padding:7px 0">Farbschema Dunkel + Hell, je 16-Farben-Vorschau, „Importieren …“ (iTerm/Xresources/Ghostty). Aus „Erscheinungsbild“.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:7px 8px 7px 0">Terminal (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">terminal-window</span>)</td><td style="padding:7px 8px 7px 0;color:#6a6e7c">—</td><td style="padding:7px 0">Schriftart, Schriftgröße (6–40), Ligaturen, GPU-Glyph-Atlas, Standard-Shell (nur wenn <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">hasShellChoice</span>), Mini-Terminal-Vorschau. Aus „Terminal“.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:7px 8px 7px 0">Eingabe (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">clipboard</span>)</td><td style="padding:7px 8px 7px 0;color:#6a6e7c">—</td><td style="padding:7px 0">Auswahl automatisch kopieren, Rechtsklick fügt ein, vor mehrzeiligem Einfügen warnen. Aus „Eingabe &amp; Zwischenablage“.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:7px 8px 7px 0">Agenten &amp; MCP (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">robot</span>)</td><td style="padding:7px 8px 7px 0;color:#6a6e7c">„3 Abos“</td><td style="padding:7px 0">Abo-Matrix Quelle → Empfänger, Arten-Filter, MCP-Server an/aus + Port. Aus „Agenten-Benachrichtigungen“ + Menü „Agent-Steuerung“.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:7px 8px 7px 0">Tastenkürzel (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">command</span>)</td><td style="padding:7px 8px 7px 0;color:#6a6e7c">Anzahl</td><td style="padding:7px 0">Gruppierte Tabelle mit Suche, Aufnahme in der Zeile, Konflikthinweis, „Standard“ je Zeile, „Alle zurücksetzen“. Aus „Tastenkürzel“ + <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">hotkeyCaptureDialog</span>.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:7px 8px 7px 0">Verbindungen (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">bookmark</span>)</td><td style="padding:7px 8px 7px 0;color:#6a6e7c">Anzahl</td><td style="padding:7px 0">Profil-Liste mit Verbinden / SFTP / Bearbeiten / Löschen, „Neues Profil“. Aus <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">connectionsDialog</span>.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:7px 8px 7px 0">Secrets-Vault (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">key</span>)</td><td style="padding:7px 8px 7px 0;color:#6a6e7c">„gesperrt“</td><td style="padding:7px 0">Entsperren/Anlegen, Secret-Liste, Master-Passwort ändern. Aus <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">vaultDialog</span>.</td></tr>
+        <tr><td style="padding:7px 8px 7px 0">Erweiterungen (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">plugs</span>)</td><td style="padding:7px 8px 7px 0;color:#6a6e7c">Anzahl</td><td style="padding:7px 0">Geladene Plugins mit Backend-Typen (Echo, MacPCAN), Pfad, Version. Neu aus <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12px">Plugins.backendTypes</span>.</td></tr>
+      </tbody>
+    </table>
+    <p style="margin:0 0 14px;font-size:12.5px;color:#6a6e7c">Badges sind Statusanzeigen, keine Zähler um ihrer selbst willen: Sie zeigen nur, was man von außen wissen will (Vault gesperrt/offen, Anzahl Abos, Anzahl Profile, Schema-Name).</p>
+
+    <h3 style="margin:20px 0 8px;font-size:16px;font-weight:700">A5 · Suche</h3>
+    <ul style="margin:0 0 14px;padding-left:20px">
+      <li style="margin-bottom:4px">Suchfeld oben in der Rail (1a/1b) bzw. im Fensterkopf (1c). ⌘F fokussiert, Esc leert.</li>
+      <li style="margin-bottom:4px">Durchsucht Label, Erklärtext und Synonyme aller Einstellungen sowie die Aktionsnamen der Kürzel. Jede Einstellung bekommt dafür eine ID und ein Stichwortfeld (z. B. <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">terminal.ligatures</span>, Stichworte „FiraCode, Ligaturen, Glyph“).</li>
+      <li style="margin-bottom:4px">Treffer werden als Liste unter dem Feld gezeigt (Kategorie · Einstellung). Auswahl <strong>springt in die Kategorie, scrollt die Zeile in den Blick und hebt sie ~1,2 s mit <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Theme.sidebarSelected</span> hervor</strong> (einmaliges Aufblenden, kein Dauerblinken).</li>
+      <li style="margin-bottom:4px">Abgrenzung zur Command-Palette (⌘K): Die Palette führt Befehle aus, die Suche hier führt zu Einstellungen. Keine doppelte Pflege — die Palette behält ihre bestehenden Einträge.</li>
+    </ul>
+
+    <h3 style="margin:20px 0 8px;font-size:16px;font-weight:700">A6 · Vorgaben je Kategorie</h3>
+    <div style="border:1px solid #d8d8dc;border-radius:6px;padding:12px 14px;margin-bottom:10px;break-inside:avoid">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px">Terminal — Mini-Vorschau</div>
+      <p style="margin:0;font-size:13.5px">Ein echtes, nicht interaktives Vorschaufeld unterhalb der Optionen: aktives Schema als Hintergrund, gewählte Schriftart/-größe, eine Beispielausgabe mit ANSI-Farben und einer Ligaturzeile (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">!= &lt;= =&gt; --&gt;</span>). Aktualisiert sich sofort bei jeder Änderung. Umsetzung wahlweise als <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">TerminalItem</span> mit vorgefülltem Puffer (kein PTY) oder als statischer <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Text</span>-Block — Entscheidung liegt bei der Umsetzung, sichtbar identisch.</p>
+    </div>
+    <div style="border:1px solid #d8d8dc;border-radius:6px;padding:12px 14px;margin-bottom:10px;break-inside:avoid">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px">Tastenkürzel — Aufnahme in der Zeile</div>
+      <p style="margin:0 0 6px;font-size:13.5px">Kein eigener Aufnahme-Dialog mehr. Klick auf das Kürzel schaltet die Zeile in den Aufnahme-Zustand: Akzentrahmen, Text „Tasten drücken …“, Esc bricht ab, ⏎ bestätigt, „Leeren“ entfernt die Belegung.</p>
+      <ul style="margin:0;padding-left:18px;font-size:13.5px">
+        <li>Während der Aufnahme bleiben alle globalen Shortcuts deaktiviert (heute <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">hotkeyCaptureDialog.capturing</span> — Flag bleibt, wandert ins Fenster).</li>
+        <li>Konflikt wird <strong>inline unter der Zeile</strong> gemeldet: „Bereits belegt von: &lt;Aktion&gt;“ mit den Aktionen „Zuweisen“ (entfernt die andere Belegung) und „Abbrechen“.</li>
+        <li>Gruppen: Sitzungen · Panes · Verbindungen · Ansicht &amp; App. „Standard“ erscheint nur bei Abweichung vom Default (Verhalten wie heute).</li>
+      </ul>
+    </div>
+    <div style="border:1px solid #d8d8dc;border-radius:6px;padding:12px 14px;margin-bottom:10px;break-inside:avoid">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px">Agenten &amp; MCP — Matrix</div>
+      <p style="margin:0 0 6px;font-size:13.5px">Zeile = Empfänger-Session, Spalte = Quell-Session (Kopf: <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">#id</span>, Tooltip mit Titel + Arbeitsverzeichnis). Eine Zelle schaltet das Paar. Die Diagonale (Quelle = Empfänger) ist gesperrt dargestellt.</p>
+      <ul style="margin:0;padding-left:18px;font-size:13.5px">
+        <li>Mapping auf die bestehende API: leere Quell-Liste = „alle anderen“; sobald eine einzelne Zelle abgewählt wird, wird die explizite Quell-Liste geschrieben (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">AgentEvents.subscribe(id, sources, kinds)</span>).</li>
+        <li>Arten-Chips je Zeile: fertig / Frage / Fehler; leere Arten-Liste = alle (Verhalten wie heute).</li>
+        <li>MCP-Abschnitt darunter: Server an/aus, Port, Hinweis „nur 127.0.0.1, Vault nicht über MCP erreichbar“. Kein Vault-Zugriff über diese Seite.</li>
+        <li>Ohne offene Sessions: Leerzustand „Keine Sessions geöffnet.“ (Text bleibt).</li>
+      </ul>
+    </div>
+    <div style="border:1px solid #d8d8dc;border-radius:6px;padding:12px 14px;margin-bottom:16px;break-inside:avoid">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px">Verbindungen &amp; Vault</div>
+      <p style="margin:0;font-size:13.5px">Profile als Zeilen mit Typ-Icon, Ziel in Monospace, Tags (SSH/Seriell/Plugin, „Vault“, „Login-Script“) und den Aktionen Verbinden · SFTP · Bearbeiten. Der Vault-Abschnitt zeigt den Sperrzustand prominent; das Entsperren passiert in der Seite selbst, das Anlegen/Ändern einzelner Secrets weiterhin im kleinen modalen Dialog. Master-Passwort ändern bleibt ein eigener Dialog.</p>
+    </div>
+
+    <h3 style="margin:20px 0 8px;font-size:16px;font-weight:700">A7 · Persistenz, Umsetzung, Übersetzung</h3>
+    <ul style="margin:0 0 14px;padding-left:20px">
+      <li style="margin-bottom:4px">Keine neuen Settings-Keys für bestehende Optionen — alle Bindungen unverändert übernehmen. Neu nur: <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">ui/prefsGeometry</span>, <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">ui/prefsCategory</span>.</li>
+      <li style="margin-bottom:4px">Dateien: neu <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">qml/PrefsWindow.qml</span> (Fenster + Rail + Suche) und je Kategorie eine Datei unter <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">qml/prefs/</span>. Die gemeinsamen Komponenten (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">AppComboBox</span>, <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">AppPopupBg</span>, <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">AppDialog</span>) wandern aus <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Main.qml</span> in eigene Dateien, damit beide Fenster sie nutzen.</li>
+      <li style="margin-bottom:4px">In <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Main.qml</span> entfallen: <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">settingsDialog</span>, <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">connectionsDialog</span>, <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">vaultDialog</span>, <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">hotkeyCaptureDialog</span>. Die zugehörigen Actions zeigen auf <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">prefs.open(…)</span>; die Command-Palette behält ihre Einträge und springt in die passende Kategorie.</li>
+      <li style="margin-bottom:4px">Alle sichtbaren Strings über <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">qsTr()</span>; <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">i18n/qtmux_de.ts</span> und <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">qtmux_en.ts</span> ergänzen. Bestehende Übersetzungen der übernommenen Texte wiederverwenden, nicht neu formulieren.</li>
+      <li style="margin-bottom:4px">Reihenfolge der Umsetzung: (1) Fenster + Rail + zwei einfache Kategorien, (2) Restkategorien 1:1 umziehen, (3) Tastenkürzel-Inline-Aufnahme, (4) Agenten-Matrix, (5) Suche, (6) alte Dialoge entfernen.</li>
+    </ul>
+
+    <h3 style="margin:20px 0 8px;font-size:16px;font-weight:700">A8 · Abnahmekriterien</h3>
+    <ol style="margin:0 0 18px;padding-left:20px">
+      <li style="margin-bottom:4px">Jede heute vorhandene Einstellung ist im neuen Fenster erreichbar und wirkt sofort; nichts ist verloren gegangen.</li>
+      <li style="margin-bottom:4px">Das Fenster ist nicht modal: Terminals laufen weiter, Sessions lassen sich im Hauptfenster wechseln, Ausgabe und Status-Puls bleiben sichtbar.</li>
+      <li style="margin-bottom:4px">Schema- und Design-Wechsel färben Haupt- <em>und</em> Einstellungsfenster ohne Neustart.</li>
+      <li style="margin-bottom:4px">Kürzel-Aufnahme in der Zeile funktioniert inklusive Konfliktfall; währenddessen feuert kein globaler Shortcut.</li>
+      <li style="margin-bottom:4px">Suche findet jede Einstellung über Label <em>und</em> Stichwort und hebt sie nach dem Sprung hervor.</li>
+      <li style="margin-bottom:4px">Hell- und Dunkel-Schema geprüft, ebenso Fenstergrößen 820 × 560 und maximiert.</li>
+      <li>Bestehende Tests bleiben grün; <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">tst_hotkeys</span> und <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">tst_profiles</span> um die neuen Einstiegspunkte ergänzen.</li>
+    </ol>
+
+    <h2 style="margin:26px 0 10px;font-size:21px;font-weight:700;letter-spacing:-.01em;border-bottom:2px solid #1b1d26;padding-bottom:6px;break-before:page">Teil B — Pulsierende Session-Kacheln</h2>
+    <p style="margin:0 0 14px">Mit einem nicht-modalen Einstellungsfenster wird der Puls zur dauerhaft sichtbaren Statusanzeige. Das bestehende Verhalten aus <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">Main.qml</span> wird hiermit als Vorgabe festgeschrieben und an zwei Stellen präzisiert.</p>
+
+    <h3 style="margin:18px 0 8px;font-size:16px;font-weight:700">B1 · Zustände und Farben</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin-bottom:14px">
+      <thead>
+        <tr style="text-align:left;border-bottom:1.5px solid #1b1d26">
+          <th style="padding:6px 8px 6px 0;font-weight:700;width:26%">Zustand</th>
+          <th style="padding:6px 8px 6px 0;font-weight:700;width:24%">Farbe</th>
+          <th style="padding:6px 0;font-weight:700">Darstellung</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0">Aufmerksamkeit</td><td style="padding:6px 8px 6px 0"><span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">Theme.accent</span> (ANSI 4)</td><td style="padding:6px 0">Ring <em>und</em> 2 px Kachelrahmen, beide pulsierend. Höchster Vorrang.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0">Läuft (1)</td><td style="padding:6px 8px 6px 0"><span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">#46d369</span></td><td style="padding:6px 0">Ring statisch.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0">Wartet auf Eingabe (2)</td><td style="padding:6px 8px 6px 0"><span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">#f5c451</span></td><td style="padding:6px 0">Ring statisch.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0">Fehler (3)</td><td style="padding:6px 8px 6px 0"><span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">#e5534b</span></td><td style="padding:6px 0">Ring statisch.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0">Geschlossen (4)</td><td style="padding:6px 8px 6px 0"><span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">#5a5d6a</span></td><td style="padding:6px 0">Ring statisch.</td></tr>
+        <tr style="border-bottom:1px solid #e2e2e6"><td style="padding:6px 8px 6px 0">MCP-Controller</td><td style="padding:6px 8px 6px 0"><span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:12.5px">#e5534b</span></td><td style="padding:6px 0">3 px Tab am linken Kachelrand, nie pulsierend.</td></tr>
+        <tr><td style="padding:6px 8px 6px 0">Gruppe</td><td style="padding:6px 8px 6px 0">Gruppenfarbe</td><td style="padding:6px 0">3 px Marke in der Einzugsspalte (links <em>vor</em> der Kachel), konkurriert nicht mit dem Controller-Tab.</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin:18px 0 8px;font-size:16px;font-weight:700">B2 · Animation</h3>
+    <ul style="margin:0 0 14px;padding-left:20px">
+      <li style="margin-bottom:4px">Puls: Opazität 1.0 → 0.3 in 600 ms, zurück in 600 ms, endlos, <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">alwaysRunToEnd</span>. Ring und Rahmen laufen im selben Takt.</li>
+      <li style="margin-bottom:4px">Beim Beenden des Zustands wird die Opazität hart auf 1.0 zurückgesetzt (kein „hängender“ Zwischenwert).</li>
+      <li style="margin-bottom:4px">Fortschrittsbalken (OSC 9;4) im unbestimmten Zustand pulsiert mit 700 ms je Richtung — bewusst ein anderer Takt, damit beide unterscheidbar bleiben.</li>
+      <li style="margin-bottom:4px">Der Puls endet, sobald die Session aktiv wird (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">sessions.setActiveRow</span> löscht den Hinweis) — auch dann, wenn das Einstellungsfenster den Fokus hat und die Session nur ins Pane geladen wurde.</li>
+      <li style="margin-bottom:4px"><strong>Neu:</strong> Bei aktivem <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">prefers-reduced-motion</span> (bzw. deaktivierten UI-Effekten des Systems) wird nicht animiert, sondern der Ring dauerhaft in Akzentfarbe und der Rahmen statisch gezeichnet.</li>
+    </ul>
+
+    <h3 style="margin:18px 0 8px;font-size:16px;font-weight:700">B3 · Zusammenspiel mit dem Einstellungsfenster</h3>
+    <ul style="margin:0 0 14px;padding-left:20px">
+      <li style="margin-bottom:4px">Das Einstellungsfenster öffnet versetzt und darf die Sidebar des Hauptfensters nicht standardmäßig verdecken.</li>
+      <li style="margin-bottom:4px">Keine Toasts, Banner oder Badges im Einstellungsfenster für Agenten-Ereignisse — die Sidebar bleibt die einzige Meldestelle.</li>
+      <li style="margin-bottom:4px">Im Einstellungsfenster selbst wird nichts animiert außer dem Cursor der Terminal-Vorschau (1,1 s Blinktakt) und dem einmaligen Aufblenden nach einem Suchtreffer. Insbesondere: kein pulsierender Aufnahme-Zustand bei Tastenkürzeln, sondern ein statischer Akzentrahmen.</li>
+      <li style="margin-bottom:4px">Der Puls hängt weiterhin ausschließlich an gemeldeten Ereignissen (OSC 133 / OSC 9 / 777 / Bell bzw. <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">AgentEventHub</span>). Es wird nichts aus Bildschirminhalt oder Prozesszustand abgeleitet.</li>
+    </ul>
+
+    <h3 style="margin:18px 0 8px;font-size:16px;font-weight:700">B4 · Abnahmekriterien</h3>
+    <ol style="margin:0 0 18px;padding-left:20px">
+      <li style="margin-bottom:4px">Ein Agent meldet „Frage“ → Ring und Rahmen der betreffenden Kachel pulsieren synchron, auch bei geöffnetem Einstellungsfenster.</li>
+      <li style="margin-bottom:4px">Klick auf die Kachel beendet den Puls sofort und vollständig (Opazität 1.0).</li>
+      <li style="margin-bottom:4px">Controller-Tab, Gruppenmarke und Fortschrittsbalken bleiben bei aktivem Puls sichtbar und unverdeckt.</li>
+      <li style="margin-bottom:4px">Bei reduzierter Bewegung ist der Zustand ohne Animation erkennbar.</li>
+      <li>Mit 20 offenen Sessions und drei pulsenden Kacheln bleibt die Oberfläche flüssig (keine messbare Renderlast im Leerlauf).</li>
+    </ol>
+
+    <h2 style="margin:24px 0 10px;font-size:21px;font-weight:700;letter-spacing:-.01em;border-bottom:2px solid #1b1d26;padding-bottom:6px">Teil C — Offene Entscheidungen</h2>
+    <ol style="margin:0 0 18px;padding-left:20px">
+      <li style="margin-bottom:4px"><strong>Variante</strong>: 1a (geringstes Risiko, nächste am Bestand) · 1b (stärkster Bezug zur CLI-/MCP-Seele, beste Tabellen) · 1c (beste Rückkopplung durch Vorschau-Spalte, breiteres Fenster). Struktur, Kategorien und Funktionsumfang sind in allen drei identisch — die Wahl betrifft nur die Ausgestaltung.</li>
+      <li style="margin-bottom:4px">Vorschau als echtes <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">TerminalItem</span> oder als statischer Textblock.</li>
+      <li style="margin-bottom:4px">Soll das Fenster pro Profil (<span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:13px">QTMUX_PROFILE</span>) eine eigene Geometrie merken?</li>
+      <li>Bleibt „Verbindungen verwalten“ zusätzlich als eigener Toolbar-Knopf, oder nur noch als Sprung in die Kategorie?</li>
+    </ol>
+
+    <div style="border-top:1px solid #d8d8dc;padding-top:12px;font-size:12px;color:#6a6e7c">
+      <p style="margin:0">Anhang · Kürzel-Defaults zur Kontrolle der Gruppierung (aus <span style="font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:11.5px">src/core/HotkeyRegistry.cpp</span>): Neue Session ⌘T · Session schließen ⌘W · Pane schließen ⇧⌘W · Nächste/Vorige Session ⌃⇥ / ⇧⌃⇥ (Windows/Linux Strg+Tab) · Nebeneinander teilen ⇧⌘E · Untereinander teilen ⇧⌘O · Befehlspalette ⌘K · Broadcast ⇧⌘B · Neue SSH-Verbindung ⇧⌘S · Neue serielle Verbindung ⇧⌘R · Verbindungen verwalten ⇧⌘M · Secrets-Vault ⇧⌘K · MCP umschalten ⇧⌘A · Schriftgröße zurücksetzen ⌘0 · Design umschalten ⌘D · Einstellungen ⌘, · Beenden ⌘Q.</p>
+    </div>
+  </div>
+</doc-page>
+
+<script src="./doc-page.js"></script>
+</body>
+</html>
