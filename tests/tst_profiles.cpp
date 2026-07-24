@@ -77,6 +77,30 @@ private slots:
         QCOMPARE(reg->profiles().size(), 1);
         QCOMPARE(reg->profiles().first().name, QStringLiteral("lokal"));
     }
+
+    // QTMUX-47: Die Verbindungen-Kategorie (qml/prefs/CatVerbindungen.qml) blendet den
+    // SFTP-Knopf nur bei SSH-Profilen ein — Bedingung `modelData.type === 1`. Dieser
+    // Guard sichert, dass der Typ-Wert über Persistenz/Auslesen erhalten bleibt (SSH=1,
+    // Shell=0), sonst verschwände der SFTP-Knopf still oder erschiene fälschlich.
+    void typePreservedForConnectionsUi() {
+        auto *reg = ConnectionProfileRegistry::instance();
+        while (!reg->profiles().isEmpty())
+            reg->removeProfile(reg->profiles().first().name);
+
+        QVariantMap ssh;
+        ssh[QStringLiteral("name")] = QStringLiteral("edge");
+        ssh[QStringLiteral("type")] = 1;   // SSH
+        ssh[QStringLiteral("host")] = QStringLiteral("edge.example");
+        reg->saveProfile(ssh);
+
+        QVariantMap sh;
+        sh[QStringLiteral("name")] = QStringLiteral("shell");
+        sh[QStringLiteral("type")] = 0;    // lokale Shell
+        reg->saveProfile(sh);
+
+        QCOMPARE(reg->profile(QStringLiteral("edge")).value(QStringLiteral("type")).toInt(), 1);
+        QCOMPARE(reg->profile(QStringLiteral("shell")).value(QStringLiteral("type")).toInt(), 0);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestProfiles)

@@ -82,6 +82,34 @@ private slots:
         r->resetAll();
         QVERIFY(!r->isCustom(QStringLiteral("actCommandPalette")));
     }
+
+    // QTMUX-47: Die Kürzel-Kategorie (qml/prefs/CatHotkeys.qml) gruppiert die Aktionen
+    // nach Sitzungen · Panes · Verbindungen · Ansicht & App. Unbekannte IDs landen in
+    // „Weitere" — würde eine Bucket-ID umbenannt, verschwände die Aktion still aus ihrer
+    // Gruppe. Dieser Guard koppelt die QML-Gruppierung an die Registry: jede genannte ID
+    // muss existieren.
+    void groupingBucketsExist() {
+        auto *r = HotkeyRegistry::instance();
+        const QStringList buckets = {
+            // Sitzungen
+            QStringLiteral("actNewSession"), QStringLiteral("actCloseSession"),
+            QStringLiteral("actNextSession"), QStringLiteral("actPrevSession"),
+            // Panes
+            QStringLiteral("actClosePane"), QStringLiteral("actSplitH"),
+            QStringLiteral("actSplitV"), QStringLiteral("actBroadcast"),
+            // Verbindungen
+            QStringLiteral("actNewSsh"), QStringLiteral("actNewSerial"),
+            QStringLiteral("actConnections"), QStringLiteral("actVault"),
+            // Ansicht & App
+            QStringLiteral("actCommandPalette"), QStringLiteral("actMcpToggle"),
+            QStringLiteral("actZoomReset"), QStringLiteral("actToggleTheme"),
+            QStringLiteral("actSettings"), QStringLiteral("actAbout"),
+            QStringLiteral("actQuit")
+        };
+        const QStringList ids = r->actionIds();
+        for (const QString &b : buckets)
+            QVERIFY2(ids.contains(b), qPrintable(QStringLiteral("Bucket-ID fehlt in der Registry: %1").arg(b)));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestHotkeys)
