@@ -1795,12 +1795,20 @@ ApplicationWindow {
                         // Eingeklappte Gruppen: Kachel verschwindet, ohne dass das
                         // Model angefasst wird (die Session läuft ja weiter).
                         readonly property bool hidden: group.length > 0 && window.isGroupCollapsed(group)
+                        // Gruppierte Kacheln werden eingerückt (QTMUX-45): die Zuordnung
+                        // ist damit an der FORM erkennbar, nicht nur an der Farbe — die
+                        // Farbmarke allein trug zu viel Last (Farbfehlsichtigkeit, und sie
+                        // konkurriert am linken Rand mit der MCP-Controller-Kennzeichnung).
+                        // Der Einzug ist zugleich die Spalte, in der die Farbmarke sitzt.
+                        // 🔑 Eingerückt wird der INHALT (Margins), NICHT die Delegate-Wurzel:
+                        // ein `x`-Binding hier wäre wirkungslos, weil die ListView die
+                        // Querachsen-Position ihrer Delegates selbst setzt — die Kachel bliebe
+                        // links stehen und die Marke landete außerhalb (clip: true → weg).
+                        readonly property real groupIndent: group.length > 0 ? 12 : 0
                         width: ListView.view.width
                         visible: !hidden
                         height: hidden ? 0 : 52
-                        radius: 8
-                        color: index === window.currentRow ? Theme.sidebarSelected
-                             : hover.hovered ? Theme.sidebarHover : "transparent"
+                        color: "transparent"      // Kachel-Optik liegt im eingerückten `card`
 
                         // Während des Ziehens angehoben darstellen.
                         z: dragH.active ? 2 : 0
@@ -1840,14 +1848,31 @@ ApplicationWindow {
                             }
                         }
 
-                        // Farbmarke der Gruppe am linken Rand — macht auf einen Blick
-                        // sichtbar, welche Sessions zusammengehören, auch beim Scrollen.
+                        // Die eigentliche Kachelfläche (Auswahl/Hover). Als erstes Kind
+                        // deklariert, liegt also unter Marke/Inhalt. Ihr linker Rand ist
+                        // der Einzug — daran wird die Gruppenzugehörigkeit sichtbar.
                         Rectangle {
-                            visible: tile.group.length > 0 && !tile.mcpController
+                            id: card
+                            anchors.fill: parent
+                            anchors.leftMargin: tile.groupIndent
+                            radius: 8
+                            color: tile.index === window.currentRow ? Theme.sidebarSelected
+                                 : hover.hovered ? Theme.sidebarHover : "transparent"
+                        }
+
+                        // Farbmarke der Gruppe — sitzt in der EINRÜCKUNGSSPALTE links vor
+                        // der Kachel, nicht auf ihrem Rand. Dadurch bleibt sie sichtbar,
+                        // wenn diese Session zugleich MCP-Controller ist (QTMUX-45): vorher
+                        // teilten sich beide den linken Kachelrand, und der rote Tab hat die
+                        // Gruppenfarbe verdrängt (`&& !mcpController`) — die Gruppe war an
+                        // genau der Kachel unsichtbar, die man am ehesten sucht.
+                        Rectangle {
+                            visible: tile.group.length > 0
                             width: 3
                             radius: 1.5
                             color: window.groupColor(tile.group)
                             anchors.left: parent.left
+                            anchors.leftMargin: 4
                             anchors.verticalCenter: parent.verticalCenter
                             height: parent.height - 14
                         }
@@ -1859,13 +1884,14 @@ ApplicationWindow {
                             radius: 1.5
                             color: "#e5534b"
                             anchors.left: parent.left
+                            anchors.leftMargin: tile.groupIndent
                             anchors.verticalCenter: parent.verticalCenter
                             height: parent.height - 14
                         }
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 10
+                            anchors.leftMargin: 10 + tile.groupIndent
                             anchors.rightMargin: 10
                             spacing: 10
 
@@ -1968,7 +1994,7 @@ ApplicationWindow {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.bottom: parent.bottom
-                            anchors.leftMargin: 10
+                            anchors.leftMargin: 10 + tile.groupIndent
                             anchors.rightMargin: 10
                             anchors.bottomMargin: 4
                             height: 3

@@ -65,9 +65,11 @@ erzeugt hat — `lastAgentEventKind`, `lastAgentEventText`, `lastAgentEventSeq`.
 
 Wer mehrere Worker parallel fahren lässt, sieht in der Sidebar sonst nur eine flache
 Liste gleich aussehender Shells. Eine Gruppe fasst die Sessions einer Aufgabe zusammen:
-Sie stehen unter einer benannten, einklappbaren Kopfzeile beieinander und tragen links
-eine gemeinsame Farbmarke. Der Controller kann seine Worker also beim Anlegen sofort
-einsortieren:
+Sie stehen unter einer benannten, einklappbaren Kopfzeile beieinander, sind **eingerückt**
+und tragen links eine gemeinsame Farbmarke (QTMUX-45 — der Einzug macht die Zuordnung
+unabhängig von der Farbe erkennbar und bleibt auch dann sichtbar, wenn die Session als
+MCP-Controller den roten Tab trägt). Der Controller kann seine Worker also beim Anlegen
+sofort einsortieren:
 
 ```jsonc
 {"name": "set_session_group", "arguments": {"id": 7, "group": "Migration Auth"}}

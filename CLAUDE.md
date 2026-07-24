@@ -253,6 +253,15 @@ SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattform
 (DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 23 MCP-Tools
 (GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 223/223.
 
+**QTMUX-45 (2026-07-23) — Gruppen werden eingerückt, Marke kollidiert nicht mehr.**
+Anwenderbefund zu QTMUX-42: Die Farbmarke allein trug die Gruppenzugehörigkeit zu schwach —
+und sie wurde von der MCP-Controller-Kennzeichnung *überschrieben* (beide saßen am linken
+Kachelrand, der rote Tab schaltete die Marke ab). Jetzt sind gruppierte Kacheln eingerückt
+(Form statt nur Farbe), die Farbmarke sitzt in der Einzugsspalte und der Controller-Tab am
+Rand der eingerückten Kachel — beide zugleich sichtbar. Verifiziert per Screenshot in beiden
+Themes; Details und die ListView-Falle dahinter in der Feature-Referenz (Sessions & UI).
+⚠ Jira-Issue dual noch anzulegen (Windows-Maschine hat keine Credentials).
+
 **QTMUX-42 (2026-07-23) — Sitzungsgruppen in der Sidebar.** Wer mehrere Agenten parallel
 laufen lässt, sah nur eine flache Liste gleich aussehender Shells. Jetzt lassen sich
 Sessions zu benannten, einklappbaren Gruppen zusammenfassen (Rechtsklick oder MCP), mit
@@ -452,6 +461,19 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   die Kachel ans Listenende. `groups()`/`groupSize()` sind Funktionen ohne Property →
   QML-Bindungen brauchen den Anker `groupsChanged`/`window.groupsRevision`, sonst frieren
   Kopfzeile und Kontextmenü auf ihrem ersten Stand ein.
+- **Einzug + kollisionsfreie Marke (QTMUX-45):** Gruppierte Kacheln sind **12 px eingerückt**,
+  die Gruppenzugehörigkeit ist damit an der **Form** erkennbar statt nur an der Farbe; die
+  Farbmarke sitzt in der Einzugsspalte, der rote MCP-Controller-Tab am Rand der eingerückten
+  Kachel. Vorher teilten sich beide den linken Kachelrand und die Marke war per
+  `visible: … && !mcpController` **abgeschaltet** — die Gruppe war genau an der Kachel
+  unsichtbar, die man am ehesten sucht (der Controller). 🔑 Eingerückt wird der **Inhalt über
+  Margins**, NICHT die Delegate-Wurzel: ein `x`-Binding auf dem Delegate ist wirkungslos, weil
+  die `ListView` die Querachsen-Position ihrer Delegates selbst setzt — die Kachel blieb links
+  stehen und die (relativ dazu positionierte) Marke rutschte aus dem `clip: true`-Viewport,
+  war also ersatzlos weg. Deshalb trägt ein inneres `card`-Rechteck die Kachel-Optik
+  (Auswahl/Hover, respektiert den Einzug) und Inhalt/Fortschrittsbalken bekommen
+  `leftMargin: 10 + groupIndent`. Rein visuell → unit-test-unsichtbar, verifiziert per
+  Screenshot in beiden Themes (Controller-in-Gruppe + Auswahl auf gruppierter Kachel).
 - **Session-ID in der Kachel (QTMUX-44):** Jede Sidebar-Kachel zeigt neben dem Titel klein
   und monospaced `#<id>` — die **stabile** `Session::id()`, also genau die Nummer, mit der
   man die Session per MCP anspricht (`send_text`, `set_session_group` …). Model-Rolle
