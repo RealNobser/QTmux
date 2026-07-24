@@ -1367,6 +1367,7 @@ ApplicationWindow {
                             { title: qsTr("Auswahl automatisch kopieren"), sub: "",           icon: "copy",            run: function(){ window.copyOnSelect = !window.copyOnSelect } },
                             { title: qsTr("Rechtsklick fügt ein"),       sub: "",             icon: "clipboard",       run: function(){ window.rightClickPaste = !window.rightClickPaste } },
                             { title: qsTr("Vor mehrzeiligem Einfügen warnen"), sub: "",       icon: "info",            run: function(){ window.pasteWarnMultiline = !window.pasteWarnMultiline } },
+                            { title: qsTr("Vor dem Beenden nachfragen"),  sub: "",             icon: "info",            run: function(){ window.confirmQuit = !window.confirmQuit } },
                             { title: qsTr("Design: Wie System"),         sub: "",             icon: "gear",            run: function(){ Theme.mode = Theme.System } },
                             { title: qsTr("Design: Hell"),               sub: "",             icon: "sun",             run: function(){ Theme.mode = Theme.Light } },
                             { title: qsTr("Design: Dunkel"),             sub: "",             icon: "moon",            run: function(){ Theme.mode = Theme.Dark } },
@@ -1389,6 +1390,34 @@ ApplicationWindow {
                                      sub: window.profileSummary(profs[j]),
                                      icon: window.profileIcon(profs[j].type),
                                      run: (function(p){ return function(){ window.connectProfile(p) } })(profs[j]) })
+                        }
+                        // Sitzungsgruppen (QTMUX-46): dieselben Operationen wie das
+                        // Rechtsklick-Menü der Kachel bzw. des Gruppenkopfs. Vorher waren
+                        // Gruppen nur per Rechtsklick erreichbar (und per MCP
+                        // set_session_group) — in der Palette gar nicht, obwohl sie sonst
+                        // jede Funktion bündelt. `currentRow` wird ERST beim Ausführen
+                        // gelesen, die Befehle wirken also immer auf die aktive Session.
+                        if (sessions.count > 0) {
+                            var cs = sessions.sessionAt(window.currentRow)
+                            var csTitle = cs ? cs.title : qsTr("Aktive Session")
+                            c.push({ title: qsTr("Session gruppieren …"), sub: csTitle, icon: "bookmark",
+                                     run: function(){ groupNameDialog.start(window.currentRow) } })
+                            var gs = sessions.groups()
+                            for (var gi = 0; gi < gs.length; ++gi) {
+                                c.push({ title: qsTr("Session zu Gruppe: %1").arg(gs[gi]), sub: csTitle,
+                                         icon: "bookmark",
+                                         run: (function(n){ return function(){ sessions.setSessionGroup(window.currentRow, n) } })(gs[gi]) })
+                            }
+                            c.push({ title: qsTr("Session aus Gruppe nehmen"), sub: csTitle, icon: "x",
+                                     run: function(){ sessions.setSessionGroup(window.currentRow, "") } })
+                            for (var gj = 0; gj < gs.length; ++gj) {
+                                c.push({ title: qsTr("Gruppe umbenennen: %1 …").arg(gs[gj]), sub: qsTr("Gruppe"),
+                                         icon: "bookmark",
+                                         run: (function(n){ return function(){ groupNameDialog.startRename(n) } })(gs[gj]) })
+                                c.push({ title: qsTr("Gruppe auflösen: %1").arg(gs[gj]), sub: qsTr("Gruppe"),
+                                         icon: "trash",
+                                         run: (function(n){ return function(){ sessions.renameGroup(n, "") } })(gs[gj]) })
+                            }
                         }
                         for (var i = 0; i < sessions.count; ++i) {
                             var s = sessions.sessionAt(i)
@@ -1562,6 +1591,16 @@ ApplicationWindow {
                 }
             }
             MenuSeparator {}
+            // Direkt über „Beenden“, weil die Option genau dessen Verhalten steuert
+            // (QTMUX-46: stand vorher NUR im Einstellungsdialog, während die anderen
+            // Komfort-Schalter überall erreichbar sind).
+            ShortcutMenuItem {
+                text: qsTr("Vor dem Beenden nachfragen")
+                icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                checkable: true
+                checked: window.confirmQuit
+                onTriggered: window.confirmQuit = !window.confirmQuit
+            }
             ShortcutMenuItem { action: actQuit }
         }
         ThemedMenu {
@@ -3245,6 +3284,22 @@ ApplicationWindow {
             return s.kinds.length === 0 || s.kinds.indexOf(kind) >= 0
         }
 
+        // Portwechsel (QTMUX-46): erst auf Klick/Enter anwenden, nicht bei jedem
+        // Tastenanschlag — sonst würde der Server bei jeder Zwischenzahl neu binden.
+        // Lief er, wird er auf dem neuen Port wieder gestartet; scheitert das (Port
+        // belegt), sagt mcpPortError das offen, statt still auszubleiben.
+        property string mcpPortError: ""
+        function applyMcpPort(field) {
+            const p = parseInt(field.text)
+            if (!(p >= 1024 && p <= 65535)) { mcpPortError = qsTr("Bitte einen Port zwischen 1024 und 65535 angeben."); return }
+            mcpPortError = ""
+            const wasListening = mcp.listening
+            if (wasListening) mcp.stop()
+            mcp.port = p
+            if (wasListening && !mcp.start())
+                mcpPortError = qsTr("Port %1 ließ sich nicht öffnen (belegt?). Server ist aus.").arg(p)
+        }
+
         // Abschnittsüberschrift im Dialog.
         component SectionLabel: Text {
             color: Theme.textDim
@@ -3439,6 +3494,51 @@ ApplicationWindow {
                     color: Theme.textDim
                     font.pixelSize: 11
                     Layout.leftMargin: 26
+                }
+            }
+
+            SectionLabel { text: qsTr("Agenten-Steuerung (MCP)") }
+            // Bisher gab es für den MCP-Server nur An/Aus (Menü, Palette, Toolbar) —
+            // der Port war zwar als Einstellung dokumentiert, aber nur über die
+            // Umgebungsvariable oder einen Eingriff in die Einstellungsdatei
+            // erreichbar (QTMUX-46).
+            ColumnLayout {
+                spacing: 6; Layout.fillWidth: true
+                CheckBox {
+                    text: qsTr("MCP-Server aktiv (nur 127.0.0.1)")
+                    checked: mcp.listening
+                    onToggled: checked ? mcp.start() : mcp.stop()
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Layout.leftMargin: 6
+                    Text { text: qsTr("Port"); color: Theme.textBright }
+                    TextField {
+                        id: mcpPortField
+                        Layout.preferredWidth: 90
+                        text: mcp.port
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        validator: IntValidator { bottom: 1024; top: 65535 }
+                        onAccepted: settingsDialog.applyMcpPort(mcpPortField)
+                    }
+                    Button {
+                        text: qsTr("Übernehmen")
+                        font.pixelSize: 12
+                        enabled: mcpPortField.text != mcp.port
+                        onClicked: settingsDialog.applyMcpPort(mcpPortField)
+                    }
+                }
+                Text {
+                    text: settingsDialog.mcpPortError.length > 0
+                          ? settingsDialog.mcpPortError
+                          : qsTr("Wird gespeichert und beim nächsten Start verwendet. "
+                               + "Die Umgebungsvariable QTMUX_MCP_PORT hat Vorrang.")
+                    color: settingsDialog.mcpPortError.length > 0 ? "#e5534b" : Theme.textDim
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 6
                 }
             }
 

@@ -251,7 +251,28 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 **v1.5.0.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
 SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattformen fertig
 (DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 23 MCP-Tools
-(GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 223/223.
+(GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 235/235
+(+1 Bestandsfall: Plural-Eintrag `%n Einträge` bleibt unfinished — der DE-Finalisierer
+lässt Numerus-Formen bewusst offen).
+
+**QTMUX-46 (2026-07-23) — Paritätsprüfung MCP / HTTP / Befehlspalette / Einstellungen.**
+Kontrolle auf Anwender-Wunsch, ob nach den letzten Änderungen alle Befehle überall
+vorhanden sind. **Funktional fehlte nichts:** `tools/list` liefert 23 Tools, dieselben 23
+stehen in `docs/MCP.md`, und jedes ist im Dispatch erreichbar (empirisch je einmal
+aufgerufen — kein „Unbekanntes Tool"); die Shell-Helfer nutzen nur existierende Tools.
+Vier Lücken nachgezogen: (1) die **Argumentspalte** der MCP-Doku hinkte dem `inputSchema`
+nach (`create_session` ohne `plugin`/`pluginId`/`typeId`/`loginScript`, `send_text` ohne
+`broadcast`, `read_screen` ohne `scrollback`, `list_sessions` ohne `workingDir`/`progress`);
+(2) **`confirmQuit`** lag nur im Einstellungsdialog → jetzt auch im Datei-Menü (über
+„Beenden") und in der Palette, wie die übrigen Komfort-Schalter; (3) **Sitzungsgruppen**
+waren nur per Rechtsklick und MCP bedienbar → fünf Palette-Befehle (gruppieren, zu Gruppe X,
+aus Gruppe nehmen, Gruppe umbenennen, Gruppe auflösen); (4) **`mcp/port`** war dokumentiert,
+aber nur per Umgebungsvariable/Registry setzbar → neuer Dialog-Abschnitt „Agenten-Steuerung
+(MCP)" mit An/Aus und Portfeld, und `McpServer::setPort` **schreibt** die Einstellung jetzt
+(las sie vorher nur). Verifiziert an einer isolierten Testinstanz: Palette-Befehl setzt die
+Gruppe (per MCP nachgemessen), Toggle landet als `confirmQuit=false` in den Einstellungen,
+Portwechsel im Dialog → Server antwortet auf dem neuen Port, alter Port tot, `mcp/port`
+persistiert. ⚠ Jira-Issue dual noch anzulegen (Windows-Maschine hat keine Credentials).
 
 **QTMUX-45 (2026-07-23) — Gruppen werden eingerückt, Marke kollidiert nicht mehr.**
 Anwenderbefund zu QTMUX-42: Die Farbmarke allein trug die Gruppenzugehörigkeit zu schwach —
@@ -475,6 +496,15 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   (Auswahl/Hover, respektiert den Einzug) und Inhalt/Fortschrittsbalken bekommen
   `leftMargin: 10 + groupIndent`. Rein visuell → unit-test-unsichtbar, verifiziert per
   Screenshot in beiden Themes (Controller-in-Gruppe + Auswahl auf gruppierter Kachel).
+- **Befehlspalette (Strg/Cmd+K):** Das Such-/Befehlsfeld in der Toolbar ist die zentrale
+  Sammelstelle **aller** Funktionen — feste Befehle plus dynamisch je Plugin-Backend, je
+  Verbindungsprofil, je Sitzungsgruppe und je offener Session („Wechseln zu: …"). Sie wird
+  bei **jedem Öffnen** neu gebaut (`buildCommands()` in `openFor()`), dynamische Einträge
+  sind also immer aktuell; Kürzel-Anzeige kommt live aus `Hotkeys.bindings`. 🔑 Neue
+  Funktionen gehören HIER hinein, sonst entsteht die Schieflage aus QTMUX-46: Ein Schalter
+  lag nur im Einstellungsdialog (`confirmQuit`), Gruppen nur im Rechtsklick — beides in der
+  Palette unauffindbar. Faustregel: Was per MCP steuerbar ist, muss auch die Palette können
+  (Ausnahme Vault — bewusste Sicherheitsgrenze).
 - **Session-ID in der Kachel (QTMUX-44):** Jede Sidebar-Kachel zeigt neben dem Titel klein
   und monospaced `#<id>` — die **stabile** `Session::id()`, also genau die Nummer, mit der
   man die Session per MCP anspricht (`send_text`, `set_session_group` …). Model-Rolle

@@ -31,13 +31,13 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 
 | Tool | Argumente | Zweck |
 |---|---|---|
-| `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification) |
-| `create_session` | `type` ("shell"/"serial"/"ssh"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?` | Session anlegen → gibt neue **id** zurück |
+| `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification, workingDir, progress*) |
+| `create_session` | `type` ("shell"/"serial"/"ssh"/"plugin"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?`, `pluginId?`, `typeId?`, `loginScript?` | Session anlegen → gibt neue **id** zurück |
 | `close_session` | `id` | Session schließen |
 | `set_session_group` | `id`, `group?` | Session einer **Sidebar-Gruppe** zuordnen; leerer/fehlender `group`-Wert nimmt sie heraus (s. u.) |
 | `focus_session` | `id` | Session sichtbar/fokussiert machen |
-| `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard 60) | Text in die Session tippen; Enter geht **kurz danach** raus (s. u.) |
-| `read_screen` | `id` | Sichtbaren Bildschirm als Klartext lesen |
+| `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard 60), `broadcast?` | Text in die Session tippen; Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt) |
+| `read_screen` | `id`, `scrollback?` | Sichtbaren Bildschirm als Klartext lesen; mit `scrollback:true` zusätzlich die Historie davor |
 | `attach_controller` | `id` | Markiert die Session als steuernde **MCP-Controller**-Session (roter Tab) |
 | `set_theme` | `mode` ("system"/"light"/"dark") | App-Design umschalten |
 | `list_shells` | – | Verfügbare Shells (`{program, name}`) für `create_session type=shell` |

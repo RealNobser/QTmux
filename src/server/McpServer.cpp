@@ -70,6 +70,12 @@ void McpServer::setSessions(SessionModel *m) {
 void McpServer::setPort(int p) {
     if (p == m_port) return;
     m_port = p;
+    // QTMUX-46: Der Port war als Einstellung `mcp/port` dokumentiert, aber nur lesend
+    // implementiert (defaultPort()) — er ließ sich also nur per Hand in den
+    // Einstellungen bzw. per QTMUX_MCP_PORT ändern. Wer ihn setzt, will ihn behalten,
+    // deshalb hier schreiben. Der Konstruktor geht NICHT über setPort, ein reiner
+    // Programmstart schreibt die Einstellung also nicht (Env-Wert bleibt flüchtig).
+    QSettings().setValue(QStringLiteral("mcp/port"), p);
     emit portChanged();
 }
 
