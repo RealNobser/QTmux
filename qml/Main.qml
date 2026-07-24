@@ -1782,8 +1782,10 @@ ApplicationWindow {
                                      : runState === 3 ? "#e5534b"
                                      : runState === 4 ? "#5a5d6a"
                                      : Theme.textDim
+                                // Bei „Bewegung reduzieren" nicht pulsieren, sondern den Ring
+                                // statisch in Akzentfarbe (Opazität 1.0) zeichnen (QTMUX-47).
                                 SequentialAnimation on opacity {
-                                    running: needsAttention
+                                    running: needsAttention && !App.reduceMotion
                                     loops: Animation.Infinite
                                     alwaysRunToEnd: true
                                     NumberAnimation { to: 0.3; duration: 600 }
@@ -1888,7 +1890,7 @@ ApplicationWindow {
                                      : Theme.accent
                                 Behavior on width { NumberAnimation { duration: 120 } }
                                 SequentialAnimation on opacity {
-                                    running: tile.progressActive && tile.progressState === 3
+                                    running: tile.progressActive && tile.progressState === 3 && !App.reduceMotion
                                     loops: Animation.Infinite
                                     alwaysRunToEnd: true
                                     NumberAnimation { to: 0.3; duration: 700 }
@@ -1909,8 +1911,9 @@ ApplicationWindow {
                             visible: needsAttention
                             border.color: Theme.accent
                             border.width: 2
+                            // Reduzierte Bewegung: statischer Akzentrahmen statt Puls.
                             SequentialAnimation on opacity {
-                                running: needsAttention
+                                running: needsAttention && !App.reduceMotion
                                 loops: Animation.Infinite
                                 alwaysRunToEnd: true
                                 NumberAnimation { to: 0.25; duration: 600 }

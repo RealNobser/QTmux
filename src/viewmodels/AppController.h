@@ -15,11 +15,18 @@ class AppController : public QObject {
     QML_NAMED_ELEMENT(App)
     QML_SINGLETON
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
+    // „Bewegung reduzieren" des Systems (QTMUX-47, Teil B): true → die Sidebar zeichnet
+    // pulsierende Status-Elemente statisch statt animiert. Beim Start ermittelt (macOS
+    // universalaccess reduceMotion, Windows SPI_GETCLIENTAREAANIMATION), sonst false;
+    // Umgebungsvariable QTMUX_REDUCE_MOTION erzwingt den Wert (für Tests). Read-only.
+    Q_PROPERTY(bool reduceMotion READ reduceMotion NOTIFY reduceMotionChanged)
 public:
     explicit AppController(QObject *parent = nullptr);
 
     QString language() const { return m_language; }
     void setLanguage(const QString &lang);
+
+    bool reduceMotion() const { return m_reduceMotion; }
 
     /// Unterstützte Sprachen (Code -> Anzeigename) für das Sprachmenü.
     Q_INVOKABLE QStringList languageCodes() const { return {QStringLiteral("de"), QStringLiteral("en")}; }
@@ -48,9 +55,11 @@ public:
 
 signals:
     void languageChanged(const QString &lang);
+    void reduceMotionChanged();
 
 private:
     QString m_language;
+    bool m_reduceMotion = false;
 };
 
 } // namespace qtmux

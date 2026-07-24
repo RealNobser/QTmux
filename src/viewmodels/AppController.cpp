@@ -5,7 +5,40 @@
 #include <QKeySequence>
 #include <QGuiApplication>
 #include <QClipboard>
+#include <QtGlobal>
 #include <Qt>
+
+#if defined(Q_OS_MACOS)
+#  include <CoreFoundation/CoreFoundation.h>
+#elif defined(Q_OS_WIN)
+#  include <windows.h>
+#endif
+
+namespace {
+// System-Einstellung „Bewegung reduzieren" plattformspezifisch (einmalig beim Start).
+bool systemReduceMotion() {
+#if defined(Q_OS_MACOS)
+    // Dieselbe CoreFoundation-C-API wie main.cpp — kein Objective-C/.mm nötig.
+    bool result = false;
+    CFPropertyListRef v = CFPreferencesCopyValue(
+        CFSTR("reduceMotion"), CFSTR("com.apple.universalaccess"),
+        kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    if (v) {
+        if (CFGetTypeID(v) == CFBooleanGetTypeID())
+            result = CFBooleanGetValue(static_cast<CFBooleanRef>(v));
+        CFRelease(v);
+    }
+    return result;
+#elif defined(Q_OS_WIN)
+    BOOL animations = TRUE;
+    if (SystemParametersInfo(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0))
+        return animations == FALSE;
+    return false;
+#else
+    return false;   // Linux: keine einheitliche API — Standard „nicht reduziert".
+#endif
+}
+} // namespace
 
 namespace qtmux {
 
@@ -15,6 +48,12 @@ AppController::AppController(QObject *parent) : QObject(parent) {
     const QString sys = QLocale::system().name().left(2);
     const QString fallback = (sys == QLatin1String("de")) ? QStringLiteral("de") : QStringLiteral("en");
     m_language = s.value(QStringLiteral("ui/language"), fallback).toString();
+
+    // „Bewegung reduzieren": System-Einstellung, per QTMUX_REDUCE_MOTION erzwingbar (Tests).
+    if (qEnvironmentVariableIsSet("QTMUX_REDUCE_MOTION"))
+        m_reduceMotion = qEnvironmentVariableIntValue("QTMUX_REDUCE_MOTION") != 0;
+    else
+        m_reduceMotion = systemReduceMotion();
 }
 
 void AppController::setLanguage(const QString &lang) {
