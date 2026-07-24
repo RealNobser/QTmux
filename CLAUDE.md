@@ -272,7 +272,8 @@ aber nur per Umgebungsvariable/Registry setzbar → neuer Dialog-Abschnitt „Ag
 (las sie vorher nur). Verifiziert an einer isolierten Testinstanz: Palette-Befehl setzt die
 Gruppe (per MCP nachgemessen), Toggle landet als `confirmQuit=false` in den Einstellungen,
 Portwechsel im Dialog → Server antwortet auf dem neuen Port, alter Port tot, `mcp/port`
-persistiert. ⚠ Jira-Issue dual noch anzulegen (Windows-Maschine hat keine Credentials).
+persistiert. Jira-Issue am 2026-07-24 vom Mac aus dual nachgetragen (Windows-Maschine hat
+keine Credentials) — beide Systeme vergaben **46**, Referenzen stimmen.
 
 **QTMUX-45 (2026-07-23) — Gruppen werden eingerückt, Marke kollidiert nicht mehr.**
 Anwenderbefund zu QTMUX-42: Die Farbmarke allein trug die Gruppenzugehörigkeit zu schwach —
