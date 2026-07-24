@@ -46,6 +46,11 @@ Window {
     // und nach dem Hervorheben zurückgesetzt. Wird in Schritt 7 genutzt.
     property string pendingSetting: ""
 
+    // Läuft gerade eine Kürzel-Inline-Aufnahme (Schritt 5)? Solange true, deaktiviert
+    // Main.qml alle globalen App-Shortcuts, damit die gedrückten Tasten aufgenommen
+    // statt ausgeführt werden. Wird von der Hotkeys-Seite gesetzt/zurückgesetzt.
+    property bool capturing: false
+
     // --- Brücken zu Main.qml ------------------------------------------------
     // Ein eigenes Window sieht die IDs aus Main.qml (window, sessions, mcp, die
     // modalen Editier-Dialoge) NICHT — sie werden hier als Handles hereingereicht
@@ -153,10 +158,12 @@ Window {
     }
 
     // Esc und ⌘W/Strg+W schließen nur dieses Fenster (nicht die Session im Hauptfenster).
-    Shortcut { sequences: ["Escape"]; onActivated: root.close() }
-    Shortcut { sequences: [StandardKey.Close]; onActivated: root.close() }
+    // Während einer Kürzel-Aufnahme abgeschaltet, damit Esc/⌘W als Kürzel erfassbar sind
+    // (die Hotkeys-Seite fängt sie dann selbst ab).
+    Shortcut { sequences: ["Escape"]; enabled: !root.capturing; onActivated: root.close() }
+    Shortcut { sequences: [StandardKey.Close]; enabled: !root.capturing; onActivated: root.close() }
     // ⌘F/Strg+F fokussiert die Suche (Funktion folgt in Schritt 7).
-    Shortcut { sequences: [StandardKey.Find]; onActivated: searchField.forceActiveFocus() }
+    Shortcut { sequences: [StandardKey.Find]; enabled: !root.capturing; onActivated: searchField.forceActiveFocus() }
 
     ColumnLayout {
         anchors.fill: parent

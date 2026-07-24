@@ -809,28 +809,28 @@ ApplicationWindow {
         id: actNewSession
         text: qsTr("Neue Session")
         shortcut: Hotkeys.bindings["actNewSession"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: window.newSession()
     }
     Action {
         id: actCloseSession
         text: qsTr("Session schließen")
         shortcut: Hotkeys.bindings["actCloseSession"]
-        enabled: window.currentRow >= 0 && !hotkeyCaptureDialog.capturing
+        enabled: window.currentRow >= 0 && !prefs.capturing
         onTriggered: window.closeCurrent()
     }
     Action {
         id: actToggleTheme
         text: Theme.dark ? qsTr("Helles Design") : qsTr("Dunkles Design")
         shortcut: Hotkeys.bindings["actToggleTheme"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: Theme.toggle()
     }
     Action {
         id: actQuit
         text: qsTr("Beenden")
         shortcut: Hotkeys.bindings["actQuit"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: window.requestQuit()
     }
     // Einstellungen-Dialog öffnen (macOS: Cmd+, ; sonst Strg+,).
@@ -841,7 +841,7 @@ ApplicationWindow {
         // App-Menü und der In-Window-Shortcut greift dann nicht (Komma lief ins Terminal).
         // „Ctrl+," wird auf macOS zu Cmd+, gemappt — native Optik, aber zuverlässig.
         shortcut: Hotkeys.bindings["actSettings"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: prefs.open()
     }
     // Terminal-Zoom: Schriftgröße global vergrößern/verkleinern/zurücksetzen.
@@ -849,21 +849,21 @@ ApplicationWindow {
         id: actZoomIn
         text: qsTr("Schrift vergrößern")
         shortcut: StandardKey.ZoomIn        // Cmd++/Strg++ (inkl. „=" ohne Shift)
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: window.zoomTerminal(1)
     }
     Action {
         id: actZoomOut
         text: qsTr("Schrift verkleinern")
         shortcut: StandardKey.ZoomOut        // Cmd+-/Strg+-
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: window.zoomTerminal(-1)
     }
     Action {
         id: actZoomReset
         text: qsTr("Schriftgröße zurücksetzen")
         shortcut: Hotkeys.bindings["actZoomReset"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: window.resetTerminalZoom()
     }
     // Broadcast-Input umschalten: Eingabe an alle Sessions.
@@ -871,7 +871,7 @@ ApplicationWindow {
         id: actBroadcast
         text: qsTr("Eingabe an alle Sessions")
         shortcut: Hotkeys.bindings["actBroadcast"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         checkable: true
         checked: window.broadcastInput
         onTriggered: window.broadcastInput = !window.broadcastInput
@@ -882,14 +882,14 @@ ApplicationWindow {
     Action {
         id: actCopy
         text: qsTr("Kopieren")
-        enabled: window.activeTerminal && window.activeTerminal.hasSelection && !hotkeyCaptureDialog.capturing
+        enabled: window.activeTerminal && window.activeTerminal.hasSelection && !prefs.capturing
         shortcut: Qt.platform.os === "osx" ? StandardKey.Copy : ""
         onTriggered: if (window.activeTerminal) window.activeTerminal.copy()
     }
     Action {
         id: actPaste
         text: qsTr("Einfügen")
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         shortcut: Qt.platform.os === "osx" ? StandardKey.Paste : ""
         onTriggered: if (window.activeTerminal) window.activeTerminal.paste()
     }
@@ -898,21 +898,21 @@ ApplicationWindow {
         id: actSplitH
         text: qsTr("Nebeneinander teilen")
         shortcut: Hotkeys.bindings["actSplitH"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: window.splitPane(Qt.Horizontal)
     }
     Action {
         id: actSplitV
         text: qsTr("Untereinander teilen")
         shortcut: Hotkeys.bindings["actSplitV"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: window.splitPane(Qt.Vertical)
     }
     Action {
         id: actClosePane
         text: qsTr("Pane schließen")
         shortcut: Hotkeys.bindings["actClosePane"]
-        enabled: window.paneCount > 1 && !hotkeyCaptureDialog.capturing
+        enabled: window.paneCount > 1 && !prefs.capturing
         onTriggered: window.closePane()
     }
     // Befehlspalette: fokussiert das dauerhafte Such-/Befehlsfeld in der Toolbar
@@ -921,7 +921,7 @@ ApplicationWindow {
         id: actCommandPalette
         text: qsTr("Befehlspalette …")
         shortcut: Hotkeys.bindings["actCommandPalette"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         // Explizit öffnen (nicht nur über onActiveFocusChanged) — sonst bleibt die
         // Palette tot, wenn das Feld nach einem Befehl noch den Fokus hat.
         onTriggered: { cmdInput.forceActiveFocus(); cmdInput.selectAll(); cmdPopup.openFor() }
@@ -931,14 +931,14 @@ ApplicationWindow {
         id: actNextSession
         text: qsTr("Nächste Session")
         shortcut: Hotkeys.bindings["actNextSession"]
-        enabled: sessions.count > 1 && !hotkeyCaptureDialog.capturing
+        enabled: sessions.count > 1 && !prefs.capturing
         onTriggered: window.cycleSession(1)
     }
     Action {
         id: actPrevSession
         text: qsTr("Vorige Session")
         shortcut: Hotkeys.bindings["actPrevSession"]
-        enabled: sessions.count > 1 && !hotkeyCaptureDialog.capturing
+        enabled: sessions.count > 1 && !prefs.capturing
         onTriggered: window.cycleSession(-1)
     }
     // Verbindungs-/Dialog-Aktionen (vorher nur Toolbar/Menü ohne Kürzel).
@@ -946,55 +946,55 @@ ApplicationWindow {
         id: actNewSsh
         text: qsTr("Neue SSH-Verbindung …")
         shortcut: Hotkeys.bindings["actNewSsh"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: sshDialog.open()
     }
     Action {
         id: actNewSerial
         text: qsTr("Neue serielle Verbindung …")
         shortcut: Hotkeys.bindings["actNewSerial"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: serialDialog.openDialog()
     }
     Action {
         id: actConnections
         text: qsTr("Verbindungen verwalten …")
         shortcut: Hotkeys.bindings["actConnections"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: connectionsDialog.open()
     }
     Action {
         id: actVault
         text: qsTr("Secrets-Vault …")
         shortcut: Hotkeys.bindings["actVault"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: vaultDialog.open()
     }
     Action {
         id: actMcpToggle
         text: qsTr("MCP-Server umschalten")
         shortcut: Hotkeys.bindings["actMcpToggle"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: mcp.listening ? mcp.stop() : mcp.start()
     }
     Action {
         id: actAbout
         text: qsTr("Über QTmux")
         shortcut: Hotkeys.bindings["actAbout"]
-        enabled: !hotkeyCaptureDialog.capturing
+        enabled: !prefs.capturing
         onTriggered: aboutDialog.open()
     }
     // Direktsprung zu Session 1..9 (feste, nicht konfigurierbare Kürzel — sonst
     // würden 9 Einträge die Kürzel-Liste überladen). Ctrl+<N> lädt Session N.
-    Shortcut { sequence: "Ctrl+1"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 0) window.assignToActivePane(0) }
-    Shortcut { sequence: "Ctrl+2"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 1) window.assignToActivePane(1) }
-    Shortcut { sequence: "Ctrl+3"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 2) window.assignToActivePane(2) }
-    Shortcut { sequence: "Ctrl+4"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 3) window.assignToActivePane(3) }
-    Shortcut { sequence: "Ctrl+5"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 4) window.assignToActivePane(4) }
-    Shortcut { sequence: "Ctrl+6"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 5) window.assignToActivePane(5) }
-    Shortcut { sequence: "Ctrl+7"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 6) window.assignToActivePane(6) }
-    Shortcut { sequence: "Ctrl+8"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 7) window.assignToActivePane(7) }
-    Shortcut { sequence: "Ctrl+9"; enabled: !hotkeyCaptureDialog.capturing; onActivated: if (sessions.count > 8) window.assignToActivePane(8) }
+    Shortcut { sequence: "Ctrl+1"; enabled: !prefs.capturing; onActivated: if (sessions.count > 0) window.assignToActivePane(0) }
+    Shortcut { sequence: "Ctrl+2"; enabled: !prefs.capturing; onActivated: if (sessions.count > 1) window.assignToActivePane(1) }
+    Shortcut { sequence: "Ctrl+3"; enabled: !prefs.capturing; onActivated: if (sessions.count > 2) window.assignToActivePane(2) }
+    Shortcut { sequence: "Ctrl+4"; enabled: !prefs.capturing; onActivated: if (sessions.count > 3) window.assignToActivePane(3) }
+    Shortcut { sequence: "Ctrl+5"; enabled: !prefs.capturing; onActivated: if (sessions.count > 4) window.assignToActivePane(4) }
+    Shortcut { sequence: "Ctrl+6"; enabled: !prefs.capturing; onActivated: if (sessions.count > 5) window.assignToActivePane(5) }
+    Shortcut { sequence: "Ctrl+7"; enabled: !prefs.capturing; onActivated: if (sessions.count > 6) window.assignToActivePane(6) }
+    Shortcut { sequence: "Ctrl+8"; enabled: !prefs.capturing; onActivated: if (sessions.count > 7) window.assignToActivePane(7) }
+    Shortcut { sequence: "Ctrl+9"; enabled: !prefs.capturing; onActivated: if (sessions.count > 8) window.assignToActivePane(8) }
 
     // --- Toolbar oben: Schnellzugriff mit Phosphor-Icons --------------------
     header: ToolBar {
