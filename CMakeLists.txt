@@ -117,6 +117,7 @@ qt_add_qml_module(qtmux
     QML_FILES
         qml/Main.qml
         qml/SplitNode.qml
+        qml/PrefsWindow.qml
         qml/Ui/IconToolButton.qml
         qml/Ui/ShortcutMenuItem.qml
         qml/Ui/AppMenuItem.qml

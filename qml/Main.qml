@@ -56,6 +56,11 @@ ApplicationWindow {
 
     SessionModel { id: sessions }
 
+    // Nicht-modales Einstellungsfenster (QTMUX-47). Öffnen über actSettings/Toolbar/
+    // Palette per prefs.open(kategorie). Der alte settingsDialog bleibt bis Schritt 8
+    // bestehen, wird aber nicht mehr angesteuert.
+    PrefsWindow { id: prefs }
+
     // MCP-Server: externe Agenten-Steuerung über 127.0.0.1 (nur lokal).
     McpServer {
         id: mcp
@@ -826,7 +831,7 @@ ApplicationWindow {
         // „Ctrl+," wird auf macOS zu Cmd+, gemappt — native Optik, aber zuverlässig.
         shortcut: Hotkeys.bindings["actSettings"]
         enabled: !hotkeyCaptureDialog.capturing
-        onTriggered: settingsDialog.open()
+        onTriggered: prefs.open()
     }
     // Terminal-Zoom: Schriftgröße global vergrößern/verkleinern/zurücksetzen.
     Action {
@@ -1180,7 +1185,7 @@ ApplicationWindow {
                             { title: qsTr("Schriftgröße zurücksetzen"),  sub: hk("actZoomReset"), icon: "gear",            run: function(){ window.resetTerminalZoom() } },
                             { title: qsTr("Eingabe an alle Sessions"),   sub: hk("actBroadcast"), icon: "broadcast-input", run: function(){ window.broadcastInput = !window.broadcastInput } },
                             { title: qsTr("Design umschalten"),          sub: hk("actToggleTheme"), icon: "moon",            run: function(){ Theme.toggle() } },
-                            { title: qsTr("Einstellungen …"),            sub: hk("actSettings"), icon: "gear",            run: function(){ settingsDialog.open() } },
+                            { title: qsTr("Einstellungen …"),            sub: hk("actSettings"), icon: "gear",            run: function(){ prefs.open() } },
                             { title: qsTr("MCP-Server umschalten"),      sub: hk("actMcpToggle"), icon: "broadcast",       run: function(){ mcp.listening ? mcp.stop() : mcp.start() } },
                             { title: qsTr("Kopieren"),                   sub: App.shortcutText("Ctrl+C"), icon: "copy",            run: function(){ if (window.activeTerminal) window.activeTerminal.copy() } },
                             { title: qsTr("Einfügen"),                   sub: App.shortcutText("Ctrl+V"), icon: "clipboard",       run: function(){ if (window.activeTerminal) window.activeTerminal.paste() } },
@@ -1373,7 +1378,7 @@ ApplicationWindow {
             IconToolButton {
                 icon.source: window.icon("gear")
                 tip: qsTr("Einstellungen …")
-                onClicked: settingsDialog.open()
+                onClicked: prefs.open()
             }
             IconToolButton {
                 icon.source: window.icon("info")
