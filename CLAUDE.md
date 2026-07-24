@@ -260,7 +260,8 @@ Kachelrand, der rote Tab schaltete die Marke ab). Jetzt sind gruppierte Kacheln 
 (Form statt nur Farbe), die Farbmarke sitzt in der Einzugsspalte und der Controller-Tab am
 Rand der eingerückten Kachel — beide zugleich sichtbar. Verifiziert per Screenshot in beiden
 Themes; Details und die ListView-Falle dahinter in der Feature-Referenz (Sessions & UI).
-⚠ Jira-Issue dual noch anzulegen (Windows-Maschine hat keine Credentials).
+Jira-Issue am 2026-07-24 vom Mac aus dual nachgetragen (Windows-Maschine hat keine
+Credentials) — beide Systeme vergaben **45**, Referenzen stimmen.
 
 **QTMUX-42 (2026-07-23) — Sitzungsgruppen in der Sidebar.** Wer mehrere Agenten parallel
 laufen lässt, sah nur eine flache Liste gleich aussehender Shells. Jetzt lassen sich
