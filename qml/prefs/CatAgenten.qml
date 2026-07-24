@@ -1,18 +1,22 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QTmux
 
-// Kategorie „Agenten & MCP" (QTMUX-47, Tabelle A4): MCP-Server (an/aus + Port) und die
-// Inter-Agenten-Benachrichtigungs-Abos. Unverändert aus den settingsDialog-Abschnitten
-// „Agenten-Steuerung (MCP)" und „Agenten-Benachrichtigungen". Die Abo-Matrix (Quelle →
-// Empfänger) folgt in Schritt 6.
+// Kategorie „Agenten & MCP" (QTMUX-47, Tabelle A4 + Schritt 6): Abo-Matrix (Empfänger ↓ /
+// Quelle →) für Inter-Agenten-Benachrichtigungen, darunter der MCP-Server. Mapping auf die
+// bestehende API (AgentEvents.subscribe): leere Quell-Liste = „alle anderen"; wird eine
+// einzelne Zelle abgewählt, wird die explizite Quell-Liste geschrieben. Arten-Chips je
+// Empfänger (fertig/Frage/Fehler, leere Liste = alle). Die Diagonale (Session hört sich
+// selbst) ist gesperrt.
 CatPage {
     id: page
     heading: qsTr("Agenten & MCP")
     subtitle: qsTr("Steuerung durch KI-Agenten und Benachrichtigungen zwischen Sitzungen.")
 
-    // Agenten-Benachrichtigungs-Abos (reaktiv aus dem Hub gespiegelt).
+    // Abos reaktiv aus dem Hub gespiegelt.
     property var agentSubs: AgentEvents.subscriptions()
     Connections {
         target: AgentEvents
@@ -23,30 +27,235 @@ CatPage {
             if (agentSubs[i].subscriberSessionId === id) return agentSubs[i]
         return null
     }
-    // Arten-Checkbox-Status: kein Abo → aus; leere Arten-Liste → „alle" (alle an).
     function agentKindChecked(id, kind) {
         const s = agentSubFor(id)
         if (!s) return false
         return s.kinds.length === 0 || s.kinds.indexOf(kind) >= 0
     }
 
-    // Portwechsel (QTMUX-46): erst auf Klick/Enter anwenden, nicht bei jedem
-    // Tastenanschlag — sonst würde der Server bei jeder Zwischenzahl neu binden.
-    // Lief er, wird er auf dem neuen Port wieder gestartet; scheitert das (Port
-    // belegt), sagt mcpPortError das offen, statt still auszubleiben.
-    property string mcpPortError: ""
-    function applyMcpPort(field) {
-        const p = parseInt(field.text)
-        if (!(p >= 1024 && p <= 65535)) { mcpPortError = qsTr("Bitte einen Port zwischen 1024 und 65535 angeben."); return }
-        mcpPortError = ""
-        const wasListening = page.host.mcp.listening
-        if (wasListening) page.host.mcp.stop()
-        page.host.mcp.port = p
-        if (wasListening && !page.host.mcp.start())
-            mcpPortError = qsTr("Port %1 ließ sich nicht öffnen (belegt?). Server ist aus.").arg(p)
+    // Alle aktuellen Session-IDs (zum Materialisieren von „alle Quellen").
+    function allSessionIds() {
+        const ids = []
+        const n = page.host.sessions.count
+        for (let i = 0; i < n; ++i) {
+            const s = page.host.sessions.sessionAt(i)
+            if (s) ids.push(s.sessionId)
+        }
+        return ids
     }
 
-    // --- MCP-Server ---
+    // Hört Empfänger r die Quelle s? (leere Quell-Liste = alle anderen)
+    function cellOn(r, s) {
+        const sub = agentSubFor(r)
+        if (!sub) return false
+        if (sub.sources.length === 0) return true
+        return sub.sources.indexOf(s) >= 0
+    }
+    // Zelle (r hört s) umschalten. „alle" wird beim Abwählen materialisiert; sind wieder
+    // alle Quellen an, auf die leere Liste (= alle) zusammengefasst; keine Quelle → Abo weg.
+    function toggleCell(r, s) {
+        const sub = agentSubFor(r)
+        const all = allSessionIds().filter(id => id !== r)
+        let cur = sub ? (sub.sources.length === 0 ? all.slice() : sub.sources.slice()) : []
+        const idx = cur.indexOf(s)
+        if (idx >= 0) cur.splice(idx, 1)
+        else cur.push(s)
+        const kinds = sub ? sub.kinds : []
+        if (cur.length === 0) { AgentEvents.unsubscribe(r); return }
+        if (cur.length === all.length) AgentEvents.subscribe(r, [], kinds)
+        else AgentEvents.subscribe(r, cur, kinds)
+    }
+    // Ereignisart je Empfänger umschalten (nur bei bestehendem Abo). Leere Arten-Liste = alle.
+    function toggleKind(r, kind) {
+        const sub = agentSubFor(r)
+        if (!sub) return
+        let cur = sub.kinds.length === 0 ? ["done", "question", "error"] : sub.kinds.slice()
+        const idx = cur.indexOf(kind)
+        if (idx >= 0) cur.splice(idx, 1)
+        else cur.push(kind)
+        if (cur.length === 3) cur = []   // wieder alle → leere Liste
+        AgentEvents.subscribe(r, sub.sources, cur)
+    }
+
+    readonly property var kindDefs: [
+        { k: "done",     label: qsTr("fertig") },
+        { k: "question", label: qsTr("Frage") },
+        { k: "error",    label: qsTr("Fehler") }
+    ]
+
+    readonly property int labelW: 172
+    readonly property int cellW: 42
+
+    // --- Agenten-Benachrichtigungen (Matrix) ---
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 6
+        SectionLabel { text: qsTr("Benachrichtigungen") }
+        Text {
+            text: qsTr("Zeile = Empfänger, Spalte = Quelle. Ein Häkchen bedeutet: der "
+                     + "Empfänger wird über Ereignisse der Quelle benachrichtigt. Agenten "
+                     + "abonnieren sich meist selbst per MCP (subscribe_events).")
+            color: Theme.textDim
+            font.pixelSize: 11
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+        }
+
+        // Waagerecht scrollbar, falls viele Sessions offen sind.
+        Flickable {
+            Layout.fillWidth: true
+            visible: page.host.sessions.count > 0
+            implicitHeight: matrixCol.implicitHeight
+            contentWidth: matrixCol.implicitWidth
+            contentHeight: matrixCol.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollIndicator.horizontal: ScrollIndicator {}
+
+            ColumnLayout {
+                id: matrixCol
+                spacing: 4
+
+                // Kopfzeile: Quell-Spalten (#id, Tooltip Titel + CWD) + „Arten".
+                RowLayout {
+                    spacing: 0
+                    Item { Layout.preferredWidth: page.labelW; Layout.preferredHeight: 1 }
+                    Repeater {
+                        model: page.host.sessions
+                        delegate: Item {
+                            id: hcol
+                            required property var session
+                            required property string title
+                            required property string workingDir
+                            Layout.preferredWidth: page.cellW
+                            Layout.preferredHeight: 22
+                            Text {
+                                anchors.centerIn: parent
+                                text: "#" + hcol.session.sessionId
+                                color: Theme.textDim
+                                font.pixelSize: 11
+                            }
+                            HoverHandler { id: hcolHover }
+                            ToolTip.visible: hcolHover.hovered
+                            ToolTip.text: hcol.workingDir.length > 0
+                                          ? hcol.title + " · " + hcol.workingDir : hcol.title
+                        }
+                    }
+                    Text {
+                        text: qsTr("Arten")
+                        color: Theme.textDim
+                        font.pixelSize: 11
+                        Layout.leftMargin: 12
+                    }
+                }
+
+                // Eine Zeile je Empfänger.
+                Repeater {
+                    model: page.host.sessions
+                    delegate: RowLayout {
+                        id: recv
+                        required property var session
+                        required property string title
+                        required property string workingDir
+                        spacing: 0
+
+                        Text {
+                            Layout.preferredWidth: page.labelW
+                            text: recv.title + "  #" + recv.session.sessionId
+                            color: Theme.textBright
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                        }
+
+                        // Quell-Zellen.
+                        Repeater {
+                            model: page.host.sessions
+                            delegate: Item {
+                                id: cell
+                                required property var session
+                                Layout.preferredWidth: page.cellW
+                                Layout.preferredHeight: 28
+                                readonly property bool selfCell: cell.session.sessionId === recv.session.sessionId
+                                // Diagonale gesperrt.
+                                Text {
+                                    visible: cell.selfCell
+                                    anchors.centerIn: parent
+                                    text: "—"
+                                    color: Theme.textDim
+                                    font.pixelSize: 13
+                                }
+                                // Toggle-Kachel (kein CheckBox → Bindung an das Modell bleibt
+                                // beim Klick erhalten, wichtig für die Kreuzeffekte der Matrix).
+                                Rectangle {
+                                    visible: !cell.selfCell
+                                    anchors.centerIn: parent
+                                    width: 20; height: 20; radius: 4
+                                    readonly property bool on: page.cellOn(recv.session.sessionId, cell.session.sessionId)
+                                    color: on ? Theme.accent : Theme.bgElevated
+                                    border.color: on ? Theme.accent : Theme.border
+                                    border.width: 1
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: parent.on
+                                        text: "✓"
+                                        color: "#ffffff"
+                                        font.pixelSize: 12
+                                    }
+                                    TapHandler {
+                                        onTapped: page.toggleCell(recv.session.sessionId, cell.session.sessionId)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Arten-Chips (nur bei bestehendem Abo aktiv).
+                        RowLayout {
+                            id: kinds
+                            Layout.leftMargin: 12
+                            spacing: 6
+                            readonly property int rid: recv.session.sessionId
+                            readonly property bool hasSub: page.agentSubFor(rid) !== null
+                            Repeater {
+                                model: page.kindDefs
+                                delegate: Rectangle {
+                                    id: chip
+                                    required property var modelData
+                                    radius: 10
+                                    implicitWidth: chipText.implicitWidth + 16
+                                    implicitHeight: 22
+                                    readonly property bool on: kinds.hasSub && page.agentKindChecked(kinds.rid, chip.modelData.k)
+                                    color: on ? Theme.accent : Theme.bgElevated
+                                    opacity: kinds.hasSub ? 1.0 : 0.4
+                                    border.color: on ? Theme.accent : Theme.border
+                                    border.width: 1
+                                    Text {
+                                        id: chipText
+                                        anchors.centerIn: parent
+                                        text: chip.modelData.label
+                                        color: chip.on ? "#ffffff" : Theme.textDim
+                                        font.pixelSize: 11
+                                    }
+                                    TapHandler {
+                                        enabled: kinds.hasSub
+                                        onTapped: page.toggleKind(kinds.rid, chip.modelData.k)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Text {
+            visible: page.host.sessions.count === 0
+            text: qsTr("Keine Sessions geöffnet.")
+            color: Theme.textDim
+            font.pixelSize: 11
+        }
+    }
+
+    // --- MCP-Server (darunter) ---
     ColumnLayout {
         spacing: 6
         Layout.fillWidth: true
@@ -79,8 +288,8 @@ CatPage {
         Text {
             text: page.mcpPortError.length > 0
                   ? page.mcpPortError
-                  : qsTr("Wird gespeichert und beim nächsten Start verwendet. "
-                       + "Die Umgebungsvariable QTMUX_MCP_PORT hat Vorrang.")
+                  : qsTr("Nur 127.0.0.1 · Vault nicht über MCP erreichbar. Wird gespeichert "
+                       + "und beim nächsten Start verwendet; QTMUX_MCP_PORT hat Vorrang.")
             color: page.mcpPortError.length > 0 ? "#e5534b" : Theme.textDim
             font.pixelSize: 11
             wrapMode: Text.WordWrap
@@ -89,96 +298,16 @@ CatPage {
         }
     }
 
-    // --- Agenten-Benachrichtigungen ---
-    ColumnLayout {
-        Layout.fillWidth: true
-        spacing: 6
-        SectionLabel { text: qsTr("Agenten-Benachrichtigungen") }
-        // Inter-Agenten-Benachrichtigung: eine Session wird benachrichtigt, wenn ein
-        // Agent in einer ANDEREN Session fertig ist oder eine Frage hat. Hier wird je
-        // Session ein Abo (auf alle anderen Quellen) ein-/ausgeschaltet und auf
-        // Ereignisarten gefiltert. Agenten abonnieren sich i. d. R. selbst per MCP
-        // (subscribe_events) und holen die Ereignisse per wait_for_events ab.
-        Text {
-            text: qsTr("Wähle je Session, ob sie über Ereignisse der anderen Sessions "
-                     + "benachrichtigt wird. Feinere Quell-Filter sind über die "
-                     + "MCP-Schnittstelle verfügbar.")
-            color: Theme.textDim
-            font.pixelSize: 11
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
-        }
-        Repeater {
-            model: page.host.sessions
-            delegate: ColumnLayout {
-                required property var session
-                required property string title
-                required property string workingDir
-                Layout.fillWidth: true
-                spacing: 0
-                // Titel + eindeutige Kennung (Session-ID, dazu CWD bei Shells),
-                // damit gleichnamige Sessions (z. B. mehrere „Eingabeaufforderung")
-                // unterscheidbar sind.
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 6
-                    CheckBox {
-                        text: title
-                        checked: page.agentSubFor(session.sessionId) !== null
-                        onToggled: {
-                            if (checked) AgentEvents.subscribe(session.sessionId, [], [])
-                            else AgentEvents.unsubscribe(session.sessionId)
-                        }
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        text: workingDir.length > 0
-                              ? qsTr("#%1 · %2").arg(session.sessionId).arg(workingDir)
-                              : qsTr("#%1").arg(session.sessionId)
-                        color: Theme.textDim
-                        font.pixelSize: 11
-                        elide: Text.ElideLeft
-                    }
-                }
-                RowLayout {
-                    id: kindRow
-                    Layout.leftMargin: 26
-                    spacing: 10
-                    visible: page.agentSubFor(session.sessionId) !== null
-                    property int sid: session.sessionId
-                    // Aktuelle Arten-Auswahl aus den drei Checkboxen bauen und das
-                    // Abo aktualisieren (leere Liste = alle Arten).
-                    function apply() {
-                        const ks = []
-                        if (cbDone.checked) ks.push("done")
-                        if (cbQuestion.checked) ks.push("question")
-                        if (cbError.checked) ks.push("error")
-                        AgentEvents.subscribe(sid, [], ks)
-                    }
-                    Text { text: qsTr("Arten:"); color: Theme.textDim; font.pixelSize: 11 }
-                    CheckBox {
-                        id: cbDone; text: qsTr("fertig"); font.pixelSize: 11
-                        checked: page.agentKindChecked(kindRow.sid, "done")
-                        onToggled: kindRow.apply()
-                    }
-                    CheckBox {
-                        id: cbQuestion; text: qsTr("Frage"); font.pixelSize: 11
-                        checked: page.agentKindChecked(kindRow.sid, "question")
-                        onToggled: kindRow.apply()
-                    }
-                    CheckBox {
-                        id: cbError; text: qsTr("Fehler"); font.pixelSize: 11
-                        checked: page.agentKindChecked(kindRow.sid, "error")
-                        onToggled: kindRow.apply()
-                    }
-                }
-            }
-        }
-        Text {
-            visible: page.host.sessions.count === 0
-            text: qsTr("Keine Sessions geöffnet.")
-            color: Theme.textDim
-            font.pixelSize: 11
-        }
+    // Portwechsel (QTMUX-46): erst auf Klick/Enter anwenden, nicht bei jedem Anschlag.
+    property string mcpPortError: ""
+    function applyMcpPort(field) {
+        const p = parseInt(field.text)
+        if (!(p >= 1024 && p <= 65535)) { mcpPortError = qsTr("Bitte einen Port zwischen 1024 und 65535 angeben."); return }
+        mcpPortError = ""
+        const wasListening = page.host.mcp.listening
+        if (wasListening) page.host.mcp.stop()
+        page.host.mcp.port = p
+        if (wasListening && !page.host.mcp.start())
+            mcpPortError = qsTr("Port %1 ließ sich nicht öffnen (belegt?). Server ist aus.").arg(p)
     }
 }
