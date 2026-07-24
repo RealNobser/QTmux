@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -188,6 +190,7 @@ Window {
                     Repeater {
                         model: root.categories
                         delegate: Rectangle {
+                            id: railTile
                             required property var modelData
                             Layout.fillWidth: true
                             Layout.preferredHeight: 40
@@ -196,9 +199,10 @@ Window {
                             color: current ? Theme.sidebarSelected
                                  : railHover.hovered ? Theme.sidebarHover : "transparent"
                             readonly property color ink: current ? Theme.textBright : Theme.textDim
+                            readonly property string badge: root.badgeFor(modelData.id)
 
                             HoverHandler { id: railHover }
-                            TapHandler { onTapped: root.selectCategory(modelData.id) }
+                            TapHandler { onTapped: root.selectCategory(railTile.modelData.id) }
 
                             RowLayout {
                                 anchors.fill: parent
@@ -213,7 +217,7 @@ Window {
                                     Image {
                                         id: railIco
                                         anchors.fill: parent
-                                        source: root.iconSrc(modelData.icon)
+                                        source: root.iconSrc(railTile.modelData.icon)
                                         sourceSize.width: 17
                                         sourceSize.height: 17
                                         visible: false
@@ -222,25 +226,32 @@ Window {
                                         anchors.fill: railIco
                                         source: railIco
                                         colorization: 1.0
-                                        colorizationColor: parent.parent.ink
+                                        colorizationColor: railTile.ink
                                     }
                                 }
                                 Text {
                                     Layout.fillWidth: true
-                                    text: modelData.label
-                                    color: parent.parent.ink
-                                    font.pixelSize: 13.5
+                                    text: railTile.modelData.label
+                                    color: railTile.ink
+                                    font.pixelSize: 13
                                     font.weight: Font.Medium
                                     elide: Text.ElideRight
                                 }
-                                Text {
-                                    readonly property string badge: root.badgeFor(modelData.id)
-                                    visible: badge.length > 0
-                                    text: badge
-                                    color: Theme.textDim
-                                    font.pixelSize: 10.5
-                                    leftPadding: 7; rightPadding: 7; topPadding: 2; bottomPadding: 2
-                                    background: Rectangle { radius: 8; color: Theme.bgElevated }
+                                // Badge als Pille (Text hat kein background — deshalb ein
+                                // Rectangle mit Text darin).
+                                Rectangle {
+                                    visible: railTile.badge.length > 0
+                                    radius: 8
+                                    color: Theme.bgElevated
+                                    implicitWidth: badgeText.implicitWidth + 14
+                                    implicitHeight: badgeText.implicitHeight + 4
+                                    Text {
+                                        id: badgeText
+                                        anchors.centerIn: parent
+                                        text: railTile.badge
+                                        color: Theme.textDim
+                                        font.pixelSize: 11
+                                    }
                                 }
                             }
                         }
