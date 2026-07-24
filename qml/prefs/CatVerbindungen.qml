@@ -12,7 +12,10 @@ CatPage {
     heading: qsTr("Verbindungen")
     subtitle: qsTr("Wiederverwendbare Profile für SSH, seriell und Plugin-Backends.")
 
-    ColumnLayout {
+    PrefAnchor {
+      settingKey: "verbindungen.list"
+      page: page
+      ColumnLayout {
         Layout.fillWidth: true
         spacing: 10
 
@@ -123,5 +126,6 @@ CatPage {
             font.pixelSize: 12
             text: qsTr("Noch keine Profile. Lege mit „Neu …“ eine wiederverwendbare Verbindung an.")
         }
+      }
     }
 }

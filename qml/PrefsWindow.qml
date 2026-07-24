@@ -157,10 +157,75 @@ Window {
         category = categories[i].id
     }
 
+    // --- Suche (Schritt 7) --------------------------------------------------
+    function categoryLabel(id) {
+        for (let i = 0; i < categories.length; ++i)
+            if (categories[i].id === id) return categories[i].label
+        return id
+    }
+    // Durchsuchbare Einstellungen: Label + Stichworte je Eintrag, Schlüssel = Sektions-
+    // Anker (mehrere Einträge dürfen denselben Anker teilen). Kürzel werden dynamisch aus
+    // der Registry angehängt (Sprung in die Kürzel-Kategorie).
+    readonly property var searchEntries: {
+        const e = [
+            { cat: "allgemein",        key: "allgemein.general",     label: qsTr("Design"),                            keywords: "design darstellung hell dunkel system theme modus" },
+            { cat: "allgemein",        key: "allgemein.general",     label: qsTr("Sprache"),                           keywords: "sprache language deutsch englisch locale" },
+            { cat: "allgemein",        key: "allgemein.window",      label: qsTr("Vor dem Beenden nachfragen"),        keywords: "beenden quit schließen rückfrage confirm warnung" },
+            { cat: "allgemein",        key: "allgemein.window",      label: qsTr("Quake-Modus"),                       keywords: "quake hotkey einblenden ausblenden global" },
+            { cat: "erscheinungsbild", key: "erscheinung.schemes",   label: qsTr("Farbschema (Dunkel)"),               keywords: "farbschema schema dunkel ansi farben iterm ghostty xresources import" },
+            { cat: "erscheinungsbild", key: "erscheinung.schemes",   label: qsTr("Farbschema (Hell)"),                 keywords: "farbschema schema hell ansi farben import" },
+            { cat: "terminal",         key: "terminal.options",      label: qsTr("Schriftart"),                        keywords: "schrift font monospace terminal" },
+            { cat: "terminal",         key: "terminal.options",      label: qsTr("Schriftgröße"),                      keywords: "schriftgröße größe font size zoom" },
+            { cat: "terminal",         key: "terminal.options",      label: qsTr("Ligaturen"),                         keywords: "ligaturen firacode glyph programmier calt liga" },
+            { cat: "terminal",         key: "terminal.options",      label: qsTr("GPU-Glyph-Atlas"),                   keywords: "gpu rendering glyph atlas qpainter beschleunigung" },
+            { cat: "terminal",         key: "terminal.options",      label: qsTr("Standard-Shell"),                    keywords: "shell zsh bash powershell cmd standard" },
+            { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Auswahl automatisch kopieren"),      keywords: "kopieren auswahl copy select zwischenablage" },
+            { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Rechtsklick fügt ein"),              keywords: "rechtsklick einfügen paste zwischenablage" },
+            { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Vor mehrzeiligem Einfügen warnen"),  keywords: "einfügen paste warnung mehrzeilig multiline" },
+            { cat: "agenten",          key: "agenten.notifications", label: qsTr("Benachrichtigungen"),                keywords: "agent benachrichtigung abo matrix ereignis subscribe" },
+            { cat: "agenten",          key: "agenten.mcp",           label: qsTr("MCP-Server"),                        keywords: "mcp server port agenten steuerung 127.0.0.1" },
+            { cat: "verbindungen",     key: "verbindungen.list",     label: qsTr("Verbindungsprofile"),                keywords: "verbindung profil ssh seriell sftp profile" },
+            { cat: "vault",            key: "vault.section",         label: qsTr("Secrets-Vault"),                     keywords: "vault secret passwort geheimnis master token" },
+            { cat: "erweiterungen",    key: "erweiterungen.list",    label: qsTr("Erweiterungen"),                     keywords: "plugin erweiterung backend echo macpcan can" }
+        ]
+        if (app) {
+            const ids = Hotkeys.actionIds()
+            for (let i = 0; i < ids.length; ++i)
+                e.push({ cat: "hotkeys", key: "hotkeys.list", label: app.hotkeyLabel(ids[i]),
+                         keywords: "kürzel shortcut taste " + ids[i] + " " + (Hotkeys.bindings[ids[i]] || "") })
+        }
+        return e
+    }
+    readonly property var searchResults: {
+        const q = searchQuery.trim().toLowerCase()
+        if (q.length === 0) return []
+        const out = []
+        for (let i = 0; i < searchEntries.length && out.length < 8; ++i) {
+            const e = searchEntries[i]
+            const hay = (e.label + " " + e.keywords + " " + categoryLabel(e.cat)).toLowerCase()
+            if (hay.indexOf(q) >= 0) out.push(e)
+        }
+        return out
+    }
+    // Von der Suche gesetzter Text (getrennt vom TextField, damit die Ergebnisliste nicht
+    // vom Fokus abhängt).
+    property string searchQuery: ""
+    readonly property bool searchActive: searchQuery.length > 0
+
+    // Springt zu einem Treffer: Kategorie wechseln, Sektion markieren (pendingSetting →
+    // PrefAnchor blendet auf + scrollt), Suche schließen.
+    function jumpTo(entry) {
+        category = entry.cat
+        pendingSetting = entry.key
+        searchQuery = ""
+        searchField.text = ""
+    }
+
     // Esc und ⌘W/Strg+W schließen nur dieses Fenster (nicht die Session im Hauptfenster).
     // Während einer Kürzel-Aufnahme abgeschaltet, damit Esc/⌘W als Kürzel erfassbar sind
-    // (die Hotkeys-Seite fängt sie dann selbst ab).
-    Shortcut { sequences: ["Escape"]; enabled: !root.capturing; onActivated: root.close() }
+    // (die Hotkeys-Seite fängt sie dann selbst ab); bei aktiver Suche fängt Esc erst die
+    // Suche ab (leert sie), statt das Fenster zu schließen.
+    Shortcut { sequences: ["Escape"]; enabled: !root.capturing && !root.searchActive; onActivated: root.close() }
     Shortcut { sequences: [StandardKey.Close]; enabled: !root.capturing; onActivated: root.close() }
     // ⌘F/Strg+F fokussiert die Suche (Funktion folgt in Schritt 7).
     Shortcut { sequences: [StandardKey.Find]; enabled: !root.capturing; onActivated: searchField.forceActiveFocus() }
@@ -207,12 +272,75 @@ Window {
                             placeholderTextColor: Theme.textDim
                             font.pixelSize: 13
                             selectByMouse: true
-                            // Suche wird in Schritt 7 verdrahtet; Esc leert dann/blurrt.
+                            onTextChanged: root.searchQuery = text
+                            // Esc leert die Suche (bzw. blurrt, wenn schon leer).
+                            Keys.onEscapePressed: (event) => {
+                                if (text.length > 0) { text = ""; root.searchQuery = "" }
+                                else focus = false
+                                event.accepted = true
+                            }
+                            // Enter übernimmt den ersten Treffer.
+                            Keys.onReturnPressed: (event) => {
+                                if (root.searchResults.length > 0) { root.jumpTo(root.searchResults[0]); event.accepted = true }
+                            }
                         }
                         Text {
                             text: App.shortcutText("Ctrl+F")
                             color: Theme.textDim
                             font.pixelSize: 11
+                        }
+                    }
+
+                    // Ergebnisliste unter dem Suchfeld (Kategorie · Einstellung).
+                    Popup {
+                        id: searchPopup
+                        y: parent.height + 4
+                        x: 0
+                        width: parent.width
+                        padding: 4
+                        visible: root.searchActive && root.searchResults.length > 0
+                        closePolicy: Popup.NoAutoClose
+                        background: Rectangle {
+                            color: Theme.bgElevated
+                            border.color: Theme.border
+                            border.width: 1
+                            radius: 8
+                        }
+                        contentItem: ColumnLayout {
+                            spacing: 1
+                            Repeater {
+                                model: root.searchResults
+                                delegate: Rectangle {
+                                    id: resRow
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    implicitHeight: 38
+                                    radius: 6
+                                    color: resHover.hovered ? Theme.sidebarHover : "transparent"
+                                    HoverHandler { id: resHover }
+                                    TapHandler { onTapped: root.jumpTo(resRow.modelData) }
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 10
+                                        anchors.rightMargin: 10
+                                        spacing: 0
+                                        Text {
+                                            text: resRow.modelData.label
+                                            color: Theme.textBright
+                                            font.pixelSize: 13
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            text: root.categoryLabel(resRow.modelData.cat)
+                                            color: Theme.textDim
+                                            font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

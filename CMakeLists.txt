@@ -127,6 +127,7 @@ qt_add_qml_module(qtmux
         qml/Ui/AppDialog.qml
         qml/Ui/SectionLabel.qml
         qml/prefs/CatPage.qml
+        qml/prefs/PrefAnchor.qml
         qml/prefs/CatAllgemein.qml
         qml/prefs/CatErscheinungsbild.qml
         qml/prefs/CatTerminal.qml

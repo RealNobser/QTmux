@@ -20,7 +20,10 @@ CatPage {
         return names.join(", ")
     }
 
-    ColumnLayout {
+    PrefAnchor {
+      settingKey: "erweiterungen.list"
+      page: page
+      ColumnLayout {
         Layout.fillWidth: true
         spacing: 4
 
@@ -76,5 +79,6 @@ CatPage {
             font.pixelSize: 12
             text: qsTr("Keine Plugins geladen. Plugins liegen in „<App>/plugins“ bzw. „<AppData>/QTmux/plugins“ und werden beim Start eingesammelt.")
         }
+      }
     }
 }

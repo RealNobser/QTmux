@@ -14,6 +14,7 @@ CatPage {
     // Aktives Schema (das die ganze App färbt) — reaktiv über ColorSchemes.current.
     readonly property var scheme: ColorSchemes.colors(ColorSchemes.current)
 
+    PrefAnchor { settingKey: "terminal.options"; page: page
     GridLayout {
         columns: 2
         columnSpacing: 12
@@ -63,11 +64,13 @@ CatPage {
             onActivated: (i) => page.host.app.defaultShellProgram = page.host.sessions.availableShells()[i].program
         }
     }
+    }
 
     // --- Live-Vorschau (nicht interaktiv, QTMUX-47 Schritt 4) -------------------
     // Spiegelt sofort Schema, Schriftart/-größe und Ligaturen wider. Bewusst ein
     // gestylter Text-Block statt eines PTY-losen TerminalItem — sichtbares Ergebnis
     // ist verbindlich, nicht der Weg.
+    PrefAnchor { settingKey: "terminal.preview"; page: page
     ColumnLayout {
         Layout.fillWidth: true
         spacing: 6
@@ -137,5 +140,6 @@ CatPage {
                 }
             }
         }
+    }
     }
 }

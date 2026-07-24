@@ -10,23 +10,27 @@ CatPage {
     heading: qsTr("Eingabe")
     subtitle: qsTr("Auswahl und Zwischenablage.")
 
-    ColumnLayout {
-        spacing: 6
-        Layout.fillWidth: true
-        CheckBox {
-            text: qsTr("Auswahl automatisch kopieren")
-            checked: page.host.app.copyOnSelect
-            onToggled: page.host.app.copyOnSelect = checked
-        }
-        CheckBox {
-            text: qsTr("Rechtsklick fügt ein")
-            checked: page.host.app.rightClickPaste
-            onToggled: page.host.app.rightClickPaste = checked
-        }
-        CheckBox {
-            text: qsTr("Vor mehrzeiligem Einfügen warnen")
-            checked: page.host.app.pasteWarnMultiline
-            onToggled: page.host.app.pasteWarnMultiline = checked
+    PrefAnchor {
+        settingKey: "eingabe.clipboard"
+        page: page
+        ColumnLayout {
+            spacing: 6
+            Layout.fillWidth: true
+            CheckBox {
+                text: qsTr("Auswahl automatisch kopieren")
+                checked: page.host.app.copyOnSelect
+                onToggled: page.host.app.copyOnSelect = checked
+            }
+            CheckBox {
+                text: qsTr("Rechtsklick fügt ein")
+                checked: page.host.app.rightClickPaste
+                onToggled: page.host.app.rightClickPaste = checked
+            }
+            CheckBox {
+                text: qsTr("Vor mehrzeiligem Einfügen warnen")
+                checked: page.host.app.pasteWarnMultiline
+                onToggled: page.host.app.pasteWarnMultiline = checked
+            }
         }
     }
 }

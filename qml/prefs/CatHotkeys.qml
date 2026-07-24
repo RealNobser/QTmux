@@ -90,6 +90,7 @@ CatPage {
     }
 
     // --- Gruppen mit ihren Aktionen ---
+    PrefAnchor { settingKey: "hotkeys.list"; page: page
     Repeater {
         model: page.groups
         delegate: ColumnLayout {
@@ -202,5 +203,6 @@ CatPage {
         font.pixelSize: 11
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
+    }
     }
 }

@@ -11,7 +11,10 @@ CatPage {
     heading: qsTr("Erscheinungsbild")
     subtitle: qsTr("Farbschemata für Dunkel und Hell. Das aktive Schema färbt die gesamte App.")
 
-    GridLayout {
+    PrefAnchor {
+      settingKey: "erscheinung.schemes"
+      page: page
+      GridLayout {
         columns: 2
         columnSpacing: 12
         rowSpacing: 8
@@ -73,5 +76,6 @@ CatPage {
                 }
             }
         }
+      }
     }
 }

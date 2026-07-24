@@ -87,6 +87,7 @@ CatPage {
     readonly property int cellW: 42
 
     // --- Agenten-Benachrichtigungen (Matrix) ---
+    PrefAnchor { settingKey: "agenten.notifications"; page: page
     ColumnLayout {
         Layout.fillWidth: true
         spacing: 6
@@ -254,8 +255,10 @@ CatPage {
             font.pixelSize: 11
         }
     }
+    }
 
     // --- MCP-Server (darunter) ---
+    PrefAnchor { settingKey: "agenten.mcp"; page: page
     ColumnLayout {
         spacing: 6
         Layout.fillWidth: true
@@ -296,6 +299,7 @@ CatPage {
             Layout.fillWidth: true
             Layout.leftMargin: 6
         }
+    }
     }
 
     // Portwechsel (QTMUX-46): erst auf Klick/Enter anwenden, nicht bei jedem Anschlag.

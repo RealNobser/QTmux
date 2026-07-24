@@ -16,6 +16,7 @@ CatPage {
     // Beim Wechsel auf diese Seite das Passwortfeld fokussieren, wenn gesperrt.
     Component.onCompleted: { if (!Vault.unlocked) vpw.forceActiveFocus() }
 
+    PrefAnchor { settingKey: "vault.section"; page: page
     // --- Gesperrt / Anlegen ---
     ColumnLayout {
         visible: !Vault.unlocked
@@ -134,5 +135,6 @@ CatPage {
             Item { Layout.fillWidth: true }
             Button { text: qsTr("Sperren"); onClicked: Vault.lock() }
         }
+    }
     }
 }

@@ -16,6 +16,19 @@ Flickable {
     // Brücke zu Main.qml (app/sessions/mcp/Editier-Dialoge) — vom PrefsWindow gesetzt.
     property var host
 
+    // Ziel-Einstellung eines Suchsprungs (Schritt 7): wird von PrefAnchor gelesen, das
+    // passende Element blendet einmalig auf und scrollt in den Blick, dann wird der Wert
+    // zurückgesetzt (kein Dauerblinken). Gespiegelt aus host.pendingSetting.
+    readonly property string pendingSetting: host ? host.pendingSetting : ""
+    function clearPending() { if (host) host.pendingSetting = "" }
+    // Scrollt `item` (irgendwo in dieser Seite) in den sichtbaren Bereich.
+    function scrollTo(item) {
+        const p = item.mapToItem(page.contentItem, 0, 0)
+        const target = Math.max(0, p.y - 24)
+        const maxY = Math.max(0, contentHeight - height)
+        page.contentY = Math.min(target, maxY)
+    }
+
     // Seiteninhalt landet in dieser Spalte.
     default property alias content: contentCol.data
 
