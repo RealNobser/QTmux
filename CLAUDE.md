@@ -246,14 +246,31 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
-## Status (2026-07-23)
+## Status (2026-07-25)
 
 **v1.5.0.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
 SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattformen fertig
 (DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 23 MCP-Tools
-(GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n 235/235
+(GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n finalisiert
 (+1 Bestandsfall: Plural-Eintrag `%n Einträge` bleibt unfinished — der DE-Finalisierer
 lässt Numerus-Formen bewusst offen).
+
+**QTMUX-47 (2026-07-25) — Einstellungen als nicht-modales Kategorie-Fenster.** Der modale
+`settingsDialog` (480 px, sechs gestapelte Abschnitte) sowie `connectionsDialog`,
+`vaultDialog` und `hotkeyCaptureDialog` sind einem eigenen `Window` (1c, 1060×700) mit
+Kategorie-Rail links + View rechts gewichen: neun Kategorien (Allgemein · Erscheinungsbild ·
+Terminal · Eingabe · Agenten & MCP · Tastenkürzel · Verbindungen · Secrets-Vault ·
+Erweiterungen), je eine Datei in `qml/prefs/Cat*.qml` über ein `CatPage`-Gerüst. **Keine
+funktionalen Änderungen** an den Einstellungen (gleiche Settings-Keys, wirkt sofort).
+Umgesetzt nach `docs/design/kategorie-dialog/Umsetzungsanweisung-Claude-Code.md`
+(9-Schritte-Plan, Variante 1c) aus dem importierten Claude-Design-Projekt. Neu ggü. dem
+alten Dialog: **Terminal-Live-Vorschau** (Schema/Font/Ligaturen), **Kürzel-Aufnahme in der
+Zeile** (statt Modaldialog, Gruppen + Inline-Konflikt), **Agenten-Abo-Matrix**
+(Empfänger↓/Quelle→, Diagonale gesperrt), **Suche mit Sprung + Aufblenden** (`PrefAnchor`),
+und **`App.reduceMotion`** (macOS/Windows erkannt) → Sidebar-Puls statisch statt animiert.
+Details in der Feature-Referenz (Sessions & UI). Zehn lokale Commits (`f1e28ba`…`fe10323`),
+noch **nicht gepusht**; visuelle Abnahme durch den Anwender steht aus (headless verifiziert:
+alle Kategorien laden fehlerfrei, 15/15 ctest, DE finalisiert/EN vollständig).
 
 **QTMUX-46 (2026-07-23) — Paritätsprüfung MCP / HTTP / Befehlspalette / Einstellungen.**
 Kontrolle auf Anwender-Wunsch, ob nach den letzten Änderungen alle Befehle überall
@@ -519,8 +536,34 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   ablehnt — dadurch greift dieselbe Rückfrage auch für Schließkreuz und Alt+F4.
   `quitConfirmed` schaltet die Frage für den bestätigten Durchlauf ab (sonst fragt der
   Wächter beim `close()` aus `onAccepted` erneut).
+- **Einstellungsfenster (QTMUX-47):** Nicht-modales `qml/PrefsWindow.qml` (Rail + View,
+  Variante 1c 1060×700) statt der modalen Dialoge. Neun Kategorie-Seiten `qml/prefs/Cat*.qml`
+  auf einem `CatPage`-Gerüst (Flickable + Kopfzeile + Default-Content). 🔑 **Brücken-Muster:**
+  ein eigenes `Window` sieht die IDs aus `Main.qml` NICHT → `app`(=window)/`sessions`/`mcp` +
+  die noch modalen Editier-Dialoge (Profil/Secret/Master-PW/Schema-Import) werden als
+  `property var` ins PrefsWindow gereicht und von den Seiten über `host.*` genutzt; globale
+  Registry-Singletons (Theme/App/ColorSchemes/Profiles/Hotkeys/Vault/AgentEvents/Plugins) sind
+  Context-Properties und überall direkt. Kürzel-Aufnahme läuft **inline** (kein
+  `hotkeyCaptureDialog` mehr); `prefs.capturing` deaktiviert währenddessen alle globalen
+  App-Shortcuts (Main.qml) und die Fenster-Shortcuts. **Agenten-Abo-Matrix**:
+  Zellen/Chips sind Toggle-Kacheln (TapHandler), KEINE CheckBoxen — deren `checked`-Bindung
+  bräche beim Klick, was bei den Kreuzeffekten (leere Quell-Liste = „alle", Abwählen
+  materialisiert die explizite Liste) Stände veralten ließe. **Suche**: `PrefAnchor` umschließt
+  je Kategorie die Sektionen (bewusst Sektions-, nicht Grid-Zellen-Ebene — das bräche die
+  GridLayouts) und blendet bei einem Treffer über `host.pendingSetting` einmalig ~1,2 s auf.
+  🔑 **Fallen:** `MultiEffect` braucht `import QtQuick.Effects` je Datei; deutsche `„…"`-Strings
+  mit typografischem Schluss `"` (gerader `"` bricht den qsTr-String); verschachtelte
+  Repeater-Delegates brauchen `pragma ComponentBehavior: Bound` + qualifizierte IDs.
+  Verifikation headless: PrefsWindow referenziert alle 9 Cat-Typen → ein defekter Typ bricht
+  den ganzen App-Start; zusätzlich jede Seite einzeln via `defaults write
+  com.qtmux.QTmux-<profil> ui.prefsCategory <kat>` vorgeseedet instanziiert.
 - **Agent-Awareness:** OSC 133 (Prompt-Marker → Activity-Ring), OSC 9/777 (Notify),
   OSC 9;4 (Progress-Balken), Bell → Attention-Pulse (blau); MCP-Controller-Tab rot.
+  🔑 **Reduzierte Bewegung (QTMUX-47):** `App.reduceMotion` (AppController, beim Start
+  ermittelt — macOS CoreFoundation `com.apple.universalaccess/reduceMotion`, Windows
+  `SPI_GETCLIENTAREAANIMATION`, sonst false; Env-Override `QTMUX_REDUCE_MOTION` für Tests)
+  schaltet die drei Sidebar-Puls-Animationen ab (`running: … && !App.reduceMotion`) → Ring
+  in Akzentfarbe und Rahmen statisch statt pulsierend.
 - **AgentEventHub** (Gui-frei, Ringpuffer 256, monotone `seq`): Inter-Agenten-Ereignisse
   `done|question|error|info` via OSC `777;qtmux-event` oder MCP `post_event`; Zustellung
   über MCP-Long-Poll `wait_for_events`. **⚠️ Hook-stdout wird vom Agenten gekapselt** —
