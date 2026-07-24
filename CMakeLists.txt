@@ -117,6 +117,14 @@ qt_add_qml_module(qtmux
     QML_FILES
         qml/Main.qml
         qml/SplitNode.qml
+        qml/Ui/IconToolButton.qml
+        qml/Ui/ShortcutMenuItem.qml
+        qml/Ui/AppMenuItem.qml
+        qml/Ui/AppPopupBg.qml
+        qml/Ui/ThemedMenu.qml
+        qml/Ui/AppComboBox.qml
+        qml/Ui/AppDialog.qml
+        qml/Ui/SectionLabel.qml
     SOURCES
         src/terminal/TerminalItem.h
         src/terminal/TerminalItem.cpp
