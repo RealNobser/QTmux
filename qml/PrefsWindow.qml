@@ -64,7 +64,6 @@ Window {
     property var secretEditDialog    // Secret anlegen/bearbeiten (bleibt modal)
     property var masterPwDialog      // Master-Passwort ändern (bleibt modal)
     property var schemeFileDialog    // Farbschema-Import-Dateidialog
-    property var hotkeyCaptureDialog // Kürzel-Aufnahme (entfällt in Schritt 5)
 
     // Icon-Pfad-Helfer (window.icon ist hier nicht erreichbar — eigenes Fenster).
     function iconSrc(name) { return "qrc:/icons/" + name + ".svg" }
