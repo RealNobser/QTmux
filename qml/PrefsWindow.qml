@@ -46,6 +46,21 @@ Window {
     // und nach dem Hervorheben zurückgesetzt. Wird in Schritt 7 genutzt.
     property string pendingSetting: ""
 
+    // --- Brücken zu Main.qml ------------------------------------------------
+    // Ein eigenes Window sieht die IDs aus Main.qml (window, sessions, mcp, die
+    // modalen Editier-Dialoge) NICHT — sie werden hier als Handles hereingereicht
+    // und von den Kategorie-Seiten über `host.*` genutzt. Globale Singletons
+    // (Theme, App, ColorSchemes, Profiles, Hotkeys, Vault, AgentEvents, Plugins)
+    // sind dagegen Context-Properties und überall direkt verfügbar.
+    property var app                 // ApplicationWindow (Terminal-Einstellungen, Helfer)
+    property var sessions            // SessionModel
+    property var mcp                 // McpServer
+    property var profileEditDialog   // Profil anlegen/bearbeiten (bleibt modal)
+    property var secretEditDialog    // Secret anlegen/bearbeiten (bleibt modal)
+    property var masterPwDialog      // Master-Passwort ändern (bleibt modal)
+    property var schemeFileDialog    // Farbschema-Import-Dateidialog
+    property var hotkeyCaptureDialog // Kürzel-Aufnahme (entfällt in Schritt 5)
+
     // Icon-Pfad-Helfer (window.icon ist hier nicht erreichbar — eigenes Fenster).
     function iconSrc(name) { return "qrc:/icons/" + name + ".svg" }
 
@@ -90,10 +105,41 @@ Window {
         { id: "erweiterungen",   icon: "plugs",           label: qsTr("Erweiterungen") }
     ]
 
-    // Badge je Kategorie (Statusanzeige, kein Selbstzweck). Die konkreten Werte werden
-    // mit den Kategorie-Seiten in Schritt 3 gefüllt; hier zentral, damit die Rail eine
-    // Stelle hat. Vorerst nur die statisch bekannten.
+    // Badge je Kategorie (Statusanzeige, kein Selbstzweck — s. Design-Referenz A4):
+    // zeigt nur, was man von außen wissen will (aktives Schema, Anzahl Abos/Profile/
+    // Plugins, geänderte Kürzel, Vault-Sperrzustand). `badgeRev` erzwingt die
+    // Neuauswertung bei Registry-Änderungen, deren Quelle eine Methode statt einer
+    // beobachtbaren Property ist (AgentEvents.subscriptions()).
+    property int badgeRev: 0
+    Connections { target: AgentEvents; function onSubscriptionsChanged() { root.badgeRev++ } }
+    Connections { target: Hotkeys;     function onChanged()             { root.badgeRev++ } }
     function badgeFor(id) {
+        root.badgeRev   // Abhängigkeit erzwingen
+        switch (id) {
+        case "erscheinungsbild":
+            return ColorSchemes.current
+        case "agenten": {
+            const n = AgentEvents.subscriptions().length
+            return n > 0 ? qsTr("%1 Abos").arg(n) : ""
+        }
+        case "hotkeys": {
+            let n = 0
+            const ids = Hotkeys.actionIds()
+            for (let i = 0; i < ids.length; ++i)
+                if (Hotkeys.bindings[ids[i]] !== Hotkeys.defaultSequence(ids[i])) n++
+            return n > 0 ? qsTr("%1 geändert").arg(n) : ""
+        }
+        case "verbindungen": {
+            const n = Profiles.profiles.length
+            return n > 0 ? String(n) : ""
+        }
+        case "vault":
+            return Vault.unlocked ? "" : qsTr("gesperrt")
+        case "erweiterungen": {
+            const n = Plugins.backendTypes.length
+            return n > 0 ? String(n) : ""
+        }
+        }
         return ""
     }
 
@@ -273,46 +319,46 @@ Window {
             Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: Theme.border }
 
             // --- View (Kategorie-Inhalt) ---------------------------------------
-            // Eigenes Flickable/Scroll je Seite; die Rail scrollt nie mit. In Schritt 3
-            // lädt der Loader qml/prefs/Cat*.qml; bis dahin ein Platzhalter.
+            // Jede Kategorie ist eine eigene Datei qml/prefs/Cat*.qml (ein CatPage,
+            // das selbst scrollt). Der Loader wählt sie nach der aktiven Kategorie;
+            // die inline-Components reichen `host: root` durch, damit die Seiten über
+            // host.app/host.sessions/host.mcp/host.*Dialog auf Main.qml zugreifen.
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: Theme.bgMain
                 Loader {
                     anchors.fill: parent
-                    sourceComponent: placeholderView
+                    sourceComponent: root.viewFor(root.category)
                 }
             }
         }
     }
 
-    // Platzhalter bis Schritt 3: zeigt Titel der aktiven Kategorie.
-    Component {
-        id: placeholderView
-        Item {
-            ColumnLayout {
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.margins: 28
-                anchors.right: parent.right
-                spacing: 6
-                Text {
-                    text: {
-                        for (let i = 0; i < root.categories.length; ++i)
-                            if (root.categories[i].id === root.category) return root.categories[i].label
-                        return ""
-                    }
-                    color: Theme.textBright
-                    font.pixelSize: 26
-                    font.bold: true
-                }
-                Text {
-                    text: qsTr("Inhalt zieht in Schritt 3 ein.")
-                    color: Theme.textDim
-                    font.pixelSize: 13
-                }
-            }
+    // Kategorie → Inhalts-Component. Der Vorschlag der Design-Referenz ist eine Datei
+    // je Kategorie; hier zusammengeführt, damit `host` sauber gebunden wird.
+    function viewFor(id) {
+        switch (id) {
+        case "allgemein":        return cAllgemein
+        case "erscheinungsbild": return cErscheinungsbild
+        case "terminal":         return cTerminal
+        case "eingabe":          return cEingabe
+        case "agenten":          return cAgenten
+        case "hotkeys":          return cHotkeys
+        case "verbindungen":     return cVerbindungen
+        case "vault":            return cVault
+        case "erweiterungen":    return cErweiterungen
         }
+        return cAllgemein
     }
+
+    Component { id: cAllgemein;        CatAllgemein        { host: root } }
+    Component { id: cErscheinungsbild; CatErscheinungsbild { host: root } }
+    Component { id: cTerminal;         CatTerminal         { host: root } }
+    Component { id: cEingabe;          CatEingabe          { host: root } }
+    Component { id: cAgenten;          CatAgenten          { host: root } }
+    Component { id: cHotkeys;          CatHotkeys          { host: root } }
+    Component { id: cVerbindungen;     CatVerbindungen     { host: root } }
+    Component { id: cVault;            CatVault            { host: root } }
+    Component { id: cErweiterungen;    CatErweiterungen    { host: root } }
 }

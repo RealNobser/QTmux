@@ -58,8 +58,19 @@ ApplicationWindow {
 
     // Nicht-modales Einstellungsfenster (QTMUX-47). Öffnen über actSettings/Toolbar/
     // Palette per prefs.open(kategorie). Der alte settingsDialog bleibt bis Schritt 8
-    // bestehen, wird aber nicht mehr angesteuert.
-    PrefsWindow { id: prefs }
+    // bestehen, wird aber nicht mehr angesteuert. Ein eigenes Window sieht die IDs aus
+    // Main.qml nicht — die Handles werden hier hereingereicht (s. PrefsWindow-Brücken).
+    PrefsWindow {
+        id: prefs
+        app: window
+        sessions: sessions
+        mcp: mcp
+        profileEditDialog: profileEditDialog
+        secretEditDialog: secretEditDialog
+        masterPwDialog: vaultChangePwDialog
+        schemeFileDialog: schemeFileDialog
+        hotkeyCaptureDialog: hotkeyCaptureDialog
+    }
 
     // MCP-Server: externe Agenten-Steuerung über 127.0.0.1 (nur lokal).
     McpServer {

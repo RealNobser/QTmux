@@ -126,6 +126,16 @@ qt_add_qml_module(qtmux
         qml/Ui/AppComboBox.qml
         qml/Ui/AppDialog.qml
         qml/Ui/SectionLabel.qml
+        qml/prefs/CatPage.qml
+        qml/prefs/CatAllgemein.qml
+        qml/prefs/CatErscheinungsbild.qml
+        qml/prefs/CatTerminal.qml
+        qml/prefs/CatEingabe.qml
+        qml/prefs/CatAgenten.qml
+        qml/prefs/CatHotkeys.qml
+        qml/prefs/CatVerbindungen.qml
+        qml/prefs/CatVault.qml
+        qml/prefs/CatErweiterungen.qml
     SOURCES
         src/terminal/TerminalItem.h
         src/terminal/TerminalItem.cpp
