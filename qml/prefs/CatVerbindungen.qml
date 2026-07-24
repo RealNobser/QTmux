@@ -70,6 +70,8 @@ CatPage {
                         MultiEffect {
                             anchors.fill: parent
                             source: typeImg
+                            // Schwarzes SVG erst auf Weiß heben, dann colorize (sonst dunkel).
+                            brightness: 1.0
                             colorization: 1.0
                             colorizationColor: Theme.textBright
                         }

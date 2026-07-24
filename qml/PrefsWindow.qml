@@ -405,6 +405,10 @@ Window {
                                     MultiEffect {
                                         anchors.fill: railIco
                                         source: railIco
+                                        // Schwarzes SVG (fill="currentColor") erst auf Weiß
+                                        // heben, dann colorize — sonst gewichtet die Colorization
+                                        // mit der Quell-Luminanz ~0 und das Icon bleibt dunkel.
+                                        brightness: 1.0
                                         colorization: 1.0
                                         colorizationColor: railTile.ink
                                     }
