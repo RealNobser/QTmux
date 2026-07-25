@@ -2391,8 +2391,10 @@ ApplicationWindow {
                 delegate: Rectangle {
                     width: ListView.view.width
                     height: 30
-                    color: sftpList.currentIndex === index ? Theme.selection
-                                                           : (hov.hovered ? Theme.hover : "transparent")
+                    // Theme.selection/Theme.hover existieren nicht (waren undefiniert) →
+                    // die echten Selektionsfarben (im Dark Mode dunkel, helle Schrift lesbar).
+                    color: sftpList.currentIndex === index ? Theme.sidebarSelected
+                                                           : (hov.hovered ? Theme.sidebarHover : "transparent")
                     radius: 4
                     HoverHandler { id: hov }
                     RowLayout {
@@ -2404,6 +2406,14 @@ ApplicationWindow {
                             source: window.icon(modelData.isDir ? "terminal-window" : "copy")
                             sourceSize.width: 16; sourceSize.height: 16
                             opacity: 0.8
+                            // Monochromes SVG themegerecht tönen (sonst schwarz/dunkel im
+                            // Dark Mode). brightness hebt es erst auf Weiß, dann colorize.
+                            layer.enabled: true
+                            layer.effect: MultiEffect {
+                                brightness: 1.0
+                                colorization: 1.0
+                                colorizationColor: Theme.textBright
+                            }
                         }
                         Label {
                             Layout.fillWidth: true

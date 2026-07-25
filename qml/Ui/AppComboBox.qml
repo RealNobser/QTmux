@@ -14,6 +14,30 @@ ComboBox {
         border.color: cb.activeFocus ? Theme.accent : Theme.border
         border.width: 1
     }
+    // Eigener, themengebundener Popup-Eintrag. WICHTIG: das Default-ItemDelegate des
+    // Basic-Styles färbt das Highlight über palette.light und lässt die Textfarbe auf
+    // palette.text — beides stammt im Popup NICHT vom App-Theme (Popups erben die Palette
+    // nicht), was im Dark Mode helle Schrift auf hellem Highlight ergab. Daher explizit
+    // (gleiche Lösung wie ShortcutMenuItem).
+    delegate: ItemDelegate {
+        id: cbItem
+        width: ListView.view ? ListView.view.width : implicitWidth
+        highlighted: cb.highlightedIndex === index
+        contentItem: Text {
+            text: cb.textRole
+                  ? (Array.isArray(cb.model) ? modelData[cb.textRole] : model[cb.textRole])
+                  : modelData
+            color: Theme.textBright
+            font.pixelSize: 13
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+        background: Rectangle {
+            radius: 6
+            color: cbItem.highlighted ? Theme.sidebarHover : "transparent"
+        }
+    }
+
     indicator: Image {
         x: cb.width - width - 10
         y: (cb.height - height) / 2
