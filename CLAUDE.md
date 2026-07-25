@@ -460,14 +460,21 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Zeile **URLs** (Scheme-Whitelist http/https/ftp/mailto/file — KI-Output darf keinen
   beliebigen Handler starten) und **existierende Dateipfade** (gegen Session-CWD aufgelöst;
   die `QFileInfo::exists`-Prüfung IST der Fehlalarm-Filter, nackte Wörter ohne Trenner
-  bleiben außen vor). `TerminalItem` unterstreicht bei **Cmd/Ctrl-Hover** (Overlay-Quad wie
-  Selektion) und öffnet bei **Cmd/Ctrl-Klick** via `QDesktopServices::openUrl` — Modifier
-  ist die bewusste Geste gegen versehentliches Öffnen. Klick läuft **vor** der
+  bleiben außen vor). **Auffindbarkeit (2026-07-26):** `TerminalItem` unterstreicht schon beim
+  **einfachen Drüberfahren** (Overlay-Quad wie Selektion, Link-Blau) + Hand-Cursor, und
+  `SplitNode.qml` zeigt unten links im Pane eine dezente Statuszeilen-Pille **„⌘/Strg-Klick
+  zum Öffnen: <ziel>"** (Property `hoverLinkTarget` + Signal `hoverLinkChanged`). Das
+  **Öffnen** bleibt an **Cmd/Ctrl-Klick** gebunden (`QDesktopServices::openUrl`) — der Modifier
+  ist die bewusste Geste gegen versehentliches Öffnen; ein reiner Klick selektiert normal.
+  🔑 Ursprünglich lief die Erkennung nur bei gehaltenem Modifier (keine `QFileInfo`-Syscalls
+  je Mausbewegung) — ohne sichtbaren Hinweis fand der Anwender den Cmd-Klick aber nicht. Jetzt
+  läuft `detect()` beim Hover, aber **je Zeile gecacht** (`m_hoverDetectRow`/`m_hoverDetectText`
+  → nur bei Zeilen-/Textwechsel neu, nicht je Pixel). Klick läuft **vor** der
   App-Maus-Weiterleitung (wie Shift die Selektion erzwingt). Zeilentext aus
   `absLineText(absRow)` (1 Zeichen/Spalte; Spalten↔Zeichen 1:1, solange keine Emoji davor).
   Tests: `tst_linkdetector` (11 Fälle) + `tst_vtscreen::linkDetectionOnScreenLine`
-  (Integration VtScreen→Text→Detector). **OSC 8 (explizite Hyperlinks) bewusst NICHT** —
-  s. QTMUX-40 unten.
+  (Integration VtScreen→Text→Detector); die Hover-Anzeige ist rein visuell → Anwender-Abnahme.
+  **OSC 8 (explizite Hyperlinks) bewusst NICHT** — s. QTMUX-40 unten.
 
 ### PTY-Layer
 - `UnixPty`: forkpty, O_NONBLOCK-Master. **⚠️ `write()` ist gepuffert** (`pending` +

@@ -6,6 +6,7 @@
 #include <QImage>
 #include <QPointer>
 #include "GlyphAtlas.h"
+#include "LinkDetector.h"
 
 QT_BEGIN_NAMESPACE
 class QWheelEvent;
@@ -44,6 +45,9 @@ class TerminalItem : public QQuickItem {
     Q_PROPERTY(bool copyOnSelect READ copyOnSelect WRITE setCopyOnSelect NOTIFY copyOnSelectChanged)
     Q_PROPERTY(bool rightClickPaste READ rightClickPaste WRITE setRightClickPaste NOTIFY rightClickPasteChanged)
     Q_PROPERTY(bool pasteWarnMultiline READ pasteWarnMultiline WRITE setPasteWarnMultiline NOTIFY pasteWarnMultilineChanged)
+    // Ziel des Links unter der Maus (leer = keiner). Treibt den QML-Tooltip „⌘-Klick zum
+    // Öffnen"; die Erkennung läuft beim einfachen Drüberfahren, das Öffnen bleibt Cmd/Ctrl.
+    Q_PROPERTY(QString hoverLinkTarget READ hoverLinkTarget NOTIFY hoverLinkChanged)
 public:
     explicit TerminalItem(QQuickItem *parent = nullptr);
     ~TerminalItem() override;
@@ -118,6 +122,8 @@ signals:
     void pasteWarnMultilineChanged();
     /// Mehrzeilige Einfügung erkannt — QML fragt nach (lineCount = Zeilenzahl).
     void multilinePasteWarning(int lineCount);
+    /// Link unter der Maus hat gewechselt (Ziel geändert) — QML aktualisiert den Tooltip.
+    void hoverLinkChanged();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -217,15 +223,26 @@ private:
     int m_scrollOffset = 0;
     int m_lastSbCount = 0;   // letzter scrollbackCount() — für die Anker-Nachführung
 
-    // Klickbarer Link unter der Maus (nur solange Cmd/Ctrl gehalten wird). m_hoverRow
-    // = absolute Inhalts-Zeile (-1 = keiner), m_hoverC0..C1 = Spaltenbereich, target =
-    // aufgelöstes Ziel für den Klick. m_lastHoverPos merkt die letzte Mausposition,
-    // damit ein reines Modifier-Drücken/Loslassen (ohne Bewegung) neu bewerten kann.
+    // Klickbarer Link unter der Maus. Die Erkennung/Unterstreichung läuft schon beim
+    // einfachen Drüberfahren (Auffindbarkeit); der Klick zum Öffnen bleibt Cmd/Ctrl.
+    // m_hoverRow = absolute Inhalts-Zeile (-1 = keiner), m_hoverC0..C1 = Spaltenbereich,
+    // target = aufgelöstes Ziel. m_lastHoverPos merkt die letzte Mausposition, damit ein
+    // reines Modifier-Drücken/Loslassen (ohne Bewegung) neu bewerten kann.
     QPointF m_lastHoverPos{-1, -1};
     int m_hoverRow = -1;
     int m_hoverC0 = 0;
     int m_hoverC1 = -1;   // < C0 ⇒ kein aktiver Link
     QString m_hoverTarget;
+
+    // Detect()-Ergebnis je Zeile zwischenspeichern, damit das Fahren INNERHALB einer Zeile
+    // nicht bei jedem Pixel erneut QFileInfo::exists (Syscalls) auslöst — nur bei Zeilen-
+    // oder Textwechsel neu bestimmen.
+    int m_hoverDetectRow = -2;
+    QString m_hoverDetectText;
+    QList<LinkDetector::Span> m_hoverSpans;
+
+public:
+    QString hoverLinkTarget() const { return m_hoverTarget; }
 };
 
 } // namespace qtmux

@@ -726,9 +726,10 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
             pushColoredQuad(ovVerts, cur.x() * m_cellW, cur.y() * m_cellH, m_cellW, m_cellH, cc);
         }
 
-        // Link-Unterstreichung unter der Maus (nur bei gehaltenem Cmd/Ctrl gesetzt):
-        // dünne Linie an der Zellunterkante über den Spaltenbereich des Treffers,
-        // in Viewport-Koordinaten wie die Selektion umgerechnet.
+        // Link-Unterstreichung unter der Maus (schon beim einfachen Drüberfahren gesetzt,
+        // zur Auffindbarkeit — der Klick zum Öffnen bleibt Cmd/Ctrl): dünne Linie an der
+        // Zellunterkante über den Spaltenbereich des Treffers, in Viewport-Koordinaten
+        // wie die Selektion umgerechnet.
         if (m_hoverRow >= 0 && m_hoverC1 >= m_hoverC0) {
             const int vr = m_hoverRow - (sc->scrollbackCount() - m_scrollOffset);
             if (vr >= 0 && vr < m_rows) {
@@ -763,8 +764,6 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     if (!m_session) { event->ignore(); return; }
 
     const Qt::KeyboardModifiers mods = event->modifiers();
-    // Cmd/Ctrl gedrückt (Maus steht still) → Link unter der letzten Position zeigen.
-    if (m_lastHoverPos.x() >= 0) updateHoverLink(m_lastHoverPos, mods);
 #if defined(Q_OS_MACOS)
     const bool cpMod = (mods & Qt::ControlModifier) && !(mods & Qt::MetaModifier);
 #else
@@ -852,15 +851,23 @@ QString TerminalItem::sessionCwd() const {
     return m_session ? m_session->currentWorkingDirectory() : QString();
 }
 
-void TerminalItem::updateHoverLink(const QPointF &pos, Qt::KeyboardModifiers mods) {
+void TerminalItem::updateHoverLink(const QPointF &pos, Qt::KeyboardModifiers /*mods*/) {
     int newRow = -1, c0 = 0, c1 = -1;
     QString target;
-    // Nur mit gehaltenem Cmd/Ctrl überhaupt nach Links suchen — ohne Modifier keine
-    // QFileInfo-Prüfungen bei jeder Mausbewegung, und kein Ablenken der Selektion.
-    if (isLinkModifier(mods) && screen() && pos.x() >= 0) {
+    // Schon beim einfachen Drüberfahren nach Links suchen (Auffindbarkeit: unterstreichen
+    // + Hand-Cursor + Tooltip, damit man den Cmd/Ctrl-Klick überhaupt entdeckt). Der Klick
+    // zum Öffnen bleibt in mousePressEvent Cmd/Ctrl-gebunden. Das detect()-Ergebnis wird je
+    // Zeile gecacht, damit das Fahren INNERHALB einer Zeile keine QFileInfo-Syscalls je
+    // Pixel auslöst.
+    if (screen() && pos.x() >= 0) {
         const QPoint ac = absCellAt(pos);
-        const auto spans = LinkDetector::detect(absLineText(ac.y()), sessionCwd());
-        for (const auto &s : spans) {
+        const QString lineText = absLineText(ac.y());
+        if (ac.y() != m_hoverDetectRow || lineText != m_hoverDetectText) {
+            m_hoverDetectRow = ac.y();
+            m_hoverDetectText = lineText;
+            m_hoverSpans = LinkDetector::detect(lineText, sessionCwd());
+        }
+        for (const auto &s : m_hoverSpans) {
             if (ac.x() >= s.start && ac.x() < s.start + s.length) {
                 newRow = ac.y(); c0 = s.start; c1 = s.start + s.length - 1;
                 target = s.target;
@@ -869,8 +876,10 @@ void TerminalItem::updateHoverLink(const QPointF &pos, Qt::KeyboardModifiers mod
         }
     }
     if (newRow != m_hoverRow || c0 != m_hoverC0 || c1 != m_hoverC1) {
+        const bool targetChanged = (target != m_hoverTarget);
         m_hoverRow = newRow; m_hoverC0 = c0; m_hoverC1 = c1; m_hoverTarget = target;
         setCursor(newRow >= 0 ? Qt::PointingHandCursor : Qt::ArrowCursor);
+        if (targetChanged) emit hoverLinkChanged();
         update();
     }
 }
@@ -1095,17 +1104,18 @@ void TerminalItem::hoverMoveEvent(QHoverEvent *event) {
 void TerminalItem::hoverLeaveEvent(QHoverEvent *event) {
     m_lastHoverPos = QPointF(-1, -1);
     if (m_hoverRow >= 0 || m_hoverC1 >= m_hoverC0) {
+        const bool hadTarget = !m_hoverTarget.isEmpty();
         m_hoverRow = -1; m_hoverC1 = -1; m_hoverTarget.clear();
         setCursor(Qt::ArrowCursor);
+        if (hadTarget) emit hoverLinkChanged();
         update();
     }
     QQuickItem::hoverLeaveEvent(event);
 }
 
 void TerminalItem::keyReleaseEvent(QKeyEvent *event) {
-    // Cmd/Ctrl losgelassen → Link-Hervorhebung an der letzten Mausposition neu bewerten
-    // (verschwindet dann). Ohne Bewegung feuert sonst kein Hover-Event.
-    updateHoverLink(m_lastHoverPos, event->modifiers());
+    // Die Link-Hervorhebung hängt nicht mehr am Modifier (sie erscheint schon beim
+    // Drüberfahren) — hier ist daher keine Neubewertung mehr nötig.
     QQuickItem::keyReleaseEvent(event);
 }
 

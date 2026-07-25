@@ -229,6 +229,38 @@ Item {
                 }
             }
 
+            // Link-Hinweis (QTMUX-39): schwebt die Maus über einem erkannten Link, erscheint
+            // unten links eine dezente Statuszeilen-Pille „⌘/Strg-Klick zum Öffnen: <ziel>" —
+            // so ist der (Cmd/Ctrl-gebundene) Klick überhaupt auffindbar. Nicht-interaktiv.
+            Rectangle {
+                id: linkHint
+                visible: paneTerm.hoverLinkTarget !== ""
+                z: 70
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 8
+                anchors.bottomMargin: 8
+                radius: 6
+                color: Theme.bgElevated
+                border.color: Theme.border
+                border.width: 1
+                width: Math.min(hintText.implicitWidth + 20, pane.width - 16)
+                height: hintText.implicitHeight + 10
+                Text {
+                    id: hintText
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideMiddle
+                    font.pixelSize: 11
+                    textFormat: Text.PlainText
+                    text: (Qt.platform.os === "osx" ? "⌘" : "Strg")
+                          + qsTr("-Klick zum Öffnen: ") + paneTerm.hoverLinkTarget
+                    color: Theme.textBright
+                }
+            }
+
             // Hervorhebung, solange ein gezogenes Pane über diesem schwebt (Tausch-Ziel).
             Rectangle {
                 anchors.fill: parent
