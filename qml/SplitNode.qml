@@ -204,6 +204,31 @@ Item {
                 }
             }
 
+            // Aufmerksamkeit (QTMUX-48): braucht die Session in diesem Pane Aufmerksamkeit
+            // (needsAttention: Bell / OSC 9/777), pulsiert der Pane-Rand mit Akzentrahmen —
+            // analog zur Sidebar-Kachel (QTMUX-47 Teil B). Nur im Mehrfach-Layout, damit man
+            // das betroffene Pane findet. Bei „Bewegung reduzieren" statischer Rahmen.
+            Rectangle {
+                id: attentionFrame
+                anchors.fill: parent
+                z: 60
+                radius: pane.radius
+                color: "transparent"
+                readonly property bool attention: win.paneCount > 1
+                                                  && paneTerm.session && paneTerm.session.needsAttention
+                visible: attention
+                border.color: Theme.accent
+                border.width: 2
+                SequentialAnimation on opacity {
+                    running: attentionFrame.attention && !App.reduceMotion
+                    loops: Animation.Infinite
+                    alwaysRunToEnd: true
+                    NumberAnimation { to: 0.25; duration: 600 }
+                    NumberAnimation { to: 1.0; duration: 600 }
+                    onStopped: attentionFrame.opacity = 1.0
+                }
+            }
+
             // Hervorhebung, solange ein gezogenes Pane über diesem schwebt (Tausch-Ziel).
             Rectangle {
                 anchors.fill: parent
