@@ -2603,13 +2603,16 @@ ApplicationWindow {
         }
         AppMenuItem {
             text: qsTr("Neue Gruppe …")
-            icon.source: window.icon("plus"); icon.color: Theme.menuIcon
+            // In-Window-Kontextmenü → App-Theme-Tönung (AppMenuItem-Default Theme.textBright),
+            // NICHT Theme.menuIcon: das folgt auf macOS dem System und wäre bei App=Dunkel/
+            // System=Hell dunkel auf dunklem Grund.
+            icon.source: window.icon("plus")
             onTriggered: groupNameDialog.start(sessionMenu.row)
         }
         AppMenuItem {
             text: qsTr("Aus Gruppe entfernen")
             enabled: sessionMenu.currentGroup.length > 0
-            icon.source: window.icon("x"); icon.color: Theme.menuIcon
+            icon.source: window.icon("x")
             onTriggered: sessions.setSessionGroup(sessionMenu.row, "")
         }
     }
@@ -2624,7 +2627,7 @@ ApplicationWindow {
         }
         AppMenuItem {
             text: qsTr("Gruppe auflösen")
-            icon.source: window.icon("x"); icon.color: Theme.menuIcon
+            icon.source: window.icon("x")   // App-Theme-Tönung (s. sessionMenu oben)
             // Auflösen betrifft nur die Zuordnung — die Sessions laufen weiter.
             onTriggered: sessions.renameGroup(groupMenu.groupName, "")
         }
