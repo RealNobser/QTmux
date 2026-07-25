@@ -246,7 +246,18 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
-## Status (2026-07-25)
+## Status (2026-07-26)
+
+**v1.5.1 (2026-07-26) — Link-Hover-Auffindbarkeit (QTMUX-39-Nachbesserung).** Anwenderbefund:
+Cmd/Ctrl-Klick auf Links funktionierte (empirisch mit Logging + einem echten Cmd-Klick belegt),
+war aber **nicht auffindbar** — die Unterstreichung erschien nur bei gehaltenem Modifier. Jetzt
+unterstreicht das Terminal Links schon beim **einfachen Drüberfahren** (+ Hand-Cursor) und
+`SplitNode.qml` zeigt unten links eine Statuszeilen-Pille „⌘/Strg-Klick zum Öffnen: <ziel>"
+(Property `hoverLinkTarget` + Signal `hoverLinkChanged`; `detect()` je Zeile gecacht gegen
+QFileInfo-Syscalls pro Mausbewegung). Öffnen bleibt Cmd/Ctrl-gebunden. Commits `1b6ecc0`
+(Feature) + `9cc4342` (Version 1.5.1, alle Bump-Stellen, via MCP-`serverInfo` gegengeprüft),
+gepusht. Details in der Feature-Referenz (Terminal-Verhalten → Klickbare Links). Visuell vom
+Anwender abgenommen; rein visuell → kein Unit-Test.
 
 **v1.5.0.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
 SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattformen fertig
@@ -254,6 +265,22 @@ SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattform
 (GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n finalisiert
 (+1 Bestandsfall: Plural-Eintrag `%n Einträge` bleibt unfinished — der DE-Finalisierer
 lässt Numerus-Formen bewusst offen).
+
+**QTMUX-48 (2026-07-25) — Split-Panes pulsieren bei Aufmerksamkeit.** Overlay-Rechteck im
+Blatt-Pane von `SplitNode.qml`: pulsiert mit Akzentrahmen, wenn die Session dort
+`needsAttention` (Bell/OSC 9/777), nur bei `paneCount > 1`, `running: … && !App.reduceMotion`.
+Analog zur Sidebar-Kachel (QTMUX-47 Teil B). Commit `b18a234`, gepusht, Jira dual Done.
+
+**Dark-Mode-Fixes (2026-07-25, nach QTMUX-47).** Drei Anwender-Befunde, alle gepusht:
+`73fd437` Icon-Tönung app-weit vereinheitlicht — monochrome `fill="currentColor"`-SVGs brauchen
+bei `MultiEffect` **`brightness: 1.0` VOR `colorization`** (sonst gewichtet colorize mit
+Luminanz ~0 → dunkles Icon; galt Rail/Verbindungs-Typ-Icon/Schließen-×/Combo-Caret/SFTP-Icons).
+`2eb2110` Gruppen-Kontextmenü-Icons: `Theme.menuIcon` folgt auf macOS dem **System** (native
+Menüs), nicht der App → In-Window-Popups stattdessen `Theme.textBright`. `7cd0cec` Dropdown-
+Lesbarkeit: `AppComboBox` ohne eigenen `delegate` → Basic-`ItemDelegate` färbt Highlight über
+`palette.light`/Text über `palette.text` (Popup erbt App-Palette NICHT) → helle Schrift auf
+hellem Grund; Fix expliziter delegate (`Theme.sidebarHover`/`textBright`), SFTP-Liste band an
+nicht-existente `Theme.selection`/`hover` → `sidebarSelected`/`sidebarHover`.
 
 **QTMUX-47 (2026-07-25) — Einstellungen als nicht-modales Kategorie-Fenster.** Der modale
 `settingsDialog` (480 px, sechs gestapelte Abschnitte) sowie `connectionsDialog`,
