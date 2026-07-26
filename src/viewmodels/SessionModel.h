@@ -97,6 +97,15 @@ public:
     Q_INVOKABLE int groupSize(const QString &name) const;
     /// Benennt eine Gruppe um (alle Mitglieder). Leerer Zielname löst sie auf.
     Q_INVOKABLE void renameGroup(const QString &from, const QString &to);
+    /// Verschiebt eine ganze Gruppe als Block in der Sidebar-Reihenfolge: dir < 0 = hoch,
+    /// dir > 0 = runter. Die Gruppe springt jeweils über die benachbarte „Sektion"
+    /// (eine andere Gruppe ODER einen zusammenhängenden Lauf gruppenloser Sessions); die
+    /// Mitglieder bleiben zusammenhängend. No-op am Rand oder bei unbekannter Gruppe.
+    Q_INVOKABLE void moveGroup(const QString &name, int dir);
+    /// Verschiebt die Gruppe `name` als Block vor/nach die Sektion, in der `targetRow`
+    /// liegt (für Header-Drag-to-Reorder). Landet der Ziel-Zeilenwert in der Gruppe
+    /// selbst, passiert nichts. `moveGroup` ist ein Spezialfall hiervon.
+    Q_INVOKABLE void moveGroupToRow(const QString &name, int targetRow);
     /// Entfernt die MCP-Controller-Markierung (roter Tab) einer Zeile. Nötig, weil ein
     /// steuernder Agent, der ohne Abmeldung verschwindet, den Tab sonst hängen lässt und
     /// es keinen anderen Menschen-Weg gibt, ihn zu löschen (attach_controller ist MCP-only).
@@ -146,6 +155,9 @@ private:
     int regroupRow(int row);
     /// Reines Verschieben ohne Gruppen-Adoption (die macht nur moveSession).
     bool moveRowInternal(int from, int to);
+    /// Verschiebt den zusammenhängenden Zeilenblock [first..last] vor die Zielzeile `dest`
+    /// (in aktueller Nummerierung) — als EIN beginMoveRows. Für moveGroup.
+    bool moveBlock(int first, int last, int dest);
 
     QList<Session *> m_sessions;
     QList<SessionConfig> m_configs;   // parallel zu m_sessions

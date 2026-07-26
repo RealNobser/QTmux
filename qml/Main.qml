@@ -691,6 +691,34 @@ ApplicationWindow {
         rebuildLayout()
     }
 
+    // Gruppen-Verschiebung ordnet Modell-Zeilen um → Auswahl (currentRow) und die
+    // Layout-Blätter (referenzieren Zeilen per INDEX) müssen nachgeführt werden. Statt die
+    // Block-Rotation nachzurechnen, remappen wir per SESSION-IDENTITÄT: vor dem Move je
+    // Blatt/currentRow die sessionId sichern, danach die neue Zeile derselben Session suchen.
+    // Kein rebuildLayout nötig — die Panes behalten ihre Session, nur die Index-Referenzen
+    // werden konsistent gehalten (wirkt beim nächsten Rebuild korrekt).
+    function rowForSessionId(sid) {
+        for (let i = 0; i < sessions.count; ++i) {
+            const s = sessions.sessionAt(i)
+            if (s && s.sessionId === sid) return i
+        }
+        return -1
+    }
+    function withRowRemap(reorderFn) {
+        const leaves = []
+        forEachLeaf(window.layout, function(l) {
+            const s = sessions.sessionAt(l.sessionRow)
+            leaves.push({ leaf: l, sid: s ? s.sessionId : -1 })
+        })
+        const curS = (window.currentRow >= 0) ? sessions.sessionAt(window.currentRow) : null
+        const curSid = curS ? curS.sessionId : -1
+        reorderFn()
+        for (const e of leaves) { const r = rowForSessionId(e.sid); if (r >= 0) e.leaf.sessionRow = r }
+        if (curSid >= 0) { const r = rowForSessionId(curSid); if (r >= 0) window.currentRow = r }
+    }
+    function moveGroupBy(name, dir)     { withRowRemap(function(){ sessions.moveGroup(name, dir) }) }
+    function moveGroupToRow(name, row)  { withRowRemap(function(){ sessions.moveGroupToRow(name, row) }) }
+
     // Sidebar-Klick: gewählte Session ins aktive Blatt laden.
     function assignToActivePane(row) {
         window.currentRow = row
@@ -1339,6 +1367,12 @@ ApplicationWindow {
                                 c.push({ title: qsTr("Gruppe auflösen: %1").arg(gs[gj]), sub: qsTr("Gruppe"),
                                          icon: "trash",
                                          run: (function(n){ return function(){ sessions.renameGroup(n, "") } })(gs[gj]) })
+                                c.push({ title: qsTr("Gruppe nach oben: %1").arg(gs[gj]), sub: qsTr("Gruppe"),
+                                         icon: "bookmark",
+                                         run: (function(n){ return function(){ window.moveGroupBy(n, -1) } })(gs[gj]) })
+                                c.push({ title: qsTr("Gruppe nach unten: %1").arg(gs[gj]), sub: qsTr("Gruppe"),
+                                         icon: "bookmark",
+                                         run: (function(n){ return function(){ window.moveGroupBy(n, 1) } })(gs[gj]) })
                             }
                         }
                         for (var i = 0; i < sessions.count; ++i) {
@@ -1697,13 +1731,17 @@ ApplicationWindow {
                         visible: section.length > 0
 
                         readonly property bool collapsed: window.isGroupCollapsed(section)
+                        // Beim Ziehen anheben (wie eine Kachel), damit der Griff sichtbar ist.
+                        z: hdrDrag.active ? 3 : 0
+                        opacity: hdrDrag.active ? 0.85 : 1.0
 
                         Rectangle {
                             anchors.fill: parent
                             anchors.topMargin: 4
                             anchors.bottomMargin: 2
                             radius: 6
-                            color: hdrHover.hovered ? Theme.sidebarHover : "transparent"
+                            color: hdrDrag.active ? Theme.sidebarSelected
+                                 : hdrHover.hovered ? Theme.sidebarHover : "transparent"
 
                             RowLayout {
                                 anchors.fill: parent
@@ -1740,6 +1778,23 @@ ApplicationWindow {
                                 onTapped: {
                                     groupMenu.groupName = groupHeader.section
                                     groupMenu.popup()
+                                }
+                            }
+                            // Ganze Gruppe per Ziehen des Kopfes umsortieren (QTMUX-54).
+                            // Gleiche Technik wie der Kachel-Drag: DragHandler + Hit-Test über
+                            // window.rowNearestTo (Qt-Drag/DropArea ist hier fragil). Beim
+                            // Loslassen bestimmt die Kopf-Mitte die Zielzeile → moveGroupToRow.
+                            DragHandler {
+                                id: hdrDrag
+                                target: groupHeader
+                                xAxis.enabled: false
+                                yAxis.enabled: true
+                                onActiveChanged: {
+                                    if (active) return
+                                    const cy = groupHeader.y + groupHeader.height / 2
+                                    const target = window.rowNearestTo(cy, -1)
+                                    if (target >= 0) window.moveGroupToRow(groupHeader.section, target)
+                                    sessionList.forceLayout()   // Kopf wieder einrasten lassen
                                 }
                             }
                         }
@@ -2782,6 +2837,15 @@ ApplicationWindow {
     ThemedMenu {
         id: groupMenu
         property string groupName: ""
+        AppMenuItem {
+            text: qsTr("Gruppe nach oben")
+            onTriggered: window.moveGroupBy(groupMenu.groupName, -1)
+        }
+        AppMenuItem {
+            text: qsTr("Gruppe nach unten")
+            onTriggered: window.moveGroupBy(groupMenu.groupName, 1)
+        }
+        MenuSeparator {}
         AppMenuItem {
             text: qsTr("Gruppe umbenennen …")
             onTriggered: groupNameDialog.startRename(groupMenu.groupName)

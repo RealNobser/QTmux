@@ -19,6 +19,7 @@ private slots:
     void newGroupLeavesForeignBlockIntact();
     void dragAdoptsNeighbourGroup();
     void removeFromGroupNotifiesFinalRow();
+    void moveGroupReordersBlock();
     void renameMergesAndDissolves();
     void groupSurvivesSaveAndRestore();
 
@@ -154,6 +155,47 @@ void TestSessionGroups::removeFromGroupNotifiesFinalRow() {
             lastRow = args.at(0).value<QModelIndex>().row();
     }
     QCOMPARE(lastRow, finalRowB);
+}
+
+// moveGroup verschiebt eine ganze Gruppe als Block über die benachbarte Sektion; die
+// Mitglieder bleiben zusammenhängend und identisch, nur die Blockreihenfolge ändert sich.
+void TestSessionGroups::moveGroupReordersBlock() {
+    SessionModel m;
+    for (int i = 0; i < 4; ++i) QVERIFY(m.createShellSession() >= 0);
+    m.setSessionGroup(0, QStringLiteral("A"));
+    m.setSessionGroup(1, QStringLiteral("A"));
+    m.setSessionGroup(2, QStringLiteral("B"));
+    m.setSessionGroup(3, QStringLiteral("B"));
+    const QStringList AABB{"A","A","B","B"};
+    QCOMPARE(layout(m), AABB);
+    // IDs der A-Mitglieder merken (müssen erhalten bleiben, nur die Position ändert sich).
+    QList<int> aIds;
+    for (int i = 0; i < m.count(); ++i)
+        if (m.sessions().at(i)->group() == QLatin1String("A")) aIds << m.sessions().at(i)->id();
+
+    m.moveGroup(QStringLiteral("A"), 1);          // A nach unten → über den B-Block
+    QCOMPARE(layout(m), (QStringList{"B","B","A","A"}));
+    QList<int> aIdsAfter;
+    for (int i = 0; i < m.count(); ++i)
+        if (m.sessions().at(i)->group() == QLatin1String("A")) aIdsAfter << m.sessions().at(i)->id();
+    QCOMPARE(aIdsAfter, aIds);                     // dieselben Mitglieder, nur verschoben
+
+    m.moveGroup(QStringLiteral("A"), -1);          // wieder hoch → Ausgangslage
+    QCOMPARE(layout(m), AABB);
+
+    m.moveGroup(QStringLiteral("A"), -1);          // schon ganz oben → No-op
+    QCOMPARE(layout(m), AABB);
+
+    m.moveGroup(QStringLiteral("Gibtsnicht"), 1);  // unbekannte Gruppe → No-op
+    QCOMPARE(layout(m), AABB);
+
+    // Direkter moveGroupToRow (Header-Drag-Pfad): A auf eine Zeile im B-Block fallen
+    // lassen → A landet hinter B.
+    m.moveGroupToRow(QStringLiteral("A"), 3);
+    QCOMPARE(layout(m), (QStringList{"B","B","A","A"}));
+    // Auf die eigene Gruppe fallen lassen → No-op.
+    m.moveGroupToRow(QStringLiteral("A"), 2);
+    QCOMPARE(layout(m), (QStringList{"B","B","A","A"}));
 }
 
 // Umbenennen zieht alle Mitglieder mit; auf einen bereits vergebenen Namen

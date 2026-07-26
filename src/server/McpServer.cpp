@@ -497,6 +497,13 @@ QJsonObject McpServer::toolsList() const {
                       QJsonObject{{"from", strProp("bestehender Gruppenname")},
                                   {"to", strProp("neuer Name (leer = Gruppe auflösen)")}},
                       QJsonArray{"from"}));
+    tools.append(tool("move_group",
+                      "Verschiebt eine ganze Gruppe als Block in der Sidebar-Reihenfolge. "
+                      "Sie springt über die benachbarte Sektion (andere Gruppe oder Lauf "
+                      "gruppenloser Sessions); die Mitglieder bleiben zusammenhängend.",
+                      QJsonObject{{"name", strProp("Gruppenname")},
+                                  {"direction", strProp("'up' = nach oben | 'down' = nach unten")}},
+                      QJsonArray{"name", "direction"}));
     tools.append(tool("focus_session", "Fokussiert eine Session und lädt sie ins aktive Pane.",
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
     tools.append(tool("attach_controller",
@@ -849,6 +856,22 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         }
         m_sessions->renameGroup(from, to);
         text = to.trimmed().isEmpty() ? QStringLiteral("aufgelöst") : QStringLiteral("ok");
+        return {};
+    }
+    if (name == "move_group") {
+        const QString gname = args.value("name").toString().trimmed();
+        const QString dir = args.value("direction").toString().toLower();
+        if (gname.isEmpty()) {
+            isError = true; text = QStringLiteral("'name' (Gruppenname) ist erforderlich."); return {};
+        }
+        if (dir != QLatin1String("up") && dir != QLatin1String("down")) {
+            isError = true; text = QStringLiteral("'direction' muss 'up' oder 'down' sein."); return {};
+        }
+        if (m_sessions->groupSize(gname) == 0) {
+            isError = true; text = QStringLiteral("Unbekannte Gruppe: %1.").arg(gname); return {};
+        }
+        m_sessions->moveGroup(gname, dir == QLatin1String("up") ? -1 : 1);
+        text = QStringLiteral("ok");
         return {};
     }
     if (name == "close_session") {

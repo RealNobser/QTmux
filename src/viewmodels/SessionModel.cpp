@@ -10,6 +10,7 @@
 #include <QSettings>
 #include <QTimer>
 #include <QVariantMap>
+#include <algorithm>   // std::rotate (moveBlock)
 
 namespace qtmux {
 
@@ -318,6 +319,62 @@ bool SessionModel::moveRowInternal(int from, int to) {
     else if (from < to && m_activeRow > from && m_activeRow <= to) --m_activeRow;
     else if (to < from && m_activeRow >= to && m_activeRow < from) ++m_activeRow;
     return true;
+}
+
+bool SessionModel::moveBlock(int first, int last, int dest) {
+    // `dest` = Zielzeile (aktuelle Nummerierung), VOR die der Block eingefügt wird.
+    // Gültig nur außerhalb [first, last+1] — sonst würde der Block in sich selbst wandern.
+    if (first < 0 || last >= count() || first > last) return false;
+    if (dest >= first && dest <= last + 1) return false;
+    if (!beginMoveRows({}, first, last, {}, dest)) return false;
+    // Aktive Session merken (m_activeRow ist ein reiner Index, kein persistenter QModelIndex).
+    Session *active = (m_activeRow >= 0 && m_activeRow < count()) ? m_sessions.at(m_activeRow) : nullptr;
+    auto reorder = [first, last, dest](auto &vec) {
+        if (dest < first)                                   // aufwärts
+            std::rotate(vec.begin() + dest, vec.begin() + first, vec.begin() + last + 1);
+        else                                                // abwärts (dest > last+1)
+            std::rotate(vec.begin() + first, vec.begin() + last + 1, vec.begin() + dest);
+    };
+    reorder(m_sessions);
+    reorder(m_configs);
+    endMoveRows();
+    if (active) m_activeRow = m_sessions.indexOf(active);
+    return true;
+}
+
+void SessionModel::moveGroup(const QString &name, int dir) {
+    const QString g = name.trimmed();
+    if (g.isEmpty() || dir == 0) return;
+    int gStart = -1, gEnd = -1;
+    for (int i = 0; i < count(); ++i)
+        if (m_sessions.at(i)->group() == g) { if (gStart < 0) gStart = i; gEnd = i; }
+    if (gStart < 0) return;   // unbekannte Gruppe
+    // Ein-Schritt-Verschiebung = Ziel ist die direkt angrenzende Zeile ober-/unterhalb;
+    // moveGroupToRow bestimmt daraus die ganze Nachbarsektion.
+    if (dir < 0 && gStart > 0)              moveGroupToRow(g, gStart - 1);
+    else if (dir > 0 && gEnd < count() - 1) moveGroupToRow(g, gEnd + 1);
+}
+
+void SessionModel::moveGroupToRow(const QString &name, int targetRow) {
+    const QString g = name.trimmed();
+    if (g.isEmpty() || count() == 0) return;
+    int gStart = -1, gEnd = -1;
+    for (int i = 0; i < count(); ++i)
+        if (m_sessions.at(i)->group() == g) { if (gStart < 0) gStart = i; gEnd = i; }
+    if (gStart < 0) return;                                 // unbekannte Gruppe
+    targetRow = std::clamp(targetRow, 0, count() - 1);
+    if (targetRow >= gStart && targetRow <= gEnd) return;   // auf die eigene Gruppe fallen gelassen
+
+    // Ziel-Sektion = zusammenhängender Lauf gleichen Gruppenwerts um targetRow.
+    const QString tv = m_sessions.at(targetRow)->group();
+    int tStart = targetRow, tEnd = targetRow;
+    while (tStart > 0 && m_sessions.at(tStart - 1)->group() == tv) --tStart;
+    while (tEnd < count() - 1 && m_sessions.at(tEnd + 1)->group() == tv) ++tEnd;
+
+    bool moved = false;
+    if (tEnd < gStart)       moved = moveBlock(gStart, gEnd, tStart);       // Ziel oberhalb → davor
+    else if (tStart > gEnd)  moved = moveBlock(gStart, gEnd, tEnd + 1);     // Ziel unterhalb → danach
+    if (moved) { saveState(); emit groupsChanged(); }
 }
 
 void SessionModel::moveSession(int from, int to) {

@@ -36,6 +36,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `close_session` | `id` | Session schließen |
 | `set_session_group` | `id`, `group?` | Session einer **Sidebar-Gruppe** zuordnen; leerer/fehlender `group`-Wert nimmt sie heraus (s. u.) |
 | `rename_group` | `from`, `to?` | Bestehende Gruppe umbenennen (alle Mitglieder) bzw. **auflösen** (leeres `to`) |
+| `move_group` | `name`, `direction` | Ganze Gruppe als Block in der Sidebar verschieben (`direction`: `up`/`down`) |
 | `focus_session` | `id` | Session sichtbar/fokussiert machen |
 | `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard 60), `broadcast?` | Text in die Session tippen; Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt) |
 | `read_screen` | `id`, `scrollback?` | Sichtbaren Bildschirm als Klartext lesen; mit `scrollback:true` zusätzlich die Historie davor |
