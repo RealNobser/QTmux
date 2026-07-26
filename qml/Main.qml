@@ -49,6 +49,23 @@ ApplicationWindow {
     property int paneCount: 1
     property var paneItems: ({})         // paneId -> TerminalItem (für Fokus + Hit-Test)
     property var activeTerminal: null
+    // Ob das AKTIVE Terminal gerade eine Auswahl hat — treibt actCopy.enabled (Menü/
+    // Kontextmenü „Kopieren"). Bewusst als eigene Property + Connections statt der
+    // direkten Bindung `activeTerminal.hasSelection`: die Änderungsbenachrichtigung einer
+    // Sub-Property eines `var`-gehaltenen QObjects propagiert in QML NICHT zuverlässig,
+    // wodurch der Menüeintrag dauerhaft ausgegraut blieb (Cmd+C ging weiter, weil das
+    // fokussierte Terminal die Taste selbst behandelt). Hier wird der Wert bei jedem
+    // Terminal-Wechsel UND bei jedem selectionChanged des aktiven Terminals nachgeführt.
+    property bool activeHasSelection: false
+    function refreshActiveSelection() {
+        activeHasSelection = activeTerminal ? activeTerminal.hasSelection : false
+    }
+    onActiveTerminalChanged: refreshActiveSelection()
+    Connections {
+        target: window.activeTerminal
+        ignoreUnknownSignals: true
+        function onSelectionChanged() { window.refreshActiveSelection() }
+    }
     // Pane-Reorder per Drag (QTMUX-4): aktives Quell-Pane + aktuell überfahrenes Ziel.
     property int dragPaneId: -1
     property int dragOverPaneId: -1
@@ -919,7 +936,7 @@ ApplicationWindow {
     Action {
         id: actCopy
         text: qsTr("Kopieren")
-        enabled: window.activeTerminal && window.activeTerminal.hasSelection && !prefs.capturing
+        enabled: window.activeHasSelection && !prefs.capturing
         shortcut: Qt.platform.os === "osx" ? StandardKey.Copy : ""
         onTriggered: if (window.activeTerminal) window.activeTerminal.copy()
     }

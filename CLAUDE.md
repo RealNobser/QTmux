@@ -248,6 +248,17 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 
 ## Status (2026-07-26)
 
+**v1.6.1 (2026-07-26) — Hotfix: „Kopieren" im Menü war dauerhaft ausgegraut.** Anwenderbefund:
+`Bearbeiten → Kopieren` (und Rechtsklick → Kopieren) blieb grau, egal ob Text markiert war;
+**Cmd+C funktionierte** aber. Ursache: `actCopy.enabled` band an `window.activeTerminal.hasSelection`
+— eine **Sub-Property eines `var`-gehaltenen QObjects**, deren `NOTIFY` (`selectionChanged`) in
+QML NICHT zuverlässig propagiert, sodass die Bindung nie aktualisierte. (Cmd+C ging trotzdem, weil
+das fokussierte `TerminalItem` die Taste im `keyPressEvent` selbst behandelt, unabhängig vom Menü.)
+Fix: window-Property **`activeHasSelection`**, per `Connections` bei jedem `selectionChanged` des
+aktiven Terminals + bei `onActiveTerminalChanged` nachgeführt; `actCopy.enabled` nutzt sie. Der Bug
+steckte seit **1.5.0** in allen Releases (Copy-Pfad war seither unverändert). Rein visuell/QML →
+Anwender-Abnahme. Hotfix-Release v1.6.1 mit allen vier Installern.
+
 **v1.6.0 (2026-07-26) — Sitzungsgruppen-Fixes, „Neues Fenster", Oberflächen-Parität.**
 Drei Themen in einem Zug (Anwender-getrieben):
 
