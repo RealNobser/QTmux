@@ -18,6 +18,7 @@ private slots:
     void firstMemberStaysInPlace();
     void newGroupLeavesForeignBlockIntact();
     void dragAdoptsNeighbourGroup();
+    void removeFromGroupNotifiesFinalRow();
     void renameMergesAndDissolves();
     void groupSurvivesSaveAndRestore();
 
@@ -117,6 +118,42 @@ void TestSessionGroups::dragAdoptsNeighbourGroup() {
     // Und wieder heraus: ans Ende gezogen, wo niemand mehr eine Gruppe hat …
     m.setSessionGroup(2, QString());
     QCOMPARE(m.groupSize(QStringLiteral("Team")), 2);
+}
+
+// Bug-Regression: Wird eine Session aus einer Gruppe genommen und dabei umsortiert,
+// muss die dataChanged-Benachrichtigung am ENDGÜLTIGEN Index (nach dem Move) kommen.
+// Andernfalls (dataChanged VOR dem beginMoveRows) cachte der ListView-Delegate beim
+// direkt folgenden Move den alten Gruppenwert wieder ein → Farbmarke/Einrückung blieben
+// sporadisch stehen, obwohl das Model bereits stimmte.
+void TestSessionGroups::removeFromGroupNotifiesFinalRow() {
+    SessionModel m;
+    for (int i = 0; i < 3; ++i) QVERIFY(m.createShellSession() >= 0);
+    m.setSessionGroup(0, QStringLiteral("X"));
+    m.setSessionGroup(1, QStringLiteral("X"));   // Layout: X X ""
+    const int idB = m.sessions().at(1)->id();
+
+    const int groupRole = m.roleNames().key("group", -1);
+    QVERIFY(groupRole >= 0);
+
+    QSignalSpy spy(&m, &QAbstractItemModel::dataChanged);
+    m.setSessionGroup(1, QString());             // B aus Gruppe X nehmen → wird verschoben
+
+    // B ist jetzt ungruppiert und aus dem X-Block heraus (X bleibt zusammenhängend).
+    QCOMPARE(m.groupSize(QStringLiteral("X")), 1);
+    int finalRowB = -1;
+    for (int i = 0; i < m.count(); ++i)
+        if (m.sessions().at(i)->id() == idB) { finalRowB = i; break; }
+    QVERIFY(finalRowB >= 0);
+    QVERIFY(m.sessions().at(finalRowB)->group().isEmpty());
+
+    // Das LETZTE dataChanged mit der group-Rolle muss auf B's endgültige Zeile zeigen.
+    int lastRow = -1;
+    for (const QList<QVariant> &args : spy) {
+        const QList<int> roles = args.at(2).value<QList<int>>();
+        if (roles.contains(groupRole))
+            lastRow = args.at(0).value<QModelIndex>().row();
+    }
+    QCOMPARE(lastRow, finalRowB);
 }
 
 // Umbenennen zieht alle Mitglieder mit; auf einen bereits vergebenen Namen

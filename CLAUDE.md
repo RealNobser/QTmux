@@ -58,7 +58,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
-| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (23 Tools); Doku `docs/MCP.md` |
+| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (25 Tools); Doku `docs/MCP.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
@@ -247,6 +247,36 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
   pflegen.
 
 ## Status (2026-07-26)
+
+**v1.6.0 (2026-07-26) — Sitzungsgruppen-Fixes, „Neues Fenster", Oberflächen-Parität.**
+Drei Themen in einem Zug (Anwender-getrieben):
+
+- **Zwei Gruppen-Bugs behoben.** (1) Beim Entgruppieren blieben Farbmarke/Einrückung sporadisch
+  stehen: `SessionModel::setSessionGroup` feuerte `dataChanged` **vor** dem `beginMoveRows` —
+  der Delegate cachte beim direkt folgenden Move den alten Gruppenwert wieder ein. Fix: erst
+  umsortieren (`regroupRow`), dann `dataChanged` am **endgültigen** Index (Regressionstest
+  `tst_sessiongroups::removeFromGroupNotifiesFinalRow`, per Gegentest abgesichert). (2) Im
+  Kachel-Kontextmenü blieb der Gruppen-**Haken** auf dem zuletzt getoggelten Stand (angehakt
+  selbst bei ungruppierten Shells): `checkable`-MenuItems verlieren beim Klick ihre
+  `checked`-Bindung, und der `Repeater` recycelt Delegates gleicher Länge. Fix: `Binding`-
+  Element erzwingt `checked` neu, inklusive `sessionMenu.opened` → greift bei **jedem** Öffnen.
+  Außerdem: Abwählen der aktiven Gruppe rief `setSessionGroup(row, gleicheGruppe)` = No-op
+  (früher Return) → jetzt `modelData === currentGroup ? "" : modelData`.
+- **„Neues Fenster" (`App.openNewInstance`, Datei-Menü + Palette, ⌘⇧N).** Startet eine
+  **eigene, unabhängige Instanz** als Prozess: freier MCP-Port (Scan ab 7346) + Profil `i<port>`
+  (getrennte QSettings-Domain). `main.cpp` übersetzt neue CLI-Args `--profile`/`--mcp-port`
+  ganz früh in die bestehenden Env-Vars → restlicher Code unverändert. Das ist das Test-Setup
+  (`QTMUX_PROFILE`/`QTMUX_MCP_PORT`) als Anwender-Feature.
+- **Paritäts-Audit (REST/MCP · Palette · Menü · Shortcut) mit 5 Parallel-Agenten**, dann
+  Lücken geschlossen: **2 neue MCP-Tools → 25 gesamt**: `focus_pane` (bestehendes Pane aktiv
+  setzen; die schärfste funktionale Lücke — vorher nur per Mausklick) und `rename_group`
+  (Gruppe umbenennen/auflösen; GUI konnte mehr als MCP). Dazu **Pane-Navigation** als
+  Aktion+Shortcut+Menü+Palette (`actNextPane`/`actPrevPane`, ⌘⇧→/←, `window.cyclePane`),
+  **Nächste/Vorige Session** ins Menü (Shortcut war unauffindbar), **Palette-Parität** für die
+  Toggles Ligaturen/GPU/Quake und **`SFTP: <Profil>`** je SSH-Profil, und **Controller-
+  Markierung per Rechtsklick zurücksetzen** (`SessionModel::clearMcpController` — vorher gab es
+  keinen Menschen-Weg, einen hängenden roten Tab zu löschen). **Bewusst deferred:**
+  reduceMotion-Schalter, Profil-CRUD über MCP, Sidebar-Reorder per Befehl.
 
 **v1.5.1 (2026-07-26) — Link-Hover-Auffindbarkeit (QTMUX-39-Nachbesserung).** Anwenderbefund:
 Cmd/Ctrl-Klick auf Links funktionierte (empirisch mit Logging + einem echten Cmd-Klick belegt),
@@ -679,7 +709,7 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (23 Tools)
+### MCP-Server (25 Tools)
 `src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC auf `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
 - **Controller-Auto-Erkennung** beim `initialize`: TCP-Port → PID → **Prozess-Vorfahren-

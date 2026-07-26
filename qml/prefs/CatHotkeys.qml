@@ -45,8 +45,8 @@ CatPage {
     // vorhandene Aktionen werden gezeigt; unbekannte landen am Ende in „Weitere", damit nie
     // eine Aktion verschwindet.
     readonly property var groupDefs: [
-        { title: qsTr("Sitzungen"),     ids: ["actNewSession", "actCloseSession", "actNextSession", "actPrevSession"] },
-        { title: qsTr("Panes"),         ids: ["actClosePane", "actSplitH", "actSplitV", "actBroadcast"] },
+        { title: qsTr("Sitzungen"),     ids: ["actNewSession", "actNewInstance", "actCloseSession", "actNextSession", "actPrevSession"] },
+        { title: qsTr("Panes"),         ids: ["actClosePane", "actNextPane", "actPrevPane", "actSplitH", "actSplitV", "actBroadcast"] },
         { title: qsTr("Verbindungen"),  ids: ["actNewSsh", "actNewSerial", "actConnections", "actVault"] },
         { title: qsTr("Ansicht & App"), ids: ["actCommandPalette", "actMcpToggle", "actZoomReset", "actToggleTheme", "actSettings", "actAbout", "actQuit"] }
     ]

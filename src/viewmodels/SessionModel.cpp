@@ -377,9 +377,16 @@ void SessionModel::setSessionGroup(int row, const QString &name) {
     if (s->group() == name.trimmed()) return;
     s->setGroup(name);
     m_configs[row].group = s->group();
-    const QModelIndex idx = index(row);
+    // Erst umsortieren (jede Gruppe muss ein zusammenhängender Section-Block bleiben),
+    // DANN am endgültigen Index benachrichtigen. Andersherum (dataChanged VOR dem Move)
+    // aktualisiert der Delegate zwar kurz, aber der unmittelbar folgende beginMoveRows/
+    // endMoveRows verschiebt ihn und lässt ihn den alten Gruppenwert wieder eincachen →
+    // Farbmarke und Einrückung blieben sporadisch stehen, obwohl das Model (und damit der
+    // Menü-Haken) schon stimmte. Mit dataChanged als LETZTEM Ereignis am Zielindex sieht
+    // die View zuletzt den korrekten Wert an der korrekten Stelle.
+    const int newRow = regroupRow(row);
+    const QModelIndex idx = index(newRow);
     emit dataChanged(idx, idx, {GroupRole});
-    regroupRow(row);
     saveState();
     emit groupsChanged();
 }
@@ -418,6 +425,12 @@ void SessionModel::renameGroup(const QString &from, const QString &to) {
         if (m_sessions.at(i)->group() == dst) regroupRow(i);
     saveState();
     emit groupsChanged();
+}
+
+void SessionModel::clearMcpController(int row) {
+    if (row < 0 || row >= count()) return;
+    m_sessions.at(row)->setMcpController(false);
+    // Der Rollen-Refresh läuft über das mcpControllerChanged-Signal (im Ctor verdrahtet).
 }
 
 void SessionModel::writeToAll(const QByteArray &data) {

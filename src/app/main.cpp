@@ -63,6 +63,20 @@ int main(int argc, char *argv[])
     // damit unsere Phosphor-Icons auch in der nativen Menüleiste erscheinen.
     QCoreApplication::setAttribute(Qt::AA_DontShowIconsInMenus, false);
 
+    // Startargumente --profile / --mcp-port GANZ FRÜH in die entsprechenden Env-Vars
+    // übersetzen, damit der restliche (env-basierte) Code unverändert bleibt: die
+    // QSettings-Domain unten liest QTMUX_PROFILE, der McpServer liest QTMUX_MCP_PORT.
+    // So kann „Neues Fenster" (AppController::openNewInstance) eine unabhängige Instanz
+    // mit eigenem Profil + freiem Port starten, ohne dass Umgebungsvererbung nötig wäre.
+    // Bereits gesetzte Env-Vars haben Vorrang (explizit gestartete Testinstanz).
+    for (int i = 1; i + 1 < argc; ++i) {
+        const QByteArray a(argv[i]);
+        if (a == "--profile" && !qEnvironmentVariableIsSet("QTMUX_PROFILE"))
+            qputenv("QTMUX_PROFILE", argv[i + 1]);
+        else if (a == "--mcp-port" && !qEnvironmentVariableIsSet("QTMUX_MCP_PORT"))
+            qputenv("QTMUX_MCP_PORT", argv[i + 1]);
+    }
+
     // App-Identität bereits VOR der QGuiApplication setzen (statisch erlaubt), damit
     // QSettings unten dieselbe (Bundle-abgeleitete) Domain trifft wie der AppController.
     // Instanz-Profil (QTMUX_PROFILE): hängt einen Suffix an den App-Namen und trennt
@@ -75,7 +89,7 @@ int main(int argc, char *argv[])
                                             ? QStringLiteral("QTmux")
                                             : QStringLiteral("QTmux-%1").arg(profile));
     QGuiApplication::setOrganizationName("QTmux");
-    QGuiApplication::setApplicationVersion("1.5.1");
+    QGuiApplication::setApplicationVersion("1.6.0");
 
 #if defined(Q_OS_MACOS)
     // Die nativen App-Menü-Standarditems (Über/Einstellungen/Dienste/Ausblenden/

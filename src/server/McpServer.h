@@ -69,6 +69,8 @@ signals:
     void splitPaneRequested(const QString &orientation);
     /// Pane schließen (paneId < 0 = aktives Pane). Schließt wie die GUI auch die Session.
     void closePaneRequested(int paneId);
+    /// Ein bestehendes Pane fokussieren/aktiv setzen (nur Fokuswechsel, kein Laden).
+    void focusPaneRequested(int paneId);
     /// Session (Sidebar-Zeile `row`) in ein Pane laden (paneId < 0 = aktives Pane).
     void assignPaneRequested(int row, int paneId);
     /// Verbindungsprofil per Name verbinden (Vault-Auflösung passiert im QML-Weg).

@@ -5,6 +5,10 @@
 #include <QKeySequence>
 #include <QGuiApplication>
 #include <QClipboard>
+#include <QCoreApplication>
+#include <QProcess>
+#include <QTcpServer>
+#include <QHostAddress>
 #include <QtGlobal>
 #include <Qt>
 
@@ -121,6 +125,34 @@ QStringList AppController::monospaceFonts() const {
 
 QString AppController::defaultMonospaceFont() const {
     return QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
+}
+
+int AppController::openNewInstance() const {
+    // Freien MCP-Port suchen. Ab 7346 aufwärts: 7345 ist der Standard-Port der
+    // produktiven Instanz; ein schon belegter Port (weitere Instanz) wird durch das
+    // Probe-listen übersprungen. Der gefundene Port ist beim Start des Kindes zwar
+    // theoretisch schon wieder frei (TOCTOU), das ist für eine manuelle Aktion aber
+    // unkritisch — schlägt das Binden dennoch fehl, läuft die Instanz nur ohne MCP.
+    int port = -1;
+    for (int p = 7346; p <= 7399; ++p) {
+        QTcpServer probe;
+        if (probe.listen(QHostAddress::LocalHost, static_cast<quint16>(p))) {
+            probe.close();
+            port = p;
+            break;
+        }
+    }
+    if (port < 0) return -1;
+
+    // Profil aus dem Port ableiten → stabile, getrennte QSettings-Domain je „Slot"
+    // (öffnet man denselben Port erneut, findet die Instanz ihre frühere Session-Liste).
+    const QString profile = QStringLiteral("i%1").arg(port);
+    const QString exe = QCoreApplication::applicationFilePath();
+    const QStringList args{
+        QStringLiteral("--profile"),  profile,
+        QStringLiteral("--mcp-port"), QString::number(port),
+    };
+    return QProcess::startDetached(exe, args) ? port : -1;
 }
 
 } // namespace qtmux

@@ -97,6 +97,10 @@ public:
     Q_INVOKABLE int groupSize(const QString &name) const;
     /// Benennt eine Gruppe um (alle Mitglieder). Leerer Zielname löst sie auf.
     Q_INVOKABLE void renameGroup(const QString &from, const QString &to);
+    /// Entfernt die MCP-Controller-Markierung (roter Tab) einer Zeile. Nötig, weil ein
+    /// steuernder Agent, der ohne Abmeldung verschwindet, den Tab sonst hängen lässt und
+    /// es keinen anderen Menschen-Weg gibt, ihn zu löschen (attach_controller ist MCP-only).
+    Q_INVOKABLE void clearMcpController(int row);
     /// Beendet alle laufenden Prozesse/Verbindungen (beim App-Quit aufzurufen,
     /// nach saveState()). Verhindert verwaiste Shells/Agenten.
     Q_INVOKABLE void shutdownAll();

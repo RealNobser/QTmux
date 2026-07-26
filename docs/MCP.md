@@ -35,6 +35,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `create_session` | `type` ("shell"/"serial"/"ssh"/"plugin"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?`, `pluginId?`, `typeId?`, `loginScript?` | Session anlegen → gibt neue **id** zurück |
 | `close_session` | `id` | Session schließen |
 | `set_session_group` | `id`, `group?` | Session einer **Sidebar-Gruppe** zuordnen; leerer/fehlender `group`-Wert nimmt sie heraus (s. u.) |
+| `rename_group` | `from`, `to?` | Bestehende Gruppe umbenennen (alle Mitglieder) bzw. **auflösen** (leeres `to`) |
 | `focus_session` | `id` | Session sichtbar/fokussiert machen |
 | `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard 60), `broadcast?` | Text in die Session tippen; Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt) |
 | `read_screen` | `id`, `scrollback?` | Sichtbaren Bildschirm als Klartext lesen; mit `scrollback:true` zusätzlich die Historie davor |
@@ -51,6 +52,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `get_layout` | – | `{layout, activePaneId, sessions}` — Baum **plus** Pane-Zuordnung aller Sessions (s. u.) |
 | `split_pane` | `orientation` ("h"/"v") | Aktives Pane teilen (neue Shell-Session im neuen Pane, wird aktiv) → neue **Session-id** |
 | `close_pane` | `paneId?` | Pane **mitsamt Session** schließen (GUI-Semantik); ohne `paneId` das aktive Pane |
+| `focus_pane` | `paneId` | Bestehendes Pane **aktiv** setzen (reiner Fokuswechsel, ohne die Session zu ändern) |
 | `assign_session` | `id`, `paneId?` | Session in ein Pane laden (ohne `paneId` ins aktive — wie ein Sidebar-Klick) |
 | `list_profiles` | – | Gespeicherte Verbindungsprofile; **ohne Geheimniswerte** (nur `hasPasswordSecret`/`hasLoginScript`-Flags) |
 | `connect_profile` | `name` | Profil verbinden — ein Vault-Passwort wird **intern** aufgelöst (nie über MCP ausgegeben) → neue **Session-id** |

@@ -15,8 +15,11 @@ HotkeyRegistry::HotkeyRegistry(QObject *parent) : QObject(parent) {
     // bleiben bewusst auf StandardKey (plattform-/terminal-sensibel) und nicht hier.
     m_defaults = {
         {QStringLiteral("actNewSession"),     QStringLiteral("Ctrl+T")},
+        {QStringLiteral("actNewInstance"),    QStringLiteral("Ctrl+Shift+N")},
         {QStringLiteral("actCloseSession"),   QStringLiteral("Ctrl+W")},
         {QStringLiteral("actClosePane"),      QStringLiteral("Ctrl+Shift+W")},
+        {QStringLiteral("actNextPane"),       QStringLiteral("Ctrl+Shift+Right")},
+        {QStringLiteral("actPrevPane"),       QStringLiteral("Ctrl+Shift+Left")},
         // Session-Navigation: auf macOS heißt Qt-"Ctrl" Cmd, und Cmd+Tab gehört dem
         // System-App-Switcher (die App sieht die Taste nie). "Meta+Tab" = PHYSISCHES
         // Ctrl+Tab — die plattformübliche Belegung (Terminal.app/iTerm-Stil).

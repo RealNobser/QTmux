@@ -400,7 +400,7 @@ QJsonObject McpServer::dispatchMethod(const QString &method, const QJsonObject &
         return QJsonObject{
             {"protocolVersion", kProtocolVersion},
             {"capabilities", QJsonObject{{"tools", QJsonObject{}}}},
-            {"serverInfo", QJsonObject{{"name", "QTmux"}, {"version", "1.5.1"}}},
+            {"serverInfo", QJsonObject{{"name", "QTmux"}, {"version", "1.6.0"}}},
         };
     }
     if (method == "tools/list") {
@@ -490,6 +490,13 @@ QJsonObject McpServer::toolsList() const {
                       QJsonObject{{"id", intProp("Session-ID")},
                                   {"group", strProp("Gruppenname (leer = ohne Gruppe)")}},
                       QJsonArray{"id"}));
+    tools.append(tool("rename_group",
+                      "Benennt eine bestehende Sidebar-Gruppe um (alle Mitglieder ziehen "
+                      "mit) oder löst sie auf (leeres 'to'). Ergänzt set_session_group um "
+                      "das, was bisher nur die GUI konnte.",
+                      QJsonObject{{"from", strProp("bestehender Gruppenname")},
+                                  {"to", strProp("neuer Name (leer = Gruppe auflösen)")}},
+                      QJsonArray{"from"}));
     tools.append(tool("focus_session", "Fokussiert eine Session und lädt sie ins aktive Pane.",
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
     tools.append(tool("attach_controller",
@@ -551,6 +558,12 @@ QJsonObject McpServer::toolsList() const {
                       "das aktive Pane; beim letzten Pane wird nur die Session geschlossen.",
                       QJsonObject{{"paneId", intProp("Pane-ID aus get_layout (optional, sonst aktives Pane)")}},
                       {}));
+    tools.append(tool("focus_pane",
+                      "Setzt ein bestehendes Pane aktiv (reiner Fokuswechsel, ohne die "
+                      "Session zu ändern) — das GUI-Pendant zum Klick in ein Pane, das "
+                      "es bisher nur per Maus gab.",
+                      QJsonObject{{"paneId", intProp("Pane-ID aus get_layout")}},
+                      QJsonArray{"paneId"}));
     tools.append(tool("assign_session",
                       "Lädt eine Session in ein Pane (macht es aktiv). Ohne paneId ins "
                       "aktive Pane (wie ein Sidebar-Klick).",
@@ -819,6 +832,25 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         text = QStringLiteral("ok");
         return {};
     }
+    if (name == "rename_group") {
+        // Benennt eine Gruppe um (alle Mitglieder) bzw. löst sie auf (leeres `to`).
+        // Ergänzt set_session_group um genau das, was bisher nur die GUI konnte.
+        const QString from = args.value("from").toString().trimmed();
+        const QString to = args.value("to").toString();
+        if (from.isEmpty()) {
+            isError = true;
+            text = QStringLiteral("'from' (bestehender Gruppenname) ist erforderlich.");
+            return {};
+        }
+        if (m_sessions->groupSize(from) == 0) {
+            isError = true;
+            text = QStringLiteral("Unbekannte Gruppe: %1.").arg(from);
+            return {};
+        }
+        m_sessions->renameGroup(from, to);
+        text = to.trimmed().isEmpty() ? QStringLiteral("aufgelöst") : QStringLiteral("ok");
+        return {};
+    }
     if (name == "close_session") {
         const int row = m_sessions->rowForId(id);
         if (row < 0) { isError = true; text = idProblem(); return {}; }
@@ -893,6 +925,16 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
     if (name == "close_pane") {
         const int paneId = args.value("paneId").toInt(-1);
         bridgedCall([this, paneId] { emit closePaneRequested(paneId); }, isError, text);
+        return {};
+    }
+    if (name == "focus_pane") {
+        const int paneId = args.value("paneId").toInt(-1);
+        if (paneId < 0) {
+            isError = true;
+            text = QStringLiteral("paneId (>= 0) ist erforderlich; get_layout liefert die IDs.");
+            return {};
+        }
+        bridgedCall([this, paneId] { emit focusPaneRequested(paneId); }, isError, text);
         return {};
     }
     if (name == "assign_session") {

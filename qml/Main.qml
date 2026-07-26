@@ -135,6 +135,13 @@ ApplicationWindow {
             window.closePane()
             mcp.provideResult(true, "ok")
         }
+        onFocusPaneRequested: (paneId) => {
+            const f = window.findLeaf(paneId)
+            if (!f) { mcp.provideResult(false, qsTr("Unbekannte paneId.")); return }
+            window.setActivePaneById(paneId, window.paneItems[paneId])
+            window.focusActivePane()
+            mcp.provideResult(true, "ok")
+        }
         onAssignPaneRequested: (row, paneId) => {
             if (paneId >= 0) {
                 if (!window.findLeaf(paneId)) { mcp.provideResult(false, qsTr("Unbekannte paneId.")); return }
@@ -409,6 +416,8 @@ ApplicationWindow {
         sessions.closeSession(currentRow)
         currentRow = Math.min(currentRow, sessions.count - 1)
     }
+    // Kurzer, selbstverschwindender Hinweis unten im Fenster (z. B. nach „Neues Fenster").
+    function notifyToast(msg) { toast.text = msg; toast.restart() }
     function typeLabel(t) {
         return t === 1 ? qsTr("SSH") : t === 2 ? qsTr("Seriell") : qsTr("Shell")
     }
@@ -483,8 +492,11 @@ ApplicationWindow {
     function hotkeyLabel(id) {
         switch (id) {
         case "actNewSession":     return qsTr("Neue Session")
+        case "actNewInstance":    return qsTr("Neues Fenster")
         case "actCloseSession":   return qsTr("Session schließen")
         case "actClosePane":      return qsTr("Pane schließen")
+        case "actNextPane":       return qsTr("Nächstes Pane")
+        case "actPrevPane":       return qsTr("Vorheriges Pane")
         case "actNextSession":    return qsTr("Nächste Session")
         case "actPrevSession":    return qsTr("Vorige Session")
         case "actSplitH":         return qsTr("Nebeneinander teilen")
@@ -624,6 +636,20 @@ ApplicationWindow {
         const f = findLeaf(id)
         if (f && f.leaf.sessionRow >= 0 && f.leaf.sessionRow < sessions.count)
             window.currentRow = f.leaf.sessionRow
+    }
+    // Aktives Pane zyklisch wechseln (dir = +1/-1) — das Tastatur-/Befehls-Pendant zum
+    // Mausklick ins Pane. Reihenfolge = Blattreihenfolge des Layout-Baums (forEachLeaf).
+    function cyclePane(dir) {
+        if (window.paneCount <= 1) return
+        const ids = []
+        forEachLeaf(window.layout, function(l) { ids.push(l.paneId) })
+        if (ids.length === 0) return
+        let i = ids.indexOf(window.activePaneId)
+        if (i < 0) i = 0
+        const ni = (i + dir + ids.length) % ids.length
+        const t = window.paneItems[ids[ni]]
+        window.setActivePaneById(ids[ni], t)
+        if (t) t.forceActiveFocus()
     }
     // Fokus (nach Item-Erzeugung) auf das aktive Pane legen.
     function focusActivePane() {
@@ -811,6 +837,18 @@ ApplicationWindow {
         enabled: !prefs.capturing
         onTriggered: window.newSession()
     }
+    // Neue, unabhängige QTmux-Instanz (eigener Prozess, eigenes Profil, freier MCP-Port).
+    Action {
+        id: actNewInstance
+        text: qsTr("Neues Fenster")
+        shortcut: Hotkeys.bindings["actNewInstance"]
+        enabled: !prefs.capturing
+        onTriggered: {
+            const port = App.openNewInstance()
+            if (port < 0) window.notifyToast(qsTr("Kein freier MCP-Port für eine neue Instanz gefunden."))
+            else window.notifyToast(qsTr("Neues Fenster gestartet (MCP-Port %1).").arg(port))
+        }
+    }
     Action {
         id: actCloseSession
         text: qsTr("Session schließen")
@@ -913,6 +951,20 @@ ApplicationWindow {
         shortcut: Hotkeys.bindings["actClosePane"]
         enabled: window.paneCount > 1 && !prefs.capturing
         onTriggered: window.closePane()
+    }
+    Action {
+        id: actNextPane
+        text: qsTr("Nächstes Pane")
+        shortcut: Hotkeys.bindings["actNextPane"]
+        enabled: window.paneCount > 1 && !prefs.capturing
+        onTriggered: window.cyclePane(1)
+    }
+    Action {
+        id: actPrevPane
+        text: qsTr("Vorheriges Pane")
+        shortcut: Hotkeys.bindings["actPrevPane"]
+        enabled: window.paneCount > 1 && !prefs.capturing
+        onTriggered: window.cyclePane(-1)
     }
     // Befehlspalette: fokussiert das dauerhafte Such-/Befehlsfeld in der Toolbar
     // (öffnet dadurch das Befehls-Popup) und markiert den Inhalt zum Überschreiben.
@@ -1181,6 +1233,7 @@ ApplicationWindow {
                     function hk(id) { return App.shortcutText(Hotkeys.bindings[id] || "") }
                     function buildCommands() {
                         var c = [
+                            { title: qsTr("Neues Fenster"),              sub: hk("actNewInstance"), icon: "terminal-window", run: function(){ actNewInstance.trigger() } },
                             { title: qsTr("Neue Session"),               sub: hk("actNewSession"), icon: "plus",            run: function(){ window.newSession() } },
                             { title: qsTr("Neue SSH-Verbindung …"),      sub: hk("actNewSsh"), icon: "plugs",           run: function(){ sshDialog.open() } },
                             { title: qsTr("Neue serielle Verbindung …"), sub: hk("actNewSerial"), icon: "usb",             run: function(){ serialDialog.openDialog() } },
@@ -1201,6 +1254,10 @@ ApplicationWindow {
                             { title: qsTr("Einfügen"),                   sub: App.shortcutText("Ctrl+V"), icon: "clipboard",       run: function(){ if (window.activeTerminal) window.activeTerminal.paste() } },
                             { title: qsTr("Nächste Session"),            sub: hk("actNextSession"), icon: "terminal-window", run: function(){ window.cycleSession(1) } },
                             { title: qsTr("Vorige Session"),             sub: hk("actPrevSession"), icon: "terminal-window", run: function(){ window.cycleSession(-1) } },
+                            { title: qsTr("Nächstes Pane"),              sub: hk("actNextPane"), icon: "split-h",         run: function(){ window.cyclePane(1) } },
+                            { title: qsTr("Vorheriges Pane"),            sub: hk("actPrevPane"), icon: "split-h",         run: function(){ window.cyclePane(-1) } },
+                            { title: qsTr("Ligaturen umschalten"),       sub: "",             icon: "terminal-window", run: function(){ window.terminalLigatures = !window.terminalLigatures } },
+                            { title: qsTr("GPU-Rendering umschalten"),   sub: "",             icon: "terminal-window", run: function(){ window.terminalGpuRendering = !window.terminalGpuRendering } },
                             { title: qsTr("Auswahl automatisch kopieren"), sub: "",           icon: "copy",            run: function(){ window.copyOnSelect = !window.copyOnSelect } },
                             { title: qsTr("Rechtsklick fügt ein"),       sub: "",             icon: "clipboard",       run: function(){ window.rightClickPaste = !window.rightClickPaste } },
                             { title: qsTr("Vor mehrzeiligem Einfügen warnen"), sub: "",       icon: "info",            run: function(){ window.pasteWarnMultiline = !window.pasteWarnMultiline } },
@@ -1213,6 +1270,10 @@ ApplicationWindow {
                             { title: qsTr("Über QTmux"),                 sub: hk("actAbout"), icon: "info",            run: function(){ aboutDialog.open() } },
                             { title: qsTr("Beenden"),                    sub: hk("actQuit"), icon: "x",               run: function(){ window.requestQuit() } },
                         ]
+                        // Quake-Modus ist nur auf macOS aktiv (globaler Carbon-Hotkey).
+                        if (Qt.platform.os === "osx")
+                            c.push({ title: qsTr("Quake-Modus umschalten"), sub: "", icon: "terminal-window",
+                                     run: function(){ window.toggleQuake() } })
                         // Je geladenem Plugin-Backend ein Eintrag (wie im „+"-Menü).
                         var pts = Plugins.backendTypes
                         for (var k = 0; k < pts.length; ++k) {
@@ -1227,6 +1288,13 @@ ApplicationWindow {
                                      sub: window.profileSummary(profs[j]),
                                      icon: window.profileIcon(profs[j].type),
                                      run: (function(p){ return function(){ window.connectProfile(p) } })(profs[j]) })
+                            // SFTP war bisher NUR über einen Profil-Button tief in den
+                            // Einstellungen erreichbar — hier je SSH-Profil (type 1) auffindbar.
+                            if (profs[j].type === 1)
+                                c.push({ title: qsTr("SFTP: %1").arg(profs[j].name),
+                                         sub: window.profileSummary(profs[j]),
+                                         icon: "bookmark",
+                                         run: (function(p){ return function(){ window.openSftp(p) } })(profs[j]) })
                         }
                         // Sitzungsgruppen (QTMUX-46): dieselben Operationen wie das
                         // Rechtsklick-Menü der Kachel bzw. des Gruppenkopfs. Vorher waren
@@ -1402,12 +1470,17 @@ ApplicationWindow {
     menuBar: MenuBar {
         ThemedMenu {
             title: qsTr("&Datei")
+            ShortcutMenuItem { action: actNewInstance; icon.source: window.icon("terminal-window"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuSeparator {}
             ShortcutMenuItem { action: actNewSession; icon.source: window.icon("plus"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actNewSsh;     icon.source: window.icon("plugs");    icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actNewSerial;  icon.source: window.icon("usb");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actConnections; icon.source: window.icon("bookmark"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actVault;      icon.source: window.icon("key");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuSeparator {}
+            ShortcutMenuItem { action: actNextSession }
+            ShortcutMenuItem { action: actPrevSession }
             MenuSeparator { visible: window.hasShellChoice }
             // Globale Standard-Shell (nur Windows, wo es mehrere gibt). Setzt dieselbe
             // Property wie die Schnellwahl im „+"-Menü → beide bleiben synchron.
@@ -1485,6 +1558,8 @@ ApplicationWindow {
                 icon.source: window.icon("split-v"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
             }
             ShortcutMenuItem { action: actClosePane; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actNextPane; enabled: window.paneCount > 1 }
+            ShortcutMenuItem { action: actPrevPane; enabled: window.paneCount > 1 }
             MenuSeparator {}
             ShortcutMenuItem { action: actZoomIn }
             ShortcutMenuItem { action: actZoomOut }
@@ -1699,6 +1774,7 @@ ApplicationWindow {
                             onTapped: {
                                 sessionMenu.row = tile.index
                                 sessionMenu.currentGroup = tile.group
+                                sessionMenu.isController = tile.mcpController
                                 sessionMenu.groupList = sessions.groups()
                                 sessionMenu.popup()
                             }
@@ -2580,12 +2656,41 @@ ApplicationWindow {
         }
     }
 
+    // Toast-Overlay (window.notifyToast): kurzer Hinweis unten mittig, blendet sich weg.
+    Rectangle {
+        id: toast
+        property string text: ""
+        function restart() { opacity = 1; hideTimer.restart() }
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 24
+        z: 1000
+        visible: opacity > 0
+        opacity: 0
+        width: toastText.implicitWidth + 28
+        height: toastText.implicitHeight + 18
+        radius: 8
+        color: Theme.bgElevated
+        border.color: Theme.border
+        border.width: 1
+        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Text {
+            id: toastText
+            anchors.centerIn: parent
+            text: toast.text
+            color: Theme.textBright
+            font.pixelSize: 12
+        }
+        Timer { id: hideTimer; interval: 2600; onTriggered: toast.opacity = 0 }
+    }
+
     // --- Gruppen-Kontextmenüs (QTMUX-42) ------------------------------------
     // Rechtsklick auf eine Kachel: Gruppe zuordnen, wechseln oder verlassen.
     ThemedMenu {
         id: sessionMenu
         property int row: -1
         property string currentGroup: ""
+        property bool isController: false
 
         MenuItem {
             enabled: false
@@ -2604,11 +2709,29 @@ ApplicationWindow {
         Repeater {
             model: sessionMenu.groupList
             delegate: AppMenuItem {
+                id: groupItem
                 required property string modelData
                 text: modelData
                 checkable: true
-                checked: modelData === sessionMenu.currentGroup
-                onTriggered: sessions.setSessionGroup(sessionMenu.row, modelData)
+                // Klick auf die BEREITS angehakte Gruppe = daraus entfernen (""); jede andere
+                // = dorthin verschieben. Vergleich über currentGroup (Modellwahrheit beim
+                // Öffnen), NICHT über den getoggelten `checked`-Zustand — der wechselt beim
+                // Klick und wäre hier schon invertiert. Ohne diese Fallunterscheidung rief das
+                // Abwählen setSessionGroup(row, gleicheGruppe) → No-op (früher Return im Model),
+                // der Haken verschwand, aber Farbmarke/Einrückung blieben stehen.
+                onTriggered: sessions.setSessionGroup(sessionMenu.row,
+                                 groupItem.modelData === sessionMenu.currentGroup ? "" : groupItem.modelData)
+                // Haken BINDUNGSSICHER: ein Klick setzt `checked` imperativ und zerstört eine
+                // gewöhnliche `checked:`-Bindung; zudem recycelt der Repeater Delegates gleicher
+                // Länge (statt sie neu zu bauen), sodass der Haken sonst auf dem zuletzt
+                // getoggelten Stand einfror (Gruppe angehakt selbst bei ungruppierten Shells).
+                // Das Binding-Element erzwingt den Wert erneut — inklusive `sessionMenu.opened`,
+                // damit es bei JEDEM Öffnen neu greift, auch wenn currentGroup unverändert bleibt.
+                Binding {
+                    target: groupItem
+                    property: "checked"
+                    value: sessionMenu.opened && groupItem.modelData === sessionMenu.currentGroup
+                }
             }
         }
         AppMenuItem {
@@ -2624,6 +2747,17 @@ ApplicationWindow {
             enabled: sessionMenu.currentGroup.length > 0
             icon.source: window.icon("x")
             onTriggered: sessions.setSessionGroup(sessionMenu.row, "")
+        }
+        // Roter MCP-Controller-Tab lässt sich sonst vom Menschen nicht zurücksetzen
+        // (attach_controller ist MCP-only) — bleibt ein steuernder Agent ohne Abmeldung
+        // weg, hängt der Tab. Nur sichtbar, wenn diese Kachel gerade Controller ist.
+        MenuSeparator { visible: sessionMenu.isController }
+        AppMenuItem {
+            text: qsTr("Controller-Markierung entfernen")
+            visible: sessionMenu.isController
+            height: visible ? implicitHeight : 0
+            icon.source: window.icon("robot")
+            onTriggered: sessions.clearMcpController(sessionMenu.row)
         }
     }
 

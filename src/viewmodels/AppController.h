@@ -53,6 +53,13 @@ public:
     /// Plattformübliche Standard-Monospace-Familie (Default der Terminal-Schrift).
     Q_INVOKABLE QString defaultMonospaceFont() const;
 
+    /// Startet eine WEITERE, unabhängige QTmux-Instanz als eigener Prozess: eigenes
+    /// Instanz-Profil (getrennte QSettings-Domain — eigene Session-Liste/Profile/Vault)
+    /// und ein freier MCP-Port, damit sich mehrere Instanzen nicht überlagern. Das ist
+    /// dasselbe wie eine Testinstanz (QTMUX_PROFILE/QTMUX_MCP_PORT), nur per Klick.
+    /// Liefert den gewählten Port zurück (> 0) oder -1 bei Fehlschlag.
+    Q_INVOKABLE int openNewInstance() const;
+
 signals:
     void languageChanged(const QString &lang);
     void reduceMotionChanged();
