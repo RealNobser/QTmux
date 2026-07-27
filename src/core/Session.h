@@ -36,6 +36,9 @@ class Session : public QObject {
     // Frei wählbarer Gruppenname (QTMUX-42): fasst in der Sidebar die Sessions
     // zusammen, die gemeinsam an einer Sache arbeiten. Leer = ohne Gruppe.
     Q_PROPERTY(QString group READ group NOTIFY groupChanged)
+    // Window-Zugehörigkeit (QTMUX-83, B1): jede Session ist ein Pane genau eines Windows.
+    // -1 = (noch) keinem Window zugeordnet. Adressierung bleibt über die stabile id().
+    Q_PROPERTY(int windowId READ windowId WRITE setWindowId NOTIFY windowIdChanged)
 public:
     enum class Type { Shell, Ssh, Serial, App };
     Q_ENUM(Type)
@@ -88,6 +91,8 @@ public:
     /// blockweise sortiert und persistiert die Zuordnung.
     QString group() const { return m_group; }
     void setGroup(const QString &g);
+    int windowId() const { return m_windowId; }
+    void setWindowId(int w) { if (w == m_windowId) return; m_windowId = w; emit windowIdChanged(); }
 
     /// Beendet den zugrundeliegenden Prozess/die Verbindung (für sauberes App-Quit).
     void shutdown();
@@ -157,6 +162,7 @@ signals:
     void progressChanged();
     void workingDirectoryChanged();
     void groupChanged();
+    void windowIdChanged();
     void bell();
 
 private:
@@ -180,6 +186,7 @@ private:
     QString m_workingDir;      // gecachtes Arbeitsverzeichnis (nur Shell)
     QString m_agentId;
     QString m_group;           // Sidebar-Gruppe (QTMUX-42), leer = ohne Gruppe
+    int m_windowId = -1;       // Window-Zugehörigkeit (QTMUX-83, B1), -1 = keins
     QString m_inputLine;       // Puffer der aktuell getippten Zeile
     QString m_loginScript;     // Auto-Befehle nach Verbindungsaufbau (QTMUX-23)
     bool m_loginScriptPending = false;  // Login-Script noch zu senden?

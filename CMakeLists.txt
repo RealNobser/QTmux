@@ -146,6 +146,10 @@ qt_add_qml_module(qtmux
         src/terminal/GlyphAtlas.cpp
         src/viewmodels/SessionModel.h
         src/viewmodels/SessionModel.cpp
+        src/viewmodels/Window.h
+        src/viewmodels/Window.cpp
+        src/viewmodels/WindowModel.h
+        src/viewmodels/WindowModel.cpp
         src/viewmodels/SftpClient.h
         src/viewmodels/SftpClient.cpp
         src/viewmodels/Theme.h

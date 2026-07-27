@@ -61,6 +61,17 @@ add_test(NAME test_plugins COMMAND test_plugins)
 set_tests_properties(test_plugins PROPERTIES
     ENVIRONMENT "QTMUX_PLUGIN_DIR=${CMAKE_BINARY_DIR}/plugins")
 
+# Per-Window-Layouts (QTMUX-83, Modul A): Window/WindowModel liegen wie SessionModel
+# im QML-Modul → die .cpp direkt mitkompilieren (Qt6::Qml wegen QML_ELEMENT). Reine
+# Datenschicht ohne Prozesse, deshalb in der Logik-Kategorie.
+qt_add_executable(test_windowmodel tst_windowmodel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/Window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/WindowModel.cpp)
+target_include_directories(test_windowmodel PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels)
+target_link_libraries(test_windowmodel PRIVATE qtmux_core Qt6::Test Qt6::Qml)
+add_test(NAME test_windowmodel COMMAND test_windowmodel)
+
 # --- PTY-/ConPTY-E2E-Tests (starten echte Shells) ---------------------------
 qt_add_executable(test_pty tst_pty.cpp)
 target_link_libraries(test_pty PRIVATE qtmux_core Qt6::Test)
