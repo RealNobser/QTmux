@@ -571,6 +571,12 @@ QJsonObject McpServer::toolsList() const {
                       "es bisher nur per Maus gab.",
                       QJsonObject{{"paneId", intProp("Pane-ID aus get_layout")}},
                       QJsonArray{"paneId"}));
+    tools.append(tool("zoom_pane",
+                      "Maximiert ein Pane temporaer ('zoomt') bzw. hebt den Zoom auf, ohne "
+                      "das Layout zu veraendern. Mit paneId das genannte Pane; ohne/-1 wird "
+                      "der Zoom aufgehoben.",
+                      QJsonObject{{"paneId", intProp("Pane-ID aus get_layout (fehlend/-1 = Zoom aus)")}},
+                      {}));
     tools.append(tool("assign_session",
                       "Lädt eine Session in ein Pane (macht es aktiv). Ohne paneId ins "
                       "aktive Pane (wie ein Sidebar-Klick).",
@@ -1021,6 +1027,12 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             return {};
         }
         bridgedCall([this, paneId] { emit focusPaneRequested(paneId); }, isError, text);
+        return {};
+    }
+    if (name == "zoom_pane") {
+        // paneId >= 0: dieses Pane maximieren; fehlend/-1: Zoom aufheben.
+        const int paneId = args.value("paneId").toInt(-1);
+        bridgedCall([this, paneId] { emit zoomPaneRequested(paneId); }, isError, text);
         return {};
     }
     if (name == "assign_session") {

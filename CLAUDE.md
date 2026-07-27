@@ -58,7 +58,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
-| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (29 Tools); Doku `docs/MCP.md` |
+| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (30 Tools); Doku `docs/MCP.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
@@ -285,6 +285,18 @@ Build + 14/14 Tests grün, Cache zeigt auf VS 2022. Damit ist der frühere Fix
 solange nur VS 2022 installiert war. Drei cmd-Fallen dabei erlebt und im
 Windows-Build-Abschnitt notiert (CRLF-Pflicht, ASCII, Klammern aus
 `%ProgramFiles(x86)%`). ⚠ Jira-Issue dual noch anzulegen (keine Credentials hier).
+
+**QTMUX-59 (2026-07-27) — Pane-Zoom.** Das aktive Pane maximieren. 🔑 **Wichtige Lektion:** der
+erste Ansatz baute den Layout-Baum neu (`effectiveLayout` → nur das Zoom-Blatt rendern) — das
+**zerstörte die SplitView-Proportionen UND verursachte Fokus-Churn** (beim Aufheben grabschte das
+zuletzt erzeugte Pane den Fokus, teils verzögert; kein Timer-/Guard-Hack half zuverlässig). Richtig
+ist **KEIN Rebuild:** der Baum bleibt stehen, `SplitNode` blendet beim Zoom nur die Zweige aus,
+deren Teilbaum die Zoom-Pane nicht enthält (`visible:false` → SplitView schließt sie aus, der
+sichtbare Zweig füllt; `window.subtreeHasPane(node,id)` entscheidet). Dadurch bleiben TerminalItems,
+Fokus und Proportionen unangetastet; Aufheben stellt exakt das alte Layout her. `window.zoomedPane`
++ `toggleZoom()`/`zoomPaneById(id)`; `rebuildLayout`-Guard hebt den Zoom auf, wenn das Pane
+verschwindet. Aktion **`actZoomPane`** (⌘/Strg+Shift+Z) + Ansicht-Menü + Palette + MCP-Tool
+**`zoom_pane`** → **30 Tools**. Rein visuell → Anwender-abgenommen.
 
 **QTMUX-71 (2026-07-27) — Scrollback-Suche (Find-Bar, ⌘/Strg+F).** Jede andere Terminal-App
 hat sie, QTmux bisher nicht. Gui-freier Matcher **`TerminalSearch::find(lines, needle,
@@ -806,7 +818,7 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (29 Tools)
+### MCP-Server (30 Tools)
 `src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC auf `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
 - **Controller-Auto-Erkennung** beim `initialize`: TCP-Port → PID → **Prozess-Vorfahren-

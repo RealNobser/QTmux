@@ -159,6 +159,10 @@ ApplicationWindow {
             window.focusActivePane()
             mcp.provideResult(true, "ok")
         }
+        onZoomPaneRequested: (paneId) => {
+            if (window.zoomPaneById(paneId)) mcp.provideResult(true, "ok")
+            else mcp.provideResult(false, qsTr("Unbekannte paneId."))
+        }
         onAssignPaneRequested: (row, paneId) => {
             if (paneId >= 0) {
                 if (!window.findLeaf(paneId)) { mcp.provideResult(false, qsTr("Unbekannte paneId.")); return }
@@ -514,6 +518,7 @@ ApplicationWindow {
         case "actClosePane":      return qsTr("Pane schließen")
         case "actNextPane":       return qsTr("Nächstes Pane")
         case "actPrevPane":       return qsTr("Vorheriges Pane")
+        case "actZoomPane":       return qsTr("Pane zoomen")
         case "actNextSession":    return qsTr("Nächste Session")
         case "actPrevSession":    return qsTr("Vorige Session")
         case "actSplitH":         return qsTr("Nebeneinander teilen")
@@ -641,10 +646,38 @@ ApplicationWindow {
 
     // Baum neu aufbauen (nach Strukturänderung) + Blattzahl/Fokus aktualisieren.
     function rebuildLayout() {
+        // Pane-Zoom (QTMUX-59): zeigt ein Zoom-Pane das nicht mehr existiert, Zoom aufheben.
+        if (window.zoomedPane >= 0 && !findLeaf(window.zoomedPane)) window.zoomedPane = -1
         window.paneCount = leafCount()
         paneTreeLoader.sourceComponent = null
         paneTreeLoader.sourceComponent = paneTreeComp
         focusActivePane()
+    }
+
+    // Pane-Zoom (QTMUX-59): das aktive Pane maximieren, OHNE den Layout-Baum neu zu bauen.
+    // `zoomedPane` hält die gezoomte paneId; SplitNode blendet die Zweige, deren Teilbaum
+    // die Zoom-Pane NICHT enthält, per visible:false aus (SplitView schließt sie aus, der
+    // sichtbare Zweig füllt). Kein Rebuild → Fokus, SplitView-Proportionen und die
+    // TerminalItems bleiben unangetastet; beim Aufheben kehrt exakt das alte Layout zurück.
+    property int zoomedPane: -1
+    function subtreeHasPane(node, id) {
+        if (!node) return false
+        if (node.children === undefined) return node.paneId === id       // Blatt
+        for (var i = 0; i < node.children.length; ++i)
+            if (subtreeHasPane(node.children[i], id)) return true
+        return false
+    }
+    function toggleZoom() {
+        if (window.zoomedPane >= 0) { window.zoomedPane = -1; return }
+        if (leafCount() <= 1) return                       // nichts zu zoomen
+        if (window.activePaneId < 0 || !findLeaf(window.activePaneId)) return
+        window.zoomedPane = window.activePaneId
+    }
+    function zoomPaneById(id) {                              // für MCP zoom_pane
+        if (id < 0) { window.zoomedPane = -1; return true }
+        if (!findLeaf(id)) return false
+        window.zoomedPane = id
+        return true
     }
 
     // Aktives Pane setzen (per paneId) und currentRow nachziehen.
@@ -1021,6 +1054,13 @@ ApplicationWindow {
         enabled: window.paneCount > 1 && !prefs.capturing
         onTriggered: window.cyclePane(-1)
     }
+    Action {
+        id: actZoomPane
+        text: window.zoomedPane >= 0 ? qsTr("Pane-Zoom aufheben") : qsTr("Pane zoomen")
+        shortcut: Hotkeys.bindings["actZoomPane"]
+        enabled: (window.paneCount > 1 || window.zoomedPane >= 0) && !prefs.capturing
+        onTriggered: window.toggleZoom()
+    }
     // Befehlspalette: fokussiert das dauerhafte Such-/Befehlsfeld in der Toolbar
     // (öffnet dadurch das Befehls-Popup) und markiert den Inhalt zum Überschreiben.
     Action {
@@ -1312,6 +1352,7 @@ ApplicationWindow {
                             { title: qsTr("Vorige Session"),             sub: hk("actPrevSession"), icon: "terminal-window", run: function(){ window.cycleSession(-1) } },
                             { title: qsTr("Nächstes Pane"),              sub: hk("actNextPane"), icon: "split-h",         run: function(){ window.cyclePane(1) } },
                             { title: qsTr("Vorheriges Pane"),            sub: hk("actPrevPane"), icon: "split-h",         run: function(){ window.cyclePane(-1) } },
+                            { title: window.zoomedPane >= 0 ? qsTr("Pane-Zoom aufheben") : qsTr("Pane zoomen"), sub: hk("actZoomPane"), icon: "eye", run: function(){ window.toggleZoom() } },
                             { title: qsTr("Ligaturen umschalten"),       sub: "",             icon: "terminal-window", run: function(){ window.terminalLigatures = !window.terminalLigatures } },
                             { title: qsTr("GPU-Rendering umschalten"),   sub: "",             icon: "terminal-window", run: function(){ window.terminalGpuRendering = !window.terminalGpuRendering } },
                             { title: qsTr("Auswahl automatisch kopieren"), sub: "",           icon: "copy",            run: function(){ window.copyOnSelect = !window.copyOnSelect } },
@@ -1624,6 +1665,7 @@ ApplicationWindow {
             ShortcutMenuItem { action: actClosePane; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actNextPane; enabled: window.paneCount > 1 }
             ShortcutMenuItem { action: actPrevPane; enabled: window.paneCount > 1 }
+            ShortcutMenuItem { action: actZoomPane; icon.source: window.icon("eye"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
             ShortcutMenuItem { action: actZoomIn }
             ShortcutMenuItem { action: actZoomOut }

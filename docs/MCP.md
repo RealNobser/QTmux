@@ -57,6 +57,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `split_pane` | `orientation` ("h"/"v") | Aktives Pane teilen (neue Shell-Session im neuen Pane, wird aktiv) → neue **Session-id** |
 | `close_pane` | `paneId?` | Pane **mitsamt Session** schließen (GUI-Semantik); ohne `paneId` das aktive Pane |
 | `focus_pane` | `paneId` | Bestehendes Pane **aktiv** setzen (reiner Fokuswechsel, ohne die Session zu ändern) |
+| `zoom_pane` | `paneId?` | Pane maximieren („zoomen"); ohne/`-1` = Zoom aufheben |
 | `assign_session` | `id`, `paneId?` | Session in ein Pane laden (ohne `paneId` ins aktive — wie ein Sidebar-Klick) |
 | `list_profiles` | – | Gespeicherte Verbindungsprofile; **ohne Geheimniswerte** (nur `hasPasswordSecret`/`hasLoginScript`-Flags) |
 | `connect_profile` | `name` | Profil verbinden — ein Vault-Passwort wird **intern** aufgelöst (nie über MCP ausgegeben) → neue **Session-id** |

@@ -51,6 +51,12 @@ Item {
                     SplitView.fillHeight: true
                     SplitView.minimumWidth: 140
                     SplitView.minimumHeight: 90
+                    // Pane-Zoom (QTMUX-59, ohne Rebuild): ist ein Pane gezoomt, nur den Zweig
+                    // zeigen, dessen Teilbaum es enthält — SplitView schließt unsichtbare
+                    // Kinder aus, sodass der sichtbare Zweig den Platz füllt. Ohne Zoom alle
+                    // sichtbar; das Wiederanzeigen stellt die vorherigen Größen wieder her.
+                    visible: root.win.zoomedPane < 0
+                             || root.win.subtreeHasPane(root.node.children[index], root.win.zoomedPane)
                     Component.onCompleted: setSource(Qt.resolvedUrl("SplitNode.qml"),
                                                      { node: root.node.children[index], win: root.win })
                 }

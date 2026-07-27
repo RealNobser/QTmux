@@ -71,6 +71,8 @@ signals:
     void closePaneRequested(int paneId);
     /// Ein bestehendes Pane fokussieren/aktiv setzen (nur Fokuswechsel, kein Laden).
     void focusPaneRequested(int paneId);
+    /// Pane maximieren/„zoomen" (paneId >= 0) bzw. Zoom aufheben (paneId < 0).
+    void zoomPaneRequested(int paneId);
     /// Session (Sidebar-Zeile `row`) in ein Pane laden (paneId < 0 = aktives Pane).
     void assignPaneRequested(int row, int paneId);
     /// Verbindungsprofil per Name verbinden (Vault-Auflösung passiert im QML-Weg).

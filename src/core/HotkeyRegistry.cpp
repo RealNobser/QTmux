@@ -20,6 +20,7 @@ HotkeyRegistry::HotkeyRegistry(QObject *parent) : QObject(parent) {
         {QStringLiteral("actClosePane"),      QStringLiteral("Ctrl+Shift+W")},
         {QStringLiteral("actNextPane"),       QStringLiteral("Ctrl+Shift+Right")},
         {QStringLiteral("actPrevPane"),       QStringLiteral("Ctrl+Shift+Left")},
+        {QStringLiteral("actZoomPane"),       QStringLiteral("Ctrl+Shift+Z")},
         // Session-Navigation: auf macOS heißt Qt-"Ctrl" Cmd, und Cmd+Tab gehört dem
         // System-App-Switcher (die App sieht die Taste nie). "Meta+Tab" = PHYSISCHES
         // Ctrl+Tab — die plattformübliche Belegung (Terminal.app/iTerm-Stil).
