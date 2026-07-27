@@ -739,6 +739,19 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
             }
         }
 
+        // Scrollback-Suchtreffer (QTMUX-71): alle Treffer halbtransparent amber (Text bleibt
+        // lesbar), der aktuelle kräftiger. In Viewport-Zeilen umgerechnet wie die Selektion.
+        if (m_searchActive && !m_matches.isEmpty()) {
+            const int base = sc->scrollbackCount() - m_scrollOffset;
+            for (int i = 0; i < m_matches.size(); ++i) {
+                const int vr = m_matches[i].line - base;
+                if (vr < 0 || vr >= m_rows) continue;
+                const QColor hl(0xf5, 0xc4, 0x51, i == m_currentMatch ? 0xcc : 0x60);
+                pushColoredQuad(ovVerts, m_matches[i].col * m_cellW, vr * m_cellH,
+                                m_matches[i].length * m_cellW, m_cellH, hl);
+            }
+        }
+
         const int sb = sc->scrollbackCount();
         if (sb > 0 && m_rows > 0) {
             const qreal total = sb + m_rows;
@@ -899,6 +912,82 @@ bool TerminalItem::openLinkAt(const QPointF &pos) {
         return true;   // Treffer verbraucht den Klick, auch wenn das Schema abgelehnt wurde
     }
     return false;
+}
+
+// --- Scrollback-Suche (QTMUX-71) -----------------------------------------------------
+void TerminalItem::recomputeMatches() {
+    m_matches.clear();
+    VtScreen *sc = screen();
+    if (!sc || m_searchQuery.isEmpty()) return;
+    // Gesamten Inhalt (Scrollback + sichtbar) zu Zeilen zusammensetzen; Zeilenindex =
+    // absolute Inhalts-Zeile. absLineText baut 1 Zeichen/Spalte (Spalten↔Zeichen 1:1,
+    // solange keine Emoji davor — dieselbe Konvention wie die Link-Erkennung).
+    const int total = sc->scrollbackCount() + m_rows;
+    QStringList lines;
+    lines.reserve(total);
+    for (int r = 0; r < total; ++r) lines << absLineText(r);
+    m_matches = TerminalSearch::find(lines, m_searchQuery, /*caseSensitive=*/false);
+}
+
+void TerminalItem::scrollToMatch(int idx) {
+    if (idx < 0 || idx >= m_matches.size()) return;
+    VtScreen *sc = screen();
+    if (!sc) return;
+    // m_scrollOffset so wählen, dass der Treffer etwa in Zeilenmitte sichtbar wird.
+    const int off = std::clamp(sc->scrollbackCount() - m_matches[idx].line + m_rows / 2,
+                               0, maxScrollOffset());
+    if (off != m_scrollOffset) { m_scrollOffset = off; m_geomDirty = true; }
+}
+
+void TerminalItem::beginSearch() {
+    if (m_searchActive) return;
+    m_searchActive = true;
+    emit searchChanged();
+    update();
+}
+
+void TerminalItem::updateSearch(const QString &query) {
+    m_searchActive = true;
+    m_searchQuery = query;
+    recomputeMatches();
+    m_currentMatch = -1;
+    if (!m_matches.isEmpty()) {
+        VtScreen *sc = screen();
+        const int topAbs = sc ? sc->scrollbackCount() - m_scrollOffset : 0;
+        int pick = 0;                                   // ersten Treffer ab dem Sichtbereich
+        for (int i = 0; i < m_matches.size(); ++i)
+            if (m_matches[i].line >= topAbs) { pick = i; break; }
+        m_currentMatch = pick;
+        scrollToMatch(pick);
+    }
+    emit searchChanged();
+    update();
+}
+
+void TerminalItem::searchNext() {
+    if (m_matches.isEmpty()) return;
+    m_currentMatch = (m_currentMatch + 1) % m_matches.size();
+    scrollToMatch(m_currentMatch);
+    emit searchChanged();
+    update();
+}
+
+void TerminalItem::searchPrev() {
+    if (m_matches.isEmpty()) return;
+    m_currentMatch = (m_currentMatch - 1 + m_matches.size()) % m_matches.size();
+    scrollToMatch(m_currentMatch);
+    emit searchChanged();
+    update();
+}
+
+void TerminalItem::endSearch() {
+    if (!m_searchActive && m_matches.isEmpty()) return;
+    m_searchActive = false;
+    m_matches.clear();
+    m_searchQuery.clear();
+    m_currentMatch = -1;
+    emit searchChanged();
+    update();
 }
 
 void TerminalItem::clearSelection() {

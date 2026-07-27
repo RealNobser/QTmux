@@ -48,7 +48,7 @@ CatPage {
         { title: qsTr("Sitzungen"),     ids: ["actNewSession", "actNewInstance", "actCloseSession", "actNextSession", "actPrevSession"] },
         { title: qsTr("Panes"),         ids: ["actClosePane", "actNextPane", "actPrevPane", "actSplitH", "actSplitV", "actBroadcast"] },
         { title: qsTr("Verbindungen"),  ids: ["actNewSsh", "actNewSerial", "actConnections", "actVault"] },
-        { title: qsTr("Ansicht & App"), ids: ["actCommandPalette", "actMcpToggle", "actZoomReset", "actToggleTheme", "actSettings", "actAbout", "actQuit"] }
+        { title: qsTr("Ansicht & App"), ids: ["actCommandPalette", "actFind", "actMcpToggle", "actZoomReset", "actToggleTheme", "actSettings", "actAbout", "actQuit"] }
     ]
     readonly property var groups: {
         const all = Hotkeys.actionIds()

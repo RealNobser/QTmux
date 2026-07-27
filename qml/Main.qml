@@ -519,6 +519,7 @@ ApplicationWindow {
         case "actSplitH":         return qsTr("Nebeneinander teilen")
         case "actSplitV":         return qsTr("Untereinander teilen")
         case "actCommandPalette": return qsTr("Befehlspalette")
+        case "actFind":           return qsTr("Suchen (Scrollback)")
         case "actBroadcast":      return qsTr("Eingabe an alle Sessions")
         case "actNewSsh":         return qsTr("Neue SSH-Verbindung")
         case "actNewSerial":      return qsTr("Neue serielle Verbindung")
@@ -975,6 +976,15 @@ ApplicationWindow {
         shortcut: Qt.platform.os === "osx" ? StandardKey.Paste : ""
         onTriggered: if (window.activeTerminal) window.activeTerminal.paste()
     }
+    // Scrollback-Suche im aktiven Terminal öffnen (QTMUX-71). Die Find-Bar sitzt im Pane
+    // (SplitNode.qml) und fokussiert sich selbst, sobald searchActive wird.
+    Action {
+        id: actFind
+        text: qsTr("Suchen …")
+        shortcut: Hotkeys.bindings["actFind"]
+        enabled: window.activeTerminal && !prefs.capturing
+        onTriggered: if (window.activeTerminal) window.activeTerminal.beginSearch()
+    }
     // Split-Panes: nebeneinander / untereinander teilen, aktives Pane schließen.
     Action {
         id: actSplitH
@@ -1297,6 +1307,7 @@ ApplicationWindow {
                             { title: qsTr("MCP-Server umschalten"),      sub: hk("actMcpToggle"), icon: "broadcast",       run: function(){ mcp.listening ? mcp.stop() : mcp.start() } },
                             { title: qsTr("Kopieren"),                   sub: App.shortcutText("Ctrl+C"), icon: "copy",            run: function(){ if (window.activeTerminal) window.activeTerminal.copy() } },
                             { title: qsTr("Einfügen"),                   sub: App.shortcutText("Ctrl+V"), icon: "clipboard",       run: function(){ if (window.activeTerminal) window.activeTerminal.paste() } },
+                            { title: qsTr("Suchen (Scrollback)"),        sub: hk("actFind"), icon: "eye",             run: function(){ if (window.activeTerminal) window.activeTerminal.beginSearch() } },
                             { title: qsTr("Nächste Session"),            sub: hk("actNextSession"), icon: "terminal-window", run: function(){ window.cycleSession(1) } },
                             { title: qsTr("Vorige Session"),             sub: hk("actPrevSession"), icon: "terminal-window", run: function(){ window.cycleSession(-1) } },
                             { title: qsTr("Nächstes Pane"),              sub: hk("actNextPane"), icon: "split-h",         run: function(){ window.cyclePane(1) } },
@@ -1573,6 +1584,8 @@ ApplicationWindow {
                                shortcutOverride: Qt.platform.os === "osx" ? "" : "Ctrl+C" }
             ShortcutMenuItem { action: actPaste; icon.source: window.icon("clipboard"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                                shortcutOverride: Qt.platform.os === "osx" ? "" : "Ctrl+V" }
+            MenuSeparator {}
+            ShortcutMenuItem { action: actFind; icon.source: window.icon("eye"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
             ShortcutMenuItem {
                 text: qsTr("Auswahl automatisch kopieren")

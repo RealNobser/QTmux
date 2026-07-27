@@ -11,6 +11,10 @@ qt_add_executable(test_keyencoding tst_keyencoding.cpp)
 target_link_libraries(test_keyencoding PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_keyencoding COMMAND test_keyencoding)
 
+qt_add_executable(test_terminalsearch tst_terminalsearch.cpp)
+target_link_libraries(test_terminalsearch PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_terminalsearch COMMAND test_terminalsearch)
+
 qt_add_executable(test_agent tst_agent.cpp)
 target_link_libraries(test_agent PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_agent COMMAND test_agent)

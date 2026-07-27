@@ -30,6 +30,13 @@ HotkeyRegistry::HotkeyRegistry(QObject *parent) : QObject(parent) {
         {QStringLiteral("actNextSession"),    QStringLiteral("Ctrl+Tab")},
         {QStringLiteral("actPrevSession"),    QStringLiteral("Ctrl+Shift+Tab")},
 #endif
+        // Scrollback-Suche (QTMUX-71): macOS Cmd+F (Qt-"Ctrl"=Cmd); sonst Ctrl+Shift+F,
+        // damit die Shell/TUI ihr eigenes Ctrl+F (vorwärts / Seite runter) behält.
+#if defined(Q_OS_MACOS)
+        {QStringLiteral("actFind"),           QStringLiteral("Ctrl+F")},
+#else
+        {QStringLiteral("actFind"),           QStringLiteral("Ctrl+Shift+F")},
+#endif
         {QStringLiteral("actSplitH"),         QStringLiteral("Ctrl+Shift+E")},
         {QStringLiteral("actSplitV"),         QStringLiteral("Ctrl+Shift+O")},
         {QStringLiteral("actCommandPalette"), QStringLiteral("Ctrl+K")},

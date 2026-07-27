@@ -55,6 +55,8 @@ add_library(qtmux_core STATIC
     src/core/LinkDetector.cpp
     src/core/KeyEncoding.h
     src/core/KeyEncoding.cpp
+    src/core/TerminalSearch.h
+    src/core/TerminalSearch.cpp
     src/core/ColorScheme.h
     src/core/ColorScheme.cpp
     src/core/ConnectionProfile.h

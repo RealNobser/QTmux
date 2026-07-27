@@ -286,6 +286,18 @@ solange nur VS 2022 installiert war. Drei cmd-Fallen dabei erlebt und im
 Windows-Build-Abschnitt notiert (CRLF-Pflicht, ASCII, Klammern aus
 `%ProgramFiles(x86)%`). ⚠ Jira-Issue dual noch anzulegen (keine Credentials hier).
 
+**QTMUX-71 (2026-07-27) — Scrollback-Suche (Find-Bar, ⌘/Strg+F).** Jede andere Terminal-App
+hat sie, QTmux bisher nicht. Gui-freier Matcher **`TerminalSearch::find(lines, needle,
+caseSensitive)`** in `qtmux_core` (Test `test_terminalsearch`, wie `LinkDetector`). `TerminalItem`
+setzt den gesamten Inhalt (Scrollback + sichtbar) über `absLineText` zu Zeilen zusammen, hebt
+Treffer als **halbtransparente amber Overlay-Quads** hervor (aktueller Treffer kräftiger) und
+**scrollt den aktuellen Treffer in die Mitte** (`scrollToMatch` über `m_scrollOffset`). Q_PROPERTYs
+`searchActive`/`matchCount`/`currentMatch` + `beginSearch`/`updateSearch`/`searchNext`/`searchPrev`/
+`endSearch`. QML-**Find-Bar** je Pane (`SplitNode.qml`, oben rechts): Feld fokussiert sich beim
+Öffnen, Enter=weiter, Shift+Enter=zurück, Esc schließt, „n/m"-Anzeige. Shortcut **`actFind`**
+(macOS Cmd+F; sonst Ctrl+Shift+F, damit Shells ihr Ctrl+F behalten) + Bearbeiten-Menü + Palette.
+Rein visuell → Anwender-Abnahme; Matcher-Logik unit-getestet.
+
 **QTMUX-78 (2026-07-27) — Sidebar-Ring zeigt echte Zustände (idle/busy/waiting/error).**
 Anwenderbefund: der Punkt war faktisch **immer grün** (Default `Running`; `Idle`/`Waiting`
 wurden nirgends gesetzt; Agenten-TUIs senden kein OSC 133). Zweiteilig behoben: (1) **Shells

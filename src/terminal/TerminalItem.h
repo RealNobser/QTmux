@@ -7,6 +7,7 @@
 #include <QPointer>
 #include "GlyphAtlas.h"
 #include "LinkDetector.h"
+#include "TerminalSearch.h"
 
 QT_BEGIN_NAMESPACE
 class QWheelEvent;
@@ -48,6 +49,11 @@ class TerminalItem : public QQuickItem {
     // Ziel des Links unter der Maus (leer = keiner). Treibt den QML-Tooltip „⌘-Klick zum
     // Öffnen"; die Erkennung läuft beim einfachen Drüberfahren, das Öffnen bleibt Cmd/Ctrl.
     Q_PROPERTY(QString hoverLinkTarget READ hoverLinkTarget NOTIFY hoverLinkChanged)
+    // Scrollback-Suche (QTMUX-71): Find-Bar aktiv? Trefferzahl? aktueller Treffer (1-basiert,
+    // 0 = keiner) — treiben die QML-Find-Bar (Anzeige „3/12", Weiter/Zurück-Aktivierung).
+    Q_PROPERTY(bool searchActive READ searchActive NOTIFY searchChanged)
+    Q_PROPERTY(int matchCount READ matchCount NOTIFY searchChanged)
+    Q_PROPERTY(int currentMatch READ currentMatch NOTIFY searchChanged)
 public:
     explicit TerminalItem(QQuickItem *parent = nullptr);
     ~TerminalItem() override;
@@ -104,6 +110,20 @@ public:
     /// Ob aktuell etwas selektiert ist (für Menü-Aktivierung).
     Q_INVOKABLE bool hasSelection() const { return m_hasSelection; }
 
+    // --- Scrollback-Suche (QTMUX-71) -------------------------------------------------
+    bool searchActive() const { return m_searchActive; }
+    int matchCount() const { return static_cast<int>(m_matches.size()); }
+    int currentMatch() const { return m_currentMatch < 0 ? 0 : m_currentMatch + 1; }  // 1-basiert
+    /// Find-Bar öffnen (⌘/Strg+F). Ohne Query zunächst nur sichtbar schalten.
+    Q_INVOKABLE void beginSearch();
+    /// Suchbegriff setzen/ändern → Treffer neu berechnen und zum ersten sinnvollen springen.
+    Q_INVOKABLE void updateSearch(const QString &query);
+    /// Zum nächsten/vorigen Treffer (mit Umlauf), scrollt ihn in den sichtbaren Bereich.
+    Q_INVOKABLE void searchNext();
+    Q_INVOKABLE void searchPrev();
+    /// Find-Bar schließen und Trefferhervorhebung löschen.
+    Q_INVOKABLE void endSearch();
+
 signals:
     void sessionChanged();
     void fontChanged();
@@ -124,6 +144,8 @@ signals:
     void multilinePasteWarning(int lineCount);
     /// Link unter der Maus hat gewechselt (Ziel geändert) — QML aktualisiert den Tooltip.
     void hoverLinkChanged();
+    /// Such-Zustand geändert (aktiv/Trefferzahl/aktueller Treffer) — QML-Find-Bar folgt.
+    void searchChanged();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -240,6 +262,16 @@ private:
     int m_hoverDetectRow = -2;
     QString m_hoverDetectText;
     QList<LinkDetector::Span> m_hoverSpans;
+
+    // Scrollback-Suche (QTMUX-71). m_matches sind Treffer über den GESAMTEN Inhalt
+    // (Scrollback + sichtbar), `line` = absolute Inhalts-Zeile; m_currentMatch = Index
+    // des aktiven Treffers (-1 = keiner).
+    bool m_searchActive = false;
+    QString m_searchQuery;
+    QList<TerminalSearch::Match> m_matches;
+    int m_currentMatch = -1;
+    void recomputeMatches();     // Treffer aus dem aktuellen Inhalt neu bestimmen
+    void scrollToMatch(int idx); // m_scrollOffset so setzen, dass der Treffer sichtbar ist
 
 public:
     QString hoverLinkTarget() const { return m_hoverTarget; }

@@ -229,6 +229,79 @@ Item {
                 }
             }
 
+            // Scrollback-Suche (QTMUX-71): Find-Bar oben rechts im Pane, sichtbar wenn
+            // paneTerm.searchActive. ⌘/Strg+F öffnet sie (Action → beginSearch), das Feld
+            // fokussiert sich selbst; Enter = nächster, Shift+Enter = voriger Treffer, Esc
+            // schließt und gibt den Fokus ans Terminal zurück.
+            Rectangle {
+                id: findBar
+                visible: paneTerm.searchActive
+                z: 80
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.rightMargin: 10
+                anchors.topMargin: win.paneCount > 1 ? 30 : 8   // unter dem Pane-Kopf
+                radius: 6
+                color: Theme.bgElevated
+                border.color: Theme.border
+                border.width: 1
+                implicitWidth: findRow.implicitWidth + 16
+                implicitHeight: findRow.implicitHeight + 10
+                function close() { paneTerm.endSearch(); paneTerm.forceActiveFocus() }
+                onVisibleChanged: if (visible) {
+                    findField.forceActiveFocus(); findField.selectAll()
+                    if (findField.text.length) paneTerm.updateSearch(findField.text)
+                }
+
+                RowLayout {
+                    id: findRow
+                    anchors.fill: parent
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    spacing: 6
+
+                    TextField {
+                        id: findField
+                        Layout.preferredWidth: 180
+                        placeholderText: qsTr("Scrollback durchsuchen …")
+                        color: Theme.textBright
+                        placeholderTextColor: Theme.textDim
+                        font.pixelSize: 12
+                        background: Rectangle { color: "transparent" }
+                        onTextChanged: paneTerm.updateSearch(text)
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                if (event.modifiers & Qt.ShiftModifier) paneTerm.searchPrev()
+                                else paneTerm.searchNext()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Escape) {
+                                findBar.close(); event.accepted = true
+                            }
+                        }
+                    }
+                    Text {
+                        text: paneTerm.matchCount > 0 ? (paneTerm.currentMatch + "/" + paneTerm.matchCount)
+                            : (findField.text.length ? qsTr("0") : "")
+                        color: Theme.textDim
+                        font.pixelSize: 11
+                        Layout.minimumWidth: 28
+                        horizontalAlignment: Text.AlignRight
+                    }
+                    Text {
+                        text: "‹"; color: Theme.textBright; font.pixelSize: 16
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: paneTerm.searchPrev() }
+                    }
+                    Text {
+                        text: "›"; color: Theme.textBright; font.pixelSize: 16
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: paneTerm.searchNext() }
+                    }
+                    Text {
+                        text: "×"; color: Theme.textDim; font.pixelSize: 14
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: findBar.close() }
+                    }
+                }
+            }
+
             // Link-Hinweis (QTMUX-39): schwebt die Maus über einem erkannten Link, erscheint
             // unten links eine dezente Statuszeilen-Pille „⌘/Strg-Klick zum Öffnen: <ziel>" —
             // so ist der (Cmd/Ctrl-gebundene) Klick überhaupt auffindbar. Nicht-interaktiv.
