@@ -48,7 +48,9 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `subscribe_events` | `sessionId?`, `sources?` (int[]), `kinds?` (string[]) | Agenten-Ereignisse abonnieren (leer = alle Quellen/Arten) |
 | `unsubscribe_events` | `sessionId?` | Abo dieser Session aufheben |
 | `list_subscriptions` | – | Aktive Abos (`subscriberSessionId`, `sources`, `kinds`) |
-| `post_event` | `kind`, `text?`, `sessionId?` | Ereignis dieser Session melden (fertig/Frage/Fehler) |
+| `post_event` | `kind`, `text?`, `sessionId?` | Ereignis dieser Session melden (fertig/Frage/Fehler/Info); **question/error** lassen die Kachel pulsen |
+| `needs_attention` | `text?`, `sessionId?` | Explizit Aufmerksamkeit anfordern (Kachel pulst) — für „blockiert/brauche Mensch" |
+| `clear_attention` | `sessionId?` | Aufmerksamkeits-Markierung wieder löschen |
 | `wait_for_events` | `sessionId?`, `afterSeq?`, `timeoutMs?` | **Long-Poll**: blockiert bis ein abonniertes Ereignis vorliegt/Timeout |
 | `get_layout` | – | `{layout, activePaneId, sessions}` — Baum **plus** Pane-Zuordnung aller Sessions (s. u.) |
 | `split_pane` | `orientation` ("h"/"v") | Aktives Pane teilen (neue Shell-Session im neuen Pane, wird aktiv) → neue **Session-id** |

@@ -58,7 +58,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
-| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (26 Tools); Doku `docs/MCP.md` |
+| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (28 Tools); Doku `docs/MCP.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
@@ -247,6 +247,17 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
   pflegen.
 
 ## Status (2026-07-27)
+
+**QTMUX-77 (2026-07-27) — Aufmerksamkeits-Puls über MCP + neue Signal-Tools.** Anwenderbefund:
+Ein Agent, der per MCP `post_event` (kind=question) meldete, ließ die Kachel NICHT pulsen
+(Beleg: `lastAgentEventKind=question` bei `needsAttention=false`). Ursache: `post_event`
+schrieb nur in den `AgentEventHub`, rief aber kein `raiseAttention` — nur der OSC-`777`-Pfad
+tat das. Fix: beide Wege laufen jetzt durch **`Session::reportAgentEvent()`** (Hub + Sidebar-Notiz
++ Puls bei **question/error**, nur wenn Kachel nicht fokussiert; `done`/`info` = nur Notiz, kein
+Puls — bewusst, sonst Dauergeblinke). Neu: MCP-Tools **`needs_attention`** (explizit, optional Text)
++ **`clear_attention`** → **28 Tools**. Test `tst_session::agentEventPulseAndExplicitAttention`,
+e2e per MCP verifiziert, Anwender-abgenommen. Backlog für die restliche Signal-Sprache:
+QTMUX-74 (`set_badge`), QTMUX-75 (`request_input`), QTMUX-76 (`set_workflow_state`).
 
 **QTMUX-54 (2026-07-27) — Ganze Gruppe verschieben.** Eine Sitzungsgruppe lässt sich als
 Block in der Sidebar umsortieren: **Header ziehen** (Drag-to-Reorder, `DragHandler` +
@@ -733,7 +744,7 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (26 Tools)
+### MCP-Server (28 Tools)
 `src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC auf `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
 - **Controller-Auto-Erkennung** beim `initialize`: TCP-Port → PID → **Prozess-Vorfahren-

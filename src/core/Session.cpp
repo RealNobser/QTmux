@@ -191,14 +191,35 @@ void Session::onNotify(const QString &text) {
 }
 
 void Session::onAgentEvent(const QString &kind, const QString &text) {
-    // OSC 777;qtmux-event: strukturiertes Agenten-Ereignis (fertig/Frage/Fehler) in den
-    // Ereignis-Bus einspeisen — abonnierende Sessions werden per MCP-Long-Poll benachrichtigt.
-    // Die Quell-Identität ist die eigene Session-ID (mit der ein Agent „hier" weiterarbeitet).
-    AgentEventHub::instance()->postEvent(m_id, AgentEventHub::kindFromString(kind), text);
-    // Lokal zusätzlich als Notification spiegeln (Sidebar-Text + Aufmerksamkeit).
+    // OSC 777;qtmux-event läuft jetzt durch DENSELBEN Pfad wie das MCP-Werkzeug post_event.
+    reportAgentEvent(kind, text);
+}
+
+void Session::reportAgentEvent(const QString &kind, const QString &text) {
+    // Strukturiertes Agenten-Ereignis (fertig/Frage/Fehler/Info) in den Ereignis-Bus
+    // einspeisen — abonnierende Sessions werden per MCP-Long-Poll benachrichtigt. Quelle
+    // ist die eigene Session-ID (mit der ein Agent „hier" weiterarbeitet).
+    const AgentEventHub::Kind k = AgentEventHub::kindFromString(kind);
+    AgentEventHub::instance()->postEvent(m_id, k, text);
+    // Lokal als Sidebar-Notiz spiegeln.
     m_lastNotification = text.isEmpty() ? kind : QStringLiteral("%1: %2").arg(kind, text);
     emit notificationChanged();
+    // Nur die „Mensch nötig"-Arten wecken die Kachel (Puls); done/info sind FYI und
+    // sollen die Sidebar nicht blinken lassen. raiseAttention greift nur, wenn inaktiv.
+    if (k == AgentEventHub::Kind::Question || k == AgentEventHub::Kind::Error)
+        raiseAttention();
+}
+
+void Session::flagAttention(const QString &note) {
+    // Explizite Aufmerksamkeits-Anforderung (MCP needs_attention).
+    if (!note.isEmpty()) { m_lastNotification = note; emit notificationChanged(); }
     raiseAttention();
+}
+
+void Session::clearAttention() {
+    if (!m_needsAttention) return;
+    m_needsAttention = false;
+    emit attentionChanged();
 }
 
 void Session::onProgress(int state, int value) {

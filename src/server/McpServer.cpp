@@ -610,13 +610,27 @@ QJsonObject McpServer::toolsList() const {
                                   {"timeoutMs", intProp("max. Wartezeit in ms (Standard 25000, Deckel 55000)")}},
                       {}));
     tools.append(tool("post_event",
-                      "Meldet ein Agenten-Ereignis aus DIESER Session (fertig/Frage/Fehler). "
-                      "Abonnierende Sessions werden benachrichtigt. Alternative zum Shell-Hook "
-                      "'qtmux-event'.",
+                      "Meldet ein Agenten-Ereignis aus DIESER Session (fertig/Frage/Fehler/Info). "
+                      "Abonnierende Sessions werden benachrichtigt; der Text erscheint in der "
+                      "Sidebar. Bei 'question'/'error' pulst zusaetzlich die Kachel (Aufmerksamkeit), "
+                      "sofern sie nicht fokussiert ist. Alternative zum Shell-Hook 'qtmux-event'.",
                       QJsonObject{{"kind", strProp("'done' | 'question' | 'error' | 'info'")},
                                   {"text", strProp("Beschreibungstext")},
                                   {"sessionId", intProp("Quell-Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
                       QJsonArray{"kind"}));
+    tools.append(tool("needs_attention",
+                      "Fordert explizit Aufmerksamkeit fuer DIESE Session an: die Sidebar-Kachel "
+                      "pulst (sofern nicht fokussiert). Fuer 'ich bin blockiert / brauche einen "
+                      "Menschen', entkoppelt vom Ereignis-Bus. Optionaler Text landet als "
+                      "Sidebar-Notiz.",
+                      QJsonObject{{"text", strProp("optionaler Hinweistext")},
+                                  {"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
+                      {}));
+    tools.append(tool("clear_attention",
+                      "Loescht die Aufmerksamkeits-Markierung DIESER Session wieder (Gegenstueck "
+                      "zu needs_attention; sonst erlischt sie erst beim Fokussieren der Kachel).",
+                      QJsonObject{{"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
+                      {}));
     tools.append(tool("subscribe_events",
                       "Abonniert Agenten-Ereignisse für DIESE Session. Ohne Filter werden alle "
                       "Ereignisse aller anderen Sessions empfangen; optional auf Quell-Sessions "
@@ -685,8 +699,33 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         const int srcId = callerId();
         if (srcId <= 0) { isError = true; text = QStringLiteral("Keine Quell-Session (sessionId fehlt/unbekannt)."); return {}; }
         const QString kind = args.value("kind").toString(QStringLiteral("info"));
-        AgentEventHub::instance()->postEvent(srcId, AgentEventHub::kindFromString(kind),
-                                             args.value("text").toString());
+        const QString evText = args.value("text").toString();
+        // Ueber die Quell-Session melden: das speist den Ereignis-Bus, spiegelt die Notiz in
+        // die Sidebar UND weckt bei question/error den Aufmerksamkeits-Puls (frueher fehlte
+        // Letzteres beim MCP-Weg — Ereignis kam an, aber die Kachel pulste nicht). Fallback
+        // auf den Hub direkt, falls die Session nicht (mehr) existiert.
+        if (Session *s = m_sessions ? m_sessions->sessionById(srcId) : nullptr)
+            s->reportAgentEvent(kind, evText);
+        else
+            AgentEventHub::instance()->postEvent(srcId, AgentEventHub::kindFromString(kind), evText);
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "needs_attention") {
+        const int srcId = callerId();
+        if (srcId <= 0) { isError = true; text = QStringLiteral("Keine Quell-Session (sessionId fehlt/unbekannt)."); return {}; }
+        Session *s = m_sessions ? m_sessions->sessionById(srcId) : nullptr;
+        if (!s) { isError = true; text = QStringLiteral("Unbekannte Session-ID: %1.").arg(srcId); return {}; }
+        s->flagAttention(args.value("text").toString());
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "clear_attention") {
+        const int srcId = callerId();
+        if (srcId <= 0) { isError = true; text = QStringLiteral("Keine Quell-Session (sessionId fehlt/unbekannt)."); return {}; }
+        Session *s = m_sessions ? m_sessions->sessionById(srcId) : nullptr;
+        if (!s) { isError = true; text = QStringLiteral("Unbekannte Session-ID: %1.").arg(srcId); return {}; }
+        s->clearAttention();
         text = QStringLiteral("ok");
         return {};
     }

@@ -18,6 +18,7 @@ private slots:
     void oscNotificationReachesSession();
     void osc133NonZeroExitSetsError();
     void agentEventReachesHub();
+    void agentEventPulseAndExplicitAttention();
     void loginScriptRunsOnConnect();
     void sshPasswordAutoFillOnPrompt();
     void enterIsSentSeparatelyAfterText();
@@ -162,6 +163,31 @@ void TestSession::agentEventReachesHub() {
 // Login-Script (QTMUX-23): ein per setLoginScript gesetzter Befehl wird nach dem
 // Verbindungsaufbau AUTOMATISCH gesendet (kein write() durch den Test) und erscheint
 // dadurch am Schirm. Beweist die Auto-Send-Kette über den Fallback-Timer.
+// MCP-Signalpfad (post_event/needs_attention/clear_attention laufen ueber diese Methoden):
+// question/error wecken die inaktive Kachel, done/info nicht; flagAttention setzt explizit,
+// clearAttention loescht, und eine fokussierte Session pulst nie.
+void TestSession::agentEventPulseAndExplicitAttention() {
+    { Session s; s.setActive(false);
+      s.reportAgentEvent(QStringLiteral("done"), QStringLiteral("fertig"));
+      QVERIFY(!s.needsAttention());                       // FYI -> kein Puls
+      s.reportAgentEvent(QStringLiteral("info"), QStringLiteral("x"));
+      QVERIFY(!s.needsAttention());
+      s.reportAgentEvent(QStringLiteral("question"), QStringLiteral("Darf ich?"));
+      QVERIFY(s.needsAttention()); }                       // Frage -> Puls
+    { Session s; s.setActive(false);
+      s.reportAgentEvent(QStringLiteral("error"), QStringLiteral("kaputt"));
+      QVERIFY(s.needsAttention()); }                       // Fehler -> Puls
+    { Session s; s.setActive(false);
+      s.flagAttention(QStringLiteral("blockiert"));
+      QVERIFY(s.needsAttention());
+      QCOMPARE(s.lastNotification(), QStringLiteral("blockiert"));
+      s.clearAttention();
+      QVERIFY(!s.needsAttention()); }                      // explizit setzen + loeschen
+    { Session s; s.setActive(true);
+      s.reportAgentEvent(QStringLiteral("question"), QStringLiteral("x"));
+      QVERIFY(!s.needsAttention()); }                      // fokussiert -> kein Puls
+}
+
 void TestSession::loginScriptRunsOnConnect() {
     Session sess;
     auto *pty = new PtyBackend;

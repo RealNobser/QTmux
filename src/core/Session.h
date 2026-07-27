@@ -115,6 +115,17 @@ public:
     BackendState state() const { return m_backend ? m_backend->state() : BackendState::Closed; }
     int stateInt() const { return static_cast<int>(state()); }
 
+    /// Vom Agenten gemeldetes Ereignis (MCP post_event ODER OSC 777;qtmux-event): in den
+    /// Ereignis-Bus einspeisen, als Sidebar-Notiz spiegeln und bei 'question'/'error'
+    /// Aufmerksamkeit wecken (nur wenn die Session nicht fokussiert ist). Ein Agent PUSHT
+    /// so — QTmux leitet nichts aus dem Bildschirm ab (QTMUX-30).
+    void reportAgentEvent(const QString &kind, const QString &text);
+    /// Explizite Aufmerksamkeits-Anforderung eines Agenten (MCP needs_attention);
+    /// optionaler Hinweistext landet als Sidebar-Notiz.
+    void flagAttention(const QString &note = QString());
+    /// Aufmerksamkeits-Markierung wieder löschen (MCP clear_attention).
+    void clearAttention();
+
     VtScreen *screen() const { return m_screen.get(); }
 
     void start(int cols, int rows);
