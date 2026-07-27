@@ -80,9 +80,13 @@ if ([string]::IsNullOrEmpty($QtDir)) {
     if (-not [string]::IsNullOrEmpty($env:QT_DIR)) {
         $QtDir = $env:QT_DIR
     } else {
+        # ⚠️ Nach [version] sortieren, NICHT nach Name: Eine Zeichenketten-Sortierung
+        #    stellt "6.8.3" über "6.10.3" ("8" > "1") und baut damit stumm gegen das
+        #    ältere Kit. Nicht-Versionsordner (Tools, Licenses) fallen über 0.0.0 ans Ende.
         $cand = Get-ChildItem "C:\Qt" -Directory -ErrorAction SilentlyContinue |
                 Where-Object { Test-Path (Join-Path $_.FullName "msvc2022_64") } |
-                Sort-Object Name -Descending | Select-Object -First 1
+                Sort-Object { try { [version]$_.Name } catch { [version]'0.0.0' } } -Descending |
+                Select-Object -First 1
         if ($null -ne $cand) { $QtDir = Join-Path $cand.FullName "msvc2022_64" }
     }
 }

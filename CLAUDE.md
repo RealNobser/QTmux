@@ -146,8 +146,19 @@ aktuellen Stand und baut MSI + portables ZIP; `-NoFetch` überspringt den Pull.
   detachen (sonst endet er stumm mit 0-Byte-Logs).
 - ⚠️ Vor dem Bauen prüfen, worauf der Checkout steht: `_build.cmd` nutzt `-NoFetch` und
   baut sonst klaglos eine **alte** Version (fiel erst am Dateinamen `…-1.3.1-…` auf).
+- ⚠️ **Versionsordner nie als Zeichenkette sortieren** (2026-07-27): Die Qt-Kit-Auswahl in
+  `build-release.ps1` lief über `Sort-Object Name -Descending` — damit steht `6.8.3` über
+  `6.10.3` (`"8" > "1"`), und das Release wäre nach der Qt-Angleichung **stumm gegen das
+  alte Kit** gebaut worden. Jetzt `Sort-Object { [version]$_.Name }` mit `0.0.0`-Fallback
+  für Nicht-Versionsordner (Tools, Licenses). Dieselbe Klasse Fehler wie `-NoFetch` oben:
+  ein falsches Ergebnis, das wie ein normaler Lauf aussieht. Gegentest ist Pflicht — alte
+  Logik muss nachweislich das falsche, neue das richtige Kit wählen.
 - PowerShell ist dort Standard-Shell: `&` als Trenner ist ungültig, `-Filter` nimmt nur
   EINE Zeichenkette, `Get-CimInstance -Filter` verträgt keine verschachtelten Quotes.
+  Pfade mit Klammern (`…\Visual Studio\… (x86)…`) über SSH **nicht** inline quoten —
+  PowerShell wertet `(x86)` als Befehl; stattdessen ein `.cmd` lokal erzeugen und per
+  `scp` übertragen. cmake/ninja/ctest liegen dort nicht im PATH, sondern in den
+  Build Tools unter `Common7\IDE\CommonExtensions\Microsoft\CMake\`.
 - Gegenprüfen, dass wirklich die neue Version im Paket steckt (nicht nur im Dateinamen):
   `strings qtmux.exe` auf Version **und** ein neues Merkmal (z. B. `enterDelayMs`).
 
@@ -200,10 +211,22 @@ Actions warnen über Node-20-Deprecation (ab Sept. 2026) — bei Gelegenheit anh
 > entfernte **AGL-Framework** → `ld: framework 'AGL' not found` (fiel lokal nicht auf, da
 > Homebrew-Qt 6.11 AGL-frei ist). Ausweichen auf `macos-13`-Runner funktioniert NICHT
 > (werden nicht mehr zugeteilt → 24-h-Queue-Timeout). **Nicht 6.11.x** — Windows-Metadaten
-> via aqtinstall nicht abrufbar (`Failed to locate XML data`; aqtinstall 3.3.0 ist bereits
-> das neueste 3.x). **Aktuell 6.10.3** (überall auflösbar, AGL-frei, Lauf 2026-07-19 grün).
+> via aqtinstall nicht abrufbar (aqtinstall 3.3.0 ist bereits das neueste 3.x).
+> **Aktuell 6.10.3** (überall auflösbar, AGL-frei, Lauf 2026-07-19 grün).
 > Künftige Bumps vorher **lokal** prüfen: `pip install "aqtinstall==3.3.*"` →
 > `aqt list-qt <windows|mac|linux> desktop --arch <ver>` — Fehler = Version unbrauchbar.
+>
+> **Nachprüfung 2026-07-27:** Sperre besteht, aber die Fehlermeldung hat gewechselt — jetzt
+> `Failed to download checksum for … Updates.xml` statt `Failed to locate XML data`. Das
+> *sieht* nach Netzwerkflattern aus, ist aber keins: **3/3 Wiederholungen scheitern, während
+> 6.10.3 im selben Durchlauf durchläuft** (dieser Gegentest ist der Punkt — ohne ihn hält man
+> es für einen Mirror-Aussetzer und zieht die Version doch hoch). Betrifft 6.11.0, 6.11.1 und
+> 6.12.0; `list-qt` *listet* sie, nur die Arch-Abfrage bricht ab. macOS/Linux lösen 6.11.1
+> sauber auf (`clang_64`/`linux_gcc_64`, inkl. qtserialport/qtshadertools) — der Blocker ist
+> allein Windows. Ausweg wäre der offizielle Installer (`use-official` der Action bzw.
+> `aqt install-qt-official`), der aber **Qt-Account-Zugangsdaten als Secrets** braucht — und
+> das Repo ist öffentlich: Fork-PRs bekommen keine Secrets, der Windows-Job bräche für jeden
+> externen Beitrag. Deshalb bleibt 6.10.3.
 
 ## Projekt-Doku: Confluence (DUAL: on-prem + Cloud)
 
