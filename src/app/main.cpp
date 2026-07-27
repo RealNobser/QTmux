@@ -4,6 +4,9 @@
 #include <QQuickStyle>
 #include <QTranslator>
 #include <QQmlContext>
+#include <QQuickWindow>
+#include <QTimer>
+#include <QImage>
 
 #if defined(Q_OS_WIN)
 #  include <windows.h>
@@ -69,12 +72,27 @@ int main(int argc, char *argv[])
     // So kann „Neues Fenster" (AppController::openNewInstance) eine unabhängige Instanz
     // mit eigenem Profil + freiem Port starten, ohne dass Umgebungsvererbung nötig wäre.
     // Bereits gesetzte Env-Vars haben Vorrang (explizit gestartete Testinstanz).
+    QString shotPath;          // --screenshot <png>: stiller Selbst-Screenshot (s. u.)
+    int shotSettleMs = 700;    // --settle <ms>: Wartezeit, damit das Layout sich setzt
     for (int i = 1; i + 1 < argc; ++i) {
         const QByteArray a(argv[i]);
         if (a == "--profile" && !qEnvironmentVariableIsSet("QTMUX_PROFILE"))
             qputenv("QTMUX_PROFILE", argv[i + 1]);
         else if (a == "--mcp-port" && !qEnvironmentVariableIsSet("QTMUX_MCP_PORT"))
             qputenv("QTMUX_MCP_PORT", argv[i + 1]);
+        else if (a == "--screenshot")
+            shotPath = QString::fromLocal8Bit(argv[i + 1]);
+        else if (a == "--settle")
+            shotSettleMs = qMax(50, QByteArray(argv[i + 1]).toInt());
+    }
+    // Stiller Selbst-Screenshot (Vorbild: RAFTNG --screenshot): die App rendert sich
+    // OFFSCREEN und schreibt die Root-Fenster-Szene per grabWindow() in ein PNG — ohne
+    // OS-Compositor und ohne Bildschirmaufnahme-Berechtigung (TCC). Erzwingt zusätzlich den
+    // QPainter-Renderpfad (QTMUX_NO_GPU), damit der Grab auch das benutzerdefinierte
+    // Glyph-Material zuverlässig enthält.
+    if (!shotPath.isEmpty()) {
+        if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "offscreen");
+        qputenv("QTMUX_NO_GPU", "1");
     }
 
     // App-Identität bereits VOR der QGuiApplication setzen (statisch erlaubt), damit
@@ -181,6 +199,22 @@ int main(int argc, char *argv[])
         applyLanguage(app, engine, active, appc->language());
 
     engine.loadFromModule("QTmux", "Main");
+
+    // Screenshot-Modus: nach kurzer Settle-Zeit die Root-QQuickWindow-Szene grabben,
+    // als PNG speichern und mit dem Ergebnis-Code beenden. Der Timer läuft auf dem
+    // GUI-Thread; grabWindow() rendert die (offscreen) Szene und liest sie zurück.
+    if (!shotPath.isEmpty()) {
+        QTimer::singleShot(shotSettleMs, &app, [&engine, shotPath]() {
+            const QList<QObject *> roots = engine.rootObjects();
+            auto *win = roots.isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(roots.first());
+            int rc = 2;
+            if (win) {
+                const QImage img = win->grabWindow();
+                rc = (!img.isNull() && img.save(shotPath, "PNG")) ? 0 : 1;
+            }
+            QCoreApplication::exit(rc);
+        });
+    }
 
     // Laufzeitwechsel über das Sprachmenü neu laden.
     if (appc) {
