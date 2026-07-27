@@ -290,283 +290,47 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
-## Status (2026-07-27)
+## Status (2026-07-28)
 
-**QTMUX-79 (2026-07-27) — „Run und Debug" in VSCode zog die falsche VS-Installation.**
-Anwenderbefund `error STL1001: Unexpected compiler version, expected MSVC Compiler 19.50`.
-Ursache: Auf der Maschine liegen **VS 2022 (17.14) und VS 18 (18.6)**; die
-CMake-Tools-Erweiterung injiziert per `useVsDeveloperEnvironment` immer die **neueste**
-Umgebung (VS 18, STL 14.51), während der Cache auf den Compiler aus VS 2022 (14.44)
-zeigt → gemischte Toolchain. Eine Einstellung zur Wahl der Installation existiert nicht,
-deshalb kommt die Umgebung jetzt aus `tools/vsdev-build.cmd` (vswhere `[17.0,18.0)`),
-das die Task „CMake: build" unter Windows aufruft; `useVsDeveloperEnvironment: never`,
-`configureOnOpen: false`, und der Debug-Programmpfad ist fest aufs `windows`-Preset
-gesetzt (die Extension-Variable ist ohne deren Configure nicht mehr verlässlich).
-Verifiziert mit gelöschtem Cache aus einer Shell **ohne** Dev-Umgebung: Configure +
-Build + 14/14 Tests grün, Cache zeigt auf VS 2022. Damit ist der frühere Fix
-(`useVsDeveloperEnvironment: always`, QTMUX-43-Zeitraum) abgelöst — er war richtig,
-solange nur VS 2022 installiert war. Drei cmd-Fallen dabei erlebt und im
-Windows-Build-Abschnitt notiert (CRLF-Pflicht, ASCII, Klammern aus
-`%ProgramFiles(x86)%`). ⚠ Jira-Issue dual noch anzulegen (keine Credentials hier).
+**Aktuell:** v1.6.1 ausgeliefert (alle 4 Installer: DMG/MSI+ZIP/AppImage). Phasen 0–6
+komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Plugins +
+MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **30 MCP-Tools**
+(GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert.
 
-**QTMUX-59 (2026-07-27) — Pane-Zoom.** Das aktive Pane maximieren. 🔑 **Wichtige Lektion:** der
-erste Ansatz baute den Layout-Baum neu (`effectiveLayout` → nur das Zoom-Blatt rendern) — das
-**zerstörte die SplitView-Proportionen UND verursachte Fokus-Churn** (beim Aufheben grabschte das
-zuletzt erzeugte Pane den Fokus, teils verzögert; kein Timer-/Guard-Hack half zuverlässig). Richtig
-ist **KEIN Rebuild:** der Baum bleibt stehen, `SplitNode` blendet beim Zoom nur die Zweige aus,
-deren Teilbaum die Zoom-Pane nicht enthält (`visible:false` → SplitView schließt sie aus, der
-sichtbare Zweig füllt; `window.subtreeHasPane(node,id)` entscheidet). Dadurch bleiben TerminalItems,
-Fokus und Proportionen unangetastet; Aufheben stellt exakt das alte Layout her. `window.zoomedPane`
-+ `toggleZoom()`/`zoomPaneById(id)`; `rebuildLayout`-Guard hebt den Zoom auf, wenn das Pane
-verschwindet. Aktion **`actZoomPane`** (⌘/Strg+Shift+Z) + Ansicht-Menü + Palette + MCP-Tool
-**`zoom_pane`** → **30 Tools**. Rein visuell → Anwender-abgenommen.
+**In Arbeit — QTMUX-83 (B1: Per-Window-Layouts):** Umbau vom EINEN globalen Split-Layout
+(Sidebar = Sessions, Klick lädt Session ins aktive Pane) auf das tmux-Modell: Sidebar =
+**Windows** (Tabs), jedes Window hat **sein eigenes** Split-Layout; Splits = Panes IM Window.
+Blätter referenzieren Sessions per stabiler `Session::id()` statt Zeilen-Index; `Session::id()`
+bleibt MCP-Adress-Token. Entscheidungen: Gruppen → Window-Gruppen; Window-Name auto+umbenennbar;
+Migration je Session → Ein-Pane-Window. **Stufe 1** (Window/WindowModel + `Session::windowId` +
+Migration, additiv) erledigt+gepusht; **Stufe 2** (QML-Flip) läuft. Umsetzungsanweisung:
+`docs/design/per-window-layouts/`. Vorarbeit gepusht: **QTMUX-80** (Terminal-Crispness:
+Zellmaße auf ganze Geräte-Pixel + Pane-Sub-Pixel-Snapping), **QTMUX-81** (Layout- +
+farbgetreue Scrollback-Persistenz), **QTMUX-82** (SplitView verteilt Repeater-Kinder
+gleichmäßig — Cramping-Fix). Neu: **stiller Selbst-Screenshot** `--screenshot <png>`
+(offscreen `grabWindow`, kein TCC — RAFTNG-Vorbild) für GUI-Verifikation.
 
-**QTMUX-71 (2026-07-27) — Scrollback-Suche (Find-Bar, ⌘/Strg+F).** Jede andere Terminal-App
-hat sie, QTmux bisher nicht. Gui-freier Matcher **`TerminalSearch::find(lines, needle,
-caseSensitive)`** in `qtmux_core` (Test `test_terminalsearch`, wie `LinkDetector`). `TerminalItem`
-setzt den gesamten Inhalt (Scrollback + sichtbar) über `absLineText` zu Zeilen zusammen, hebt
-Treffer als **halbtransparente amber Overlay-Quads** hervor (aktueller Treffer kräftiger) und
-**scrollt den aktuellen Treffer in die Mitte** (`scrollToMatch` über `m_scrollOffset`). Q_PROPERTYs
-`searchActive`/`matchCount`/`currentMatch` + `beginSearch`/`updateSearch`/`searchNext`/`searchPrev`/
-`endSearch`. QML-**Find-Bar** je Pane (`SplitNode.qml`, oben rechts): Feld fokussiert sich beim
-Öffnen, Enter=weiter, Shift+Enter=zurück, Esc schließt, „n/m"-Anzeige. Shortcut **`actFind`**
-(macOS Cmd+F; sonst Ctrl+Shift+F, damit Shells ihr Ctrl+F behalten) + Bearbeiten-Menü + Palette.
-Rein visuell → Anwender-Abnahme; Matcher-Logik unit-getestet.
+> **Ältere Status-Historie (v1.4–1.6, QTMUX-30…79):** die früheren Feature-Einträge
+> (Sitzungsgruppen, Pane-Zoom, Scrollback-Suche, nicht-modales Prefs-Fenster, Rückfrage vor
+> Beenden, klickbare Links, MCP-Ereigniskanal/Signal-Tools, Windows-VS-Toolchain-Fix,
+> Split-Cramping …) stehen in der **Git-Historie** dieser Datei und — wo dauerhaft relevant —
+> unten in **Feature-Referenz** und den **Build-Abschnitten**. Hier bewusst nicht mehr
+> ausgeschrieben (Datei-Hygiene 2026-07-28: Status-Changelog gekürzt, spart ~250 Zeilen je
+> Session; Lektionen/Fallen blieben erhalten).
 
-**QTMUX-78 (2026-07-27) — Sidebar-Ring zeigt echte Zustände (idle/busy/waiting/error).**
-Anwenderbefund: der Punkt war faktisch **immer grün** (Default `Running`; `Idle`/`Waiting`
-wurden nirgends gesetzt; Agenten-TUIs senden kein OSC 133). Zweiteilig behoben: (1) **Shells
-mit OSC-133-Integration** — Prompt (`A`/`B`)→`Idle` (dim), Kommando (`C`)→`Running` (grün),
-Exit≠0 (`D`)→`Error` (rot, bleibt am Prompt bis zum nächsten Kommando). (2) **Agenten** — neues
-MCP-Tool **`set_activity(state)`** (`idle`/`busy`/`waiting`/`error`) färbt den Ring direkt →
-belebt die bis dahin **toten Farben** amber(`Waiting`)/dim(`Idle`) und gibt einen kontinuierlichen
-Zustand (Agent pusht, kein Scraping — QTMUX-30). → **29 MCP-Tools**. Der Attention-Puls
-(`needs_attention`/question/error) liegt weiterhin darüber. Keine QML-Änderung (Ring-Farben waren
-schon verdrahtet). `Session::requestActivity`; Test `tst_session::agentActivityStates`; e2e
-verifiziert, Anwender-abgenommen.
+**Offene Jira:** **QTMUX-40** (OSC-8-Hyperlinks — deferred; die Heuristik-Links aus QTMUX-39
+decken den Agenten-Fall ab, OSC-8 bräuchte Cursor-Span-Tracking + neues `Cell`-Feld, teuer da
+`VtScreen` den Sichtbereich lazy aus libvterm bildet) · **QTMUX-38** (Shell-Helfer für
+Installationsnutzer unerreichbar — nur im Repo, in keinem Paket; AppImage-Mount-Pfad wechselt,
+Windows ohne stdout) · **QTMUX-2** (Windows-`currentWorkingDirectory`-Funktionstest via PEB) ·
+**QTMUX-13** (native macOS-Menü-Icons — Qt reicht `icon.source`/`icon.name` in nativen Menüs
+nicht durch; einziger Weg wäre ein QMenuBar-Umbau, deferred; [[qtmux-native-menu-icons]]).
 
-**QTMUX-77 (2026-07-27) — Aufmerksamkeits-Puls über MCP + neue Signal-Tools.** Anwenderbefund:
-Ein Agent, der per MCP `post_event` (kind=question) meldete, ließ die Kachel NICHT pulsen
-(Beleg: `lastAgentEventKind=question` bei `needsAttention=false`). Ursache: `post_event`
-schrieb nur in den `AgentEventHub`, rief aber kein `raiseAttention` — nur der OSC-`777`-Pfad
-tat das. Fix: beide Wege laufen jetzt durch **`Session::reportAgentEvent()`** (Hub + Sidebar-Notiz
-+ Puls bei **question/error**, nur wenn Kachel nicht fokussiert; `done`/`info` = nur Notiz, kein
-Puls — bewusst, sonst Dauergeblinke). Neu: MCP-Tools **`needs_attention`** (explizit, optional Text)
-+ **`clear_attention`** → **29 Tools**. Test `tst_session::agentEventPulseAndExplicitAttention`,
-e2e per MCP verifiziert, Anwender-abgenommen. Backlog für die restliche Signal-Sprache:
-QTMUX-74 (`set_badge`), QTMUX-75 (`request_input`), QTMUX-76 (`set_workflow_state`).
-
-**QTMUX-54 (2026-07-27) — Ganze Gruppe verschieben.** Eine Sitzungsgruppe lässt sich als
-Block in der Sidebar umsortieren: **Header ziehen** (Drag-to-Reorder, `DragHandler` +
-`rowNearestTo`-Hit-Test wie beim Kachel-Drag), Gruppenkopf-Kontextmenü „nach oben/unten",
-Palette, und MCP-Tool **`move_group`** (`name`, `direction`; → **26 Tools**). Model:
-`moveGroupToRow(name, targetRow)` (Kern, verschiebt den Block vor/nach die Ziel-Sektion via
-`moveBlock`=ein `beginMoveRows`+`std::rotate`); `moveGroup(name, dir)` delegiert. 🔑 **Falle:**
-Gruppen-Move ordnet Modell-Zeilen um, aber `window.currentRow` und die Split-Layout-Blätter
-referenzieren per **Index** → ohne Nachführung springt die Auswahl auf die falsche Kachel bzw.
-ein Pane zeigt nach Rebuild die falsche Session. Fix: **`withRowRemap`** (Main.qml) sichert je
-Blatt/currentRow die `sessionId` und sucht danach die neue Zeile derselben Session — alle
-GUI-Move-Pfade laufen darüber. Tests in `tst_sessiongroups` (`moveGroupReordersBlock` erweitert).
-Noch nicht als Release paketiert (Version-Bump/Release folgen auf Zuruf).
-
-**v1.6.1 (2026-07-26) — Hotfix: „Kopieren" im Menü war dauerhaft ausgegraut.** Anwenderbefund:
-`Bearbeiten → Kopieren` (und Rechtsklick → Kopieren) blieb grau, egal ob Text markiert war;
-**Cmd+C funktionierte** aber. Ursache: `actCopy.enabled` band an `window.activeTerminal.hasSelection`
-— eine **Sub-Property eines `var`-gehaltenen QObjects**, deren `NOTIFY` (`selectionChanged`) in
-QML NICHT zuverlässig propagiert, sodass die Bindung nie aktualisierte. (Cmd+C ging trotzdem, weil
-das fokussierte `TerminalItem` die Taste im `keyPressEvent` selbst behandelt, unabhängig vom Menü.)
-Fix: window-Property **`activeHasSelection`**, per `Connections` bei jedem `selectionChanged` des
-aktiven Terminals + bei `onActiveTerminalChanged` nachgeführt; `actCopy.enabled` nutzt sie. Der Bug
-steckte seit **1.5.0** in allen Releases (Copy-Pfad war seither unverändert). Rein visuell/QML →
-Anwender-Abnahme. Hotfix-Release v1.6.1 mit allen vier Installern.
-
-**v1.6.0 (2026-07-26) — Sitzungsgruppen-Fixes, „Neues Fenster", Oberflächen-Parität.**
-Drei Themen in einem Zug (Anwender-getrieben):
-
-- **Zwei Gruppen-Bugs behoben.** (1) Beim Entgruppieren blieben Farbmarke/Einrückung sporadisch
-  stehen: `SessionModel::setSessionGroup` feuerte `dataChanged` **vor** dem `beginMoveRows` —
-  der Delegate cachte beim direkt folgenden Move den alten Gruppenwert wieder ein. Fix: erst
-  umsortieren (`regroupRow`), dann `dataChanged` am **endgültigen** Index (Regressionstest
-  `tst_sessiongroups::removeFromGroupNotifiesFinalRow`, per Gegentest abgesichert). (2) Im
-  Kachel-Kontextmenü blieb der Gruppen-**Haken** auf dem zuletzt getoggelten Stand (angehakt
-  selbst bei ungruppierten Shells): `checkable`-MenuItems verlieren beim Klick ihre
-  `checked`-Bindung, und der `Repeater` recycelt Delegates gleicher Länge. Fix: `Binding`-
-  Element erzwingt `checked` neu, inklusive `sessionMenu.opened` → greift bei **jedem** Öffnen.
-  Außerdem: Abwählen der aktiven Gruppe rief `setSessionGroup(row, gleicheGruppe)` = No-op
-  (früher Return) → jetzt `modelData === currentGroup ? "" : modelData`.
-- **„Neues Fenster" (`App.openNewInstance`, Datei-Menü + Palette, ⌘⇧N).** Startet eine
-  **eigene, unabhängige Instanz** als Prozess: freier MCP-Port (Scan ab 7346) + Profil `i<port>`
-  (getrennte QSettings-Domain). `main.cpp` übersetzt neue CLI-Args `--profile`/`--mcp-port`
-  ganz früh in die bestehenden Env-Vars → restlicher Code unverändert. Das ist das Test-Setup
-  (`QTMUX_PROFILE`/`QTMUX_MCP_PORT`) als Anwender-Feature.
-- **Paritäts-Audit (REST/MCP · Palette · Menü · Shortcut) mit 5 Parallel-Agenten**, dann
-  Lücken geschlossen: **2 neue MCP-Tools → 25 gesamt**: `focus_pane` (bestehendes Pane aktiv
-  setzen; die schärfste funktionale Lücke — vorher nur per Mausklick) und `rename_group`
-  (Gruppe umbenennen/auflösen; GUI konnte mehr als MCP). Dazu **Pane-Navigation** als
-  Aktion+Shortcut+Menü+Palette (`actNextPane`/`actPrevPane`, ⌘⇧→/←, `window.cyclePane`),
-  **Nächste/Vorige Session** ins Menü (Shortcut war unauffindbar), **Palette-Parität** für die
-  Toggles Ligaturen/GPU/Quake und **`SFTP: <Profil>`** je SSH-Profil, und **Controller-
-  Markierung per Rechtsklick zurücksetzen** (`SessionModel::clearMcpController` — vorher gab es
-  keinen Menschen-Weg, einen hängenden roten Tab zu löschen). **Bewusst deferred:**
-  reduceMotion-Schalter, Profil-CRUD über MCP, Sidebar-Reorder per Befehl.
-
-**v1.5.1 (2026-07-26) — Link-Hover-Auffindbarkeit (QTMUX-39-Nachbesserung).** Anwenderbefund:
-Cmd/Ctrl-Klick auf Links funktionierte (empirisch mit Logging + einem echten Cmd-Klick belegt),
-war aber **nicht auffindbar** — die Unterstreichung erschien nur bei gehaltenem Modifier. Jetzt
-unterstreicht das Terminal Links schon beim **einfachen Drüberfahren** (+ Hand-Cursor) und
-`SplitNode.qml` zeigt unten links eine Statuszeilen-Pille „⌘/Strg-Klick zum Öffnen: <ziel>"
-(Property `hoverLinkTarget` + Signal `hoverLinkChanged`; `detect()` je Zeile gecacht gegen
-QFileInfo-Syscalls pro Mausbewegung). Öffnen bleibt Cmd/Ctrl-gebunden. Commits `1b6ecc0`
-(Feature) + `9cc4342` (Version 1.5.1, alle Bump-Stellen, via MCP-`serverInfo` gegengeprüft),
-gepusht. Details in der Feature-Referenz (Terminal-Verhalten → Klickbare Links). Visuell vom
-Anwender abgenommen; rein visuell → kein Unit-Test.
-
-**v1.5.0.** Phasen 0–5 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness,
-SSH/Seriell/SFTP, Plugin-System + MacPCAN); Phase 6: Installer aller 3 Plattformen fertig
-(DMG/MSI+ZIP/AppImage), CI grün auf allen 3 Plattformen (Qt 6.10.3). 23 MCP-Tools
-(GUI-MCP-Parität für den geplanten **AI-Companion**, wie RaftNG). i18n finalisiert
-(+1 Bestandsfall: Plural-Eintrag `%n Einträge` bleibt unfinished — der DE-Finalisierer
-lässt Numerus-Formen bewusst offen).
-
-**QTMUX-48 (2026-07-25) — Split-Panes pulsieren bei Aufmerksamkeit.** Overlay-Rechteck im
-Blatt-Pane von `SplitNode.qml`: pulsiert mit Akzentrahmen, wenn die Session dort
-`needsAttention` (Bell/OSC 9/777), nur bei `paneCount > 1`, `running: … && !App.reduceMotion`.
-Analog zur Sidebar-Kachel (QTMUX-47 Teil B). Commit `b18a234`, gepusht, Jira dual Done.
-
-**Dark-Mode-Fixes (2026-07-25, nach QTMUX-47).** Drei Anwender-Befunde, alle gepusht:
-`73fd437` Icon-Tönung app-weit vereinheitlicht — monochrome `fill="currentColor"`-SVGs brauchen
-bei `MultiEffect` **`brightness: 1.0` VOR `colorization`** (sonst gewichtet colorize mit
-Luminanz ~0 → dunkles Icon; galt Rail/Verbindungs-Typ-Icon/Schließen-×/Combo-Caret/SFTP-Icons).
-`2eb2110` Gruppen-Kontextmenü-Icons: `Theme.menuIcon` folgt auf macOS dem **System** (native
-Menüs), nicht der App → In-Window-Popups stattdessen `Theme.textBright`. `7cd0cec` Dropdown-
-Lesbarkeit: `AppComboBox` ohne eigenen `delegate` → Basic-`ItemDelegate` färbt Highlight über
-`palette.light`/Text über `palette.text` (Popup erbt App-Palette NICHT) → helle Schrift auf
-hellem Grund; Fix expliziter delegate (`Theme.sidebarHover`/`textBright`), SFTP-Liste band an
-nicht-existente `Theme.selection`/`hover` → `sidebarSelected`/`sidebarHover`.
-
-**QTMUX-47 (2026-07-25) — Einstellungen als nicht-modales Kategorie-Fenster.** Der modale
-`settingsDialog` (480 px, sechs gestapelte Abschnitte) sowie `connectionsDialog`,
-`vaultDialog` und `hotkeyCaptureDialog` sind einem eigenen `Window` (1c, 1060×700) mit
-Kategorie-Rail links + View rechts gewichen: neun Kategorien (Allgemein · Erscheinungsbild ·
-Terminal · Eingabe · Agenten & MCP · Tastenkürzel · Verbindungen · Secrets-Vault ·
-Erweiterungen), je eine Datei in `qml/prefs/Cat*.qml` über ein `CatPage`-Gerüst. **Keine
-funktionalen Änderungen** an den Einstellungen (gleiche Settings-Keys, wirkt sofort).
-Umgesetzt nach `docs/design/kategorie-dialog/Umsetzungsanweisung-Claude-Code.md`
-(9-Schritte-Plan, Variante 1c) aus dem importierten Claude-Design-Projekt. Neu ggü. dem
-alten Dialog: **Terminal-Live-Vorschau** (Schema/Font/Ligaturen), **Kürzel-Aufnahme in der
-Zeile** (statt Modaldialog, Gruppen + Inline-Konflikt), **Agenten-Abo-Matrix**
-(Empfänger↓/Quelle→, Diagonale gesperrt), **Suche mit Sprung + Aufblenden** (`PrefAnchor`),
-und **`App.reduceMotion`** (macOS/Windows erkannt) → Sidebar-Puls statisch statt animiert.
-Details in der Feature-Referenz (Sessions & UI). Zehn lokale Commits (`f1e28ba`…`fe10323`),
-noch **nicht gepusht**; visuelle Abnahme durch den Anwender steht aus (headless verifiziert:
-alle Kategorien laden fehlerfrei, 15/15 ctest, DE finalisiert/EN vollständig).
-
-**QTMUX-46 (2026-07-23) — Paritätsprüfung MCP / HTTP / Befehlspalette / Einstellungen.**
-Kontrolle auf Anwender-Wunsch, ob nach den letzten Änderungen alle Befehle überall
-vorhanden sind. **Funktional fehlte nichts:** `tools/list` liefert 23 Tools, dieselben 23
-stehen in `docs/MCP.md`, und jedes ist im Dispatch erreichbar (empirisch je einmal
-aufgerufen — kein „Unbekanntes Tool"); die Shell-Helfer nutzen nur existierende Tools.
-Vier Lücken nachgezogen: (1) die **Argumentspalte** der MCP-Doku hinkte dem `inputSchema`
-nach (`create_session` ohne `plugin`/`pluginId`/`typeId`/`loginScript`, `send_text` ohne
-`broadcast`, `read_screen` ohne `scrollback`, `list_sessions` ohne `workingDir`/`progress`);
-(2) **`confirmQuit`** lag nur im Einstellungsdialog → jetzt auch im Datei-Menü (über
-„Beenden") und in der Palette, wie die übrigen Komfort-Schalter; (3) **Sitzungsgruppen**
-waren nur per Rechtsklick und MCP bedienbar → fünf Palette-Befehle (gruppieren, zu Gruppe X,
-aus Gruppe nehmen, Gruppe umbenennen, Gruppe auflösen); (4) **`mcp/port`** war dokumentiert,
-aber nur per Umgebungsvariable/Registry setzbar → neuer Dialog-Abschnitt „Agenten-Steuerung
-(MCP)" mit An/Aus und Portfeld, und `McpServer::setPort` **schreibt** die Einstellung jetzt
-(las sie vorher nur). Verifiziert an einer isolierten Testinstanz: Palette-Befehl setzt die
-Gruppe (per MCP nachgemessen), Toggle landet als `confirmQuit=false` in den Einstellungen,
-Portwechsel im Dialog → Server antwortet auf dem neuen Port, alter Port tot, `mcp/port`
-persistiert. Jira-Issue am 2026-07-24 vom Mac aus dual nachgetragen (Windows-Maschine hat
-keine Credentials) — beide Systeme vergaben **46**, Referenzen stimmen.
-
-**QTMUX-45 (2026-07-23) — Gruppen werden eingerückt, Marke kollidiert nicht mehr.**
-Anwenderbefund zu QTMUX-42: Die Farbmarke allein trug die Gruppenzugehörigkeit zu schwach —
-und sie wurde von der MCP-Controller-Kennzeichnung *überschrieben* (beide saßen am linken
-Kachelrand, der rote Tab schaltete die Marke ab). Jetzt sind gruppierte Kacheln eingerückt
-(Form statt nur Farbe), die Farbmarke sitzt in der Einzugsspalte und der Controller-Tab am
-Rand der eingerückten Kachel — beide zugleich sichtbar. Verifiziert per Screenshot in beiden
-Themes; Details und die ListView-Falle dahinter in der Feature-Referenz (Sessions & UI).
-Jira-Issue am 2026-07-24 vom Mac aus dual nachgetragen (Windows-Maschine hat keine
-Credentials) — beide Systeme vergaben **45**, Referenzen stimmen.
-
-**QTMUX-42 (2026-07-23) — Sitzungsgruppen in der Sidebar.** Wer mehrere Agenten parallel
-laufen lässt, sah nur eine flache Liste gleich aussehender Shells. Jetzt lassen sich
-Sessions zu benannten, einklappbaren Gruppen zusammenfassen (Rechtsklick oder MCP), mit
-Farbmarke und Anzahl. Details und die zwei Sortier-Fallen in der Feature-Referenz
-(Sessions & UI).
-
-**QTMUX-41 (2026-07-22) — Rückfrage vor dem Beenden.** Cmd+Q riss bisher ohne Vorwarnung
-alle Sitzungen samt laufender Agenten/Builds/SSH-Verbindungen mit. Jetzt zählt ein Dialog
-die offenen Sitzungen auf; abschaltbar in den Einstellungen. Umsetzung und die Qt-6.5-
-Eigenheit dahinter in der Feature-Referenz (Sessions & UI).
-
-**QTMUX-39 (2026-07-22) — Klickbare Links.** Cmd/Ctrl-Klick auf eine URL oder einen
-existierenden Dateipfad öffnet den verknüpften Viewer; Cmd/Ctrl-Hover unterstreicht.
-Heuristik (`LinkDetector`, Gui-frei, 11 Unit-Tests + VtScreen-Integrationstest), Scheme-
-Whitelist gegen KI-Output-Missbrauch. Details in der Feature-Referenz (Terminal-Verhalten).
-Der Klick selbst ist GUI-interaktiv → automatisiert ist die Logik+Datenkette abgesichert,
-der visuelle Klick bleibt manueller Abnahmeschritt. OSC 8 bewusst deferred (QTMUX-40).
-
-**QTMUX-30…34 erledigt (2026-07-21)** — Befunde aus dem ersten echten Mehragenten-Betrieb
-(RAFTNG steuerte über QTmux zwei Worker; Fremdbericht `docs/mcp-controller-feedback-
-2026-07-21.md`): `send_text`-Enter abgesetzt · Ereignis-Kanal ehrlich statt stumm ·
-ID-Fehlermeldungen · `get_layout` mit Sitzungsübersicht · Doku-Wächter `test_doc_duplicates`.
-MCP-Port jetzt konfigurierbar (`QTMUX_MCP_PORT`/`QTMUX_PROFILE`) — Voraussetzung, um die
-MCP-Schicht zu testen, ohne die produktive Instanz anzufassen.
-
-**QTMUX-37 (2026-07-21, v1.5.0) — Empfangen von Agenten-Ereignissen.** Zweiter
-RAFTNG-Bericht: Zwei Worker meldeten `done` (seq 32/41 lagen im Server), der Controller
-bemerkte es eine halbe Stunde nicht — **weil er baute**. `wait_for_events` ist ein
-**Abholen**; es wirkt nur, während der Empfänger darin wartet, und ein arbeitender Agent
-wartet nie. Kein Code-Fehler, sondern eine falsche Annahme in der Doku („in einer
-Schleife" setzt einen Client voraus, der schleift). Antwort: **`shell-integration/
-qtmux-wait.{sh,ps1,cmd}`** — wartet stellvertretend im Hintergrund und **endet** beim
-ersten Treffer; dessen Ende weckt den Agenten (die einzige Stelle, an der das von außen
-geht). Dazu Doku-Abschnitt „Empfangen als KI-Agent" + Einstiegs-Cursor
-(`list_sessions` → `lastAgentEventSeq`). Eine echte Push-Seite ist **nicht** baubar:
-QTmux kann in den laufenden Zug eines fremden Agenten nicht hineinreichen — nur dessen
-eigene Umgebung kann ihn wecken.
-
-**Release 1.4.0 + öffentliches Repo (2026-07-21).** Erstes GitHub-Release mit allen vier
-Paketen (DMG · MSI · portables ZIP · AppImage), Notes zweisprachig mit SHA-256. Zugleich
-Umzug in ein öffentliches Repo unter Apache-2.0, nachdem die Historie bereinigt wurde.
-(Damit auch QTMUX-35 Windows-Installer und QTMUX-36 separater Download-Kanal erledigt.)
-Einzelheiten und Spielregeln: Abschnitt **„Repository, Release, Zusammenarbeit"**.
-
-**QTMUX-43 (2026-07-22): Shift/Alt+Enter fügt Zeilenumbruch ein.** Enter mit Shift oder
-Alt sendet jetzt `ESC CR` statt `CR` — Agenten-TUIs (Claude Code) fügen damit einen
-Umbruch ins Eingabefeld ein statt abzusenden. Encoding-Logik dafür Gui-frei nach
-`src/core/KeyEncoding.cpp` extrahiert (neuer Test `test_keyencoding`); Details/Abwägung:
-Feature-Referenz „Tasten". Jira-Issue am 2026-07-23 vom Mac aus dual nachgetragen (die
-Windows-Maschine hat keine Credentials) — die dort vergebene Nummer **43** wurde in
-beiden Systemen bestätigt, Referenzen in Code/Doku stimmen also.
-
-**Offene Jira:** **QTMUX-40** (OSC-8-Hyperlinks — die *explizite* Variante zu den
-heuristischen Links aus QTMUX-39. In dieser Architektur teuer: `VtScreen` hält den
-sichtbaren Bildschirm **nicht** als Puffer (Zellen entstehen lazy aus libvterm), und
-libvterm kennt **keine** Hyperlinks → es gibt keine Zelle, an die man die Link-ID beim
-Empfang von `ESC]8` heften könnte. Bräuchte Cursor-Span-Tracking (Link-auf/-zu über
-Cursorbewegung) + neues `Cell`-Feld + Scrollback-Sonderfälle. Bewusst deferred, weil die
-Heuristik den Agenten-Fall (nackter Text) bereits abdeckt und OSC-8-emittierende Programme
-dort selten sind) · **QTMUX-38** (Shell-Helfer sind für **Installationsnutzer nicht
-erreichbar** — `qtmux-emit.*`/`qtmux-wait.*` liegen nur im Repo, in keinem Paket; genau
-der Installationsnutzer will aber den Stop-Hook einrichten. Reines Mitpaketieren löst das
-**AppImage nicht** — es wird unter wechselndem `/tmp/.mount_*` gemountet, taugt also nicht
-für eine Hook-Zeile. Abzuwägen gegen `qtmux --install-shell-integration <dir>` mit den
-Skripten als qrc-Ressource; dort aber beachten: `WIN32_EXECUTABLE` heißt **kein stdout**,
-ein „Pfad ausgeben" erreicht unter Windows niemanden) · **QTMUX-2** (Windows-Funktionstest
-`currentWorkingDirectory` via PEB — braucht eine Windows-Session) ·
-**QTMUX-13** (native macOS-Menü-Icons — Qt 6.11 reicht in
-nativen Menüs weder `icon.source` noch `icon.name` durch, empirisch bewiesen; einziger Weg
-wäre der Widgets/`QMenuBar`-Umbau, bewusst deferred, s. [[qtmux-native-menu-icons]]).
-
-**Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) · Signierung/
-Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff (CAN-FD,
-ID-Filter, Konfig-Dialog statt `baud`-Befehl, DBC-Decoding) · CI-Action-Versionen anheben ·
-optional CPack-Distro-Pakete (.deb/.rpm) · **LGPL-Beilagen** für das in den Installern
-gebündelte Qt (Lizenztext + Quellen-Hinweis) · Screenshot im README.
+**Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) · Signierung/Notarisierung
+(macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff (CAN-FD, ID-Filter,
+Konfig-Dialog, DBC-Decoding) · CI-Action-Versionen anheben (Node-20-Deprecation ab Sept. 2026) ·
+optional CPack-Distro-Pakete (.deb/.rpm) · **LGPL-Beilagen** fürs gebündelte Qt (Lizenztext +
+Quellen-Hinweis) · Screenshot im README.
 
 ## Repository, Release, Zusammenarbeit
 
