@@ -141,3 +141,39 @@ alten `sessions`-Profils erzeugt N Ein-Pane-Windows (Unit-getestet). Noch KEINE 
 - `sessionIds()` aus dem Baum ableiten vs. separat pflegen (Redundanz/Sync). Empfehlung: **aus
   dem Baum ableiten** (single source of truth = layoutJson).
 - Migration alter `.ans`: verwerfen (aktuell so entschieden) vs. best-effort nach sessionId.
+
+## Fortschritt / Handoff (Stand 2026-07-28) — compact-fest
+
+**Erledigt + gepusht:**
+- **Stufe 1** (Datenmodell, additiv) — commit `f131f98`. `src/viewmodels/Window.{h,cpp}`
+  (Q_PROPERTY `windowId` mit Getter `id()`; `name/group/layoutJson/activePaneId`; `sessionIds()`/
+  `paneIds()`/`paneCount()` aus `layoutJson` abgeleitet; static `nextId()`/`setNextId()`),
+  `WindowModel.{h,cpp}` (QAbstractListModel, `QML_ELEMENT`; `createWindow`/`closeWindow` →
+  Signal `windowClosed(windowId, sessionIds)`; static `migrateSessionsToWindows(QSettings&)`),
+  `Session::windowId` (additiv), `tests/tst_windowmodel.cpp` (7 Fälle inkl. Migration).
+  ⚠ `Window` bewusst OHNE `QML_ELEMENT` (Namenskollision `QtQuick.Window.Window`) → über das
+  Model als `QObject*`. Aggregat-Rollen runState/attention/mcpController noch TODO-Stub.
+- **Screenshot-Harness** — commit `dbaa3c2`. GUI selbst prüfen ohne TCC:
+  `QTMUX_PROFILE=shot QTMUX_MCP_PORT=7399 ./build/macos-test/qtmux.app/Contents/MacOS/qtmux
+  --screenshot /tmp/…/x.png --settle 1800`, dann das PNG mit dem Read-Tool ansehen.
+- **Stufe-2-Fundament:** `WindowModel { id: windows }` in `qml/Main.qml` instanziiert (baut,
+  noch NICHT verdrahtet — App läuft weiter auf dem alten Modell).
+
+**NÄCHSTER SCHRITT — Stufe 2 (QML-Flip), OFFEN:**
+1. **C++ Windows-Restore (fehlt):** beim Start `migrateSessionsToWindows` laufen lassen, dann aus
+   dem `windows`-Array je Window das `Window`-Objekt + je Blatt die Session (aus `cfg`) erzeugen
+   (Gegenseite zur Migration; evtl. mit Stufe 3 zusammenziehen).
+2. **QML-Rewire (atomar):** `SplitNode`-Root rendert den Baum des aktiven Windows; Blätter
+   `session: sessions.sessionById(leaf.sessionId)` statt `sessionObject(sessionRow)`; `splitPane`/
+   `newSession`/`closePane` aufs aktive Window; Sidebar `ListView.model` → `windows`, Delegate auf
+   Window-Rollen, Klick = Window aktivieren; Startup/Shutdown umlegen; `paneId` global eindeutig.
+   `assignToActivePane` entfällt.
+3. Je Schritt: bauen + `--screenshot` prüfen; am Ende visuelle Abnahme durch den Anwender.
+
+**Verifikation:** `ctest --test-dir build/macos-test` (17/17, inkl. `test_windowmodel`). MCP-e2e
+gegen zweite Instanz. Worker #2/#3 im QTmux-Verzeichnis per QTmux-MCP steuerbar (disjunkte
+C++-Dateien parallelisierbar, QML nicht).
+
+**Referenzen:** Plan `~/.claude/plans/quizzical-chasing-flame.md`; Jira-Epic **QTMUX-83** (dual,
+In Progress); Tasks #3 (Stufe 2, in Arbeit) … #6. Entscheidungen: Gruppen→Window-Gruppen,
+Name auto+umbenennbar, Migration je Session→Ein-Pane-Window.

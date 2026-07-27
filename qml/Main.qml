@@ -77,6 +77,10 @@ ApplicationWindow {
     property var dragScenePt: null
 
     SessionModel { id: sessions }
+    // Per-Window-Layouts (QTMUX-83, Stufe 2): die künftige Sidebar-Quelle. Vorerst
+    // instanziiert, aber noch NICHT verdrahtet — der Flip (Sidebar/Layout auf Windows)
+    // folgt zusammenhängend. So bleibt die App auf dem alten Modell lauffähig.
+    WindowModel { id: windows }
 
     // Nicht-modales Einstellungsfenster (QTMUX-47). Öffnen über actSettings/Toolbar/
     // Palette per prefs.open(kategorie) — ersetzt die früheren settingsDialog/
