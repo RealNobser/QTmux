@@ -63,6 +63,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
+| `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37) |
 | `tests/` | 15 ctest-Tests: 14 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding) + `test_doc_duplicates` (reines CMake-Skript) |
 
@@ -113,6 +114,26 @@ CMake-Fehler). `CMakePresets.json`-`CMAKE_PREFIX_PATH` ggf. anpassen. In `vcvars
 cmake --preset windows && cmake --build --preset windows
 ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein!
 ```
+
+> **⚠️ Zwei Visual Studios auf einer Maschine (QTMUX-79).** Liegt neben VS 2022 auch
+> **VS 18** („2026"), injiziert die **CMake-Tools-Erweiterung immer die NEUESTE**
+> Developer-Umgebung — eine Einstellung zur Wahl der Installation gibt es nicht
+> (geprüft in 1.23.52: nur `useVsDeveloperEnvironment` und `preferredGenerators`).
+> Zusammen mit einem Cache, der auf den VS-2022-Compiler zeigt, ergibt das
+> **VS-2022-`cl.exe` + VS-18-Standardbibliothek** → `error STL1001: Unexpected compiler
+> version, expected MSVC Compiler 19.50 or newer`. Deshalb kommt die Umgebung unter
+> Windows aus **`tools/vsdev-build.cmd`** (vswhere, hart auf die 17er-Reihe begrenzt),
+> das die VSCode-Task „CMake: build" aufruft; `cmake.useVsDeveloperEnvironment` steht
+> auf **`never`**, `configureOnOpen` auf **`false`**. Konfigurieren/Bauen laufen damit
+> über **F5 bzw. Strg+Umschalt+B**, nicht über die CMake-Statusleisten-Knöpfe.
+> VS 2022 bleibt der Standard, weil Qt als `msvc2022_64` gebaut ist und CI wie
+> `installer/build-msi.ps1` ebenfalls VS 2022 nutzen.
+> 🔑 Beim Bearbeiten von `tools/vsdev-build.cmd` beachten: **CRLF-Zeilenenden** (bei
+> reinem LF zerlegt cmd.exe die Datei und führt Kommentarzeilen aus), **rein ASCII**,
+> und `%ProgramFiles(x86)%` **nie in einer `for`-/`if`-Klammer expandieren** — die
+> Klammern aus „(x86)" schließen sie vorzeitig („Der Befehl `C:\Program` ist entweder
+> falsch geschrieben"). Der vswhere-Aufruf schreibt seine Ausgabe deshalb in eine
+> temporäre Datei statt in `for /f ... in (`…`)`.
 
 `windeployqt` läuft als Post-Build. **MSI/ZIP:** `installer/build-msi.ps1 -Version <ver>`
 (WiX v5 als dotnet-Tool; nutzt dasselbe `windows-release`-Preset → nur 2 Build-Dirs:
@@ -247,6 +268,23 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
   pflegen.
 
 ## Status (2026-07-27)
+
+**QTMUX-79 (2026-07-27) — „Run und Debug" in VSCode zog die falsche VS-Installation.**
+Anwenderbefund `error STL1001: Unexpected compiler version, expected MSVC Compiler 19.50`.
+Ursache: Auf der Maschine liegen **VS 2022 (17.14) und VS 18 (18.6)**; die
+CMake-Tools-Erweiterung injiziert per `useVsDeveloperEnvironment` immer die **neueste**
+Umgebung (VS 18, STL 14.51), während der Cache auf den Compiler aus VS 2022 (14.44)
+zeigt → gemischte Toolchain. Eine Einstellung zur Wahl der Installation existiert nicht,
+deshalb kommt die Umgebung jetzt aus `tools/vsdev-build.cmd` (vswhere `[17.0,18.0)`),
+das die Task „CMake: build" unter Windows aufruft; `useVsDeveloperEnvironment: never`,
+`configureOnOpen: false`, und der Debug-Programmpfad ist fest aufs `windows`-Preset
+gesetzt (die Extension-Variable ist ohne deren Configure nicht mehr verlässlich).
+Verifiziert mit gelöschtem Cache aus einer Shell **ohne** Dev-Umgebung: Configure +
+Build + 14/14 Tests grün, Cache zeigt auf VS 2022. Damit ist der frühere Fix
+(`useVsDeveloperEnvironment: always`, QTMUX-43-Zeitraum) abgelöst — er war richtig,
+solange nur VS 2022 installiert war. Drei cmd-Fallen dabei erlebt und im
+Windows-Build-Abschnitt notiert (CRLF-Pflicht, ASCII, Klammern aus
+`%ProgramFiles(x86)%`). ⚠ Jira-Issue dual noch anzulegen (keine Credentials hier).
 
 **QTMUX-78 (2026-07-27) — Sidebar-Ring zeigt echte Zustände (idle/busy/waiting/error).**
 Anwenderbefund: der Punkt war faktisch **immer grün** (Default `Running`; `Idle`/`Waiting`

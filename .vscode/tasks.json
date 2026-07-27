@@ -2,20 +2,32 @@
   "version": "2.0.0",
   "tasks": [
     {
-      // Wird von launch.json als preLaunchTask verwendet. Baut über das aktive
-      // CMake-Build-Preset (in der Statusleiste gewählt), daher plattformneutral
-      // (macos/windows/linux) ohne Hardcoding.
-      "type": "cmake",
+      // Wird von launch.json als preLaunchTask verwendet.
+      //
+      // macOS/Linux: baut über das aktive CMake-Build-Preset (Statusleiste).
+      //
+      // Windows: läuft bewusst NICHT über die CMake-Tools-Erweiterung, sondern über
+      // tools\vsdev-build.cmd (QTMUX-79). Sind — wie hier — MEHRERE Visual Studios
+      // installiert (VS 2022 + VS 18), injiziert die Erweiterung immer die Umgebung
+      // der NEUESTEN Installation. Zusammen mit einem Cache, der auf den Compiler aus
+      // VS 2022 zeigt, ergibt das VS-2022-cl.exe + VS-18-Standardbibliothek und damit
+      //   error STL1001: Unexpected compiler version, expected MSVC Compiler 19.50
+      // Eine Einstellung zur Wahl der VS-Installation bietet CMake Tools nicht, deshalb
+      // holt das Skript die Umgebung selbst (vswhere, eingegrenzt auf die 17er-Reihe).
+      // Preset fest "windows": F5 debuggt den Debug-Build. Für einen Release-Lauf
+      // "tools\vsdev-build.cmd windows-release" von Hand aufrufen.
       "label": "CMake: build",
-      "command": "build",
-      "targets": ["qtmux"],
-      "preset": "${command:cmake.activeBuildPresetName}",
+      "type": "shell",
+      "command": "cmake --build --preset ${command:cmake.activeBuildPresetName} --target qtmux",
+      "windows": {
+        "command": "${workspaceFolder}\\tools\\vsdev-build.cmd windows qtmux"
+      },
       "group": {
         "kind": "build",
         "isDefault": true
       },
-      "problemMatcher": ["$gcc"],
-      "detail": "Baut das QTmux-Target über das aktive CMake-Build-Preset"
+      "problemMatcher": ["$gcc", "$msCompile"],
+      "detail": "Baut das QTmux-Target (Windows: in der VS-2022-Umgebung)"
     }
   ]
 }

@@ -1,11 +1,18 @@
 {
   "cmake.useCMakePresets": "always",
-  // Windows: Die Presets nutzen den Ninja-Generator + MSVC, aber ninja/cl liegen nur in
-  // der VS-Entwickler-Umgebung (vcvars64) im PATH. Ohne diese Einstellung scheitert das
-  // Configure aus einem normal gestarteten VSCode mit CMAKE_MAKE_PROGRAM-NOTFOUND —
-  // und damit der preLaunchTask von „Run und Debug". CMake Tools injiziert hiermit die
-  // VS-Developer-Umgebung selbst (Pendant zum vcvars64-Aufruf auf der Kommandozeile).
-  "cmake.useVsDeveloperEnvironment": "always",
+  // Windows: Die Erweiterung darf die VS-Umgebung NICHT selbst injizieren (QTMUX-79).
+  // Sie nähme dafür immer die neueste Installation — hier VS 18 — während der Cache
+  // auf den Compiler aus VS 2022 zeigt; diese Mischung endet in
+  //   error STL1001: Unexpected compiler version, expected MSVC Compiler 19.50
+  // Eine Einstellung zur Wahl der VS-Installation gibt es nicht, deshalb kommt die
+  // Umgebung deterministisch aus tools\vsdev-build.cmd (vswhere, auf VS 2022 begrenzt),
+  // das die Task „CMake: build" aufruft. Konfigurieren und Bauen laufen damit über
+  // F5 bzw. Strg+Umschalt+B — nicht über die CMake-Knöpfe in der Statusleiste.
+  // (Auf macOS/Linux ist die Einstellung wirkungslos.)
+  "cmake.useVsDeveloperEnvironment": "never",
+  // Kein automatisches Konfigurieren beim Öffnen: sonst legt die Erweiterung den Cache
+  // ungefragt mit der falschen (oder ganz ohne) Toolchain an. Das Skript konfiguriert.
+  "cmake.configureOnOpen": false,
   "cmake.options.statusBarVisibility": "visible",
   "C_Cpp.default.compileCommands": "${workspaceFolder}/build/${command:cmake.activeConfigurePresetName}/compile_commands.json",
   "files.associations": {

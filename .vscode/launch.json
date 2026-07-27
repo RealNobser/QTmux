@@ -33,7 +33,12 @@
       },
       "windows": {
         "type": "cppvsdbg",
-        "program": "${command:cmake.buildDirectory}/qtmux.exe",
+        // Fester Pfad statt ${command:cmake.buildDirectory} (QTMUX-79): Unter Windows
+        // konfiguriert nicht mehr die CMake-Tools-Erweiterung, sondern
+        // tools\vsdev-build.cmd (feste VS-2022-Umgebung, Preset "windows") — die
+        // Extension-Variable wäre damit nicht mehr verlässlich aufgelöst. Debug-Preset
+        // und Debug-Ziel hängen so garantiert zusammen.
+        "program": "${workspaceFolder}/build/windows/qtmux.exe",
         // WICHTIG für die ConPTY-Terminals: Der Default "internalConsole" leitet die
         // Standard-Handles der App in den Debugger um. Das stört die von QTmux per
         // ConPTY gestarteten Pseudo-Konsolen — die Kindshells (cmd/PowerShell) hängen
