@@ -35,23 +35,29 @@ ApplicationWindow {
     // Aktive (fokussierte) Session ans Model melden -> löscht deren Aufmerksamkeits-Hinweis.
     onCurrentRowChanged: sessions.setActiveRow(currentRow)
 
-    // --- Split-Panes (rekursiver Baum, QTMUX-3) ------------------------------
-    // `layout` ist die Wurzel eines Baums aus Blättern und Splits — beliebig
-    // verschachtelbar (H in V usw.). Knotentypen:
-    //   Blatt: { paneId: int, sessionRow: int }   (ein Terminal)
-    //   Split: { orientation: int, children: [...] }
-    // Strukturänderungen (teilen/schließen/reorder) bauen den Baum neu auf
-    // (rebuildLayout); der Tastaturfokus wird über `paneItems` (paneId->Term)
-    // wiederhergestellt. `currentRow` folgt der Session des aktiven Blatts.
+    // --- Per-Window-Layout (QTMUX-83, B1) ------------------------------------
+    // Die Sidebar listet **Windows** (Tabs). Jedes Window hat SEINEN EIGENEN
+    // Split-Layout-Baum (Authority: `Window::layoutJson` in C++). QML rendert immer
+    // nur den Baum des AKTIVEN Windows als Live-JS-Kopie in `layout`; bei jeder
+    // Strukturänderung wird sie über syncActiveTree() ins Window-Objekt zurück-
+    // serialisiert. Beim Umschalten (loadWindow) sichert QML den alten Baum und lädt
+    // den neuen. Knotentypen:
+    //   Blatt: { paneId: int, sessionId: int }   (ein Terminal; sessionId ist STABIL)
+    //   Split: { orientation: int, children: [...], sizes: [...] }
+    // Blätter referenzieren Sessions per stabiler `sessionId` (nicht mehr per Zeilen-
+    // index) — Umsortieren/Schließen in der Sidebar braucht damit keinen Index-Remap.
     property var layout: null
     property int nextPaneId: 1
-    // Split-Layout über Neustarts erhalten: nach jedem Strukturwechsel via persistLayout()
-    // serialisiert, beim Start (restorePaneLayout) geladen. layoutRestored sperrt das
-    // Persistieren, bis der gesicherte Baum geladen ist (kein vorzeitiges Überschreiben).
-    property string paneLayoutJson: "null"
-    property bool layoutRestored: false
+    // Stabile ID des aktuell im Hauptbereich gerenderten Windows (-1 = keines).
+    property int activeWindowId: -1
     property int activePaneId: -1
     property int paneCount: 1
+    // Anker für Sidebar-Bindungen, die den aggregierten Window-Status/-Titel aus den
+    // Sessions ableiten: `sessionsRevision` wird bei jeder Session-Änderung erhöht,
+    // `windowsRevision` bei jeder Layout-/Fenster-Änderung. Ohne solche Anker frören die
+    // in QML berechneten Window-Kacheln auf ihrem ersten Stand ein (wie groupsRevision).
+    property int sessionsRevision: 0
+    property int windowsRevision: 0
     property var paneItems: ({})         // paneId -> TerminalItem (für Fokus + Hit-Test)
     property var activeTerminal: null
     // Ob das AKTIVE Terminal gerade eine Auswahl hat — treibt actCopy.enabled (Menü/
@@ -104,11 +110,13 @@ ApplicationWindow {
         // Port NICHT hart setzen: McpServer::defaultPort() liest QTMUX_MCP_PORT bzw.
         // die Einstellung mcp/port (Vorgabe 7345). Eine Testinstanz startet damit auf
         // einem eigenen Port, ohne der produktiven Instanz den Port wegzunehmen.
-        // Nicht nur currentRow (Sidebar-Markierung) setzen, sondern die Session auch
-        // ins aktive Pane laden — sonst zeigt das Terminal nach MCP-create/focus_session
-        // weiter die alte Session, bis das Fenster aktiviert wird. assignToActivePane
-        // fällt vor dem Layout-Aufbau sauber auf reines currentRow zurück.
-        onFocusRequested: (row) => window.assignToActivePane(row)
+        // MCP focus_session (Zeilenindex): im Window-Modell heißt „fokussieren" = das
+        // Window aktivieren, in dem die Session als Pane liegt (loadWindow). Liegt die
+        // Session in keinem Window (sollte nicht vorkommen), passiert nichts.
+        onFocusRequested: (row) => {
+            const s = sessions.sessionAt(row)
+            if (s && s.windowId >= 0) window.loadWindow(s.windowId)
+        }
         onSetThemeRequested: (mode) => Theme.mode = mode
 
         // --- Layout-/Profil-Steuerung über MCP (QTMUX-29). Die Handler laufen
@@ -118,13 +126,13 @@ ApplicationWindow {
         // sichtbar sind (die liegen nur in der Seitenleiste). Deshalb liefern wir den
         // Baum unter "layout" plus eine Sitzungsübersicht mit Pane-Zuordnung.
         onLayoutRequested: {
-            const inPane = ({})   // sessionId -> paneId
+            const inPane = ({})   // sessionId -> paneId (nur die des AKTIVEN Windows)
             function ser(node) {
                 if (window.isLeaf(node)) {
-                    const s = sessions.sessionAt(node.sessionRow)
+                    const s = window.sessionById(node.sessionId)
                     if (s) inPane[s.sessionId] = node.paneId
                     return { paneId: node.paneId,
-                             sessionId: s ? s.sessionId : -1,
+                             sessionId: node.sessionId,
                              active: node.paneId === window.activePaneId }
                 }
                 return { orientation: node.orientation === Qt.Vertical ? "v" : "h",
@@ -132,6 +140,8 @@ ApplicationWindow {
             }
             if (!window.layout) { mcp.provideResult(false, qsTr("Kein Layout vorhanden.")); return }
             const tree = ser(window.layout)
+            // Sitzungsübersicht: alle Sessions, mit Pane-Zuordnung im AKTIVEN Window
+            // (QTMUX-33). Sessions anderer Windows laufen weiter, sind hier aber „unsichtbar".
             const list = []
             for (let i = 0; i < sessions.rowCount(); ++i) {
                 const s = sessions.sessionAt(i)
@@ -139,19 +149,19 @@ ApplicationWindow {
                 const pid = inPane[s.sessionId]
                 list.push({ sessionId: s.sessionId,
                             title: s.title,
-                            // Ohne Pane heißt: läuft weiter, ist aber nicht zu sehen.
+                            windowId: s.windowId,
                             paneId: pid === undefined ? null : pid,
                             visible: pid !== undefined,
                             active: pid !== undefined && pid === window.activePaneId })
             }
             mcp.provideResult(true, JSON.stringify({ layout: tree,
+                                                     windowId: window.activeWindowId,
                                                      activePaneId: window.activePaneId,
                                                      sessions: list }))
         }
         onSplitPaneRequested: (o) => {
-            window.splitPane(o === "v" ? Qt.Vertical : Qt.Horizontal)
-            const s = sessions.sessionAt(window.currentRow)
-            mcp.provideResult(true, String(s ? s.sessionId : -1))
+            const sid = window.splitPane(o === "v" ? Qt.Vertical : Qt.Horizontal)
+            mcp.provideResult(true, String(sid))
         }
         onClosePaneRequested: (paneId) => {
             if (paneId >= 0) {
@@ -172,14 +182,11 @@ ApplicationWindow {
             if (window.zoomPaneById(paneId)) mcp.provideResult(true, "ok")
             else mcp.provideResult(false, qsTr("Unbekannte paneId."))
         }
+        // assign_session ist im Window-Modell (QTMUX-83) bedeutungslos: eine Session gehört
+        // fest zu genau einem Window/Pane, es gibt kein „Session in ein Pane laden" mehr.
+        // Bewusst als klarer Hinweis statt still zu scheitern (endgültige Deprecation: Stufe 4).
         onAssignPaneRequested: (row, paneId) => {
-            if (paneId >= 0) {
-                if (!window.findLeaf(paneId)) { mcp.provideResult(false, qsTr("Unbekannte paneId.")); return }
-                window.activePaneId = paneId
-            }
-            window.assignToActivePane(row)
-            window.focusActivePane()
-            mcp.provideResult(true, "ok")
+            mcp.provideResult(false, qsTr("assign_session entfällt im Window-Modell — nutze focus_session bzw. focus_window."))
         }
         onConnectProfileRequested: (name) => {
             const p = Profiles.profile(name)
@@ -191,38 +198,49 @@ ApplicationWindow {
         Component.onCompleted: start()
     }
 
-    // Hält currentRow gültig, wenn Sessions entfernt werden (manuell oder bei Shell-Ende).
+    // Zwischenspeicher für die sessionIds, die gerade aus dem Model entfernt werden
+    // (in onRowsAboutToBeRemoved erfasst, in onRowsRemoved verarbeitet).
+    property var _removingIds: []
+    // Neu eingefügte sessionIds, die auf ihr Auto-Wrapping in ein Window warten.
+    property var _pendingWrap: []
+
+    // Extern (per MCP/C++) erzeugte Sessions haben keinen Window — sie kommen mit
+    // windowId==-1 an und würden sonst in keinem Pane sichtbar. QML-erzeugte Sessions
+    // (newSession/splitPane/openWindowWithSession) setzen windowId dagegen SYNCHRON,
+    // bevor dieser verzögerte Check läuft → nur die fensterlosen werden eingepackt.
+    function _wrapPending() {
+        const ids = window._pendingWrap; window._pendingWrap = []
+        for (let i = 0; i < ids.length; ++i) {
+            const s = window.sessionById(ids[i])
+            if (s && s.windowId < 0) {
+                const row = window.rowForSessionId(ids[i])
+                if (row >= 0) window.openWindowWithSession(row, "")   // eigenes Window (Tab)
+            }
+        }
+    }
+
+    // Session-Lebenszyklus im Window-Modell: verschwindet eine Session (manuell, Shell-Ende
+    // oder MCP close_session), müssen ihre Blätter aus ALLEN Window-Bäumen verschwinden und
+    // leer gewordene Windows geschlossen werden. Die zu entfernenden sessionIds werden VOR
+    // dem Entfernen erfasst — danach ist die Zeile→ID-Zuordnung nicht mehr abfragbar.
     Connections {
         target: sessions
-        function onRowsRemoved(parent, first, last) {
-            const removed = last - first + 1
-            const adjust = function(r) {
-                if (r > last) return r - removed
-                if (r >= first) return Math.min(first, sessions.count - 1)
-                return r
-            }
-            window.currentRow = adjust(window.currentRow)
-            if (window.layout) {
-                // Panes der ENTFERNTEN Sessions schließen (Splits kollabieren) statt
-                // sie auf eine überlebende Session umzubiegen — sonst zeigen mehrere
-                // Panes dieselbe Session und kämpfen mit verschiedenen Grids um deren
-                // resize() (Symptom: alle Panes dieselbe Session, Anzeige verzerrt).
-                const emptied = window.pruneLeaves(function(l) {
-                    return l.sessionRow >= first && l.sessionRow <= last
-                })
-                if (emptied)   // ganzer Baum weg -> ein Blatt mit der Folge-Session
-                    window.layout = { paneId: window.nextPaneId++,
-                                      sessionRow: window.currentRow }
-                // Verbliebene Blätter auf die verschobenen Indizes nachführen.
-                window.remapLeaves(function(r) { return r > last ? r - removed : r })
-                // Das aktive Pane kann mit entfernt worden sein -> neu wählen.
-                if (!window.findLeaf(window.activePaneId)) {
-                    const fl = window.firstLeaf(window.layout)
-                    if (fl) { window.activePaneId = fl.paneId; window.currentRow = fl.sessionRow }
-                }
-            }
-            window.rebuildLayout()
+        function onRowsAboutToBeRemoved(parent, first, last) {
+            const ids = []
+            for (let r = first; r <= last; ++r) { const s = sessions.sessionAt(r); if (s) ids.push(s.sessionId) }
+            window._removingIds = ids
         }
+        function onRowsRemoved(parent, first, last) {
+            window.pruneSessionsFromWindows(window._removingIds)
+            window._removingIds = []
+        }
+        function onRowsInserted(parent, first, last) {
+            for (let r = first; r <= last; ++r) { const s = sessions.sessionAt(r); if (s) window._pendingWrap.push(s.sessionId) }
+            Qt.callLater(window._wrapPending)
+        }
+        // Anker für die in QML berechneten Window-Kacheln (Titel/Status aus den Sessions).
+        function onDataChanged(topLeft, bottomRight, roles) { window.sessionsRevision++ }
+        function onCountChanged() { window.sessionsRevision++ }
         // Fenster-Alert (Dock-Hüpfen/Taskbar-Blinken), wenn QTmux nicht im Vordergrund ist.
         function onAttentionRaised(row) {
             if (!window.active) window.alert(0)
@@ -434,18 +452,10 @@ ApplicationWindow {
 
     function newSession() {
         const row = sessions.createShellSession("", window.defaultShellProgram)
-        // Neue Session ins aktive Pane laden und den Tastaturfokus daraufsetzen,
-        // damit man sofort tippen kann (kein Klick ins Terminal nötig).
-        if (window.layout)
-            window.assignToActivePane(row)
-        else
-            window.currentRow = row   // Startfall: Pane wird gleich erst erzeugt
+        window.openWindowWithSession(row, "")   // neue Session -> eigenes Window (Tab)
     }
-    function closeCurrent() {
-        if (currentRow < 0) return
-        sessions.closeSession(currentRow)
-        currentRow = Math.min(currentRow, sessions.count - 1)
-    }
+    // „Session schließen" = aktives Pane schließen (beim letzten Pane das ganze Window).
+    function closeCurrent() { window.closePane() }
     // Kurzer, selbstverschwindender Hinweis unten im Fenster (z. B. nach „Neues Fenster").
     function notifyToast(msg) { toast.text = msg; toast.restart() }
     function typeLabel(t) {
@@ -461,10 +471,7 @@ ApplicationWindow {
     function newPluginSession(pluginId, typeId) {
         const row = sessions.createPluginSession(pluginId, typeId)
         if (row < 0) return   // Plugin/Typ nicht (mehr) verfügbar
-        if (window.layout)
-            window.assignToActivePane(row)
-        else
-            window.currentRow = row
+        window.openWindowWithSession(row, "")
     }
 
     // Startet eine Session aus einem gespeicherten Verbindungsprofil (Connection-
@@ -483,9 +490,8 @@ ApplicationWindow {
             row = sessions.createSerialSession(p.serialPort, p.baud || 115200, ls)
         else
             row = sessions.createShellSession(p.workingDir || "", p.program || "", ls)
-        // Wie bei newSession: ins aktive Pane laden (sofort tippbereit).
-        if (window.layout) window.assignToActivePane(row)
-        else window.currentRow = row
+        // Wie bei newSession: eigenes Window (Tab) anlegen und aktivieren.
+        window.openWindowWithSession(row, "")
     }
     // Öffnet den SFTP-Browser für ein SSH-Profil (löst das Vault-Passwort wie beim
     // Verbinden auf). QTMUX-7-Rest: Dateitransfer über System-sftp.
@@ -549,14 +555,14 @@ ApplicationWindow {
         return id
     }
 
-    // Nächste/vorige Session ins aktive Pane laden (mit Umlauf). dir = +1/-1.
+    // Nächstes/voriges Window aktivieren (mit Umlauf). dir = +1/-1.
     function cycleSession(dir) {
-        const n = sessions.count
+        const n = windows.count
         if (n <= 0) return
-        let r = (window.currentRow < 0 ? 0 : window.currentRow) + dir
+        let r = (windows.activeRow < 0 ? 0 : windows.activeRow) + dir
         if (r < 0) r = n - 1
         else if (r >= n) r = 0
-        window.assignToActivePane(r)
+        window.loadWindowRow(r)
     }
 
     // Setzt die Breite eines Menüs explizit auf das Maximum der Item-implicitWidths.
@@ -622,9 +628,6 @@ ApplicationWindow {
         }
     }
     function leafCount() { let c = 0; forEachLeaf(window.layout, function() { ++c }); return c }
-    function remapLeaves(fn) {
-        forEachLeaf(window.layout, function(l) { l.sessionRow = fn(l.sessionRow) })
-    }
     // Entfernt alle Blätter, auf die `pred` zutrifft, aus dem Layout-Baum und
     // kollabiert dabei leere/einelementige Splits. true = Baum wurde komplett leer.
     function pruneLeaves(pred) {
@@ -650,19 +653,81 @@ ApplicationWindow {
     function sessionObject(row) {
         return (row >= 0 && row < sessions.count) ? sessions.sessionAt(row) : null
     }
+    // Session-Objekt zu einer stabilen sessionId (SplitNode-Blätter binden hierüber).
+    // sessions.sessionById ist nicht Q_INVOKABLE → hier per Iteration (kleine Listen).
+    function sessionById(id) {
+        for (let i = 0; i < sessions.count; ++i) {
+            const s = sessions.sessionAt(i)
+            if (s && s.sessionId === id) return s
+        }
+        return null
+    }
+
+    // --- Window-Anzeige (Sidebar-Kacheln berechnen Titel/Status in QML) ---------
+    // Die aggregierten Rollen (Titel/Status/Attention/Controller) werden bewusst in QML
+    // aus den Sessions abgeleitet statt in WindowModel — so bleibt das Model schlank.
+    // Die Bindungen lesen window.sessionsRevision/windowsRevision mit, damit sie live sind.
+
+    // sessionId des Blatts mit paneId im Baum eines (evtl. nicht aktiven) Windows.
+    function sessionIdForPane(w, paneId) {
+        if (!w) return -1
+        let tree = null; try { tree = JSON.parse(w.layoutJson) } catch (e) { return -1 }
+        let found = -1
+        const walk = function(n) {
+            if (!n || found >= 0) return
+            if (n.children === undefined) { if (n.paneId === paneId) found = n.sessionId; return }
+            for (let i = 0; i < n.children.length; ++i) walk(n.children[i])
+        }
+        walk(tree); return found
+    }
+    function windowTitle(w) {
+        if (!w) return qsTr("Fenster")
+        if (w.name && w.name.length > 0) return w.name
+        const ids = w.sessionIds()
+        if (ids.length === 0) return qsTr("Fenster %1").arg(w.windowId)
+        let sid = window.sessionIdForPane(w, w.activePaneId)
+        let s = (sid >= 0) ? window.sessionById(sid) : null
+        if (!s) s = window.sessionById(ids[0])
+        return s ? s.title : qsTr("Fenster %1").arg(w.windowId)
+    }
+    // Aggregierter Laufzustand (wie Session.state: 0 Start,1 Run,2 Warte,3 Fehler,4 Zu),
+    // höchste Dringlichkeit gewinnt: Fehler > WartetEingabe > Läuft > Start > Zu.
+    function windowRunState(w) {
+        if (!w) return 0
+        const ids = w.sessionIds(); let best = -1
+        const prioOf = function(st) { return st === 3 ? 4 : st === 2 ? 3 : st === 1 ? 2 : st === 0 ? 1 : 0 }
+        for (let i = 0; i < ids.length; ++i) {
+            const s = window.sessionById(ids[i]); if (!s) continue
+            if (best < 0 || prioOf(s.state) > prioOf(best)) best = s.state
+        }
+        return best < 0 ? 0 : best
+    }
+    function windowAttention(w) {
+        if (!w) return false
+        const ids = w.sessionIds()
+        for (let i = 0; i < ids.length; ++i) { const s = window.sessionById(ids[i]); if (s && s.needsAttention) return true }
+        return false
+    }
+    function windowController(w) {
+        if (!w) return false
+        const ids = w.sessionIds()
+        for (let i = 0; i < ids.length; ++i) { const s = window.sessionById(ids[i]); if (s && s.mcpController) return true }
+        return false
+    }
     function broadcastWrite(data) { sessions.writeToAll(data) }
     function popupTermContextMenu(term) { termContextMenu.popup() }
 
-    // Baum neu aufbauen (nach Strukturänderung) + Blattzahl/Fokus aktualisieren.
-    // Split-Layout-Persistenz: den Baum auf die reinen Knoten-Properties reduzieren
-    // ({paneId,sessionRow} / {orientation,children}) und mit dem aktiven Pane als JSON
-    // sichern. Aufgerufen am Ende jedes rebuildLayout (= nach jedem Strukturwechsel).
+    // Baum eines Windows auf die reinen Knoten-Properties reduzieren
+    // ({paneId,sessionId} / {orientation,children,sizes}). Split-Proportionen (sizes)
+    // werden zuvor über captureSplitStates() aus den Live-SplitViews eingesammelt.
     function serializeLayoutNode(n) {
         if (!n) return null
-        if (n.children === undefined) return { paneId: n.paneId, sessionRow: n.sessionRow }
+        if (n.children === undefined) return { paneId: n.paneId, sessionId: n.sessionId }
         const kids = []
         for (let i = 0; i < n.children.length; ++i) kids.push(serializeLayoutNode(n.children[i]))
-        return { orientation: n.orientation, children: kids }
+        const o = { orientation: n.orientation, children: kids }
+        if (n.sizes) o.sizes = n.sizes
+        return o
     }
     function maxPaneIdIn(n) {
         if (!n) return 0
@@ -671,38 +736,190 @@ ApplicationWindow {
         for (let i = 0; i < n.children.length; ++i) m = Math.max(m, maxPaneIdIn(n.children[i]))
         return m
     }
-    function persistLayout() {
-        if (!window.layoutRestored) return   // vor dem Laden nicht überschreiben
-        window.paneLayoutJson = JSON.stringify({ tree: serializeLayoutNode(window.layout),
-                                                 active: window.activePaneId })
+
+    // --- Window-Umschaltung & -Sync (QTMUX-83) -------------------------------
+    function activeWindowObj() { return windows.windowById(window.activeWindowId) }
+
+    // Live-SplitView-Größen als Proportionen in den Baum (node.sizes) übernehmen, damit
+    // sie über Window-Wechsel und Serialisierung erhalten bleiben (Mechanik aus QTMUX-82).
+    function captureSplitStates() {
+        const walk = function(n) {
+            if (!n || n.children === undefined) return
+            const sv = n.__sv
+            if (sv && sv.contentChildren && sv.contentChildren.length === n.children.length) {
+                const horiz = (n.orientation === Qt.Horizontal)
+                const total = horiz ? sv.width : sv.height
+                if (total > 0) {
+                    const sizes = []
+                    for (let i = 0; i < n.children.length; ++i) {
+                        const it = sv.contentChildren[i]
+                        sizes.push((horiz ? it.width : it.height) / total)
+                    }
+                    n.sizes = sizes
+                }
+            }
+            for (let i = 0; i < n.children.length; ++i) walk(n.children[i])
+        }
+        walk(window.layout)
     }
 
-    // Beim Start den gesicherten Split-Layout-Baum wiederherstellen und gegen die
-    // tatsächlich wiederhergestellten Sessions validieren: Blätter mit ungültiger
-    // sessionRow (weniger Sessions / übersprungene Plugin-Session) beschneiden, Splits
-    // kollabieren. Bei fehlendem/defektem/leerem Baum: genau ein Blatt mit der aktiven Session.
-    function restorePaneLayout() {
-        let saved = null
-        try { saved = JSON.parse(window.paneLayoutJson) } catch (e) { saved = null }
-        window.layout = (saved && saved.tree) ? saved.tree : null
-        if (window.layout) {
-            const emptied = window.pruneLeaves(function(l) {
-                return !(l.sessionRow >= 0 && l.sessionRow < sessions.count)
-            })
-            if (emptied) window.layout = null
+    // Den Live-Baum (window.layout) + aktives Pane ins aktive Window-Objekt zurückschreiben.
+    function syncActiveTree() {
+        const w = activeWindowObj()
+        if (!w) return
+        captureSplitStates()
+        w.layoutJson = JSON.stringify(serializeLayoutNode(window.layout))
+        w.activePaneId = window.activePaneId
+    }
+    // persistLayout = syncActiveTree (Alias, in rebuildLayout genutzt).
+    function persistLayout() { syncActiveTree() }
+
+    // currentRow (= Session-Zeile des aktiven Panes) aus dem Live-Baum nachziehen.
+    function syncCurrentRow() {
+        const f = findLeaf(window.activePaneId)
+        window.currentRow = (f && f.leaf) ? window.rowForSessionId(f.leaf.sessionId) : -1
+    }
+
+    // Ein Window aktivieren: aktuellen Baum sichern, den Baum des Zielfensters laden,
+    // aktives Pane wiederherstellen, Layout neu bauen. Die anderen Windows laufen
+    // unverändert weiter (ihre Sessions leben im Registry, nicht in der View).
+    function loadWindow(id) {
+        if (id < 0) return
+        if (id === window.activeWindowId) { window.focusActivePane(); return }
+        syncActiveTree()                       // aktuellen Stand sichern
+        const w = windows.windowById(id)
+        if (!w) return
+        window.activeWindowId = id
+        windows.setActiveRow(windows.rowForId(id))
+        let tree = null
+        try { tree = JSON.parse(w.layoutJson) } catch (e) { tree = null }
+        window.layout = tree
+        window.nextPaneId = Math.max(window.nextPaneId, window.maxPaneIdIn(window.layout) + 1)
+        if (window.findLeaf(w.activePaneId)) window.activePaneId = w.activePaneId
+        else { const fl = firstLeaf(window.layout); window.activePaneId = fl ? fl.paneId : -1 }
+        syncCurrentRow()
+        window.windowsRevision++
+        window.rebuildLayout()
+    }
+    function loadWindowRow(row) {
+        const w = windows.windowAt(row)
+        if (w) window.loadWindow(w.windowId)
+    }
+
+    // Neues Window mit genau einem Pane für die Session `row` anlegen und aktivieren.
+    function openWindowWithSession(row, name) {
+        const s = sessions.sessionAt(row)
+        if (!s) return -1
+        syncActiveTree()                       // bisheriges Window sichern
+        const wr = windows.createWindow(name || "")
+        const w = windows.windowAt(wr)
+        const pid = window.nextPaneId++
+        s.windowId = w.windowId
+        w.layoutJson = JSON.stringify({ paneId: pid, sessionId: s.sessionId })
+        w.activePaneId = pid
+        window.activeWindowId = -1             // Reload erzwingen
+        window.loadWindow(w.windowId)
+        return wr
+    }
+
+    // Beim Start je restaurierter Session ein Ein-Pane-Window erzeugen (in-memory-
+    // Migration; die per-Window-Persistenz folgt in Stufe 3). `activeRow` = zuvor aktive
+    // Session-Zeile → deren Window wird aktiviert.
+    function buildWindowsFromSessions(activeRow) {
+        let activeWid = -1
+        for (let i = 0; i < sessions.count; ++i) {
+            const s = sessions.sessionAt(i)
+            const wr = windows.createWindow("")
+            const w = windows.windowAt(wr)
+            const pid = window.nextPaneId++
+            s.windowId = w.windowId
+            w.layoutJson = JSON.stringify({ paneId: pid, sessionId: s.sessionId })
+            w.activePaneId = pid
+            if (i === activeRow) activeWid = w.windowId
         }
-        if (!window.layout) {
-            window.layout = { paneId: window.nextPaneId++, sessionRow: window.currentRow }
-            window.activePaneId = window.layout.paneId
+        if (activeWid < 0 && windows.count > 0) activeWid = windows.windowAt(0).windowId
+        window.activeWindowId = -1
+        window.loadWindow(activeWid)
+    }
+
+    // Beschneidet einen (als JSON übergebenen) Layout-Baum um alle Blätter, deren
+    // sessionId in `idset` liegt; kollabiert leere/einelementige Splits. Für die NICHT
+    // aktiven Windows (deren Baum als JSON im Window-Objekt liegt).
+    function pruneTreeJson(json, idset) {
+        let tree = null
+        try { tree = JSON.parse(json) } catch (e) { return { json: "null", empty: true } }
+        const prune = function(n) {
+            if (!n) return null
+            if (n.children === undefined) return (idset.indexOf(n.sessionId) >= 0) ? null : n
+            const kept = []
+            for (let i = 0; i < n.children.length; ++i) { const c = prune(n.children[i]); if (c) kept.push(c) }
+            if (kept.length === 0) return null
+            if (kept.length === 1) return kept[0]
+            n.children = kept
+            if (n.sizes && n.sizes.length !== kept.length) delete n.sizes
+            return n
+        }
+        tree = prune(tree)
+        return { json: JSON.stringify(tree), empty: !tree }
+    }
+
+    // Entfernte Sessions aus ALLEN Window-Bäumen tilgen; leer gewordene Windows schließen.
+    function pruneSessionsFromWindows(ids) {
+        if (!ids || ids.length === 0) return
+        syncActiveTree()                       // aktives Window in sein layoutJson spiegeln
+        const closeRows = []
+        for (let i = 0; i < windows.count; ++i) {
+            const w = windows.windowAt(i)
+            const r = pruneTreeJson(w.layoutJson, ids)
+            if (r.empty) closeRows.push(i)
+            else w.layoutJson = r.json
+        }
+        let activeClosed = false
+        for (let k = closeRows.length - 1; k >= 0; --k) {
+            const w = windows.windowAt(closeRows[k])
+            if (w && w.windowId === window.activeWindowId) activeClosed = true
+            windows.closeWindow(closeRows[k])
+        }
+        if (windows.count === 0) { window.activeWindowId = -1; window.layout = null; newSession(); return }
+        if (activeClosed) {
+            const nr = Math.max(0, Math.min(windows.activeRow >= 0 ? windows.activeRow : 0, windows.count - 1))
+            const nw = windows.windowAt(nr)
+            window.activeWindowId = -1
+            window.loadWindow(nw.windowId)
         } else {
-            window.nextPaneId = window.maxPaneIdIn(window.layout) + 1
-            const wantActive = saved ? saved.active : -1
-            const fl = window.firstLeaf(window.layout)
-            window.activePaneId = window.findLeaf(wantActive) ? wantActive : (fl ? fl.paneId : -1)
-            const af = window.findLeaf(window.activePaneId)
-            if (af) window.currentRow = af.leaf.sessionRow
+            // Aktives Window überlebte → Live-Baum aus dem (evtl. beschnittenen) layoutJson neu laden
+            const w = activeWindowObj()
+            let tree = null; try { tree = JSON.parse(w.layoutJson) } catch (e) { tree = null }
+            window.layout = tree
+            if (!findLeaf(window.activePaneId)) { const fl = firstLeaf(window.layout); window.activePaneId = fl ? fl.paneId : -1 }
+            syncCurrentRow()
+            window.windowsRevision++
+            window.rebuildLayout()
         }
-        window.paneCount = window.leafCount()
+    }
+
+    // Ein Window (Tab) samt seiner Sessions schließen.
+    function closeWindowRow(row) {
+        const w = windows.windowAt(row)
+        if (!w) return
+        const wasActive = (w.windowId === window.activeWindowId)
+        const sids = w.sessionIds()            // C++ QList<int> -> JS-Array
+        // Erst das Window aus dem Model nehmen, damit das Session-Pruning es nicht mehr sieht.
+        windows.closeWindow(row)
+        if (wasActive) {
+            window.activeWindowId = -1
+            window.layout = null
+            if (windows.count > 0) {
+                const nr = Math.max(0, Math.min(windows.activeRow >= 0 ? windows.activeRow : row, windows.count - 1))
+                const nw = windows.windowAt(nr)
+                window.loadWindow(nw.windowId)
+            }
+        }
+        for (let i = 0; i < sids.length; ++i) {
+            const rr = window.rowForSessionId(sids[i])
+            if (rr >= 0) sessions.closeSession(rr)
+        }
+        if (windows.count === 0) newSession()
     }
 
     function rebuildLayout() {
@@ -746,8 +963,9 @@ ApplicationWindow {
         window.activePaneId = id
         if (term) window.activeTerminal = term
         const f = findLeaf(id)
-        if (f && f.leaf.sessionRow >= 0 && f.leaf.sessionRow < sessions.count)
-            window.currentRow = f.leaf.sessionRow
+        if (f && f.leaf) window.currentRow = window.rowForSessionId(f.leaf.sessionId)
+        const w = activeWindowObj()
+        if (w) w.activePaneId = id       // aktives Pane im Window-Objekt merken
     }
     // Aktives Pane zyklisch wechseln (dir = +1/-1) — das Tastatur-/Befehls-Pendant zum
     // Mausklick ins Pane. Reihenfolge = Blattreihenfolge des Layout-Baums (forEachLeaf).
@@ -771,27 +989,7 @@ ApplicationWindow {
         })
     }
 
-    // Sidebar-Reorder: Session verschieben und alle Index-Referenzen nachführen.
-    function moveSession(from, to) {
-        if (from === to) return
-        sessions.moveSession(from, to)
-        const remap = function(x) {
-            if (x === from) return to
-            if (from < to) { if (x > from && x <= to) return x - 1 }
-            else { if (x >= to && x < from) return x + 1 }
-            return x
-        }
-        window.currentRow = remap(window.currentRow)
-        remapLeaves(remap)
-        rebuildLayout()
-    }
-
-    // Gruppen-Verschiebung ordnet Modell-Zeilen um → Auswahl (currentRow) und die
-    // Layout-Blätter (referenzieren Zeilen per INDEX) müssen nachgeführt werden. Statt die
-    // Block-Rotation nachzurechnen, remappen wir per SESSION-IDENTITÄT: vor dem Move je
-    // Blatt/currentRow die sessionId sichern, danach die neue Zeile derselben Session suchen.
-    // Kein rebuildLayout nötig — die Panes behalten ihre Session, nur die Index-Referenzen
-    // werden konsistent gehalten (wirkt beim nächsten Rebuild korrekt).
+    // Zeilenindex einer stabilen sessionId (sessions.rowForId ist nicht Q_INVOKABLE).
     function rowForSessionId(sid) {
         for (let i = 0; i < sessions.count; ++i) {
             const s = sessions.sessionAt(i)
@@ -799,35 +997,22 @@ ApplicationWindow {
         }
         return -1
     }
-    function withRowRemap(reorderFn) {
-        const leaves = []
-        forEachLeaf(window.layout, function(l) {
-            const s = sessions.sessionAt(l.sessionRow)
-            leaves.push({ leaf: l, sid: s ? s.sessionId : -1 })
-        })
-        const curS = (window.currentRow >= 0) ? sessions.sessionAt(window.currentRow) : null
-        const curSid = curS ? curS.sessionId : -1
-        reorderFn()
-        for (const e of leaves) { const r = rowForSessionId(e.sid); if (r >= 0) e.leaf.sessionRow = r }
-        if (curSid >= 0) { const r = rowForSessionId(curSid); if (r >= 0) window.currentRow = r }
-    }
-    function moveGroupBy(name, dir)     { withRowRemap(function(){ sessions.moveGroup(name, dir) }) }
-    function moveGroupToRow(name, row)  { withRowRemap(function(){ sessions.moveGroupToRow(name, row) }) }
+    // Sitzungsgruppen-Verschiebung (Palette/Menü). Blätter referenzieren Sessions per
+    // stabiler sessionId → das Umsortieren der Model-Zeilen berührt das Layout NICHT mehr,
+    // kein Remap nötig. (Sichtbar wird das erst mit den Window-Gruppen, Stufe 5.)
+    function moveGroupBy(name, dir)     { sessions.moveGroup(name, dir) }
+    function moveGroupToRow(name, row)  { sessions.moveGroupToRow(name, row) }
 
-    // Sidebar-Klick: gewählte Session ins aktive Blatt laden.
-    function assignToActivePane(row) {
-        window.currentRow = row
-        const f = findLeaf(window.activePaneId)
-        if (f) { f.leaf.sessionRow = row; rebuildLayout() }
-        else focusActivePane()
-    }
-
-    // Teilen: aktives Blatt durch einen Split [Blatt, neues Blatt] ersetzen.
-    // Hat der Eltern-Split bereits dieselbe Orientierung, wird nur ein Geschwister
-    // eingefügt — so entstehen saubere verschachtelte H+V-Mischungen (QTMUX-3).
+    // Teilen: aktives Blatt im AKTIVEN Window durch einen Split [Blatt, neues Blatt]
+    // ersetzen. Hat der Eltern-Split bereits dieselbe Orientierung, wird nur ein
+    // Geschwister eingefügt — saubere verschachtelte H+V-Mischungen (QTMUX-3). Die neue
+    // Session gehört demselben Window. Gibt die neue sessionId zurück (für MCP).
     function splitPane(orientation) {
         const row = sessions.createShellSession("", window.defaultShellProgram)
-        const newLeaf = { paneId: window.nextPaneId++, sessionRow: row }
+        const s = sessions.sessionAt(row)
+        if (s) s.windowId = window.activeWindowId
+        const sid = s ? s.sessionId : -1
+        const newLeaf = { paneId: window.nextPaneId++, sessionId: sid }
         const f = findLeaf(window.activePaneId)
         if (!f) {                                   // Fallback: ersetze die Wurzel
             window.layout = { orientation: orientation,
@@ -843,35 +1028,38 @@ ApplicationWindow {
         window.activePaneId = newLeaf.paneId
         window.currentRow = row
         rebuildLayout()
+        return sid
     }
 
-    // Aktives Pane schließen (letztes Pane -> normale Session-Schließung).
+    // Aktives Pane schließen. Ist es das letzte Pane des Windows, schließt das ganze
+    // Window (Tab) — sonst nur dieses Pane samt seiner Session.
     function closePane() {
-        if (leafCount() <= 1) { window.closeCurrent(); return }
+        if (leafCount() <= 1) { window.closeWindowRow(windows.rowForId(window.activeWindowId)); return }
         const f = findLeaf(window.activePaneId)
         if (!f || !f.parent) return
-        const row = f.leaf.sessionRow
+        const sid = f.leaf.sessionId
         const parent = f.parent
         parent.children.splice(f.idx, 1)
         collapseSplit(parent)        // Eltern-Split mit nur einem Kind kollabieren
         // Neues aktives Blatt wählen (irgendein verbleibendes).
         const fl = firstLeaf(window.layout)
         window.activePaneId = fl ? fl.paneId : -1
-        if (fl) window.currentRow = fl.sessionRow
-        sessions.closeSession(row)   // -> onRowsRemoved führt übrige Blätter nach
+        syncCurrentRow()
+        const r = window.rowForSessionId(sid)
+        if (r >= 0) sessions.closeSession(r)   // -> onRowsRemoved beschneidet die Bäume
         rebuildLayout()
     }
 
-    // Pane-Reorder (QTMUX-4): Inhalte (Session) zweier Blätter tauschen.
+    // Pane-Reorder (QTMUX-4): Inhalte (Session) zweier Blätter im aktiven Window tauschen.
     function swapPanes(idA, idB) {
         if (idA === idB) return
         const a = findLeaf(idA), b = findLeaf(idB)
         if (!a || !b) return
-        const tmp = a.leaf.sessionRow
-        a.leaf.sessionRow = b.leaf.sessionRow
-        b.leaf.sessionRow = tmp
+        const tmp = a.leaf.sessionId
+        a.leaf.sessionId = b.leaf.sessionId
+        b.leaf.sessionId = tmp
         window.activePaneId = idB
-        window.currentRow = b.leaf.sessionRow
+        syncCurrentRow()
         rebuildLayout()
     }
 
@@ -917,14 +1105,11 @@ ApplicationWindow {
         catch (e) { window.collapsedGroups = [] }
         const active = sessions.restoreState()
         if (sessions.count === 0)
-            newSession()
+            newSession()                       // erzeugt Session + eigenes Window
         else
-            currentRow = (active >= 0 && active < sessions.count) ? active : 0
-        // Split-Layout wiederherstellen (Panes + Anordnung), dann das Persistieren
-        // freigeben und den restaurierten Baum einmal normalisiert zurückschreiben.
-        window.restorePaneLayout()
-        window.layoutRestored = true
-        window.rebuildLayout()
+            // Stufe 2: je restaurierter Session ein Ein-Pane-Window (in-memory-Migration);
+            // die per-Window-Persistenz (Splits/Namen/Gruppen über Neustarts) folgt in Stufe 3.
+            window.buildWindowsFromSessions(active >= 0 ? active : 0)
     }
 
     // Wird das Fenster (wieder) aktiv, den Tastaturfokus auf das aktive Pane legen,
@@ -968,7 +1153,8 @@ ApplicationWindow {
         property alias pasteWarnMultiline: window.pasteWarnMultiline
         property alias confirmQuit: window.confirmQuit
         property alias collapsedGroups: window.collapsedGroupsJson
-        property alias paneLayout: window.paneLayoutJson
+        // (paneLayout entfällt: das Split-Layout lebt jetzt je Window; die per-Window-
+        //  Persistenz über Neustarts kommt in Stufe 3 als eigenes `windows`-Schema.)
     }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
@@ -1195,15 +1381,15 @@ ApplicationWindow {
     }
     // Direktsprung zu Session 1..9 (feste, nicht konfigurierbare Kürzel — sonst
     // würden 9 Einträge die Kürzel-Liste überladen). Ctrl+<N> lädt Session N.
-    Shortcut { sequence: "Ctrl+1"; enabled: !prefs.capturing; onActivated: if (sessions.count > 0) window.assignToActivePane(0) }
-    Shortcut { sequence: "Ctrl+2"; enabled: !prefs.capturing; onActivated: if (sessions.count > 1) window.assignToActivePane(1) }
-    Shortcut { sequence: "Ctrl+3"; enabled: !prefs.capturing; onActivated: if (sessions.count > 2) window.assignToActivePane(2) }
-    Shortcut { sequence: "Ctrl+4"; enabled: !prefs.capturing; onActivated: if (sessions.count > 3) window.assignToActivePane(3) }
-    Shortcut { sequence: "Ctrl+5"; enabled: !prefs.capturing; onActivated: if (sessions.count > 4) window.assignToActivePane(4) }
-    Shortcut { sequence: "Ctrl+6"; enabled: !prefs.capturing; onActivated: if (sessions.count > 5) window.assignToActivePane(5) }
-    Shortcut { sequence: "Ctrl+7"; enabled: !prefs.capturing; onActivated: if (sessions.count > 6) window.assignToActivePane(6) }
-    Shortcut { sequence: "Ctrl+8"; enabled: !prefs.capturing; onActivated: if (sessions.count > 7) window.assignToActivePane(7) }
-    Shortcut { sequence: "Ctrl+9"; enabled: !prefs.capturing; onActivated: if (sessions.count > 8) window.assignToActivePane(8) }
+    Shortcut { sequence: "Ctrl+1"; enabled: !prefs.capturing; onActivated: if (windows.count > 0) window.loadWindowRow(0) }
+    Shortcut { sequence: "Ctrl+2"; enabled: !prefs.capturing; onActivated: if (windows.count > 1) window.loadWindowRow(1) }
+    Shortcut { sequence: "Ctrl+3"; enabled: !prefs.capturing; onActivated: if (windows.count > 2) window.loadWindowRow(2) }
+    Shortcut { sequence: "Ctrl+4"; enabled: !prefs.capturing; onActivated: if (windows.count > 3) window.loadWindowRow(3) }
+    Shortcut { sequence: "Ctrl+5"; enabled: !prefs.capturing; onActivated: if (windows.count > 4) window.loadWindowRow(4) }
+    Shortcut { sequence: "Ctrl+6"; enabled: !prefs.capturing; onActivated: if (windows.count > 5) window.loadWindowRow(5) }
+    Shortcut { sequence: "Ctrl+7"; enabled: !prefs.capturing; onActivated: if (windows.count > 6) window.loadWindowRow(6) }
+    Shortcut { sequence: "Ctrl+8"; enabled: !prefs.capturing; onActivated: if (windows.count > 7) window.loadWindowRow(7) }
+    Shortcut { sequence: "Ctrl+9"; enabled: !prefs.capturing; onActivated: if (windows.count > 8) window.loadWindowRow(8) }
 
     // --- Toolbar oben: Schnellzugriff mit Phosphor-Icons --------------------
     header: ToolBar {
@@ -1490,12 +1676,12 @@ ApplicationWindow {
                                          run: (function(n){ return function(){ window.moveGroupBy(n, 1) } })(gs[gj]) })
                             }
                         }
-                        for (var i = 0; i < sessions.count; ++i) {
-                            var s = sessions.sessionAt(i)
-                            var t = s ? s.title : qsTr("Session %1").arg(i + 1)
-                            c.push({ title: qsTr("Wechseln zu: %1").arg(t), sub: qsTr("Session"),
+                        for (var i = 0; i < windows.count; ++i) {
+                            var w = windows.windowAt(i)
+                            var t = window.windowTitle(w)
+                            c.push({ title: qsTr("Wechseln zu: %1").arg(t), sub: qsTr("Fenster"),
                                      icon: "terminal-window",
-                                     run: (function(row){ return function(){ window.assignToActivePane(row) } })(i) })
+                                     run: (function(id){ return function(){ window.loadWindow(id) } })(w.windowId) })
                         }
                         return c
                     }
@@ -1834,224 +2020,85 @@ ApplicationWindow {
                     Layout.fillHeight: true
                     clip: true
                     spacing: 4
-                    model: sessions
-
-                    // Gruppen (QTMUX-42) über ListView-Sections: Das Model hält die
-                    // Gruppen als zusammenhängende Blöcke, deshalb genügt hier die
-                    // Standard-Section-Mechanik. Leere Gruppe = keine Kopfzeile.
-                    section.property: "group"
-                    section.criteria: ViewSection.FullString
-                    section.delegate: Item {
-                        id: groupHeader
-                        required property string section
-                        width: sessionList.width
-                        height: section.length > 0 ? 26 : 0
-                        visible: section.length > 0
-
-                        readonly property bool collapsed: window.isGroupCollapsed(section)
-                        // Beim Ziehen anheben (wie eine Kachel), damit der Griff sichtbar ist.
-                        z: hdrDrag.active ? 3 : 0
-                        opacity: hdrDrag.active ? 0.85 : 1.0
-
-                        Rectangle {
-                            anchors.fill: parent
-                            anchors.topMargin: 4
-                            anchors.bottomMargin: 2
-                            radius: 6
-                            color: hdrDrag.active ? Theme.sidebarSelected
-                                 : hdrHover.hovered ? Theme.sidebarHover : "transparent"
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 6
-                                anchors.rightMargin: 6
-                                spacing: 6
-
-                                // Klapp-Pfeil, zugleich Farbmarke der Gruppe.
-                                Text {
-                                    text: groupHeader.collapsed ? "▸" : "▾"
-                                    color: window.groupColor(groupHeader.section)
-                                    font.pixelSize: 11
-                                }
-                                Text {
-                                    text: groupHeader.section
-                                    color: Theme.textBright
-                                    font.pixelSize: 11
-                                    font.bold: true
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                                Text {
-                                    // groupsRevision wird bewusst mitgelesen: sonst
-                                    // bliebe die Zahl beim ersten Wert stehen.
-                                    text: (window.groupsRevision, window.groupSize(groupHeader.section))
-                                    color: Theme.textDim
-                                    font.pixelSize: 10
-                                }
-                            }
-                            HoverHandler { id: hdrHover }
-                            TapHandler { onTapped: window.toggleGroupCollapsed(groupHeader.section) }
-                            TapHandler {
-                                acceptedButtons: Qt.RightButton
-                                onTapped: {
-                                    groupMenu.groupName = groupHeader.section
-                                    groupMenu.popup()
-                                }
-                            }
-                            // Ganze Gruppe per Ziehen des Kopfes umsortieren (QTMUX-54).
-                            // Gleiche Technik wie der Kachel-Drag: DragHandler + Hit-Test über
-                            // window.rowNearestTo (Qt-Drag/DropArea ist hier fragil). Beim
-                            // Loslassen bestimmt die Kopf-Mitte die Zielzeile → moveGroupToRow.
-                            DragHandler {
-                                id: hdrDrag
-                                target: groupHeader
-                                xAxis.enabled: false
-                                yAxis.enabled: true
-                                onActiveChanged: {
-                                    if (active) return
-                                    const cy = groupHeader.y + groupHeader.height / 2
-                                    const target = window.rowNearestTo(cy, -1)
-                                    if (target >= 0) window.moveGroupToRow(groupHeader.section, target)
-                                    sessionList.forceLayout()   // Kopf wieder einrasten lassen
-                                }
-                            }
-                        }
-                    }
+                    // Sidebar = Windows (Tabs, QTMUX-83). Jede Kachel ist ein Window mit
+                    // eigenem Split-Layout; Klick aktiviert das Window. Gruppen (als
+                    // Window-Gruppen) und Reorder folgen in Stufe 5.
+                    model: windows
+                    currentIndex: windows.activeRow
 
                     delegate: Rectangle {
                         id: tile
                         required property int index
-                        required property string title
-                        required property int sessionId
-                        required property int runState
-                        required property string agentId
-                        required property bool needsAttention
-                        required property string lastNotification
-                        required property bool mcpController
-                        required property bool progressActive
-                        required property int progressState
-                        required property int progressValue
-                        required property string workingDir
-                        required property string group
-                        // Eingeklappte Gruppen: Kachel verschwindet, ohne dass das
-                        // Model angefasst wird (die Session läuft ja weiter).
-                        readonly property bool hidden: group.length > 0 && window.isGroupCollapsed(group)
-                        // Gruppierte Kacheln werden eingerückt (QTMUX-45): die Zuordnung
-                        // ist damit an der FORM erkennbar, nicht nur an der Farbe — die
-                        // Farbmarke allein trug zu viel Last (Farbfehlsichtigkeit, und sie
-                        // konkurriert am linken Rand mit der MCP-Controller-Kennzeichnung).
-                        // Der Einzug ist zugleich die Spalte, in der die Farbmarke sitzt.
-                        // 🔑 Eingerückt wird der INHALT (Margins), NICHT die Delegate-Wurzel:
-                        // ein `x`-Binding hier wäre wirkungslos, weil die ListView die
-                        // Querachsen-Position ihrer Delegates selbst setzt — die Kachel bliebe
-                        // links stehen und die Marke landete außerhalb (clip: true → weg).
-                        readonly property real groupIndent: group.length > 0 ? 12 : 0
-                        width: ListView.view.width
-                        visible: !hidden
-                        height: hidden ? 0 : 52
-                        color: "transparent"      // Kachel-Optik liegt im eingerückten `card`
+                        required property int windowId
+                        required property var windowObject
+                        readonly property var wobj: windowObject
+                        // Aggregierte Anzeige aus den Panes/Sessions — in QML berechnet;
+                        // die Revision-Anker (sessionsRevision/windowsRevision) halten die
+                        // Bindungen live (analog groupsRevision).
+                        readonly property string dispTitle: (window.sessionsRevision, window.windowsRevision, window.windowTitle(wobj))
+                        readonly property int paneN: (window.windowsRevision, wobj ? wobj.sessionIds().length : 0)
+                        readonly property int aggState: (window.sessionsRevision, window.windowRunState(wobj))
+                        readonly property bool attention: (window.sessionsRevision, window.windowAttention(wobj))
+                        readonly property bool controller: (window.sessionsRevision, window.windowController(wobj))
+                        readonly property bool selected: tile.index === windows.activeRow
 
-                        // Während des Ziehens angehoben darstellen.
-                        z: dragH.active ? 2 : 0
-                        opacity: dragH.active ? 0.85 : 1.0
-                        scale: dragH.active ? 1.02 : 1.0
+                        width: ListView.view.width
+                        height: 52
+                        color: "transparent"      // Kachel-Optik liegt im `card`
 
                         HoverHandler { id: hover }
-                        TapHandler { onTapped: window.assignToActivePane(index) }
-                        // Rechtsklick: Gruppenzuordnung dieser Session (QTMUX-42).
+                        TapHandler { onTapped: window.loadWindowRow(tile.index) }
+                        // Rechtsklick: Window-Kontextmenü (umbenennen/schließen).
                         TapHandler {
                             acceptedButtons: Qt.RightButton
                             onTapped: {
-                                sessionMenu.row = tile.index
-                                sessionMenu.currentGroup = tile.group
-                                sessionMenu.isController = tile.mcpController
-                                sessionMenu.groupList = sessions.groups()
-                                sessionMenu.popup()
+                                windowMenu.row = tile.index
+                                windowMenu.windowId = tile.windowId
+                                windowMenu.currentName = (tile.wobj && tile.wobj.name) ? tile.wobj.name : ""
+                                windowMenu.isController = tile.controller
+                                windowMenu.popup()
                             }
                         }
 
-                        // Drag-to-Reorder: vertikal ziehen, beim Loslassen die Zielzeile
-                        // aus der Position bestimmen und die Session verschieben.
-                        DragHandler {
-                            id: dragH
-                            target: tile
-                            xAxis.enabled: false
-                            yAxis.enabled: true
-                            onActiveChanged: {
-                                if (active) return
-                                const from = tile.index
-                                // Zielzeile über die Layout-Positionen der übrigen Kacheln
-                                // suchen statt über eine feste Slot-Höhe: Gruppenköpfe und
-                                // eingeklappte (0 px hohe) Kacheln machen die Liste
-                                // ungleichmäßig, eine reine Division läge daneben.
-                                const ni = window.rowNearestTo(tile.y + tile.height / 2, from)
-                                if (ni >= 0 && ni !== from) window.moveSession(from, ni)
-                                sessionList.forceLayout()   // Kachel wieder einrasten lassen
-                            }
-                        }
-
-                        // Die eigentliche Kachelfläche (Auswahl/Hover). Als erstes Kind
-                        // deklariert, liegt also unter Marke/Inhalt. Ihr linker Rand ist
-                        // der Einzug — daran wird die Gruppenzugehörigkeit sichtbar.
+                        // Kachelfläche (Auswahl/Hover).
                         Rectangle {
                             id: card
                             anchors.fill: parent
-                            anchors.leftMargin: tile.groupIndent
                             radius: 8
-                            color: tile.index === window.currentRow ? Theme.sidebarSelected
+                            color: tile.selected ? Theme.sidebarSelected
                                  : hover.hovered ? Theme.sidebarHover : "transparent"
                         }
 
-                        // Farbmarke der Gruppe — sitzt in der EINRÜCKUNGSSPALTE links vor
-                        // der Kachel, nicht auf ihrem Rand. Dadurch bleibt sie sichtbar,
-                        // wenn diese Session zugleich MCP-Controller ist (QTMUX-45): vorher
-                        // teilten sich beide den linken Kachelrand, und der rote Tab hat die
-                        // Gruppenfarbe verdrängt (`&& !mcpController`) — die Gruppe war an
-                        // genau der Kachel unsichtbar, die man am ehesten sucht.
+                        // Roter Tab: irgendein Pane dieses Windows ist MCP-Controller.
                         Rectangle {
-                            visible: tile.group.length > 0
-                            width: 3
-                            radius: 1.5
-                            color: window.groupColor(tile.group)
-                            anchors.left: parent.left
-                            anchors.leftMargin: 4
-                            anchors.verticalCenter: parent.verticalCenter
-                            height: parent.height - 14
-                        }
-
-                        // Roter Tab: diese Session steuert per MCP die anderen (Controller-Agent).
-                        Rectangle {
-                            visible: mcpController
-                            width: 3
-                            radius: 1.5
+                            visible: tile.controller
+                            width: 3; radius: 1.5
                             color: "#e5534b"
                             anchors.left: parent.left
-                            anchors.leftMargin: tile.groupIndent
                             anchors.verticalCenter: parent.verticalCenter
                             height: parent.height - 14
                         }
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 10 + tile.groupIndent
+                            anchors.leftMargin: 10
                             anchors.rightMargin: 10
                             spacing: 10
 
-                            // Status-Ring. Aufmerksamkeit (blau, pulsierend) hat Vorrang,
-                            // sonst: 0=Starting 1=Running 2=WaitingInput 3=Error 4=Closed
+                            // Aggregierter Status-Ring: Aufmerksamkeit (blau, pulsierend) hat
+                            // Vorrang, sonst der dringlichste Pane-Zustand
+                            // (0=Start 1=Läuft 2=WartetEingabe 3=Fehler 4=Zu).
                             Rectangle {
                                 id: statusRing
                                 width: 10; height: 10; radius: 5
-                                color: needsAttention ? Theme.accent
-                                     : runState === 1 ? "#46d369"
-                                     : runState === 2 ? "#f5c451"
-                                     : runState === 3 ? "#e5534b"
-                                     : runState === 4 ? "#5a5d6a"
+                                color: tile.attention ? Theme.accent
+                                     : tile.aggState === 1 ? "#46d369"
+                                     : tile.aggState === 2 ? "#f5c451"
+                                     : tile.aggState === 3 ? "#e5534b"
+                                     : tile.aggState === 4 ? "#5a5d6a"
                                      : Theme.textDim
-                                // Bei „Bewegung reduzieren" nicht pulsieren, sondern den Ring
-                                // statisch in Akzentfarbe (Opazität 1.0) zeichnen (QTMUX-47).
                                 SequentialAnimation on opacity {
-                                    running: needsAttention && !App.reduceMotion
+                                    running: tile.attention && !App.reduceMotion
                                     loops: Animation.Infinite
                                     alwaysRunToEnd: true
                                     NumberAnimation { to: 0.3; duration: 600 }
@@ -2066,62 +2113,43 @@ ApplicationWindow {
                                     Layout.fillWidth: true
                                     spacing: 6
                                     Text {
-                                        text: title
+                                        text: tile.dispTitle
                                         color: Theme.textBright
                                         font.pixelSize: 13
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
                                     }
-                                    // Stabile Session-ID, klein und monospaced — das ist die
-                                    // Nummer, mit der man die Session per MCP anspricht
-                                    // (send_text, set_session_group …). Bewusst dezent, nur
-                                    // zum Nachschlagen, nicht als Blickfang.
+                                    // Pane-Zahl (nur bei Splits) als kleines Badge.
                                     Text {
-                                        text: "#" + tile.sessionId
+                                        visible: tile.paneN > 1
+                                        text: "▦ " + tile.paneN
+                                        color: Theme.textDim
+                                        font.pixelSize: 10
+                                        Layout.alignment: Qt.AlignVCenter
+                                    }
+                                    // Stabile Window-ID (Nachschlag für MCP focus_window).
+                                    Text {
+                                        text: "#" + tile.windowId
                                         color: Theme.textDim
                                         font.pixelSize: 10
                                         font.family: window.terminalFontFamily
                                         Layout.alignment: Qt.AlignVCenter
                                     }
                                 }
-                                // Untertitel: Notification (Vorrang) oder erkannter Agent.
-                                Text {
-                                    visible: lastNotification.length > 0 || agentId.length > 0
-                                    text: lastNotification.length > 0
-                                          ? lastNotification
-                                          : qsTr("Agent: %1").arg(agentId)
-                                    color: needsAttention ? Theme.accent : Theme.textDim
-                                    font.pixelSize: 10
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                                // Arbeitsverzeichnis (klein) — nützlich bei mehreren Agenten.
-                                // ElideLeft hält das tiefste (relevanteste) Verzeichnis sichtbar.
-                                Text {
-                                    visible: workingDir.length > 0
-                                    text: workingDir
-                                    color: Theme.textDim
-                                    font.pixelSize: 9
-                                    elide: Text.ElideLeft
-                                    Layout.fillWidth: true
-                                }
                             }
 
-                            // Schließen-Button (×), erscheint bei Hover oder Auswahl.
+                            // Schließen-Button (×) — schließt das ganze Window (alle Panes).
                             Rectangle {
                                 Layout.preferredWidth: 20
                                 Layout.preferredHeight: 20
                                 radius: 4
-                                visible: hover.hovered || index === window.currentRow
+                                visible: hover.hovered || tile.selected
                                 color: closeHover.hovered ? Theme.border : "transparent"
                                 Image {
                                     anchors.centerIn: parent
                                     source: window.icon("x")
                                     sourceSize.width: 12
                                     sourceSize.height: 12
-                                    // SVG ist monochrom -> über MultiEffect auf Theme-Farbe tönen.
-                                    // brightness hebt das schwarze SVG erst auf Weiß, sonst
-                                    // gewichtet die Colorization mit der Quell-Luminanz ~0.
                                     layer.enabled: true
                                     layer.effect: MultiEffect {
                                         brightness: 1.0
@@ -2130,59 +2158,20 @@ ApplicationWindow {
                                     }
                                 }
                                 HoverHandler { id: closeHover }
-                                TapHandler { onTapped: sessions.closeSession(index) }
+                                TapHandler { onTapped: window.closeWindowRow(tile.index) }
                             }
                         }
 
-                        // Fortschrittsbalken (OSC 9;4) am unteren Kachelrand.
-                        // State: 1=normal, 2=Fehler (rot), 3=unbestimmt (pulsierend), 4=pausiert (gelb).
-                        Rectangle {
-                            visible: tile.progressActive
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            anchors.leftMargin: 10 + tile.groupIndent
-                            anchors.rightMargin: 10
-                            anchors.bottomMargin: 4
-                            height: 3
-                            radius: 1.5
-                            color: Theme.border
-                            Rectangle {
-                                anchors.left: parent.left
-                                height: parent.height
-                                radius: parent.radius
-                                width: tile.progressState === 3
-                                       ? parent.width
-                                       : parent.width * Math.max(0, Math.min(100, tile.progressValue)) / 100
-                                color: tile.progressState === 2 ? "#e5534b"
-                                     : tile.progressState === 4 ? "#f5c451"
-                                     : Theme.accent
-                                Behavior on width { NumberAnimation { duration: 120 } }
-                                SequentialAnimation on opacity {
-                                    running: tile.progressActive && tile.progressState === 3 && !App.reduceMotion
-                                    loops: Animation.Infinite
-                                    alwaysRunToEnd: true
-                                    NumberAnimation { to: 0.3; duration: 700 }
-                                    NumberAnimation { to: 1.0; duration: 700 }
-                                    onStopped: parent.opacity = 1.0
-                                }
-                            }
-                        }
-
-                        // Aufmerksamkeit: der ganze Tab pulsiert mit blauem Rahmen
-                        // (Theme.accent). Rot ist bewusst dem MCP-Controller-Tab
-                        // vorbehalten. Ergänzt den ebenfalls pulsierenden Status-Ring;
-                        // der Rahmen liegt am Rand und überdeckt keinen Inhalt.
+                        // Aufmerksamkeit: der ganze Tab pulsiert mit blauem Rahmen.
                         Rectangle {
                             anchors.fill: parent
-                            radius: parent.radius
+                            radius: 8
                             color: "transparent"
-                            visible: needsAttention
+                            visible: tile.attention
                             border.color: Theme.accent
                             border.width: 2
-                            // Reduzierte Bewegung: statischer Akzentrahmen statt Puls.
                             SequentialAnimation on opacity {
-                                running: needsAttention && !App.reduceMotion
+                                running: tile.attention && !App.reduceMotion
                                 loops: Animation.Infinite
                                 alwaysRunToEnd: true
                                 NumberAnimation { to: 0.25; duration: 600 }
@@ -3009,6 +2998,81 @@ ApplicationWindow {
                 Layout.preferredWidth: 340
                 placeholderText: qsTr("z. B. Release 1.5")
                 onAccepted: groupNameDialog.accept()
+            }
+        }
+    }
+
+    // --- Window-Kontextmenü (QTMUX-83) --------------------------------------
+    // Rechtsklick auf eine Sidebar-Kachel (= Window): umbenennen oder schließen.
+    ThemedMenu {
+        id: windowMenu
+        property int row: -1
+        property int windowId: -1
+        property string currentName: ""
+        property bool isController: false
+        AppMenuItem {
+            text: qsTr("Umbenennen …")
+            icon.source: window.icon("terminal-window")
+            onTriggered: windowRenameDialog.start(windowMenu.windowId, windowMenu.currentName)
+        }
+        AppMenuItem {
+            text: qsTr("Automatischer Name")
+            enabled: windowMenu.currentName.length > 0
+            icon.source: window.icon("x")
+            onTriggered: { const w = windows.windowById(windowMenu.windowId); if (w) w.name = "" }
+        }
+        MenuSeparator {}
+        AppMenuItem {
+            text: qsTr("Fenster schließen")
+            icon.source: window.icon("x")
+            onTriggered: window.closeWindowRow(windowMenu.row)
+        }
+        // Roter MCP-Controller-Tab lässt sich sonst vom Menschen nicht zurücksetzen
+        // (attach_controller ist MCP-only) — für alle Panes des Windows entfernen.
+        MenuSeparator { visible: windowMenu.isController }
+        AppMenuItem {
+            text: qsTr("Controller-Markierung entfernen")
+            visible: windowMenu.isController
+            height: visible ? implicitHeight : 0
+            icon.source: window.icon("robot")
+            onTriggered: {
+                const w = windows.windowById(windowMenu.windowId)
+                if (!w) return
+                const ids = w.sessionIds()
+                for (let i = 0; i < ids.length; ++i) {
+                    const r = window.rowForSessionId(ids[i])
+                    if (r >= 0) sessions.clearMcpController(r)
+                }
+            }
+        }
+    }
+
+    AppDialog {
+        id: windowRenameDialog
+        width: 380
+        property int windowId: -1
+        title: qsTr("Fenster umbenennen")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        function start(id, name) { windowId = id; windowRenameField.text = name; open() }
+        onOpened: { windowRenameField.forceActiveFocus(); windowRenameField.selectAll() }
+        onAccepted: {
+            const w = windows.windowById(windowRenameDialog.windowId)
+            if (w) w.name = windowRenameField.text.trim()
+        }
+        ColumnLayout {
+            spacing: 8
+            Label {
+                Layout.preferredWidth: 340
+                wrapMode: Text.WordWrap
+                color: Theme.textDim
+                font.pixelSize: 11
+                text: qsTr("Leer lassen = automatischer Name (Titel des aktiven Panes).")
+            }
+            TextField {
+                id: windowRenameField
+                Layout.preferredWidth: 340
+                placeholderText: qsTr("z. B. Build, Server, Logs")
+                onAccepted: windowRenameDialog.accept()
             }
         }
     }

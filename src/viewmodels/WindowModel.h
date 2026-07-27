@@ -51,7 +51,7 @@ public:
     /// Window-Objekt einer Zeile (für Bindungen in QML), oder nullptr.
     Q_INVOKABLE QObject *windowAt(int row) const;
     /// Window-Objekt zu einer stabilen Window-ID, oder nullptr.
-    Window *windowById(int id) const;
+    Q_INVOKABLE Window *windowById(int id) const;
     /// Zeilenindex einer Window-ID, oder -1.
     Q_INVOKABLE int rowForId(int id) const;
 

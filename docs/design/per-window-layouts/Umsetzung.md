@@ -159,20 +159,38 @@ alten `sessions`-Profils erzeugt N Ein-Pane-Windows (Unit-getestet). Noch KEINE 
 - **Stufe-2-Fundament:** `WindowModel { id: windows }` in `qml/Main.qml` instanziiert (baut,
   noch NICHT verdrahtet — App läuft weiter auf dem alten Modell).
 
-**NÄCHSTER SCHRITT — Stufe 2 (QML-Flip), OFFEN:**
-1. **C++ Windows-Restore (fehlt):** beim Start `migrateSessionsToWindows` laufen lassen, dann aus
-   dem `windows`-Array je Window das `Window`-Objekt + je Blatt die Session (aus `cfg`) erzeugen
-   (Gegenseite zur Migration; evtl. mit Stufe 3 zusammenziehen).
-2. **QML-Rewire (atomar):** `SplitNode`-Root rendert den Baum des aktiven Windows; Blätter
-   `session: sessions.sessionById(leaf.sessionId)` statt `sessionObject(sessionRow)`; `splitPane`/
-   `newSession`/`closePane` aufs aktive Window; Sidebar `ListView.model` → `windows`, Delegate auf
-   Window-Rollen, Klick = Window aktivieren; Startup/Shutdown umlegen; `paneId` global eindeutig.
-   `assignToActivePane` entfällt.
-3. Je Schritt: bauen + `--screenshot` prüfen; am Ende visuelle Abnahme durch den Anwender.
+- **Stufe 2** (QML-Flip, in-memory Windows) — **erledigt**. `qml/Main.qml` + `qml/SplitNode.qml`
+  komplett auf das Window-Modell umgestellt; `Session::windowId` genutzt; Blätter binden per
+  `sessionId` (`win.sessionById`); Sidebar `model: windows`, Klick = `loadWindowRow`; Window-
+  Umschaltung `loadWindow`/`syncActiveTree`/`captureSplitStates`; Lebenszyklus über
+  `pruneSessionsFromWindows` (Prune nach sessionId, leere Windows schließen); extern (MCP/C++)
+  erzeugte Sessions werden per `_wrapPending` (Qt.callLater, Diskriminator windowId==-1) in ein
+  eigenes Window verpackt. `Window::sessionIds/paneIds/paneCount` + `WindowModel::windowById`
+  auf `Q_INVOKABLE` gehoben. MCP-Bridge (`onLayoutRequested`/`onSplitPaneRequested`/
+  `onFocusRequested`) auf sessionId/Windows umgestellt; `assign_session` deprecated (Hinweis).
+  Window-Kontextmenü + Umbenennen-Dialog neu.
+  **Verifiziert** (build/macos-test, 17/17 ctest + MCP-e2e Port 7405 + Split-Screenshot):
+  create_session→neues Window, split_pane→Pane im aktiven Window, focus_session→Window-Wechsel,
+  close_pane schrumpft, close_session leert→schließt Window; send_text/read_screen per id.
 
-**Verifikation:** `ctest --test-dir build/macos-test` (17/17, inkl. `test_windowmodel`). MCP-e2e
-gegen zweite Instanz. Worker #2/#3 im QTmux-Verzeichnis per QTmux-MCP steuerbar (disjunkte
-C++-Dateien parallelisierbar, QML nicht).
+> ⚠️ **BUILD-DIR-LEKTION (teuer):** `cmake --build --preset macos -B build/macos-test` ist
+> **falsch** — `cmake --build` kennt kein `-B`, das `--preset macos` baut nach **build/macos**
+> (wo die Produktivinstanz läuft). Korrekt: EINMAL `cmake --preset macos -B build/macos-test`
+> (Konfigurieren mit -B), dann IMMER `cmake --build build/macos-test` (positionales Verzeichnis,
+> KEIN --preset). Symptom des Fehlers: Screenshots zeigen veralteten Stand (der Grab lief gegen
+> ein altes build/macos-test, während der Code nach build/macos ging). macOS reißt die laufende
+> Instanz beim Überschreiben NICHT mit (Memory-Image), aber build/macos trägt danach einen WIP —
+> vor dem nächsten Prod-Neustart sauber neu bauen.
+
+**NÄCHSTER SCHRITT — Stufe 3 (per-Window-Persistenz):** `windows`-Schema (QSettings) statt
+`sessions`-Array: je Window `{id,name,group,activePaneId,layoutJson}`, Blätter tragen `cfg`;
+Migration alt→Windows (bereits als `WindowModel::migrateSessionsToWindows` vorhanden) beim Restore
+laufen lassen und Sessions je Blatt aus `cfg` neu erzeugen; Scrollback `.ans` je **sessionId**;
+`nextWindowId`/`nextPaneId` fortschreiben. Danach Stufe 4 (MCP-Window-Tools) + Stufe 5 (Gruppen).
+
+**Verifikation:** `ctest --test-dir build/macos-test` (17/17). MCP-e2e gegen zweite Instanz
+(`QT_QPA_PLATFORM=offscreen QTMUX_PROFILE=… QTMUX_MCP_PORT=… qtmux &`, dann curl JSON-RPC).
+Visueller Split-Beweis: `--screenshot` mit langem `--settle` + parallel MCP-Split treiben.
 
 **Referenzen:** Plan `~/.claude/plans/quizzical-chasing-flame.md`; Jira-Epic **QTMUX-83** (dual,
 In Progress); Tasks #3 (Stufe 2, in Arbeit) … #6. Entscheidungen: Gruppen→Window-Gruppen,

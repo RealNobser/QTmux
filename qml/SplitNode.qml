@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import QTmux
 
 // Ein Knoten des Split-Baums — rekursiv:
-//   Blatt:  { paneId, sessionRow }                       -> Terminal-Pane
+//   Blatt:  { paneId, sessionId }                        -> Terminal-Pane
 //   Split:  { orientation, children: [node, node, ...] } -> verschachtelter SplitView
 // Erlaubt beliebige H+V-Mischungen (QTMUX-3). Der Knoten redet ausschließlich mit
 // `win` (der ApplicationWindow aus Main.qml) — keine direkten Modell-Zugriffe.
@@ -101,7 +101,7 @@ Item {
         Rectangle {
             id: pane
             readonly property int paneId: root.node.paneId
-            readonly property int sessionRow: root.node.sessionRow
+            readonly property int sessionId: root.node.sessionId
             property alias term: paneTerm
 
             color: Theme.bgMain
@@ -220,7 +220,7 @@ Item {
                     backgroundColor: Theme.terminalBg
                     foregroundColor: Theme.terminalFg
                     cursorColor: Theme.terminalCursor
-                    session: win.sessionObject(pane.sessionRow)
+                    session: win.sessionById(pane.sessionId)
                     // Broadcast-Modus: Eingabe an ALLE Sessions verteilen.
                     broadcast: win.broadcastInput
                     onInputForBroadcast: (data) => win.broadcastWrite(data)

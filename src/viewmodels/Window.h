@@ -53,11 +53,11 @@ public:
 
     /// Sessions dieses Windows in Baum-Blattreihenfolge. **Abgeleitet** aus
     /// `layoutJson` (single source of truth) — nicht separat gepflegt.
-    QList<int> sessionIds() const;
+    Q_INVOKABLE QList<int> sessionIds() const;
     /// Pane-IDs in Blattreihenfolge (parallel zu sessionIds()).
-    QList<int> paneIds() const;
+    Q_INVOKABLE QList<int> paneIds() const;
     /// Zahl der Blätter im Baum.
-    int paneCount() const;
+    Q_INVOKABLE int paneCount() const;
 
     /// Monotoner Zähler für Window-IDs. Anders als `Session::nextId()` muss der Wert
     /// über Neustarts stabil bleiben — der Restore schreibt ihn deshalb mit
