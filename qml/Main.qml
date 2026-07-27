@@ -45,6 +45,11 @@ ApplicationWindow {
     // wiederhergestellt. `currentRow` folgt der Session des aktiven Blatts.
     property var layout: null
     property int nextPaneId: 1
+    // Split-Layout über Neustarts erhalten: nach jedem Strukturwechsel via persistLayout()
+    // serialisiert, beim Start (restorePaneLayout) geladen. layoutRestored sperrt das
+    // Persistieren, bis der gesicherte Baum geladen ist (kein vorzeitiges Überschreiben).
+    property string paneLayoutJson: "null"
+    property bool layoutRestored: false
     property int activePaneId: -1
     property int paneCount: 1
     property var paneItems: ({})         // paneId -> TerminalItem (für Fokus + Hit-Test)
@@ -645,6 +650,57 @@ ApplicationWindow {
     function popupTermContextMenu(term) { termContextMenu.popup() }
 
     // Baum neu aufbauen (nach Strukturänderung) + Blattzahl/Fokus aktualisieren.
+    // Split-Layout-Persistenz: den Baum auf die reinen Knoten-Properties reduzieren
+    // ({paneId,sessionRow} / {orientation,children}) und mit dem aktiven Pane als JSON
+    // sichern. Aufgerufen am Ende jedes rebuildLayout (= nach jedem Strukturwechsel).
+    function serializeLayoutNode(n) {
+        if (!n) return null
+        if (n.children === undefined) return { paneId: n.paneId, sessionRow: n.sessionRow }
+        const kids = []
+        for (let i = 0; i < n.children.length; ++i) kids.push(serializeLayoutNode(n.children[i]))
+        return { orientation: n.orientation, children: kids }
+    }
+    function maxPaneIdIn(n) {
+        if (!n) return 0
+        if (n.children === undefined) return n.paneId
+        let m = 0
+        for (let i = 0; i < n.children.length; ++i) m = Math.max(m, maxPaneIdIn(n.children[i]))
+        return m
+    }
+    function persistLayout() {
+        if (!window.layoutRestored) return   // vor dem Laden nicht überschreiben
+        window.paneLayoutJson = JSON.stringify({ tree: serializeLayoutNode(window.layout),
+                                                 active: window.activePaneId })
+    }
+
+    // Beim Start den gesicherten Split-Layout-Baum wiederherstellen und gegen die
+    // tatsächlich wiederhergestellten Sessions validieren: Blätter mit ungültiger
+    // sessionRow (weniger Sessions / übersprungene Plugin-Session) beschneiden, Splits
+    // kollabieren. Bei fehlendem/defektem/leerem Baum: genau ein Blatt mit der aktiven Session.
+    function restorePaneLayout() {
+        let saved = null
+        try { saved = JSON.parse(window.paneLayoutJson) } catch (e) { saved = null }
+        window.layout = (saved && saved.tree) ? saved.tree : null
+        if (window.layout) {
+            const emptied = window.pruneLeaves(function(l) {
+                return !(l.sessionRow >= 0 && l.sessionRow < sessions.count)
+            })
+            if (emptied) window.layout = null
+        }
+        if (!window.layout) {
+            window.layout = { paneId: window.nextPaneId++, sessionRow: window.currentRow }
+            window.activePaneId = window.layout.paneId
+        } else {
+            window.nextPaneId = window.maxPaneIdIn(window.layout) + 1
+            const wantActive = saved ? saved.active : -1
+            const fl = window.firstLeaf(window.layout)
+            window.activePaneId = window.findLeaf(wantActive) ? wantActive : (fl ? fl.paneId : -1)
+            const af = window.findLeaf(window.activePaneId)
+            if (af) window.currentRow = af.leaf.sessionRow
+        }
+        window.paneCount = window.leafCount()
+    }
+
     function rebuildLayout() {
         // Pane-Zoom (QTMUX-59): zeigt ein Zoom-Pane das nicht mehr existiert, Zoom aufheben.
         if (window.zoomedPane >= 0 && !findLeaf(window.zoomedPane)) window.zoomedPane = -1
@@ -652,6 +708,7 @@ ApplicationWindow {
         paneTreeLoader.sourceComponent = null
         paneTreeLoader.sourceComponent = paneTreeComp
         focusActivePane()
+        persistLayout()
     }
 
     // Pane-Zoom (QTMUX-59): das aktive Pane maximieren, OHNE den Layout-Baum neu zu bauen.
@@ -859,10 +916,11 @@ ApplicationWindow {
             newSession()
         else
             currentRow = (active >= 0 && active < sessions.count) ? active : 0
-        // Start mit genau einem Blatt, das die aktive Session zeigt.
-        window.layout = { paneId: window.nextPaneId++, sessionRow: window.currentRow }
-        window.activePaneId = window.layout.paneId
-        window.paneCount = 1
+        // Split-Layout wiederherstellen (Panes + Anordnung), dann das Persistieren
+        // freigeben und den restaurierten Baum einmal normalisiert zurückschreiben.
+        window.restorePaneLayout()
+        window.layoutRestored = true
+        window.rebuildLayout()
     }
 
     // Wird das Fenster (wieder) aktiv, den Tastaturfokus auf das aktive Pane legen,
@@ -906,6 +964,7 @@ ApplicationWindow {
         property alias pasteWarnMultiline: window.pasteWarnMultiline
         property alias confirmQuit: window.confirmQuit
         property alias collapsedGroups: window.collapsedGroupsJson
+        property alias paneLayout: window.paneLayoutJson
     }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
