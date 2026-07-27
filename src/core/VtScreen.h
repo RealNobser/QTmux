@@ -55,6 +55,12 @@ public:
     /// sichtbaren Bildschirm. Leer, wenn kein Scrollback vorhanden.
     QString scrollbackText() const;
 
+    /// Scrollback + sichtbaren Bildschirm als ANSI-Byte-Strom serialisieren, der beim
+    /// Wiedereinspeisen über inputWrite() Inhalt UND Attribute (Farben/Bold/…) farbgetreu
+    /// reproduziert (Session-Restore, QTMUX-81 Stufe 2). SGR wird nur bei Stiländerung
+    /// emittiert, rechte Leerzellen werden getrimmt, jede Zeile endet mit CR/LF.
+    QByteArray serializeAnsi() const;
+
     QPoint cursor() const { return m_cursor; }
     bool cursorVisible() const { return m_cursorVisible; }
     QString title() const { return m_title; }

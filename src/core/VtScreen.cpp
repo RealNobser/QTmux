@@ -190,6 +190,85 @@ QString VtScreen::scrollbackText() const {
     return lines.join(QChar('\n'));
 }
 
+QByteArray VtScreen::serializeAnsi() const {
+    QByteArray out;
+    // Vergleicht die attributrelevanten Felder zweier Zellen (Text zählt hier nicht).
+    auto sameStyle = [](const Cell &a, const Cell &b) {
+        return a.bold == b.bold && a.faint == b.faint && a.italic == b.italic
+            && a.underline == b.underline && a.reverse == b.reverse
+            && a.fgDefault == b.fgDefault && a.bgDefault == b.bgDefault
+            && (a.fgDefault || a.fg == b.fg) && (a.bgDefault || a.bg == b.bg);
+    };
+    // Vollständige SGR-Sequenz für eine Zelle: erst 0 (Reset), dann die aktiven
+    // Attribute. Truecolor per 38;2/48;2, Default per Weglassen (Reset deckt es ab).
+    auto sgrFor = [](const Cell &c) {
+        QByteArray s = "\x1b[0";
+        if (c.bold)      s += ";1";
+        if (c.faint)     s += ";2";
+        if (c.italic)    s += ";3";
+        if (c.underline) s += ";4";
+        if (c.reverse)   s += ";7";
+        if (!c.fgDefault)
+            s += ";38;2;" + QByteArray::number(int((c.fg >> 16) & 0xff))
+               + ";" + QByteArray::number(int((c.fg >> 8) & 0xff))
+               + ";" + QByteArray::number(int(c.fg & 0xff));
+        if (!c.bgDefault)
+            s += ";48;2;" + QByteArray::number(int((c.bg >> 16) & 0xff))
+               + ";" + QByteArray::number(int((c.bg >> 8) & 0xff))
+               + ";" + QByteArray::number(int(c.bg & 0xff));
+        s += "m";
+        return s;
+    };
+    // Alle Zeilen als (Zellen, continuation) sammeln: Scrollback zuerst, dann der
+    // sichtbare Bildschirm bis zur letzten nicht-leeren Zeile (spart die ~20 Leerzeilen
+    // unter der Prompt). continuation = weicher Umbruch der Vorzeile.
+    std::vector<std::pair<std::vector<Cell>, bool>> lines;
+    for (int i = 0; i < int(m_scrollback.size()); ++i)
+        lines.emplace_back(m_scrollback[i].cells, m_scrollback[i].continuation);
+    int lastRow = -1;
+    for (int r = 0; r < m_rows; ++r)
+        for (int col = 0; col < m_cols; ++col) {
+            const Cell c = cell(r, col);
+            if (!(c.text.isEmpty() || c.text == QStringLiteral(" ")) || !c.bgDefault || c.reverse) {
+                lastRow = r; break;
+            }
+        }
+    for (int r = 0; r <= lastRow; ++r) {
+        std::vector<Cell> row;
+        row.reserve(m_cols);
+        for (int col = 0; col < m_cols; ++col) row.push_back(cell(r, col));
+        lines.emplace_back(std::move(row), lineContinuation(r));
+    }
+
+    // Stil über den GESAMTEN Strom tracken (SGR persistiert über \r\n, wie im echten
+    // Terminal). An weichen Umbrüchen KEIN \r\n → das Terminal wrappt beim Restore selbst
+    // auf die aktuelle Breite (kein harter Umbruch mitten im Wort).
+    Cell prev; bool havePrev = false;
+    for (size_t k = 0; k < lines.size(); ++k) {
+        const std::vector<Cell> &cells = lines[k].first;
+        const bool nextIsCont = (k + 1 < lines.size()) && lines[k + 1].second;
+        // Rechte Leerzellen nur trimmen, wenn KEINE Fortsetzung folgt (eine weich
+        // umbrochene Zeile ist voll breit — dort würde Trimmen den Umbruch verfälschen).
+        int last = int(cells.size()) - 1;
+        if (!nextIsCont)
+            for (last = int(cells.size()) - 1; last >= 0; --last) {
+                const Cell &c = cells[last];
+                const bool blank = (c.text.isEmpty() || c.text == QStringLiteral(" "))
+                                   && c.bgDefault && !c.reverse;
+                if (!blank) break;
+            }
+        for (int i = 0; i <= last; ) {
+            const Cell &c = cells[i];
+            if (!havePrev || !sameStyle(prev, c)) { out += sgrFor(c); prev = c; havePrev = true; }
+            out += c.text.isEmpty() ? QByteArray(" ") : c.text.toUtf8();
+            i += (c.width == 2 ? 2 : 1);   // Spacer-Zelle hinter Doppelbreite überspringen
+        }
+        if (!nextIsCont) out += "\r\n";
+    }
+    if (havePrev) out += "\x1b[0m";
+    return out;
+}
+
 Cell VtScreen::cell(int row, int col) const {
     VTermScreenCell vc;
     VTermPos pos{row, col};

@@ -25,6 +25,7 @@ private slots:
     void lineWrapContinuation();
     void mouseReporting();
     void linkDetectionOnScreenLine();
+    void serializeAnsiRoundTrip();
 };
 
 // Integration: ein per Terminal geschriebener Pfad/URL muss als exakt der String bei
@@ -253,6 +254,33 @@ void TestVtScreen::mouseReporting() {
     out.clear();
     vt.mouseButton(2, true, 5, 10, Qt::NoModifier);
     QVERIFY(out.isEmpty());
+}
+
+// Session-Restore Stufe 2 (QTMUX-81): serializeAnsi() muss Inhalt UND Attribute
+// (Farbe, Truecolor, Bold, Underline) so ausgeben, dass ein Wieder-Einspeisen den
+// Zustand reproduziert; weiche Umbrüche bleiben EINE logische Zeile (kein \r\n).
+void TestVtScreen::serializeAnsiRoundTrip() {
+    {   // Farb-/Attribut-Round-Trip in einen zweiten Screen.
+        VtScreen a(24, 80);
+        a.inputWrite("\x1b[31mR\x1b[0m\x1b[38;2;255;128;0mO\x1b[0m\x1b[1mB\x1b[0m\x1b[4mU\x1b[0mx");
+        const QByteArray dump = a.serializeAnsi();
+        QVERIFY(dump.contains("38;2;255;128;0"));      // Truecolor bleibt im Strom erhalten
+
+        VtScreen b(24, 80);
+        b.inputWrite(dump);
+        QVERIFY(!b.cell(0, 0).fgDefault);              // R: gefärbt (Palette 1)
+        QVERIFY(!b.cell(0, 1).fgDefault);              // O: Truecolor
+        QCOMPARE(b.cell(0, 1).fg, quint32(0xff8000));  //    exakt erhalten
+        QVERIFY(b.cell(0, 2).bold);                    // B: fett
+        QVERIFY(b.cell(0, 3).underline);               // U: unterstrichen
+        QCOMPARE(b.cell(0, 4).text, QStringLiteral("x"));
+        QVERIFY(b.cell(0, 4).fgDefault);               // x: wieder Default
+    }
+    {   // Weicher Umbruch bleibt EIN logisches Stück (kein \r\n mitten im Wort).
+        VtScreen a(24, 10);
+        a.inputWrite("ABCDEFGHIJKLMNO");               // 15 > 10 Spalten -> Soft-Wrap
+        QVERIFY(a.serializeAnsi().contains("ABCDEFGHIJKLMNO"));
+    }
 }
 
 QTEST_MAIN(TestVtScreen)

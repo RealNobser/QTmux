@@ -1,5 +1,6 @@
 #include "SessionModel.h"
 #include "Session.h"
+#include "VtScreen.h"
 #include "PluginHost.h"
 #include "PtyBackend.h"
 #include "SerialBackend.h"
@@ -10,6 +11,9 @@
 #include <QSettings>
 #include <QTimer>
 #include <QVariantMap>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFile>
 #include <algorithm>   // std::rotate (moveBlock)
 
 namespace qtmux {
@@ -495,7 +499,35 @@ void SessionModel::writeToAll(const QByteArray &data) {
         if (s) s->write(data);
 }
 
+QString SessionModel::historyDir() const {
+    // AppDataLocation trägt den Profil-Suffix des App-Namens → per Profil getrennt.
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+           + QStringLiteral("/history");
+}
+
+void SessionModel::saveHistory() const {
+    const QString dir = historyDir();
+    QDir().mkpath(dir);
+    for (int i = 0; i < m_sessions.size(); ++i) {
+        Session *s = m_sessions.at(i);
+        const QByteArray dump = s && s->screen() ? s->screen()->serializeAnsi() : QByteArray();
+        const QString path = dir + QStringLiteral("/%1.ans").arg(i);
+        if (dump.isEmpty()) { QFile::remove(path); continue; }
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) { f.write(dump); f.close(); }
+    }
+    // Überzählige Dumps einer früher längeren Sitzungsliste entfernen.
+    for (int i = m_sessions.size(); ; ++i) {
+        const QString path = dir + QStringLiteral("/%1.ans").arg(i);
+        if (!QFile::exists(path)) break;
+        QFile::remove(path);
+    }
+}
+
 void SessionModel::shutdownAll() {
+    // Farbgetreuen Verlauf sichern, SOLANGE die Screens noch leben (vor der Zerstörung
+    // der Backends) — Session-Restore Stufe 2 (QTMUX-81).
+    saveHistory();
     // Nur Prozesse beenden (keine Modelländerung) — wird beim App-Quit aufgerufen.
     // m_shuttingDown verhindert, dass die dabei ausgelösten Closed-Signale die
     // (zuvor von saveState gesicherte) Session-Liste per Auto-Remove leeren.
@@ -572,6 +604,19 @@ int SessionModel::restoreState() {
         if (!group.isEmpty() && count() > before) {
             m_sessions.last()->setGroup(group);
             m_configs.last().group = m_sessions.last()->group();
+        }
+        // Farbgetreuen Verlauf (QTMUX-81 Stufe 2) VOR der ersten Backend-Ausgabe
+        // einspeisen: hier synchron (noch vor dem Event-Loop) → er rendert und rollt als
+        // Scrollback nach oben, die frische Shell-Prompt erscheint darunter. Datei nach
+        // dem SPEICHER-Index i benannt (nicht der aktuellen Zeile — Plugin-Skips möglich).
+        if (count() > before) {
+            QFile hf(historyDir() + QStringLiteral("/%1.ans").arg(i));
+            if (hf.open(QIODevice::ReadOnly)) {
+                const QByteArray dump = hf.readAll();
+                hf.close();
+                if (!dump.isEmpty() && m_sessions.last()->screen())
+                    m_sessions.last()->screen()->inputWrite(dump);
+            }
         }
     }
     m_restoring = false;

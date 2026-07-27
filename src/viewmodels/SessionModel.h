@@ -134,6 +134,13 @@ signals:
 private:
     void wireSession(Session *s, int row);
 
+    /// Verzeichnis für die farbgetreuen Scrollback-Dumps (per Profil getrennt über den
+    /// App-Namen). Session-Restore Stufe 2 (QTMUX-81).
+    QString historyDir() const;
+    /// Beim App-Quit je Session den ANSI-Verlauf (Scrollback+Screen) in <historyDir>/<i>.ans
+    /// schreiben; überzählige Dateien einer früheren, längeren Liste werden entfernt.
+    void saveHistory() const;
+
     /// Persistierbare Beschreibung einer Session (Inhalt ist nicht wiederherstellbar).
     struct SessionConfig {
         int type = 0;        // qtmux::Session::Type
