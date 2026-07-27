@@ -30,8 +30,39 @@ Item {
     Component {
         id: splitComp
         SplitView {
+            id: splitView
             orientation: (root.node && root.node.orientation !== undefined)
                          ? root.node.orientation : Qt.Horizontal
+
+            // Anfangsgrößen EINMALIG explizit setzen (QTMUX-81): SplitView verteilt bei
+            // Repeater-erzeugten Kindern `fillWidth` NICHT gleichmäßig (das erste Kind füllt,
+            // die übrigen bleiben am Minimum). Wir setzen preferredWidth/Height je Kind
+            // imperativ — gleich verteilt, oder auf die gesicherten Proportionen (node.sizes).
+            // Imperativ statt Bindung, damit späteres Ziehen der Balken HÄLT (eine Bindung
+            // würde beim nächsten Layout zurückspringen). __sv stasht die Live-SplitView für
+            // captureSplitStates() (Proportionen-Persistenz).
+            property bool _sized: false
+            function applyInitialSizes() {
+                if (_sized || !root.node || !root.node.children) return
+                const n = root.node.children.length
+                const horiz = (orientation === Qt.Horizontal)
+                const total = horiz ? width : height
+                if (total <= 0 || contentChildren.length !== n) return
+                const saved = (root.node.sizes && root.node.sizes.length === n) ? root.node.sizes : null
+                for (let i = 0; i < n; ++i) {
+                    const it = contentChildren[i]
+                    const px = saved ? saved[i] * total : total / n
+                    if (horiz) it.SplitView.preferredWidth = px
+                    else       it.SplitView.preferredHeight = px
+                }
+                _sized = true
+            }
+            onWidthChanged: applyInitialSizes()
+            onHeightChanged: applyInitialSizes()
+            onContentChildrenChanged: applyInitialSizes()
+            Component.onCompleted: { if (root.node) root.node.__sv = splitView; applyInitialSizes() }
+            Component.onDestruction: { if (root.node && root.node.__sv === splitView) root.node.__sv = null }
+
             handle: Rectangle {
                 implicitWidth: 6
                 implicitHeight: 6
