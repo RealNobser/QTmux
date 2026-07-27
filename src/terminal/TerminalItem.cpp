@@ -27,6 +27,9 @@
 #include <QSGMaterialShader>
 #include <QSGTexture>
 #include <QSGSimpleTextureNode>
+#include <QSGTransformNode>
+#include <QMatrix4x4>
+#include <cmath>
 #include <algorithm>
 #include <vector>
 
@@ -120,7 +123,10 @@ void GlyphShader::updateSampledImage(RenderState &state, int, QSGTexture **textu
 
 // Wurzelknoten des GPU-Pfads: drei Geometrie-Kinder (Hintergrund, Glyphen, Overlay)
 // in Zeichenreihenfolge + die selbst verwaltete Atlas-Textur.
-class GpuRoot : public QSGNode {
+// QSGTransformNode statt QSGNode: trägt die Sub-Pixel-Snapping-Matrix (s.
+// updatePaintNode), damit das Zellraster auch bei fraktionaler Pane-Position der
+// SplitView auf dem Geräte-Pixel-Raster landet.
+class GpuRoot : public QSGTransformNode {
 public:
     QSGGeometryNode *bg = nullptr;
     QSGGeometryNode *glyph = nullptr;
@@ -304,10 +310,21 @@ void TerminalItem::applyFontFeatures() {
 
 void TerminalItem::recomputeGrid() {
     QFontMetricsF fm(m_font);
-    m_cellW = fm.horizontalAdvance(QChar('M'));
-    if (m_cellW <= 0) m_cellW = fm.averageCharWidth();
-    m_cellH = fm.height();
-    m_baseline = fm.ascent();
+    qreal cw = fm.horizontalAdvance(QChar('M'));
+    if (cw <= 0) cw = fm.averageCharWidth();
+
+    // Zellmaße auf GANZE Geräte-Pixel runden (Crispness): fraktionale Zellmaße legen die
+    // Glyph-Quads bei col*cellW / row*cellH auf HALBE Geräte-Pixel — der Atlas wird dann
+    // interpoliert (matschig) und die Grundlinie driftet Zeile für Zeile. Snappen wir
+    // cellW/cellH/baseline auf ein Vielfaches von 1/dpr, liegt jede Spalte/Zeile auf einem
+    // echten Geräte-Pixel und die Atlas-Kachel (ceil(cellW*dpr)) deckt sich exakt mit dem Quad.
+    QQuickWindow *win = window();
+    const qreal dpr = win ? win->effectiveDevicePixelRatio() : 1.0;
+    const auto snap = [dpr](qreal v) { return dpr > 0 ? std::round(v * dpr) / dpr : v; };
+    m_cellW = std::max(snap(cw), 1.0);
+    m_cellH = std::max(snap(fm.height()), 1.0);
+    m_baseline = snap(fm.ascent());
+    m_gridDpr = dpr;
 
     const int cols = m_cellW > 0 ? static_cast<int>(width() / m_cellW) : m_cols;
     const int rows = m_cellH > 0 ? static_cast<int>(height() / m_cellH) : m_rows;
@@ -764,6 +781,20 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
         }
     }
     uploadColored(root->overlay, ovVerts);
+
+    // Sub-Pixel-Snapping (Crispness bei Split-Panes): das Zellraster ist relativ zur
+    // Pane-Ecke ganzzahlig (recomputeGrid), aber die SplitView platziert die Pane an
+    // fraktionaler Szenen-Position → das ganze Raster liegt sonst um <1 Geräte-Pixel
+    // verschoben und wird interpoliert (matschig). Wir verschieben den gezeichneten
+    // Inhalt um den Bruchteil der Szenen-Position (in Geräte-Pixeln, zum nächsten Pixel
+    // gerundet) zurück, damit die ABSOLUTE Position auf dem Geräte-Pixel-Raster landet.
+    // Während updatePaintNode ist der GUI-Thread blockiert → mapToScene ist hier sicher.
+    const QPointF scenePos = mapToScene(QPointF(0, 0));
+    const double dx = (scenePos.x() * dpr - std::round(scenePos.x() * dpr)) / dpr;
+    const double dy = (scenePos.y() * dpr - std::round(scenePos.y() * dpr)) / dpr;
+    QMatrix4x4 snap;
+    snap.translate(float(-dx), float(-dy));
+    root->setMatrix(snap);
     return root;
 }
 
@@ -1082,7 +1113,21 @@ void TerminalItem::doPaste(const QByteArray &data) {
 
 void TerminalItem::geometryChange(const QRectF &newGeo, const QRectF &oldGeo) {
     QQuickItem::geometryChange(newGeo, oldGeo);
-    if (newGeo.size() != oldGeo.size()) {
+    if (newGeo.size() != oldGeo.size())
+        recomputeGrid();
+    // Immer neu zeichnen: bei Größenänderung wegen des Rasters, bei reinem
+    // Positionswechsel wegen der Sub-Pixel-Snapping-Matrix (hängt an der Szenen-
+    // Position). Der teure Inhaltsaufbau bleibt über m_geomDirty gated.
+    if (newGeo != oldGeo)
+        update();
+}
+
+void TerminalItem::itemChange(ItemChange change, const ItemChangeData &data) {
+    QQuickItem::itemChange(change, data);
+    // Monitor-/Skalierungswechsel: das Raster wurde auf die ALTE Geräte-Pixel-Dichte
+    // gesnappt und wäre auf dem neuen Bildschirm wieder matschig — neu berechnen.
+    if (change == ItemDevicePixelRatioHasChanged
+        && !qFuzzyCompare(m_gridDpr, window() ? window()->effectiveDevicePixelRatio() : 1.0)) {
         recomputeGrid();
         update();
     }

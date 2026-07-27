@@ -152,6 +152,7 @@ protected:
     void keyReleaseEvent(QKeyEvent *event) override;   // Cmd/Ctrl loslassen → Link-Hervorhebung aus
     void wheelEvent(QWheelEvent *event) override;
     void geometryChange(const QRectF &newGeo, const QRectF &oldGeo) override;
+    void itemChange(ItemChange change, const ItemChangeData &data) override;   // DPR-/Monitorwechsel
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
@@ -216,6 +217,7 @@ private:
     qreal m_cellW = 8;
     qreal m_cellH = 16;
     qreal m_baseline = 12;
+    qreal m_gridDpr = 1;   // Geräte-Pixel-Dichte, auf die cellW/cellH/baseline gesnappt sind
     int m_cols = 80;
     int m_rows = 24;
 
