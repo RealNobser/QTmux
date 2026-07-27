@@ -222,6 +222,16 @@ void Session::clearAttention() {
     emit attentionChanged();
 }
 
+void Session::requestActivity(const QString &state) {
+    const QString s = state.trimmed().toLower();
+    if (s == QLatin1String("idle"))         setActivity(Activity::Idle);
+    else if (s == QLatin1String("busy")
+          || s == QLatin1String("running")) setActivity(Activity::Running);
+    else if (s == QLatin1String("waiting")) setActivity(Activity::Waiting);
+    else if (s == QLatin1String("error"))   setActivity(Activity::Error);
+    // Unbekannt: bewusst ignorieren (Zustand bleibt unverändert).
+}
+
 void Session::onProgress(int state, int value) {
     // OSC 9;4: state 0 = aus, sonst aktiv mit Wert 0..100.
     const bool active = state != 0;
@@ -238,10 +248,11 @@ void Session::onPromptMarker(char kind, int exitCode) {
     switch (kind) {
     case 'C':                       // Befehl beginnt Ausgabe
         m_commandRunning = true;
-        setActivity(Activity::Running);
+        setActivity(Activity::Running);   // beschäftigt (grün)
         break;
     case 'D':                       // Befehl beendet (exitCode)
-        setActivity(exitCode > 0 ? Activity::Error : Activity::Running);
+        // Fehler-Exit -> rot (bleibt am Prompt sichtbar); sonst untätig (dim).
+        setActivity(exitCode > 0 ? Activity::Error : Activity::Idle);
         if (m_commandRunning) {     // echtes Kommando lief -> bei Inaktivität melden
             m_commandRunning = false;
             raiseAttention();
@@ -249,7 +260,9 @@ void Session::onPromptMarker(char kind, int exitCode) {
         break;
     case 'A':                       // neue Prompt
     case 'B':                       // Prompt bereit für Eingabe
-        if (m_activity == Activity::Error) setActivity(Activity::Running);
+        // Prompt = bereit/untätig (dim). Einen Fehler des letzten Kommandos NICHT löschen —
+        // er bleibt am Prompt sichtbar, erst das nächste Kommando (C) setzt ihn zurück.
+        if (m_activity != Activity::Error) setActivity(Activity::Idle);
         // Shell-Integration meldet die erste Eingabebereitschaft → exakter Zeitpunkt
         // fürs Login-Script (sicherer als der Fallback-Timer, z. B. nach Passwortabfrage).
         runLoginScript();

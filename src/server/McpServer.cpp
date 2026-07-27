@@ -631,6 +631,15 @@ QJsonObject McpServer::toolsList() const {
                       "zu needs_attention; sonst erlischt sie erst beim Fokussieren der Kachel).",
                       QJsonObject{{"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
                       {}));
+    tools.append(tool("set_activity",
+                      "Setzt den Dauer-Zustand DIESER Session, der den Sidebar-Ring faerbt: "
+                      "'idle' (dim), 'busy' (gruen), 'waiting' (amber = wartet/blockiert), "
+                      "'error' (rot). Fuer Agenten-TUIs, die keine OSC-133-Marker senden - so "
+                      "zeigt der Punkt echten Zustand statt Dauergruen. Der Aufmerksamkeits-Puls "
+                      "(needs_attention/question/error) liegt weiterhin darueber.",
+                      QJsonObject{{"state", strProp("'idle' | 'busy' | 'waiting' | 'error'")},
+                                  {"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
+                      QJsonArray{"state"}));
     tools.append(tool("subscribe_events",
                       "Abonniert Agenten-Ereignisse für DIESE Session. Ohne Filter werden alle "
                       "Ereignisse aller anderen Sessions empfangen; optional auf Quell-Sessions "
@@ -726,6 +735,21 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         Session *s = m_sessions ? m_sessions->sessionById(srcId) : nullptr;
         if (!s) { isError = true; text = QStringLiteral("Unbekannte Session-ID: %1.").arg(srcId); return {}; }
         s->clearAttention();
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "set_activity") {
+        const int srcId = callerId();
+        if (srcId <= 0) { isError = true; text = QStringLiteral("Keine Quell-Session (sessionId fehlt/unbekannt)."); return {}; }
+        const QString st = args.value("state").toString().toLower();
+        if (st != QLatin1String("idle") && st != QLatin1String("busy")
+            && st != QLatin1String("waiting") && st != QLatin1String("error")) {
+            isError = true; text = QStringLiteral("state muss 'idle', 'busy', 'waiting' oder 'error' sein.");
+            return {};
+        }
+        Session *s = m_sessions ? m_sessions->sessionById(srcId) : nullptr;
+        if (!s) { isError = true; text = QStringLiteral("Unbekannte Session-ID: %1.").arg(srcId); return {}; }
+        s->requestActivity(st);
         text = QStringLiteral("ok");
         return {};
     }

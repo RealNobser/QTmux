@@ -51,6 +51,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `post_event` | `kind`, `text?`, `sessionId?` | Ereignis dieser Session melden (fertig/Frage/Fehler/Info); **question/error** lassen die Kachel pulsen |
 | `needs_attention` | `text?`, `sessionId?` | Explizit Aufmerksamkeit anfordern (Kachel pulst) — für „blockiert/brauche Mensch" |
 | `clear_attention` | `sessionId?` | Aufmerksamkeits-Markierung wieder löschen |
+| `set_activity` | `state`, `sessionId?` | Dauer-Zustand für den Sidebar-Ring: `idle`(dim)/`busy`(grün)/`waiting`(amber)/`error`(rot) |
 | `wait_for_events` | `sessionId?`, `afterSeq?`, `timeoutMs?` | **Long-Poll**: blockiert bis ein abonniertes Ereignis vorliegt/Timeout |
 | `get_layout` | – | `{layout, activePaneId, sessions}` — Baum **plus** Pane-Zuordnung aller Sessions (s. u.) |
 | `split_pane` | `orientation` ("h"/"v") | Aktives Pane teilen (neue Shell-Session im neuen Pane, wird aktiv) → neue **Session-id** |
@@ -60,7 +61,9 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `list_profiles` | – | Gespeicherte Verbindungsprofile; **ohne Geheimniswerte** (nur `hasPasswordSecret`/`hasLoginScript`-Flags) |
 | `connect_profile` | `name` | Profil verbinden — ein Vault-Passwort wird **intern** aufgelöst (nie über MCP ausgegeben) → neue **Session-id** |
 
-`activity`: 1=läuft (grün), 2=wartet, 3=Fehler (rot), 4=geschlossen.
+`activity` (Sidebar-Ring): 0=untätig (dim), 1=läuft/beschäftigt (grün), 2=wartet (amber),
+3=Fehler (rot), 4=geschlossen (grau). Setzbar vom Agenten über `set_activity`; bei Shells
+mit OSC-133-Integration automatisch (Prompt=untätig, Kommando=läuft, Exit≠0=Fehler).
 `type`: 0=Shell, 1=SSH, 2=Seriell, 3=App.
 `list_sessions` liefert zusätzlich `mcpController` (true = roter Controller-Tab), `group`
 (Sidebar-Gruppe, leer = ohne) sowie — falls die Session bereits ein Agenten-Ereignis

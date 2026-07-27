@@ -19,6 +19,7 @@ private slots:
     void osc133NonZeroExitSetsError();
     void agentEventReachesHub();
     void agentEventPulseAndExplicitAttention();
+    void agentActivityStates();
     void loginScriptRunsOnConnect();
     void sshPasswordAutoFillOnPrompt();
     void enterIsSentSeparatelyAfterText();
@@ -186,6 +187,18 @@ void TestSession::agentEventPulseAndExplicitAttention() {
     { Session s; s.setActive(true);
       s.reportAgentEvent(QStringLiteral("question"), QStringLiteral("x"));
       QVERIFY(!s.needsAttention()); }                      // fokussiert -> kein Puls
+}
+
+// Agent-gepushter Dauerzustand (MCP set_activity -> requestActivity) faerbt den Ring:
+// idle=0, busy/running=1, waiting=2, error=3; Unbekanntes laesst den Zustand unveraendert.
+void TestSession::agentActivityStates() {
+    Session s;
+    s.requestActivity(QStringLiteral("idle"));    QCOMPARE(s.activityInt(), 0);
+    s.requestActivity(QStringLiteral("busy"));    QCOMPARE(s.activityInt(), 1);
+    s.requestActivity(QStringLiteral("running")); QCOMPARE(s.activityInt(), 1);   // Alias
+    s.requestActivity(QStringLiteral("waiting")); QCOMPARE(s.activityInt(), 2);
+    s.requestActivity(QStringLiteral("error"));   QCOMPARE(s.activityInt(), 3);
+    s.requestActivity(QStringLiteral("quatsch")); QCOMPARE(s.activityInt(), 3);   // unbekannt -> unveraendert
 }
 
 void TestSession::loginScriptRunsOnConnect() {

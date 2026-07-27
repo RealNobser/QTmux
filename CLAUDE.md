@@ -58,7 +58,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
-| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (28 Tools); Doku `docs/MCP.md` |
+| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (29 Tools); Doku `docs/MCP.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
@@ -248,6 +248,18 @@ Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST
 
 ## Status (2026-07-27)
 
+**QTMUX-78 (2026-07-27) — Sidebar-Ring zeigt echte Zustände (idle/busy/waiting/error).**
+Anwenderbefund: der Punkt war faktisch **immer grün** (Default `Running`; `Idle`/`Waiting`
+wurden nirgends gesetzt; Agenten-TUIs senden kein OSC 133). Zweiteilig behoben: (1) **Shells
+mit OSC-133-Integration** — Prompt (`A`/`B`)→`Idle` (dim), Kommando (`C`)→`Running` (grün),
+Exit≠0 (`D`)→`Error` (rot, bleibt am Prompt bis zum nächsten Kommando). (2) **Agenten** — neues
+MCP-Tool **`set_activity(state)`** (`idle`/`busy`/`waiting`/`error`) färbt den Ring direkt →
+belebt die bis dahin **toten Farben** amber(`Waiting`)/dim(`Idle`) und gibt einen kontinuierlichen
+Zustand (Agent pusht, kein Scraping — QTMUX-30). → **29 MCP-Tools**. Der Attention-Puls
+(`needs_attention`/question/error) liegt weiterhin darüber. Keine QML-Änderung (Ring-Farben waren
+schon verdrahtet). `Session::requestActivity`; Test `tst_session::agentActivityStates`; e2e
+verifiziert, Anwender-abgenommen.
+
 **QTMUX-77 (2026-07-27) — Aufmerksamkeits-Puls über MCP + neue Signal-Tools.** Anwenderbefund:
 Ein Agent, der per MCP `post_event` (kind=question) meldete, ließ die Kachel NICHT pulsen
 (Beleg: `lastAgentEventKind=question` bei `needsAttention=false`). Ursache: `post_event`
@@ -255,7 +267,7 @@ schrieb nur in den `AgentEventHub`, rief aber kein `raiseAttention` — nur der 
 tat das. Fix: beide Wege laufen jetzt durch **`Session::reportAgentEvent()`** (Hub + Sidebar-Notiz
 + Puls bei **question/error**, nur wenn Kachel nicht fokussiert; `done`/`info` = nur Notiz, kein
 Puls — bewusst, sonst Dauergeblinke). Neu: MCP-Tools **`needs_attention`** (explizit, optional Text)
-+ **`clear_attention`** → **28 Tools**. Test `tst_session::agentEventPulseAndExplicitAttention`,
++ **`clear_attention`** → **29 Tools**. Test `tst_session::agentEventPulseAndExplicitAttention`,
 e2e per MCP verifiziert, Anwender-abgenommen. Backlog für die restliche Signal-Sprache:
 QTMUX-74 (`set_badge`), QTMUX-75 (`request_input`), QTMUX-76 (`set_workflow_state`).
 
@@ -744,7 +756,7 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (28 Tools)
+### MCP-Server (29 Tools)
 `src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC auf `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
 - **Controller-Auto-Erkennung** beim `initialize`: TCP-Port → PID → **Prozess-Vorfahren-

@@ -125,6 +125,10 @@ public:
     void flagAttention(const QString &note = QString());
     /// Aufmerksamkeits-Markierung wieder löschen (MCP clear_attention).
     void clearAttention();
+    /// Vom Agenten gepushter Dauerzustand (MCP set_activity) → färbt den Sidebar-Ring:
+    /// "idle" (dim), "busy" (grün), "waiting" (amber), "error" (rot). Unbekannt = ignoriert.
+    /// Nötig, weil Agenten-TUIs keine OSC-133-Marker senden (QTMUX-30, kein Scraping).
+    void requestActivity(const QString &state);
 
     VtScreen *screen() const { return m_screen.get(); }
 
