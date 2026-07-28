@@ -68,7 +68,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37) |
-| `tests/` | 17 ctest-Tests: 16 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch) + `test_doc_duplicates` (reines CMake-Skript) |
+| `tests/` | 18 ctest-Tests: 17 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
 
@@ -279,10 +279,19 @@ Vorarbeit QTMUX-80/81/82, dabei **stiller Selbst-Screenshot** `--screenshot <png
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-28** · Branch `main`, letzter Commit `9c55f33` (**ungepusht**) · Working
-Tree: QTMUX-84 (Meta-Kodierung) uncommitted. Windows-Maschine: `windows` (Debug) **und**
+Stand **2026-07-28** · Branch `main`, letzter Commit `aefcb07` (QTMUX-84), **gepusht** ·
+Working Tree: nur diese CLAUDE.md-Ergänzung. Windows-Maschine: `windows` (Debug) **und**
 `windows-release` frisch, `ctest -E "^test_pty$"` beidseitig **16/16 grün** (test_pty fällt
 hier umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell, ConPTY).
+Die Instrumentierung aus der QTMUX-86-Untersuchung ist **zurückgenommen**, `windows-release`
+danach sauber neu gebaut.
+
+**QTMUX-86 (leeres Pane beim Window-Wechsel) ist behoben** — Ursache war **nicht** das
+Rendering, sondern eine transiente Layout-Größe (2 Zeilen), die bis zur Session durchgereicht
+wurde; Details + A/B-Belege in der Feature-Referenz („Session-Größe wird entprellt").
+**Owner-Abnahme offen:** in der eigenen Instanz mehrfach zwischen Splitscreen- und
+Einzel-Window wechseln — der Prompt muss stehen bleiben. Der Schaden an bereits betroffenen
+Sessions bleibt bestehen (Inhalt liegt in deren Scrollback); ein Neustart der Session räumt auf.
 
 **Nächster Punkt:** **QTMUX-85 — Wiederherstellung konfigurierbar + zuletzt aktive Session**
 (Owner-Wunsch 2026-07-28, Backlog unten). Vorher klären, was schon läuft: `activePaneId`
@@ -489,6 +498,23 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   lag nur im Einstellungsdialog (`confirmQuit`), Gruppen nur im Rechtsklick — beides in der
   Palette unauffindbar. Faustregel: Was per MCP steuerbar ist, muss auch die Palette können
   (Ausnahme Vault — bewusste Sicherheitsgrenze).
+- **Session-Größe wird entprellt (QTMUX-86):** `recomputeGrid()` reicht das Raster **nicht
+  sofort** an die Session, sondern über einen 60-ms-Einmal-Timer (`m_resizeTimer` →
+  `applyPendingResize`). Grund: Beim Auf-/Abbauen des Pane-Baums (Window-Wechsel, Teilen,
+  Zoom) durchläuft ein Pane binnen Millisekunden Zwischenhöhen — **gemessen 418×56 = 2 Zeilen**,
+  Millisekunden später 418×278 = 14. Bei 2 Zeilen schiebt libvterm den **ganzen sichtbaren
+  Bildschirm in den Scrollback**. Ein TUI holt sich das per SIGWINCH zurück, eine einfache
+  Shell (`cmd`/PowerShell) zeichnet **nicht** neu → das Pane bleibt leer, obwohl die Session
+  lebt und korrekt gezeichnet wird. Genau daher die Nicht-Determinismus-Erfahrung: es hängt am
+  Inhalt, nicht am Zufall. Belegt per A/B am instrumentierten `Session::resize` (identischer
+  Detektor): **ohne** Fix 34 angekommene Resizes, davon 2 auf ≤ 5 Zeilen — **mit** Fix 7, davon 0.
+  Zusätzlich Gui-frei abgesichert: `gridFor()` ([src/core/TerminalGrid.h](src/core/TerminalGrid.h),
+  Test `test_terminalgrid`) liefert bei nicht positiver Größe `valid=false` → ohne belastbare
+  Größe wird gar nichts abgeleitet (früher wurde auf 1×1 geklemmt; ein 1-Spalten-Reflow kürzt
+  jede Zeile auf ihr erstes Zeichen — im Scrollback als einzelne `H` aus `H:\…>` sichtbar).
+  🔑 **Merke:** Nicht die Anzeige war schuld, sondern eine **transiente Layout-Größe, die bis
+  ins PTY durchgereicht wurde**. Wer hier etwas ändert, prüft nicht Pixel, sondern die
+  **angekommenen** Größen (`Session::resize` protokollieren).
 - **Session-ID in der Kachel (QTMUX-44):** Jede Sidebar-Kachel zeigt neben dem Titel klein
   und monospaced `#<id>` — die **stabile** `Session::id()`, also genau die Nummer, mit der
   man die Session per MCP anspricht (`send_text`, `set_session_group` …). Model-Rolle
@@ -670,6 +696,20 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   sonst schlägt `SetForegroundWindow` still fehl und die Tasten landen in der IDE.
   Vordergrund **prüfen** (`GetForegroundWindow()`), nicht annehmen — und den PID des
   Vordergrundfensters mitloggen, das benennt den Dieb sofort.
+- ⚠️ **Detektor-Blindheit (QTMUX-86, teuerste Fehldiagnose):** Um „geht Inhalt verloren?" zu
+  messen, lief `read_screen` mit **`scrollback: true`** — der Inhalt war aber genau *dorthin*
+  verschoben worden. Der Detektor fand die Marken also wieder und meldete „nur ein
+  Rendering-Fehler, keine Daten weg". Erst der Blick auf den **Live**-Bildschirm (ohne
+  Scrollback) zeigte: 0 Zeichen. **Regel:** Beim Suchen eines Verlusts das Messfenster genau
+  so eng wählen wie die Behauptung — sonst beweist man die eigene Vermutung.
+- ⚠️ **Instrumentierung ohne Aufrufstelle beweist nichts.** Ein Log meldete 98 abgefangene
+  Nullgrößen — daraus schloss ich auf die Ursache. Mit mitgeloggter Aufrufstelle kamen **alle**
+  aus einem Aufruf, den *dieselbe Änderung* neu eingeführt hatte; im alten Code gab es sie
+  nicht. **Regel:** Jede Diagnose-Zeile trägt die Herkunft, sonst misst man den eigenen Fix.
+- ⚠️ **Pixel-Prüfungen sind nur bei entsperrtem Bildschirm gültig.** Ein Lauf hat den
+  Windows-**Sperrbildschirm** fotografiert und über alle Runden identische „Tinte"-Werte
+  gemeldet, die wie ein Befund aussahen. Screen-Grabs immer gegen das erwartete Fenster
+  gegenprüfen (Fenster-Handle + PID des Vordergrundfensters mitloggen).
 - ⚠️ **Marker-Kollision = falsch-positiver E2E-Beweis.** Wird eine Marke per Befehl in die
   Session eingerichtet (`Set-PSReadLineKeyHandler … Insert("META_OK")`), steht sie durch das
   **Echo der Befehlszeile** schon auf dem Bildschirm — `read_screen` findet sie, obwohl nie

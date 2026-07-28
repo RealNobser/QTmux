@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QQuickItem>
+#include <QTimer>
 #include <QFont>
 #include <QColor>
 #include <QImage>
@@ -161,6 +162,9 @@ protected:
 
 private:
     void recomputeGrid();
+    /// Überträgt das aktuelle Raster auf die Session (Bildschirm + PTY/SIGWINCH).
+    /// Läuft **verzögert** über `m_resizeTimer` — Begründung dort (QTMUX-86).
+    void applyPendingResize();
     void applyFontFeatures();   // Ligaturen je nach m_ligatures (de)aktivieren
     /// Effektive Vordergrundfarbe einer Zelle: Default→Theme-fg bzw. explizite
     /// RGB-Farbe, bei Faint (SGR 2) Richtung Hintergrund abgedunkelt.
@@ -213,6 +217,14 @@ private:
     // sich der Inhalt geändert hat. Cursor-/Selektions-Updates rebuilden nur das
     // (billige) dynamische Overlay. Gesetzt von Damage/Scroll/Resize/Font/Farbe.
     bool m_geomDirty = true;
+    /// QTMUX-86: Größenänderungen der Session werden **entprellt**. Beim Auf-/Abbauen des
+    /// Pane-Baums (Window-Wechsel, Teilen, Zoom) durchläuft ein Pane binnen Millisekunden
+    /// Zwischenhöhen — gemessen z. B. 418×56 (= 2 Zeilen), danach 418×278 (= 14). Würde
+    /// jede davon durchgereicht, schiebt libvterm bei 2 Zeilen den ganzen sichtbaren
+    /// Bildschirm in den Scrollback. Ein TUI holt sich das per SIGWINCH zurück, eine
+    /// einfache Shell (cmd/PowerShell) zeichnet NICHT neu → das Pane bleibt leer, obwohl
+    /// die Session lebt. Nur die Größe, bei der das Layout zur Ruhe kommt, zählt.
+    QTimer m_resizeTimer;
     GlyphAtlas m_atlas;         // genutzt vom GPU-Pfad (in updatePaintNode)
     qreal m_cellW = 8;
     qreal m_cellH = 16;

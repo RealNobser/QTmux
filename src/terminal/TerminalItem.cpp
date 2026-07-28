@@ -1,5 +1,6 @@
 #include "TerminalItem.h"
 #include "KeyEncoding.h"
+#include "TerminalGrid.h"
 #include "Session.h"
 #include "VtScreen.h"
 #include "LinkDetector.h"
@@ -182,6 +183,13 @@ TerminalItem::TerminalItem(QQuickItem *parent) : QQuickItem(parent) {
     // Notausstieg/Support-Schalter: QTMUX_NO_GPU=1 erzwingt den QPainter-Fallback.
     if (qEnvironmentVariableIsSet("QTMUX_NO_GPU")) m_gpu = false;
 
+    // QTMUX-86: Entprellung der Session-Größe. 60 ms sind lang genug, damit die
+    // Zwischenschritte eines Layout-Aufbaus (mehrere Frames) zusammenfallen, und kurz
+    // genug, dass ein Ziehen am Splitter unmittelbar wirkt.
+    m_resizeTimer.setSingleShot(true);
+    m_resizeTimer.setInterval(60);
+    connect(&m_resizeTimer, &QTimer::timeout, this, &TerminalItem::applyPendingResize);
+
     setFlag(ItemHasContents, true);
     setAcceptedMouseButtons(Qt::AllButtons);
     setAcceptHoverEvents(true);   // für Link-Hervorhebung unter der Maus
@@ -211,11 +219,11 @@ void TerminalItem::setSession(QObject *session) {
         connect(sc, &VtScreen::damaged, this, [this](const QRect &) { onDamaged(); });
         connect(sc, &VtScreen::cursorMoved, this, [this]() { update(); });
         m_lastSbCount = sc->scrollbackCount();
-        // Nur synchronisieren, wenn die Größe schon feststeht. Sonst würde ein noch
-        // ungelayoutetes Item (Breite/Höhe 0) die — ggf. geteilte — Session auf 1x1
-        // resizen und ihren Inhalt verwerfen (Bug bei Pane-Rebuild/Reorder). Das
-        // spätere geometryChange ruft recomputeGrid mit der echten Größe auf.
-        if (width() > 0 && height() > 0) recomputeGrid();
+        // Kein Größen-Vorbehalt mehr an dieser Stelle: recomputeGrid() bricht selbst ab,
+        // wenn die Größe noch nicht feststeht (gridFor), und reicht die Größe ohnehin nur
+        // entprellt weiter (QTMUX-86). Sonst stünde dieselbe Regel an zwei Stellen — und
+        // die zweite (geometryChange) hatte sie früher nicht.
+        recomputeGrid();
         forceActiveFocus();
     }
     m_geomDirty = true;   // neuer Inhalt
@@ -326,12 +334,23 @@ void TerminalItem::recomputeGrid() {
     m_baseline = snap(fm.ascent());
     m_gridDpr = dpr;
 
-    const int cols = m_cellW > 0 ? static_cast<int>(width() / m_cellW) : m_cols;
-    const int rows = m_cellH > 0 ? static_cast<int>(height() / m_cellH) : m_rows;
-    m_cols = std::max(cols, 1);
-    m_rows = std::max(rows, 1);
     m_geomDirty = true;   // Raster/Metrik geändert → Inhalt neu aufbauen
 
+    // QTMUX-86, Teil 1: ohne belastbare Größe gar nichts ableiten. `geometryChange` feuert
+    // auch für den Übergang auf 0×0, den ein Item beim Neuaufbau des Pane-Baums durchläuft;
+    // früher wurde das Raster dann auf 1×1 geklemmt. Regel + Begründung: gridFor().
+    const TerminalGrid g = gridFor(width(), height(), m_cellW, m_cellH);
+    if (!g.valid) return;              // bisheriges Raster behalten, nichts anstoßen
+    m_cols = g.cols;
+    m_rows = g.rows;
+
+    // QTMUX-86, Teil 2: die Session NICHT sofort resizen, sondern erst wenn das Layout zur
+    // Ruhe gekommen ist (Begründung am Timer im Header). Das Rendering nutzt m_cols/m_rows
+    // sofort weiter — für die paar Millisekunden zeichnet das Pane höchstens leere Zeilen.
+    if (m_session) m_resizeTimer.start();
+}
+
+void TerminalItem::applyPendingResize() {
     if (m_session) m_session->resize(m_cols, m_rows);
 }
 
