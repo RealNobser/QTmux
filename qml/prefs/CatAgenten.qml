@@ -110,21 +110,45 @@ CatPage {
                 Layout.leftMargin: 6
                 Layout.bottomMargin: 4
             }
-            CheckBox {
-                text: qsTr("Unterhaltung fortsetzen")
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: 6
+                Layout.topMargin: 4
+                spacing: 8
                 enabled: page.host.app.restoreAgents
-                checked: page.host.app.resumeAgentSessions
-                onToggled: page.host.app.resumeAgentSessions = checked
+                Text { text: qsTr("Unterhaltung fortsetzen"); color: Theme.textBright }
+                AppComboBox {
+                    Layout.fillWidth: true
+                    model: [qsTr("Gar nicht"), qsTr("Jüngste im Verzeichnis"),
+                            qsTr("Auswahl beim Start"), qsTr("Gemeldete Sitzung")]
+                    currentIndex: page.host.app.resumeAgentMode
+                    onActivated: (i) => page.host.app.resumeAgentMode = i
+                }
             }
+            // Der richtige Weg haengt am Nutzungsverhalten - deshalb je Wahl der
+            // konkrete Preis, nicht nur die Funktion.
             Text {
-                text: qsTr("Hängt das Fortsetzungs-Argument des Agenten an (z. B. --continue), "
-                         + "sodass er die vorherige Unterhaltung weiterführt. Nur bei Agenten, "
-                         + "die das können; ohne vorherige Unterhaltung meldet der Agent einen Fehler.")
+                text: {
+                    switch (page.host.app.resumeAgentMode) {
+                    case 1: return qsTr("Der Agent nimmt die JÜNGSTE Unterhaltung seines Arbeitsverzeichnisses. "
+                                      + "Richtig, solange dort nur ein Agent arbeitet — laufen mehrere im selben "
+                                      + "Ordner, bekommen sie alle dieselbe.")
+                    case 2: return qsTr("Der Agent öffnet beim Start seine eigene Auswahlliste; du entscheidest je "
+                                      + "Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur "
+                                      + "Claude Code eine solche Liste an.")
+                    case 3: return qsTr("Genau die Unterhaltung, die der Agent zuletzt selbst gemeldet hat "
+                                      + "(MCP-Werkzeug set_agent_session) — auch bei mehreren Agenten im selben "
+                                      + "Ordner eindeutig. Meldet er nichts, startet er frisch. QTmux kann die "
+                                      + "Kennung nicht selbst ermitteln: sie entsteht im Agenten und ändert sich "
+                                      + "bei /resume oder /clear.")
+                    default: return qsTr("Der Agent startet mit einer frischen Unterhaltung.")
+                    }
+                }
                 color: Theme.textDim
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
-                Layout.leftMargin: 26
+                Layout.leftMargin: 6
                 Layout.bottomMargin: 4
             }
         }

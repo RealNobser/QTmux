@@ -432,12 +432,17 @@ ApplicationWindow {
     property bool pasteWarnMultiline: true  // Vor mehrzeiligem Einfügen warnen
     property bool confirmQuit: true         // Vor dem Beenden nachfragen (QTMUX-41)
 
-    // Agenten-Wiederherstellung (QTMUX-85) — beide bewusst mit Vorgabe AUS: Beim Start
-    // liefe sonst unaufgefordert ein Programm los. `restoreAgents` setzt den zuletzt
-    // erkannten Agenten neu ab, `resumeAgentSessions` hängt zusätzlich dessen
-    // Fortsetzungs-Argument an (nur bei Agenten, die das können).
+    // Agenten-Wiederherstellung (QTMUX-85) — Vorgabe AUS: Beim Start liefe sonst
+    // unaufgefordert ein Programm los.
     property bool restoreAgents: false
-    property bool resumeAgentSessions: false
+    // Wie die Unterhaltung fortgesetzt wird (QTMUX-98, qtmux::ResumeMode):
+    // 0 gar nicht (Vorgabe) · 1 jüngste im Verzeichnis · 2 Auswahl beim Start ·
+    // 3 die vom Agenten gemeldete Sitzung. Bewusst eine WAHL statt eines Schalters:
+    // Wer einen Agenten je Verzeichnis fährt, ist mit 1 richtig bedient; wer mehrere
+    // im selben Ordner laufen lässt, bekäme damit überall dieselbe Unterhaltung und
+    // braucht 2 oder 3. Kann ein Agent den Modus nicht, startet er frisch — es wird
+    // NIE auf einen anderen Weg ausgewichen.
+    property int resumeAgentMode: 0
 
     // Beenden mit Rückfrage (QTMUX-41): Cmd+Q/Alt+F4 reißt sonst alle Sessions
     // samt laufender Prozesse ohne Vorwarnung mit. `quitConfirmed` schaltet die
@@ -979,18 +984,19 @@ ApplicationWindow {
         // durch sein, und der Fallback-Timer wird erst beim nächsten Output scharf —
         // bei einer wartenden Shell kommt der nie.
         const wantsAgent = window.restoreAgents && !!cfg.agentCommand
+        const ref = cfg.agentSessionRef || ""
         const launch = wantsAgent
-            ? sessions.agentLaunchCommand(cfg.agentCommand, window.resumeAgentSessions) : ""
+            ? sessions.agentLaunchCommand(cfg.agentCommand, window.resumeAgentMode, ref) : ""
         const row = (t === 1)
             ? sessions.createSshSession(cfg.host || "", cfg.sshPort || 22, cfg.user || "",
                                         cfg.identity || "", launch)
             : sessions.createShellSession(cfg.workingDir || "", cfg.program || "", launch)
         if (row >= 0 && cfg.agentCommand) {
-            if (wantsAgent) sessions.markRestoredAgent(row, cfg.agentId || "", cfg.agentCommand)
+            if (wantsAgent) sessions.markRestoredAgent(row, cfg.agentId || "", cfg.agentCommand, ref)
             // Auch OHNE Wiederherstellung vormerken, sonst überschreibt das nächste
             // Beenden den gespeicherten Befehl mit Leer und ein späteres Einschalten
             // des Schalters fände nichts mehr vor.
-            else sessions.seedAgentConfig(row, cfg.agentId || "", cfg.agentCommand)
+            else sessions.seedAgentConfig(row, cfg.agentId || "", cfg.agentCommand, ref)
         }
         return row
     }
@@ -1382,7 +1388,7 @@ ApplicationWindow {
         property alias pasteWarnMultiline: window.pasteWarnMultiline
         property alias confirmQuit: window.confirmQuit
         property alias restoreAgents: window.restoreAgents
-        property alias resumeAgentSessions: window.resumeAgentSessions
+        property alias resumeAgentMode: window.resumeAgentMode
         property alias collapsedGroups: window.collapsedGroupsJson
         // (paneLayout entfällt: das Split-Layout lebt jetzt je Window; die per-Window-
         //  Persistenz über Neustarts kommt in Stufe 3 als eigenes `windows`-Schema.)
@@ -1840,7 +1846,10 @@ ApplicationWindow {
                             { title: qsTr("Vor mehrzeiligem Einfügen warnen"), sub: "",       icon: "info",            run: function(){ window.pasteWarnMultiline = !window.pasteWarnMultiline } },
                             { title: qsTr("Vor dem Beenden nachfragen"),  sub: "",             icon: "info",            run: function(){ window.confirmQuit = !window.confirmQuit } },
                             { title: qsTr("Agenten beim Start wiederherstellen"), sub: "",     icon: "robot",           run: function(){ window.restoreAgents = !window.restoreAgents } },
-                            { title: qsTr("Agenten-Unterhaltung fortsetzen"), sub: "",         icon: "robot",           run: function(){ window.resumeAgentSessions = !window.resumeAgentSessions } },
+                            { title: qsTr("Unterhaltung fortsetzen: gar nicht"), sub: "",      icon: "robot",           run: function(){ window.resumeAgentMode = 0 } },
+                            { title: qsTr("Unterhaltung fortsetzen: jüngste im Verzeichnis"), sub: "", icon: "robot",   run: function(){ window.resumeAgentMode = 1 } },
+                            { title: qsTr("Unterhaltung fortsetzen: Auswahl beim Start"), sub: "", icon: "robot",       run: function(){ window.resumeAgentMode = 2 } },
+                            { title: qsTr("Unterhaltung fortsetzen: gemeldete Sitzung"), sub: "", icon: "robot",        run: function(){ window.resumeAgentMode = 3 } },
                             { title: qsTr("Design: Wie System"),         sub: "",             icon: "gear",            run: function(){ Theme.mode = Theme.System } },
                             { title: qsTr("Design: Hell"),               sub: "",             icon: "sun",             run: function(){ Theme.mode = Theme.Light } },
                             { title: qsTr("Design: Dunkel"),             sub: "",             icon: "moon",            run: function(){ Theme.mode = Theme.Dark } },
@@ -2211,12 +2220,21 @@ ApplicationWindow {
                 checked: window.restoreAgents
                 onTriggered: window.restoreAgents = !window.restoreAgents
             }
-            ShortcutMenuItem {
-                text: qsTr("Agenten-Unterhaltung fortsetzen")
-                checkable: true
+            ThemedMenu {
+                title: qsTr("Unterhaltung fortsetzen")
                 enabled: window.restoreAgents
-                checked: window.resumeAgentSessions
-                onTriggered: window.resumeAgentSessions = !window.resumeAgentSessions
+                Repeater {
+                    model: [qsTr("Gar nicht"), qsTr("Jüngste im Verzeichnis"),
+                            qsTr("Auswahl beim Start"), qsTr("Gemeldete Sitzung")]
+                    ShortcutMenuItem {
+                        required property int index
+                        required property string modelData
+                        text: modelData
+                        checkable: true
+                        checked: window.resumeAgentMode === index
+                        onTriggered: window.resumeAgentMode = index
+                    }
+                }
             }
         }
         ThemedMenu {

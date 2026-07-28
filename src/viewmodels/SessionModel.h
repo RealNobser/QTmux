@@ -138,24 +138,34 @@ public:
     Q_INVOKABLE void pruneHistoryExcept(const QList<int> &keys) const;
 
     // --- Agenten-Wiederherstellung (QTMUX-85) -------------------------------
-    /// Die tatsächlich abzusetzende Startzeile eines Agenten: mit `resume` um die
-    /// Fortsetzungs-Argumente aus der AgentRegistry ergänzt, sonst unverändert.
+    /// Die tatsächlich abzusetzende Startzeile eines Agenten: um die Argumente des
+    /// gewählten Fortsetzungs-Modus ergänzt (qtmux::ResumeMode als int), sonst
+    /// unverändert. `sessionRef` wird nur im Modus „gemeldete Sitzung" gebraucht.
     /// Gedacht als `loginScript`-Argument von createShellSession/createSshSession —
     /// nur dort steht das Kommando VOR dem Start fest, und nur dann greift die
     /// erprobte Auslösung am ersten Prompt zuverlässig.
-    Q_INVOKABLE QString agentLaunchCommand(const QString &commandLine, bool resume) const;
+    Q_INVOKABLE QString agentLaunchCommand(const QString &commandLine, int mode,
+                                           const QString &sessionRef = {}) const;
 
     /// Vermerkt den wiederhergestellten Agenten an `row`: setzt Kennung und Titel der
     /// Session (das Login-Script läuft an der Tipp-Beobachtung vorbei) und hält
-    /// Kennung + Befehl im SessionConfig fest, damit sie erneut persistiert werden.
+    /// Kennung, Befehl und Unterhaltungs-Referenz im SessionConfig fest, damit sie
+    /// erneut persistiert werden.
     Q_INVOKABLE void markRestoredAgent(int row, const QString &agentId,
-                                       const QString &commandLine);
+                                       const QString &commandLine,
+                                       const QString &sessionRef = {});
 
     /// Merkt den gespeicherten Agenten NUR im SessionConfig vor — ohne ihn zu starten.
     /// Nötig, wenn die Wiederherstellung abgeschaltet ist: sonst schriebe das Beenden
     /// den leeren Laufzeitwert zurück und löschte den gespeicherten Befehl.
     Q_INVOKABLE void seedAgentConfig(int row, const QString &agentId,
-                                     const QString &commandLine);
+                                     const QString &commandLine,
+                                     const QString &sessionRef = {});
+
+    /// Übernimmt die vom Agenten gemeldete Unterhaltungs-ID (MCP `set_agent_session`,
+    /// QTMUX-98) in Session UND SessionConfig. Der Agent meldet sie bei jedem Wechsel
+    /// erneut — insbesondere nach `/resume` und `/clear`, die sie zur Laufzeit ändern.
+    Q_INVOKABLE void setAgentSessionRef(int row, const QString &sessionRef);
 
     /// Schaltet den Restore-Modus (QTMUX-85): unterdrückt die CWD-Vererbung von der
     /// aktiven Session und das redundante Zurückschreiben des Alt-Schemas, während
@@ -203,6 +213,7 @@ private:
         // des Schalters liefe ins Nichts.
         QString agentId;
         QString agentCommand;
+        QString agentSessionRef;  // vom Agenten gemeldete Unterhaltungs-ID (QTMUX-98)
     };
 
     /// Verschiebt die Zeile ans Ende des Blocks ihrer eigenen Gruppe (bzw. für

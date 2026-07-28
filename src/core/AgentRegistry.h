@@ -10,10 +10,25 @@ struct AgentInfo {
     QString id;          // stabiler Schlüssel (z. B. "antigravity") — QML mappt darauf Icon/Farbe
     QString command;     // erwarteter Kommandoname (z. B. "agy")
     QString displayName; // Anzeigename in der Sidebar (z. B. "AntiGravity")
-    // Argumente, die den Agenten seine VORHERIGE Unterhaltung fortsetzen lassen
-    // (QTMUX-85, z. B. "--continue"). Leer = der Agent kann das nicht bzw. das Flag
-    // ist nicht verifiziert; dann startet er beim Wiederherstellen frisch.
-    QString resumeArgs;
+
+    // --- Fortsetzen einer Unterhaltung (QTMUX-85/98) ------------------------
+    // Je Weg eine Argument-Vorlage. LEER heißt immer: dieser Agent kann das nicht
+    // bzw. es ist nicht am `--help` verifiziert — dann startet er frisch, statt an
+    // einem geratenen Flag zu scheitern. Nur EINE der drei wird verwendet, je nach
+    // eingestelltem Modus.
+    QString resumeLastArgs;  // jüngste Unterhaltung im Verzeichnis (z. B. "--continue")
+    QString resumePickArgs;  // interaktive Auswahl beim Start (z. B. "--resume" ohne Wert)
+    QString resumeIdArgs;    // gezielt per ID; MUSS den Platzhalter {id} enthalten
+};
+
+/// Fortsetzungs-Weg beim Wiederherstellen (QTMUX-98). Die Werte sind persistiert
+/// (`window/resumeAgentMode`) — Reihenfolge daher nicht ändern, nur anhängen.
+enum class ResumeMode {
+    None = 0,    // gar nicht fortsetzen (Vorgabe)
+    Last = 1,    // jüngste Unterhaltung im Arbeitsverzeichnis — ⚠️ bei mehreren
+                 // Agenten im selben Ordner bekommen alle dieselbe
+    Pick = 2,    // Auswahl beim Start; nichts wird geraten, kostet einen Klick je Pane
+    Reported = 3 // exakt die vom Agenten gemeldete Sitzung (set_agent_session)
 };
 
 /// Registry bekannter Agenten-CLIs. Erweiterbar — neue Agenten hier eintragen.
@@ -28,13 +43,23 @@ public:
     /// nötig, weil Präfixe wie `env FOO=1` davor stehen können.
     static const AgentInfo *detect(const QString &commandLine, int *tokenIndex = nullptr);
 
-    /// Ergänzt eine erkannte Agenten-Kommandozeile um die Fortsetzungs-Argumente
-    /// (QTMUX-85). Eingefügt wird DIREKT hinter dem Kommando-Token, nicht am Ende —
-    /// nur so bleibt sowohl `claude --continue --foo` als auch eine mögliche
-    /// Subkommando-Form (`agent resume --last --foo`) gültig.
-    /// Unverändert zurück, wenn kein Agent erkannt wird, `resumeArgs` leer ist oder
-    /// dessen erster Token bereits in der Zeile steht (Idempotenz über Neustarts).
-    static QString resumeCommand(const QString &commandLine);
+    /// Ergänzt eine erkannte Agenten-Kommandozeile um die Fortsetzungs-Argumente des
+    /// gewählten Modus (QTMUX-85/98). `sessionRef` wird nur bei ResumeMode::Reported
+    /// gebraucht und ersetzt dort den Platzhalter {id}.
+    ///
+    /// Eingefügt wird DIREKT hinter dem Kommando-Token, nicht am Ende — nur so bleibt
+    /// sowohl `claude --resume <id> --foo` als auch eine Subkommando-Form
+    /// (`agent resume --last --foo`) gültig.
+    ///
+    /// Unverändert zurück, wenn kein Agent erkannt wird, die Vorlage des Modus leer ist,
+    /// bei Reported keine `sessionRef` vorliegt, oder der erste Token der Vorlage schon
+    /// in der Zeile steht (Idempotenz über mehrere Neustarts).
+    static QString resumeCommand(const QString &commandLine, ResumeMode mode,
+                                 const QString &sessionRef = {});
+
+    /// Kann dieser Agent den Modus überhaupt? (leere Vorlage = nein) — die UI kann
+    /// damit erklären, warum ein Agent trotz gesetztem Modus frisch startet.
+    static bool supportsResumeMode(const AgentInfo &a, ResumeMode mode);
 };
 
 } // namespace qtmux

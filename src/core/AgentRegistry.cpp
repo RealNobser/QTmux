@@ -3,23 +3,29 @@
 namespace qtmux {
 
 const QList<AgentInfo> &AgentRegistry::all() {
-    // `resumeArgs` nur eintragen, wenn das Flag am echten CLI gegengeprüft wurde —
-    // ein geratenes Flag lässt den Start scheitern und sieht wie ein QTmux-Fehler aus.
-    // Verifiziert (2026-07-28, `<agent> --help`): claude, agy, opencode, hermes.
+    // Vorlagen nur eintragen, wenn sie am echten CLI gegengeprüft wurden — ein
+    // geratenes Flag lässt den Start scheitern und sieht wie ein QTmux-Fehler aus.
+    // Verifiziert (2026-07-28/29, `<agent> --help`): claude, agy, opencode, hermes.
+    // Einen dokumentierten interaktiven Picker hat bislang nur Claude Code.
     static const QList<AgentInfo> kAgents = {
         {QStringLiteral("claude"),      QStringLiteral("claude"), QStringLiteral("Claude Code"),
-         QStringLiteral("--continue")},
-        {QStringLiteral("codex"),       QStringLiteral("codex"),  QStringLiteral("Codex"), {}},
-        {QStringLiteral("gemini"),      QStringLiteral("gemini"), QStringLiteral("Gemini"), {}},
+         QStringLiteral("--continue"), QStringLiteral("--resume"), QStringLiteral("--resume {id}")},
+        {QStringLiteral("codex"),       QStringLiteral("codex"),  QStringLiteral("Codex"),
+         {}, {}, {}},
+        {QStringLiteral("gemini"),      QStringLiteral("gemini"), QStringLiteral("Gemini"),
+         {}, {}, {}},
         {QStringLiteral("antigravity"), QStringLiteral("agy"),    QStringLiteral("AntiGravity"),
-         QStringLiteral("--continue")},
-        {QStringLiteral("aider"),       QStringLiteral("aider"),  QStringLiteral("Aider"), {}},
-        {QStringLiteral("cursor"),      QStringLiteral("cursor"), QStringLiteral("Cursor"), {}},
-        {QStringLiteral("qwen"),        QStringLiteral("qwen"),   QStringLiteral("Qwen Coder"), {}},
+         QStringLiteral("--continue"), {}, QStringLiteral("--conversation {id}")},
+        {QStringLiteral("aider"),       QStringLiteral("aider"),  QStringLiteral("Aider"),
+         {}, {}, {}},
+        {QStringLiteral("cursor"),      QStringLiteral("cursor"), QStringLiteral("Cursor"),
+         {}, {}, {}},
+        {QStringLiteral("qwen"),        QStringLiteral("qwen"),   QStringLiteral("Qwen Coder"),
+         {}, {}, {}},
         {QStringLiteral("opencode"),    QStringLiteral("opencode"), QStringLiteral("OpenCode"),
-         QStringLiteral("--continue")},
+         QStringLiteral("--continue"), {}, QStringLiteral("--session {id}")},
         {QStringLiteral("hermes"),      QStringLiteral("hermes"), QStringLiteral("Hermes"),
-         QStringLiteral("--continue")},
+         QStringLiteral("--continue"), {}, QStringLiteral("--resume {id}")},
     };
     return kAgents;
 }
@@ -61,19 +67,47 @@ const AgentInfo *AgentRegistry::detect(const QString &commandLine, int *tokenInd
     return nullptr;
 }
 
-QString AgentRegistry::resumeCommand(const QString &commandLine) {
+/// Vorlage des Modus, oder leer.
+static QString templateFor(const AgentInfo &a, ResumeMode mode) {
+    switch (mode) {
+    case ResumeMode::Last:     return a.resumeLastArgs;
+    case ResumeMode::Pick:     return a.resumePickArgs;
+    case ResumeMode::Reported: return a.resumeIdArgs;
+    case ResumeMode::None:     break;
+    }
+    return {};
+}
+
+bool AgentRegistry::supportsResumeMode(const AgentInfo &a, ResumeMode mode) {
+    return !templateFor(a, mode).trimmed().isEmpty();
+}
+
+QString AgentRegistry::resumeCommand(const QString &commandLine, ResumeMode mode,
+                                     const QString &sessionRef) {
+    if (mode == ResumeMode::None) return commandLine;
     int idx = -1;
     const AgentInfo *a = detect(commandLine, &idx);
-    if (!a || a->resumeArgs.trimmed().isEmpty() || idx < 0) return commandLine;
+    if (!a || idx < 0) return commandLine;
+
+    QString tmpl = templateFor(*a, mode).trimmed();
+    if (tmpl.isEmpty()) return commandLine;   // Agent kann diesen Weg nicht
+
+    if (tmpl.contains(QLatin1String("{id}"))) {
+        // Ohne Referenz NICHT auf einen anderen Weg ausweichen — lieber frisch
+        // starten als stillschweigend eine fremde Unterhaltung aufmachen.
+        const QString ref = sessionRef.trimmed();
+        if (ref.isEmpty()) return commandLine;
+        tmpl.replace(QLatin1String("{id}"), ref);
+    }
 
     QStringList tokens = commandLine.trimmed().split(QChar(' '), Qt::SkipEmptyParts);
-    const QStringList resume = a->resumeArgs.split(QChar(' '), Qt::SkipEmptyParts);
-    if (resume.isEmpty()) return commandLine;
-    // Idempotenz: steht das Fortsetzungs-Argument schon da, nicht noch einmal einfügen —
-    // sonst sammelt sich über mehrere Neustarts `--continue --continue …` an.
-    if (tokens.contains(resume.first())) return commandLine;
+    const QStringList add = tmpl.split(QChar(' '), Qt::SkipEmptyParts);
+    if (add.isEmpty()) return commandLine;
+    // Idempotenz: steht das Argument schon da, nicht noch einmal einfügen — sonst
+    // sammelt sich über mehrere Neustarts `--continue --continue …` an.
+    if (tokens.contains(add.first())) return commandLine;
 
-    for (int k = 0; k < resume.size(); ++k) tokens.insert(idx + 1 + k, resume.at(k));
+    for (int k = 0; k < add.size(); ++k) tokens.insert(idx + 1 + k, add.at(k));
     return tokens.join(QChar(' '));
 }
 

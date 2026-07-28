@@ -346,6 +346,10 @@ void Session::observeInput(const QByteArray &data) {
     }
 }
 
+void Session::setAgentSessionRef(const QString &ref) {
+    m_agentSessionRef = ref.trimmed();
+}
+
 void Session::setRestoredAgent(const QString &agentId, const QString &commandLine) {
     if (commandLine.trimmed().isEmpty()) return;
     m_agentCommand = commandLine.trimmed();

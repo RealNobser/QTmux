@@ -53,6 +53,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `needs_attention` | `text?`, `sessionId?` | Explizit Aufmerksamkeit anfordern (Kachel pulst) — für „blockiert/brauche Mensch" |
 | `clear_attention` | `sessionId?` | Aufmerksamkeits-Markierung wieder löschen |
 | `set_activity` | `state`, `sessionId?` | Dauer-Zustand für den Sidebar-Ring: `idle`(dim)/`busy`(grün)/`waiting`(amber)/`error`(rot) |
+| `set_agent_session` | `ref`, `sessionId?` | Eigene Unterhaltungs-Kennung melden, damit QTmux dich beim nächsten Start damit fortsetzen kann (s. u.) |
 | `wait_for_events` | `sessionId?`, `afterSeq?`, `timeoutMs?` | **Long-Poll**: blockiert bis ein abonniertes Ereignis vorliegt/Timeout |
 | `get_layout` | `windowId?` | `{layout, windowId, activePaneId, sessions}` — Baum des **aktiven** (oder per `windowId` gewählten) Windows plus Pane-Zuordnung (s. u.) |
 | `split_pane` | `orientation` ("h"/"v") | Aktives Pane **im aktiven Window** teilen (neue Shell im neuen Pane, wird aktiv) → neue **Session-id** |
@@ -96,6 +97,34 @@ Der Gruppenname ist frei wählbar; er wird mit der Sitzungsliste **persistiert**
 überlebt einen Neustart. Das Zuordnen **sortiert die Sidebar um** (die Mitglieder einer
 Gruppe müssen zusammenhängen) — eine Session kann dadurch ihre Zeile wechseln, ihre
 `id` bleibt.
+
+### `set_agent_session` — deine Unterhaltung über einen Neustart retten (QTMUX-98)
+
+QTmux kann deine Sitzungen wiederherstellen: Es merkt sich die getippte Agenten-Kommandozeile
+je Pane und setzt sie beim nächsten Start erneut ab. **Welche Unterhaltung** dabei fortgesetzt
+wird, hängt an einer Einstellung des Anwenders — und der genaueste Weg braucht dich:
+
+```jsonc
+{"name":"set_agent_session","arguments":{"ref":"<deine Unterhaltungs-ID>"}}
+```
+
+QTmux legt `ref` an deinem Pane ab, persistiert sie und startet dich beim nächsten Mal mit
+genau dieser Unterhaltung (z. B. `claude --resume <ref>`, `opencode --session <ref>`).
+
+**Warum du das melden musst und QTmux es nicht selbst herausfindet** — alle vier naheliegenden
+Wege wurden gemessen und scheitern: Ein Server kann seinen Client nicht anrufen, und ein
+beschäftigter Agent pollt nicht; in die PTY zu tippen landet in deinem Eingabefeld und die
+Antwort wäre Bildschirm-Raterei; deine Verlaufsdatei hältst du nicht offen (`lsof` findet
+nichts); und deine Session-Variable setzt du erst zur **Laufzeit**, sie ist von außen am
+Prozess nicht sichtbar. QTmux leitet deshalb nichts ab — du meldest, genau wie bei den
+Ereignissen.
+
+⚠️ **Nach jedem Wechsel erneut melden.** `/resume` und `/clear` ändern die Kennung mitten im
+Betrieb; ohne neue Meldung zeigt QTmux auf die alte Unterhaltung. Am besten beim Start und
+nach jedem Wechsel. Ein leerer `ref` löscht die Zuordnung.
+
+Ohne Meldung ist das kein Fehler: Der Anwender kann stattdessen „jüngste Unterhaltung im
+Verzeichnis" oder „Auswahl beim Start" wählen — dann startest du eben ohne diese Angabe.
 
 ## Sessions steuern: zwei Fallen, die Erfolg melden
 

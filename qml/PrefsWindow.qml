@@ -182,7 +182,7 @@ Window {
             { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Rechtsklick fügt ein"),              keywords: "rechtsklick einfügen paste zwischenablage" },
             { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Vor mehrzeiligem Einfügen warnen"),  keywords: "einfügen paste warnung mehrzeilig multiline" },
             { cat: "agenten",          key: "agenten.restore",       label: qsTr("Agenten beim Start wiederherstellen"), keywords: "agent wiederherstellen neustart restore claude codex starten sitzung" },
-            { cat: "agenten",          key: "agenten.restore",       label: qsTr("Unterhaltung fortsetzen"),           keywords: "fortsetzen continue resume unterhaltung konversation agent" },
+            { cat: "agenten",          key: "agenten.restore",       label: qsTr("Unterhaltung fortsetzen"),           keywords: "fortsetzen continue resume unterhaltung konversation agent auswahl gemeldet juengste" },
             { cat: "agenten",          key: "agenten.notifications", label: qsTr("Benachrichtigungen"),                keywords: "agent benachrichtigung abo matrix ereignis subscribe" },
             { cat: "agenten",          key: "agenten.mcp",           label: qsTr("MCP-Server"),                        keywords: "mcp server port agenten steuerung 127.0.0.1" },
             { cat: "verbindungen",     key: "verbindungen.list",     label: qsTr("Verbindungsprofile"),                keywords: "verbindung profil ssh seriell sftp profile" },

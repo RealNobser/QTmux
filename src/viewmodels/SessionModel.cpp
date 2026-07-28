@@ -663,27 +663,45 @@ QVariantMap SessionModel::sessionConfig(int row) const {
     }
     m[QStringLiteral("agentId")]      = agentId;
     m[QStringLiteral("agentCommand")] = agentCommand;
+    // Unterhaltungs-Referenz (QTMUX-98) mit demselben Rückfall: Ein gemeldeter Wert
+    // gewinnt, sonst bleibt der beim Restore vorgemerkte stehen.
+    QString ref = cfg.agentSessionRef;
+    if (row < m_sessions.size() && !m_sessions.at(row)->agentSessionRef().isEmpty())
+        ref = m_sessions.at(row)->agentSessionRef();
+    m[QStringLiteral("agentSessionRef")] = ref;
     return m;
 }
 
-QString SessionModel::agentLaunchCommand(const QString &commandLine, bool resume) const {
-    // Fortsetzungs-Argumente kennt nur die Registry — QML muss davon nichts wissen.
-    return resume ? AgentRegistry::resumeCommand(commandLine) : commandLine;
+QString SessionModel::agentLaunchCommand(const QString &commandLine, int mode,
+                                         const QString &sessionRef) const {
+    // Die Vorlagen kennt nur die Registry — QML muss von Flags nichts wissen.
+    return AgentRegistry::resumeCommand(commandLine, static_cast<ResumeMode>(mode), sessionRef);
 }
 
 void SessionModel::seedAgentConfig(int row, const QString &agentId,
-                                   const QString &commandLine) {
+                                   const QString &commandLine, const QString &sessionRef) {
     if (row < 0 || row >= m_configs.size()) return;
-    m_configs[row].agentId      = agentId;
-    m_configs[row].agentCommand = commandLine.trimmed();
+    m_configs[row].agentId         = agentId;
+    m_configs[row].agentCommand    = commandLine.trimmed();
+    m_configs[row].agentSessionRef = sessionRef.trimmed();
 }
 
 void SessionModel::markRestoredAgent(int row, const QString &agentId,
-                                     const QString &commandLine) {
+                                     const QString &commandLine, const QString &sessionRef) {
     if (row < 0 || row >= m_sessions.size()) return;
     if (commandLine.trimmed().isEmpty()) return;
-    seedAgentConfig(row, agentId, commandLine);
+    seedAgentConfig(row, agentId, commandLine, sessionRef);
     m_sessions.at(row)->setRestoredAgent(agentId, commandLine);
+    // Die alte Referenz gilt weiter, bis der Agent eine neue meldet — sonst wäre sie
+    // nach dem ersten Neustart weg und der nächste könnte nicht mehr fortsetzen.
+    if (!sessionRef.trimmed().isEmpty())
+        m_sessions.at(row)->setAgentSessionRef(sessionRef);
+}
+
+void SessionModel::setAgentSessionRef(int row, const QString &sessionRef) {
+    if (row < 0 || row >= m_sessions.size()) return;
+    m_sessions.at(row)->setAgentSessionRef(sessionRef);
+    if (row < m_configs.size()) m_configs[row].agentSessionRef = sessionRef.trimmed();
 }
 
 void SessionModel::saveHistoryFor(int row, int key) const {

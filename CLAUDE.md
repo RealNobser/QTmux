@@ -61,7 +61,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
-| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (36 Tools); Doku `docs/MCP.md` |
+| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (37 Tools); Doku `docs/MCP.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
@@ -287,7 +287,7 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 
 **Aktuell:** v1.6.1 ausgeliefert (alle 4 Installer: DMG/MSI+ZIP/AppImage). Phasen 0–6
 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Plugins +
-MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **36 MCP-Tools**
+MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **37 MCP-Tools**
 (GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert.
 
 **Window-Modell (QTMUX-83, auf `main`, ungereleast):** Kein globales Split-Layout mehr,
@@ -637,10 +637,27 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `_createSessionFromCfg` daraus ein **Login-Script** (QTMUX-23) — nicht `program`: Letzteres
   wird direkt exec't und bei argumentloser Angabe als Login-Shell markiert (`argv0 = "-claude"`),
   der Agent liefe ohne Shell-Umgebung und sein `exit` schlösse das Pane.
-  Zwei Schalter, beide **Vorgabe AUS**: `window/restoreAgents` und `window/resumeAgentSessions`
-  (Letzteres hängt `AgentInfo::resumeArgs` an). Verifiziert am `--help`: `--continue` für
-  claude, agy, opencode, hermes; übrige `resumeArgs` **leer** — ein geratenes Flag lässt den
-  Start scheitern und sieht wie ein QTmux-Fehler aus.
+  Schalter `window/restoreAgents`, **Vorgabe AUS**.
+- **Unterhaltung fortsetzen ist eine WAHL, kein Schalter (QTMUX-98):** `window/resumeAgentMode`
+  = `qtmux::ResumeMode` — 0 gar nicht (Vorgabe) · 1 **jüngste** im Verzeichnis · 2 **Auswahl**
+  beim Start · 3 die vom Agenten **gemeldete** Sitzung. Je Modus eine Argument-Vorlage in
+  `AgentInfo` (`resumeLastArgs`/`resumePickArgs`/`resumeIdArgs`, Letztere mit Platzhalter
+  `{id}`); leer = der Agent kann das nicht → er startet frisch, es wird **nie** auf einen
+  anderen Weg ausgewichen. Am `--help` verifiziert (2026-07-29): `--continue` für claude/agy/
+  opencode/hermes, per ID `--resume {id}` (claude, hermes), `--conversation {id}` (agy),
+  `--session {id}` (opencode); **einen Picker hat nur Claude Code** (`--resume` ohne Wert).
+  🔑 **Warum eine Wahl:** `--continue` heißt wörtlich „jüngste Unterhaltung **im Verzeichnis**".
+  Wer einen Agenten je Verzeichnis fährt, ist damit exakt bedient; wer mehrere im selben Ordner
+  laufen lässt (hier der Normalfall — 5 Panes in RAFTNG, 3 in QTmux), bekäme in **allen**
+  dieselbe. E2E-belegt: Modus 1 → beide Panes `--continue`; Modus 3 → `--session
+  unterhaltung-EINS` bzw. `-ZWEI`.
+  🔑 **Die ID kann QTmux nicht selbst ermitteln — vier Wege gemessen, alle tot:** MCP-Server
+  ruft keinen Client (und ein beschäftigter Agent pollt nicht, QTMUX-37); in die PTY tippen
+  landet im Eingabefeld der TUI und die Antwort wäre Scraping (gegen QTMUX-30); `lsof` findet
+  nichts, weil Claude Code die `.jsonl` nicht offen hält; `ps eww` zeigt nur die **Start**-
+  Umgebung, `CLAUDE_CODE_SESSION_ID` wird erst zur Laufzeit gesetzt (nur an Kindprozesse
+  vererbt). Deshalb **meldet der Agent** per MCP `set_agent_session` — und muss das nach
+  `/resume`/`/clear` **erneut** tun, weil sich die Kennung dabei ändert.
   🔑 **Drei Fallen, jede einzeln erlebt:** (1) Die Startzeile MUSS als `loginScript`-Argument
   von `create*Session` mitgehen — **vor** dem Start. Nachträglich gesetzt kann der Prompt
   schon durch sein, und `armLoginScript` wird erst beim **nächsten** Output scharf; eine
@@ -738,7 +755,7 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (36 Tools)
+### MCP-Server (37 Tools)
 `src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC auf `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
 - **Controller-Auto-Erkennung** beim `initialize`: TCP-Port → PID → **Prozess-Vorfahren-

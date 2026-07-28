@@ -79,6 +79,17 @@ public:
     /// gesichert und über den Blatt-`cfg` persistiert (QTMUX-85). Leer = kein Agent.
     QString agentCommand() const { return m_agentCommand; }
 
+    /// Vom Agenten SELBST gemeldete Kennung seiner laufenden Unterhaltung
+    /// (QTMUX-98, MCP `set_agent_session`). Undurchsichtige Zeichenkette — QTmux
+    /// legt sie nur ab und setzt sie später in die Fortsetzungs-Vorlage ein.
+    /// 🔑 QTmux kann sie NICHT selbst ermitteln: Der Agent ist ein fremdes Programm
+    /// im PTY, er setzt seine ID erst zur Laufzeit (bei Claude Code sichtbar nur in
+    /// der Umgebung seiner Kindprozesse), hält seine Verlaufsdatei nicht offen, und
+    /// `/resume` wechselt sie mitten im Betrieb. Melden ist der einzige belastbare
+    /// Weg — dieselbe Linie wie bei den Agenten-Ereignissen (QTMUX-30).
+    QString agentSessionRef() const { return m_agentSessionRef; }
+    void setAgentSessionRef(const QString &ref);
+
     /// Vermerkt einen beim Neustart wiederhergestellten Agenten (QTMUX-85): setzt
     /// Kennung, Sidebar-Titel und die gemerkte Kommandozeile.
     /// 🔑 Die Kennung MUSS explizit gesetzt werden: gestartet wird der Agent über das
@@ -200,6 +211,7 @@ private:
     QString m_workingDir;      // gecachtes Arbeitsverzeichnis (nur Shell)
     QString m_agentId;
     QString m_agentCommand;    // zuletzt erkannte Agenten-Kommandozeile (QTMUX-85)
+    QString m_agentSessionRef; // vom Agenten gemeldete Unterhaltungs-ID (QTMUX-98)
     QString m_group;           // Sidebar-Gruppe (QTMUX-42), leer = ohne Gruppe
     int m_windowId = -1;       // Window-Zugehörigkeit (QTMUX-83, B1), -1 = keins
     QString m_inputLine;       // Puffer der aktuell getippten Zeile

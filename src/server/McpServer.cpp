@@ -684,6 +684,17 @@ QJsonObject McpServer::toolsList() const {
                       QJsonObject{{"state", strProp("'idle' | 'busy' | 'waiting' | 'error'")},
                                   {"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
                       QJsonArray{"state"}));
+    tools.append(tool("set_agent_session",
+                      "Meldet die Kennung DEINER laufenden Unterhaltung (z. B. die eigene "
+                      "Session-/Conversation-ID). QTmux legt sie an deinem Pane ab und startet "
+                      "dich beim naechsten Programmstart mit genau dieser Unterhaltung wieder - "
+                      "sofern der Anwender 'Unterhaltung fortsetzen: gemeldete Sitzung' gewaehlt "
+                      "hat. QTmux kann die ID NICHT selbst ermitteln (du bist ein fremdes "
+                      "Programm im PTY), und sie aendert sich bei /resume oder /clear: melde sie "
+                      "darum beim Start und nach jedem Wechsel erneut. Leerer Wert loescht sie.",
+                      QJsonObject{{"ref", strProp("Kennung der Unterhaltung (undurchsichtige Zeichenkette)")},
+                                  {"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
+                      QJsonArray{"ref"}));
     tools.append(tool("subscribe_events",
                       "Abonniert Agenten-Ereignisse für DIESE Session. Ohne Filter werden alle "
                       "Ereignisse aller anderen Sessions empfangen; optional auf Quell-Sessions "
@@ -779,6 +790,15 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         Session *s = m_sessions ? m_sessions->sessionById(srcId) : nullptr;
         if (!s) { isError = true; text = QStringLiteral("Unbekannte Session-ID: %1.").arg(srcId); return {}; }
         s->clearAttention();
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "set_agent_session") {
+        const int srcId = callerId();
+        if (srcId <= 0) { isError = true; text = QStringLiteral("Keine Quell-Session (sessionId fehlt/unbekannt)."); return {}; }
+        const int row = m_sessions ? m_sessions->rowForId(srcId) : -1;
+        if (row < 0) { isError = true; text = QStringLiteral("Unbekannte Session-ID: %1.").arg(srcId); return {}; }
+        m_sessions->setAgentSessionRef(row, args.value("ref").toString());
         text = QStringLiteral("ok");
         return {};
     }
