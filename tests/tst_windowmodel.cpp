@@ -24,6 +24,7 @@ private slots:
     void activeRowFollowsClose();
     void windowIdsStayUniqueAfterSetNextId();
     void migrateOldSessionsToWindows();
+    void groupsStayContiguous();
 
 private:
     /// Ein Split-Baum mit zwei Blättern (Format wie im QML-Layout-Baum).
@@ -285,6 +286,61 @@ void TestWindowModel::migrateOldSessionsToWindows() {
     WindowModel::migrateSessionsToWindows(s);
     QCOMPARE(s.beginReadArray(QStringLiteral("windows")), 3);
     s.endArray();
+}
+
+// Window-Gruppen (Stufe 5): jede Gruppe bleibt ein zusammenhängender Block (die Sidebar
+// zeigt sie über ListView-Sections). setWindowGroup rückt an den Block; renameGroup
+// verschmilzt; moveGroup verschiebt als Block — alles ohne Lücken.
+void TestWindowModel::groupsStayContiguous() {
+    WindowModel m;
+    for (int i = 0; i < 4; ++i) m.createWindow(QStringLiteral("w%1").arg(i));   // Zeilen 0..3
+    auto grp = [&](int r) { return qobject_cast<Window *>(m.windowAt(r))->group(); };
+    auto contiguous = [&](const QString &g) {
+        int first = -1, last = -1;
+        for (int i = 0; i < m.count(); ++i)
+            if (grp(i) == g) { if (first < 0) first = i; last = i; }
+        if (first < 0) return true;
+        for (int i = first; i <= last; ++i)
+            if (grp(i) != g) return false;   // Lücke im Block
+        return true;
+    };
+
+    // Zeile 0 und 2 in Gruppe A: das zweite Mitglied rückt an das erste → Block.
+    m.setWindowGroup(0, QStringLiteral("A"));
+    m.setWindowGroup(2, QStringLiteral("A"));
+    QVERIFY(contiguous(QStringLiteral("A")));
+    QCOMPARE(m.groupSize(QStringLiteral("A")), 2);
+    QCOMPARE(m.groups(), (QStringList{QStringLiteral("A")}));
+
+    // Ein drittes Mitglied in einer anderen Gruppe.
+    m.setWindowGroup(m.count() - 1, QStringLiteral("B"));
+    QVERIFY(contiguous(QStringLiteral("A")));
+    QVERIFY(contiguous(QStringLiteral("B")));
+    QCOMPARE(m.groups().size(), 2);
+
+    // Reines Umbenennen (kein Merge) hält den Block zusammen und tauscht nur den Namen.
+    m.renameGroup(QStringLiteral("A"), QStringLiteral("C"));
+    QCOMPARE(m.groupSize(QStringLiteral("A")), 0);
+    QCOMPARE(m.groupSize(QStringLiteral("C")), 2);
+    QVERIFY(contiguous(QStringLiteral("C")));
+
+    // Ein Mitglied aus der Gruppe nehmen — der Rest bleibt zusammenhängend.
+    int cr = -1;
+    for (int i = 0; i < m.count(); ++i)
+        if (grp(i) == QStringLiteral("C")) { cr = i; break; }
+    m.setWindowGroup(cr, QString());
+    QCOMPARE(m.groupSize(QStringLiteral("C")), 1);
+    QVERIFY(contiguous(QStringLiteral("C")));
+
+    // Auflösen (leerer Zielname) entfernt die Gruppe ganz.
+    m.renameGroup(QStringLiteral("B"), QString());
+    QCOMPARE(m.groupSize(QStringLiteral("B")), 0);
+
+    // Gruppe als Block verschieben — bleibt zusammenhängend.
+    m.setWindowGroup(0, QStringLiteral("C"));   // C wieder auf 2 Mitglieder bringen
+    QVERIFY(contiguous(QStringLiteral("C")));
+    m.moveGroup(QStringLiteral("C"), 1);
+    QVERIFY(contiguous(QStringLiteral("C")));
 }
 
 QTEST_MAIN(TestWindowModel)

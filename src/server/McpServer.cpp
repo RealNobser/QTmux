@@ -484,24 +484,29 @@ QJsonObject McpServer::toolsList() const {
     tools.append(tool("close_session", "Schließt eine Session per ID.",
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
     tools.append(tool("set_session_group",
-                      "Ordnet eine Session einer Sidebar-Gruppe zu (QTMUX-42) — dort stehen "
-                      "die Sessions einer Gruppe zusammen und lassen sich gemeinsam "
-                      "einklappen. Leerer/fehlender 'group'-Wert nimmt sie aus ihrer Gruppe. "
-                      "Der Gruppenname erscheint auch in list_sessions ('group').",
+                      "Ordnet das WINDOW dieser Session einer Sidebar-Gruppe zu (Window-Modell, "
+                      "QTMUX-83) — Windows einer Gruppe stehen zusammen und lassen sich gemeinsam "
+                      "einklappen. Leerer/fehlender 'group'-Wert nimmt es aus der Gruppe. "
+                      "(Direkt per Window: set_window_group.)",
                       QJsonObject{{"id", intProp("Session-ID")},
                                   {"group", strProp("Gruppenname (leer = ohne Gruppe)")}},
                       QJsonArray{"id"}));
+    tools.append(tool("set_window_group",
+                      "Ordnet ein Window (Tab) einer Sidebar-Gruppe zu (QTMUX-83). Leerer/"
+                      "fehlender 'group'-Wert nimmt es aus der Gruppe.",
+                      QJsonObject{{"windowId", intProp("Window-ID (siehe list_windows)")},
+                                  {"group", strProp("Gruppenname (leer = ohne Gruppe)")}},
+                      QJsonArray{"windowId"}));
     tools.append(tool("rename_group",
-                      "Benennt eine bestehende Sidebar-Gruppe um (alle Mitglieder ziehen "
-                      "mit) oder löst sie auf (leeres 'to'). Ergänzt set_session_group um "
-                      "das, was bisher nur die GUI konnte.",
+                      "Benennt eine bestehende Window-Gruppe um (alle Mitglieder ziehen mit) "
+                      "oder löst sie auf (leeres 'to').",
                       QJsonObject{{"from", strProp("bestehender Gruppenname")},
                                   {"to", strProp("neuer Name (leer = Gruppe auflösen)")}},
                       QJsonArray{"from"}));
     tools.append(tool("move_group",
-                      "Verschiebt eine ganze Gruppe als Block in der Sidebar-Reihenfolge. "
+                      "Verschiebt eine ganze Window-Gruppe als Block in der Sidebar-Reihenfolge. "
                       "Sie springt über die benachbarte Sektion (andere Gruppe oder Lauf "
-                      "gruppenloser Sessions); die Mitglieder bleiben zusammenhängend.",
+                      "gruppenloser Windows); die Mitglieder bleiben zusammenhängend.",
                       QJsonObject{{"name", strProp("Gruppenname")},
                                   {"direction", strProp("'up' = nach oben | 'down' = nach unten")}},
                       QJsonArray{"name", "direction"}));
@@ -932,18 +937,30 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             .arg(id)
             .arg(known.isEmpty() ? QStringLiteral("keine") : known.join(QStringLiteral(", ")));
     };
+    // Gruppen sind im Window-Modell (QTMUX-83) WINDOW-Gruppen. set_session_group wirkt
+    // deshalb auf das Window der genannten Session (Kompatibilität); set_window_group
+    // adressiert das Window direkt. rename_group/move_group operieren auf Window-Gruppen.
     if (name == "set_session_group") {
-        const int row = m_sessions->rowForId(id);
-        if (row < 0) { isError = true; text = idProblem(); return {}; }
-        // Leerer/fehlender Name nimmt die Session aus ihrer Gruppe — bewusst kein
-        // Fehler, damit ein Controller symmetrisch zuordnen und lösen kann.
-        m_sessions->setSessionGroup(row, args.value("group").toString());
+        if (!m_windows) { isError = true; text = QStringLiteral("UI nicht verbunden."); return {}; }
+        Session *sess = m_sessions->sessionById(id);
+        if (!sess) { isError = true; text = idProblem(); return {}; }
+        const int wrow = m_windows->rowForId(sess->windowId());
+        if (wrow < 0) { isError = true; text = QStringLiteral("Session gehört zu keinem Window."); return {}; }
+        m_windows->setWindowGroup(wrow, args.value("group").toString());
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "set_window_group") {
+        if (!m_windows) { isError = true; text = QStringLiteral("UI nicht verbunden."); return {}; }
+        const int wid = args.value("windowId").toInt(-1);
+        const int wrow = m_windows->rowForId(wid);
+        if (wrow < 0) { isError = true; text = QStringLiteral("Unbekannte windowId: %1.").arg(wid); return {}; }
+        m_windows->setWindowGroup(wrow, args.value("group").toString());
         text = QStringLiteral("ok");
         return {};
     }
     if (name == "rename_group") {
-        // Benennt eine Gruppe um (alle Mitglieder) bzw. löst sie auf (leeres `to`).
-        // Ergänzt set_session_group um genau das, was bisher nur die GUI konnte.
+        if (!m_windows) { isError = true; text = QStringLiteral("UI nicht verbunden."); return {}; }
         const QString from = args.value("from").toString().trimmed();
         const QString to = args.value("to").toString();
         if (from.isEmpty()) {
@@ -951,16 +968,17 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             text = QStringLiteral("'from' (bestehender Gruppenname) ist erforderlich.");
             return {};
         }
-        if (m_sessions->groupSize(from) == 0) {
+        if (m_windows->groupSize(from) == 0) {
             isError = true;
             text = QStringLiteral("Unbekannte Gruppe: %1.").arg(from);
             return {};
         }
-        m_sessions->renameGroup(from, to);
+        m_windows->renameGroup(from, to);
         text = to.trimmed().isEmpty() ? QStringLiteral("aufgelöst") : QStringLiteral("ok");
         return {};
     }
     if (name == "move_group") {
+        if (!m_windows) { isError = true; text = QStringLiteral("UI nicht verbunden."); return {}; }
         const QString gname = args.value("name").toString().trimmed();
         const QString dir = args.value("direction").toString().toLower();
         if (gname.isEmpty()) {
@@ -969,10 +987,10 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         if (dir != QLatin1String("up") && dir != QLatin1String("down")) {
             isError = true; text = QStringLiteral("'direction' muss 'up' oder 'down' sein."); return {};
         }
-        if (m_sessions->groupSize(gname) == 0) {
+        if (m_windows->groupSize(gname) == 0) {
             isError = true; text = QStringLiteral("Unbekannte Gruppe: %1.").arg(gname); return {};
         }
-        m_sessions->moveGroup(gname, dir == QLatin1String("up") ? -1 : 1);
+        m_windows->moveGroup(gname, dir == QLatin1String("up") ? -1 : 1);
         text = QStringLiteral("ok");
         return {};
     }

@@ -34,9 +34,10 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification, workingDir, progress*) |
 | `create_session` | `type` ("shell"/"serial"/"ssh"/"plugin"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?`, `pluginId?`, `typeId?`, `loginScript?` | Session in einem **neuen Window** (Tab) anlegen → gibt neue **id** zurück (Pane *im* aktiven Window: `split_pane`) |
 | `close_session` | `id` | Session schließen |
-| `set_session_group` | `id`, `group?` | Session einer **Sidebar-Gruppe** zuordnen; leerer/fehlender `group`-Wert nimmt sie heraus (s. u.) |
-| `rename_group` | `from`, `to?` | Bestehende Gruppe umbenennen (alle Mitglieder) bzw. **auflösen** (leeres `to`) |
-| `move_group` | `name`, `direction` | Ganze Gruppe als Block in der Sidebar verschieben (`direction`: `up`/`down`) |
+| `set_session_group` | `id`, `group?` | Das **Window** dieser Session einer Sidebar-Gruppe zuordnen; leerer/fehlender `group` nimmt es heraus (Window-Modell) |
+| `set_window_group` | `windowId`, `group?` | Ein **Window** (Tab) direkt einer Sidebar-Gruppe zuordnen (leer = ohne Gruppe) |
+| `rename_group` | `from`, `to?` | Bestehende **Window-Gruppe** umbenennen (alle Mitglieder) bzw. **auflösen** (leeres `to`) |
+| `move_group` | `name`, `direction` | Ganze **Window-Gruppe** als Block in der Sidebar verschieben (`direction`: `up`/`down`) |
 | `focus_session` | `id` | **Window** aktivieren, in dem die Session als Pane liegt (Window-Modell) |
 | `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard 60), `broadcast?` | Text in die Session tippen; Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt) |
 | `read_screen` | `id`, `scrollback?` | Sichtbaren Bildschirm als Klartext lesen; mit `scrollback:true` zusätzlich die Historie davor |

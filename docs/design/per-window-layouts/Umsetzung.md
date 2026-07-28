@@ -218,12 +218,32 @@ alten `sessions`-Profils erzeugt N Ein-Pane-Windows (Unit-getestet). Noch KEINE 
   list_windows/rename_window/focus_window/get_layout(windowId)/close_window/assign_session-Hinweis.
   ⚠️ C++-String-Falle: gerade `"` in deutschen Beschreibungen bricht den String — `„…“` nutzen.
 
-**NÄCHSTER SCHRITT — Stufe 5 (Window-Gruppen):** Gruppen-Mechanik von `SessionModel` auf
-`WindowModel` übertragen (Window hat bereits ein `group`-Feld): `setWindowGroup`/`groups`/
-`groupSize`/`renameGroup`/`moveGroup`/`moveGroupToRow` + Contiguity-Invariante + `ListView.section`
-in der Sidebar; MCP `set_session_group`→`set_window_group` (Alias/Hinweis); Test
-`tst_sessiongroups`→`tst_windowgroups`. Danach: **build/macos aus finalem Stand neu bauen**
-(s. u.), CLAUDE.md-Status + Memory aktualisieren, Jira/Confluence (dual) pflegen.
+- **Stufe 5** (Window-Gruppen) — **erledigt + verifiziert**. Gruppen-Mechanik 1:1 von
+  `SessionModel` auf `WindowModel` portiert (`setWindowGroup`/`groups`/`groupSize`/`renameGroup`/
+  `moveGroup`/`moveGroupToRow`/`moveWindow` + `regroupRow`/`moveBlock`/`moveRowInternal` +
+  `groupsChanged`). Persistenz über `persistWindows` (das `group`-Feld wird bereits geschrieben) —
+  KEIN eigenes saveState. Sidebar: `ListView.section` (Header mit Klapp-Pfeil/Farbmarke/Anzahl,
+  Header-Drag), Kachel-Einzug + Farbmarke + Einklappen + Kachel-Drag (`moveWindow`); Window-
+  Kontextmenü mit Gruppen-Untermenü; `groupNameDialog`/`groupMenu`/Palette-Gruppenbefehle auf
+  `windows` umgestellt. MCP: `set_session_group` wirkt aufs Window der Session, neu
+  `set_window_group`, `rename_group`/`move_group` auf Window-Gruppen (McpServer bekam eine
+  `WindowModel`-Property `windows`). Test `tst_windowmodel::groupsStayContiguous`.
+  **Verifiziert:** 17/17 ctest; MCP-e2e (set_window_group/set_session_group→Window/rename_group/
+  move_group, Contiguity-Blöcke); Screenshot (Gruppen-Header „Release 1.7 · 2" + „Test · 1",
+  eingerückte Kacheln mit Farbmarke, benutzerdefinierte Namen).
+  ⚠️ Geteilter Grenzfall mit SessionModel: `renameGroup`-**Merge** zweier Blöcke mit einem
+  gruppenlosen Fenster DAZWISCHEN garantiert (noch) keine Contiguity (`regroupRow`-Leapfrog) —
+  bewusst NICHT im Port geändert (Konsistenz), Test meidet diesen Fall.
+
+## Alle 5 Stufen abgeschlossen — Restarbeiten (Housekeeping)
+1. **build/macos aus FINALEM Stand neu bauen** (trägt seit dem `-B`-Fehler einen WIP; die
+   Produktivinstanz PID 72801 läuft im Memory-Image weiter — Überschreiben reißt sie unter macOS
+   nicht mit, aber ein Prod-Neustart braucht den fertigen Build).
+2. CLAUDE.md-Status (v1.7? / „QTMUX-83 komplett") + Memory (`qtmux-b1-window-layouts`) aktualisieren.
+3. Jira QTMUX-83 (dual) → Erledigt; Confluence (dual) bei Bedarf.
+4. Offen/optional: `tst_sessiongroups` bleibt (SessionModel behält die Gruppen-Methoden als
+   totes, aber grünes Alt-API); der `renameGroup`-Merge-Grenzfall (oben) könnte später robust
+   gemacht werden (dann in BEIDEN Modellen).
 
 **Verifikation:** `ctest --test-dir build/macos-test` (17/17). MCP-e2e gegen zweite Instanz
 (`QT_QPA_PLATFORM=offscreen QTMUX_PROFILE=… QTMUX_MCP_PORT=… qtmux &`, curl JSON-RPC). Quit-Test:

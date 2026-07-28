@@ -8,6 +8,7 @@
 #include <qqmlintegration.h>
 
 #include "SessionModel.h"   // vollständiger Typ für Q_PROPERTY(SessionModel*)
+#include "WindowModel.h"    // vollständiger Typ für Q_PROPERTY(WindowModel*)
 
 class QTcpServer;
 class QTcpSocket;
@@ -26,6 +27,7 @@ class McpServer : public QObject {
     Q_OBJECT
     QML_ELEMENT
     Q_PROPERTY(qtmux::SessionModel *sessions READ sessions WRITE setSessions NOTIFY sessionsChanged)
+    Q_PROPERTY(qtmux::WindowModel *windows READ windows WRITE setWindows NOTIFY windowsChanged)
     Q_PROPERTY(int port READ port WRITE setPort NOTIFY portChanged)
     Q_PROPERTY(bool listening READ listening NOTIFY listeningChanged)
 public:
@@ -34,6 +36,8 @@ public:
 
     SessionModel *sessions() const { return m_sessions; }
     void setSessions(SessionModel *m);
+    WindowModel *windows() const { return m_windows; }
+    void setWindows(WindowModel *m) { if (m_windows == m) return; m_windows = m; emit windowsChanged(); }
     int port() const { return m_port; }
     void setPort(int p);
     bool listening() const;
@@ -56,6 +60,7 @@ public:
 
 signals:
     void sessionsChanged();
+    void windowsChanged();
     void portChanged();
     void listeningChanged();
     /// Vom MCP angeforderter Fokuswechsel auf eine Sidebar-Zeile (QML setzt currentRow).
@@ -143,6 +148,7 @@ private:
 
     QTcpServer *m_server = nullptr;
     SessionModel *m_sessions = nullptr;
+    WindowModel *m_windows = nullptr;   // Window-Gruppen (QTMUX-83, Stufe 5)
     // Ergebnis-Brücke der *Requested-Signale (s. provideResult).
     bool m_bridgeSet = false;
     bool m_bridgeOk = false;

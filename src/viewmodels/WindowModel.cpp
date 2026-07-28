@@ -5,6 +5,8 @@
 #include <QJsonObject>
 #include <QSettings>
 
+#include <algorithm>   // std::rotate, std::clamp
+
 #include "Window.h"
 
 namespace qtmux {
@@ -216,6 +218,136 @@ void WindowModel::migrateSessionsToWindows(QSettings &s) {
     s.setValue(QStringLiteral("windows/activeRow"), oldActive < olds.size() ? oldActive : 0);
     s.setValue(QStringLiteral("windows/nextWindowId"), nextWindowId);
     s.setValue(QStringLiteral("windows/nextPaneId"), nextPaneId);
+}
+
+// --- Window-Gruppen (QTMUX-83, Stufe 5) — portiert aus SessionModel ----------
+
+bool WindowModel::moveRowInternal(int from, int to) {
+    if (from < 0 || from >= count() || to < 0 || to >= count() || from == to) return false;
+    const int dest = to > from ? to + 1 : to;   // beginMoveRows: Abwärts-Ziel +1
+    if (!beginMoveRows({}, from, from, {}, dest)) return false;
+    m_windows.move(from, to);
+    endMoveRows();
+    if (m_activeRow == from) m_activeRow = to;
+    else if (from < to && m_activeRow > from && m_activeRow <= to) --m_activeRow;
+    else if (to < from && m_activeRow >= to && m_activeRow < from) ++m_activeRow;
+    emit activeRowChanged();
+    return true;
+}
+
+bool WindowModel::moveBlock(int first, int last, int dest) {
+    if (first < 0 || last >= count() || first > last) return false;
+    if (dest >= first && dest <= last + 1) return false;
+    if (!beginMoveRows({}, first, last, {}, dest)) return false;
+    Window *active = (m_activeRow >= 0 && m_activeRow < count()) ? m_windows.at(m_activeRow) : nullptr;
+    if (dest < first)
+        std::rotate(m_windows.begin() + dest, m_windows.begin() + first, m_windows.begin() + last + 1);
+    else
+        std::rotate(m_windows.begin() + first, m_windows.begin() + last + 1, m_windows.begin() + dest);
+    endMoveRows();
+    if (active) { m_activeRow = m_windows.indexOf(active); emit activeRowChanged(); }
+    return true;
+}
+
+void WindowModel::moveGroup(const QString &name, int dir) {
+    const QString g = name.trimmed();
+    if (g.isEmpty() || dir == 0) return;
+    int gStart = -1, gEnd = -1;
+    for (int i = 0; i < count(); ++i)
+        if (m_windows.at(i)->group() == g) { if (gStart < 0) gStart = i; gEnd = i; }
+    if (gStart < 0) return;
+    if (dir < 0 && gStart > 0)              moveGroupToRow(g, gStart - 1);
+    else if (dir > 0 && gEnd < count() - 1) moveGroupToRow(g, gEnd + 1);
+}
+
+void WindowModel::moveGroupToRow(const QString &name, int targetRow) {
+    const QString g = name.trimmed();
+    if (g.isEmpty() || count() == 0) return;
+    int gStart = -1, gEnd = -1;
+    for (int i = 0; i < count(); ++i)
+        if (m_windows.at(i)->group() == g) { if (gStart < 0) gStart = i; gEnd = i; }
+    if (gStart < 0) return;
+    targetRow = std::clamp(targetRow, 0, count() - 1);
+    if (targetRow >= gStart && targetRow <= gEnd) return;
+    const QString tv = m_windows.at(targetRow)->group();
+    int tStart = targetRow, tEnd = targetRow;
+    while (tStart > 0 && m_windows.at(tStart - 1)->group() == tv) --tStart;
+    while (tEnd < count() - 1 && m_windows.at(tEnd + 1)->group() == tv) ++tEnd;
+    bool moved = false;
+    if (tEnd < gStart)       moved = moveBlock(gStart, gEnd, tStart);
+    else if (tStart > gEnd)  moved = moveBlock(gStart, gEnd, tEnd + 1);
+    if (moved) emit groupsChanged();
+}
+
+void WindowModel::moveWindow(int from, int to) {
+    if (!moveRowInternal(from, to)) return;
+    // Gruppe der neuen Nachbarschaft übernehmen (zusammenhängende Section-Blöcke).
+    const QString neighbour = to > 0 ? m_windows.at(to - 1)->group()
+                            : (count() > 1 ? m_windows.at(1)->group() : QString());
+    if (m_windows.at(to)->group() != neighbour) {
+        m_windows.at(to)->setGroup(neighbour);
+        emitRowChanged(m_windows.at(to), {GroupRole});
+        emit groupsChanged();
+    }
+}
+
+int WindowModel::regroupRow(int row) {
+    const QString g = m_windows.at(row)->group();
+    int last = -1;
+    for (int i = 0; i < count(); ++i)
+        if (i != row && m_windows.at(i)->group() == g) last = i;
+    int to = row;
+    if (last >= 0) {
+        to = (last > row) ? last : last + 1;
+    } else if (row > 0 && row < count() - 1
+               && !m_windows.at(row - 1)->group().isEmpty()
+               && m_windows.at(row - 1)->group() == m_windows.at(row + 1)->group()
+               && m_windows.at(row - 1)->group() != g) {
+        to = count() - 1;
+    }
+    if (to == row) return row;
+    return moveRowInternal(row, to) ? to : row;
+}
+
+void WindowModel::setWindowGroup(int row, const QString &name) {
+    if (row < 0 || row >= count()) return;
+    Window *w = m_windows.at(row);
+    if (w->group() == name.trimmed()) return;
+    w->setGroup(name);
+    const int newRow = regroupRow(row);            // erst umsortieren, dann am Zielindex melden
+    emitRowChanged(m_windows.at(newRow), {GroupRole});
+    emit groupsChanged();
+}
+
+QStringList WindowModel::groups() const {
+    QStringList out;
+    for (const Window *w : m_windows)
+        if (!w->group().isEmpty() && !out.contains(w->group())) out << w->group();
+    return out;
+}
+
+int WindowModel::groupSize(const QString &name) const {
+    int n = 0;
+    for (const Window *w : m_windows)
+        if (w->group() == name) ++n;
+    return n;
+}
+
+void WindowModel::renameGroup(const QString &from, const QString &to) {
+    const QString src = from.trimmed();
+    if (src.isEmpty()) return;
+    const QString dst = to.trimmed();
+    bool touched = false;
+    for (int i = 0; i < count(); ++i) {
+        if (m_windows.at(i)->group() != src) continue;
+        m_windows.at(i)->setGroup(dst);
+        emitRowChanged(m_windows.at(i), {GroupRole});
+        touched = true;
+    }
+    if (!touched) return;
+    for (int i = 0; i < count(); ++i)
+        if (m_windows.at(i)->group() == dst) regroupRow(i);
+    emit groupsChanged();
 }
 
 void WindowModel::runMigration() {

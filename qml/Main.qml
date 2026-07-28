@@ -107,6 +107,7 @@ ApplicationWindow {
     McpServer {
         id: mcp
         sessions: sessions
+        windows: windows          // Window-Gruppen (QTMUX-83, Stufe 5)
         // Port NICHT hart setzen: McpServer::defaultPort() liest QTMUX_MCP_PORT bzw.
         // die Einstellung mcp/port (Vorgabe 7345). Eine Testinstanz startet damit auf
         // einem eigenen Port, ohne der produktiven Instanz den Port wegzunehmen.
@@ -444,7 +445,7 @@ ApplicationWindow {
     // in den Bindungen mitgelesen und bei jeder Zuordnungsänderung hochgezählt.
     property int groupsRevision: 0
     Connections {
-        target: sessions
+        target: windows
         function onGroupsChanged() { window.groupsRevision++ }
     }
 
@@ -456,7 +457,7 @@ ApplicationWindow {
         collapsedGroups = list
         collapsedGroupsJson = JSON.stringify(list)
     }
-    function groupSize(name) { return sessions.groupSize(name) }
+    function groupSize(name) { return windows.groupSize(name) }
     // Farbe deterministisch aus dem Namen ableiten: gleiche Gruppe = gleiche Farbe,
     // über Neustarts hinweg und ohne dass irgendwo eine Zuordnung gepflegt werden muss.
     function groupColor(name) {
@@ -468,7 +469,7 @@ ApplicationWindow {
     // (`exclude` = die gerade gezogene). Ignoriert eingeklappte Kacheln (Höhe 0).
     function rowNearestTo(cy, exclude) {
         let best = -1, bestD = Number.MAX_VALUE
-        for (let i = 0; i < sessions.count; ++i) {
+        for (let i = 0; i < windows.count; ++i) {
             if (i === exclude) continue
             const it = sessionList.itemAtIndex(i)
             if (!it || it.height <= 0) continue
@@ -1133,11 +1134,12 @@ ApplicationWindow {
         }
         return -1
     }
-    // Sitzungsgruppen-Verschiebung (Palette/Menü). Blätter referenzieren Sessions per
-    // stabiler sessionId → das Umsortieren der Model-Zeilen berührt das Layout NICHT mehr,
-    // kein Remap nötig. (Sichtbar wird das erst mit den Window-Gruppen, Stufe 5.)
-    function moveGroupBy(name, dir)     { sessions.moveGroup(name, dir) }
-    function moveGroupToRow(name, row)  { sessions.moveGroupToRow(name, row) }
+    // Window-Gruppen-Verschiebung (Palette/Menü/Drag). Reine Reihenfolge im WindowModel —
+    // die Layout-Bäume bleiben unberührt (Blätter binden per sessionId).
+    function moveGroupBy(name, dir)     { windows.moveGroup(name, dir) }
+    function moveGroupToRow(name, row)  { windows.moveGroupToRow(name, row) }
+    // Window per Drag umsortieren (übernimmt die Gruppe der neuen Nachbarschaft).
+    function moveWindowRow(from, to)    { windows.moveWindow(from, to) }
 
     // Teilen: aktives Blatt im AKTIVEN Window durch einen Split [Blatt, neues Blatt]
     // ersetzen. Hat der Eltern-Split bereits dieselbe Orientierung, wird nur ein
@@ -1791,32 +1793,29 @@ ApplicationWindow {
                                          icon: "bookmark",
                                          run: (function(p){ return function(){ window.openSftp(p) } })(profs[j]) })
                         }
-                        // Sitzungsgruppen (QTMUX-46): dieselben Operationen wie das
-                        // Rechtsklick-Menü der Kachel bzw. des Gruppenkopfs. Vorher waren
-                        // Gruppen nur per Rechtsklick erreichbar (und per MCP
-                        // set_session_group) — in der Palette gar nicht, obwohl sie sonst
-                        // jede Funktion bündelt. `currentRow` wird ERST beim Ausführen
-                        // gelesen, die Befehle wirken also immer auf die aktive Session.
-                        if (sessions.count > 0) {
-                            var cs = sessions.sessionAt(window.currentRow)
-                            var csTitle = cs ? cs.title : qsTr("Aktive Session")
-                            c.push({ title: qsTr("Session gruppieren …"), sub: csTitle, icon: "bookmark",
-                                     run: function(){ groupNameDialog.start(window.currentRow) } })
-                            var gs = sessions.groups()
+                        // Window-Gruppen (QTMUX-83, Stufe 5): dieselben Operationen wie das
+                        // Rechtsklick-Menü der Kachel bzw. des Gruppenkopfs. Wirken auf das
+                        // AKTIVE Window (windows.activeRow wird ERST beim Ausführen gelesen).
+                        if (windows.count > 0) {
+                            var cw = window.activeWindowObj()
+                            var cwTitle = cw ? window.windowTitle(cw) : qsTr("Aktives Fenster")
+                            c.push({ title: qsTr("Fenster gruppieren …"), sub: cwTitle, icon: "bookmark",
+                                     run: function(){ groupNameDialog.start(windows.activeRow) } })
+                            var gs = windows.groups()
                             for (var gi = 0; gi < gs.length; ++gi) {
-                                c.push({ title: qsTr("Session zu Gruppe: %1").arg(gs[gi]), sub: csTitle,
+                                c.push({ title: qsTr("Fenster zu Gruppe: %1").arg(gs[gi]), sub: cwTitle,
                                          icon: "bookmark",
-                                         run: (function(n){ return function(){ sessions.setSessionGroup(window.currentRow, n) } })(gs[gi]) })
+                                         run: (function(n){ return function(){ windows.setWindowGroup(windows.activeRow, n) } })(gs[gi]) })
                             }
-                            c.push({ title: qsTr("Session aus Gruppe nehmen"), sub: csTitle, icon: "x",
-                                     run: function(){ sessions.setSessionGroup(window.currentRow, "") } })
+                            c.push({ title: qsTr("Fenster aus Gruppe nehmen"), sub: cwTitle, icon: "x",
+                                     run: function(){ windows.setWindowGroup(windows.activeRow, "") } })
                             for (var gj = 0; gj < gs.length; ++gj) {
                                 c.push({ title: qsTr("Gruppe umbenennen: %1 …").arg(gs[gj]), sub: qsTr("Gruppe"),
                                          icon: "bookmark",
                                          run: (function(n){ return function(){ groupNameDialog.startRename(n) } })(gs[gj]) })
                                 c.push({ title: qsTr("Gruppe auflösen: %1").arg(gs[gj]), sub: qsTr("Gruppe"),
                                          icon: "trash",
-                                         run: (function(n){ return function(){ sessions.renameGroup(n, "") } })(gs[gj]) })
+                                         run: (function(n){ return function(){ windows.renameGroup(n, "") } })(gs[gj]) })
                                 c.push({ title: qsTr("Gruppe nach oben: %1").arg(gs[gj]), sub: qsTr("Gruppe"),
                                          icon: "bookmark",
                                          run: (function(n){ return function(){ window.moveGroupBy(n, -1) } })(gs[gj]) })
@@ -2170,15 +2169,83 @@ ApplicationWindow {
                     clip: true
                     spacing: 4
                     // Sidebar = Windows (Tabs, QTMUX-83). Jede Kachel ist ein Window mit
-                    // eigenem Split-Layout; Klick aktiviert das Window. Gruppen (als
-                    // Window-Gruppen) und Reorder folgen in Stufe 5.
+                    // eigenem Split-Layout; Klick aktiviert das Window. Gruppen (Window-
+                    // Gruppen, Stufe 5) über ListView-Sections — das Model hält sie als
+                    // zusammenhängende Blöcke.
                     model: windows
                     currentIndex: windows.activeRow
+
+                    section.property: "group"
+                    section.criteria: ViewSection.FullString
+                    section.delegate: Item {
+                        id: groupHeader
+                        required property string section
+                        width: sessionList.width
+                        height: section.length > 0 ? 26 : 0
+                        visible: section.length > 0
+
+                        readonly property bool collapsed: window.isGroupCollapsed(section)
+                        z: hdrDrag.active ? 3 : 0
+                        opacity: hdrDrag.active ? 0.85 : 1.0
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.topMargin: 4
+                            anchors.bottomMargin: 2
+                            radius: 6
+                            color: hdrDrag.active ? Theme.sidebarSelected
+                                 : hdrHover.hovered ? Theme.sidebarHover : "transparent"
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: 6
+                                spacing: 6
+                                Text {
+                                    text: groupHeader.collapsed ? "▸" : "▾"
+                                    color: window.groupColor(groupHeader.section)
+                                    font.pixelSize: 11
+                                }
+                                Text {
+                                    text: groupHeader.section
+                                    color: Theme.textBright
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: (window.groupsRevision, window.groupSize(groupHeader.section))
+                                    color: Theme.textDim
+                                    font.pixelSize: 10
+                                }
+                            }
+                            HoverHandler { id: hdrHover }
+                            TapHandler { onTapped: window.toggleGroupCollapsed(groupHeader.section) }
+                            TapHandler {
+                                acceptedButtons: Qt.RightButton
+                                onTapped: { groupMenu.groupName = groupHeader.section; groupMenu.popup() }
+                            }
+                            DragHandler {
+                                id: hdrDrag
+                                target: groupHeader
+                                xAxis.enabled: false
+                                yAxis.enabled: true
+                                onActiveChanged: {
+                                    if (active) return
+                                    const cy = groupHeader.y + groupHeader.height / 2
+                                    const target = window.rowNearestTo(cy, -1)
+                                    if (target >= 0) window.moveGroupToRow(groupHeader.section, target)
+                                    sessionList.forceLayout()
+                                }
+                            }
+                        }
+                    }
 
                     delegate: Rectangle {
                         id: tile
                         required property int index
                         required property int windowId
+                        required property string group
                         required property var windowObject
                         readonly property var wobj: windowObject
                         // Aggregierte Anzeige aus den Panes/Sessions — in QML berechnet;
@@ -2190,32 +2257,70 @@ ApplicationWindow {
                         readonly property bool attention: (window.sessionsRevision, window.windowAttention(wobj))
                         readonly property bool controller: (window.sessionsRevision, window.windowController(wobj))
                         readonly property bool selected: tile.index === windows.activeRow
+                        // Eingeklappte Gruppen: Kachel verschwindet (Window läuft weiter).
+                        readonly property bool hidden: group.length > 0 && window.isGroupCollapsed(group)
+                        // Gruppierte Kacheln eingerückt (QTMUX-45-Muster): Zugehörigkeit an der
+                        // Form erkennbar; die Farbmarke sitzt in der Einzugsspalte.
+                        readonly property real groupIndent: group.length > 0 ? 12 : 0
 
                         width: ListView.view.width
-                        height: 52
+                        visible: !hidden
+                        height: hidden ? 0 : 52
                         color: "transparent"      // Kachel-Optik liegt im `card`
+
+                        z: dragH.active ? 2 : 0
+                        opacity: dragH.active ? 0.85 : 1.0
+                        scale: dragH.active ? 1.02 : 1.0
 
                         HoverHandler { id: hover }
                         TapHandler { onTapped: window.loadWindowRow(tile.index) }
-                        // Rechtsklick: Window-Kontextmenü (umbenennen/schließen).
+                        // Rechtsklick: Window-Kontextmenü (umbenennen/Gruppe/schließen).
                         TapHandler {
                             acceptedButtons: Qt.RightButton
                             onTapped: {
                                 windowMenu.row = tile.index
                                 windowMenu.windowId = tile.windowId
                                 windowMenu.currentName = (tile.wobj && tile.wobj.name) ? tile.wobj.name : ""
+                                windowMenu.currentGroup = tile.group
                                 windowMenu.isController = tile.controller
+                                windowMenu.groupList = windows.groups()
                                 windowMenu.popup()
                             }
                         }
+                        // Drag-to-Reorder: vertikal ziehen, Zielzeile aus der Position bestimmen.
+                        DragHandler {
+                            id: dragH
+                            target: tile
+                            xAxis.enabled: false
+                            yAxis.enabled: true
+                            onActiveChanged: {
+                                if (active) return
+                                const from = tile.index
+                                const ni = window.rowNearestTo(tile.y + tile.height / 2, from)
+                                if (ni >= 0 && ni !== from) window.moveWindowRow(from, ni)
+                                sessionList.forceLayout()
+                            }
+                        }
 
-                        // Kachelfläche (Auswahl/Hover).
+                        // Kachelfläche (Auswahl/Hover) — respektiert den Einzug.
                         Rectangle {
                             id: card
                             anchors.fill: parent
+                            anchors.leftMargin: tile.groupIndent
                             radius: 8
                             color: tile.selected ? Theme.sidebarSelected
                                  : hover.hovered ? Theme.sidebarHover : "transparent"
+                        }
+
+                        // Farbmarke der Gruppe (in der Einzugsspalte links vor der Kachel).
+                        Rectangle {
+                            visible: tile.group.length > 0
+                            width: 3; radius: 1.5
+                            color: window.groupColor(tile.group)
+                            anchors.left: parent.left
+                            anchors.leftMargin: 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            height: parent.height - 14
                         }
 
                         // Roter Tab: irgendein Pane dieses Windows ist MCP-Controller.
@@ -2224,13 +2329,14 @@ ApplicationWindow {
                             width: 3; radius: 1.5
                             color: "#e5534b"
                             anchors.left: parent.left
+                            anchors.leftMargin: tile.groupIndent
                             anchors.verticalCenter: parent.verticalCenter
                             height: parent.height - 14
                         }
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 10
+                            anchors.leftMargin: 10 + tile.groupIndent
                             anchors.rightMargin: 10
                             spacing: 10
 
@@ -3109,8 +3215,8 @@ ApplicationWindow {
         AppMenuItem {
             text: qsTr("Gruppe auflösen")
             icon.source: window.icon("x")   // App-Theme-Tönung (s. sessionMenu oben)
-            // Auflösen betrifft nur die Zuordnung — die Sessions laufen weiter.
-            onTriggered: sessions.renameGroup(groupMenu.groupName, "")
+            // Auflösen betrifft nur die Zuordnung — die Windows/Sessions laufen weiter.
+            onTriggered: windows.renameGroup(groupMenu.groupName, "")
         }
     }
 
@@ -3118,7 +3224,7 @@ ApplicationWindow {
     AppDialog {
         id: groupNameDialog
         width: 380
-        property int row: -1          // >= 0: Session dieser Zeile zuordnen
+        property int row: -1          // >= 0: Window dieser Zeile zuordnen
         property string renaming: ""  // nicht leer: bestehende Gruppe umbenennen
         title: renaming.length > 0 ? qsTr("Gruppe umbenennen") : qsTr("Neue Gruppe")
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -3130,8 +3236,8 @@ ApplicationWindow {
         onAccepted: {
             const name = groupNameField.text.trim()
             if (name.length === 0) return
-            if (renaming.length > 0) sessions.renameGroup(renaming, name)
-            else if (row >= 0) sessions.setSessionGroup(row, name)
+            if (renaming.length > 0) windows.renameGroup(renaming, name)
+            else if (row >= 0) windows.setWindowGroup(row, name)
         }
         ColumnLayout {
             spacing: 8
@@ -3140,7 +3246,7 @@ ApplicationWindow {
                 wrapMode: Text.WordWrap
                 color: Theme.textDim
                 font.pixelSize: 11
-                text: qsTr("Sitzungen einer Gruppe stehen in der Seitenleiste zusammen und lassen sich gemeinsam ein- und ausklappen.")
+                text: qsTr("Fenster einer Gruppe stehen in der Seitenleiste zusammen und lassen sich gemeinsam ein- und ausklappen.")
             }
             TextField {
                 id: groupNameField
@@ -3158,6 +3264,8 @@ ApplicationWindow {
         property int row: -1
         property int windowId: -1
         property string currentName: ""
+        property string currentGroup: ""
+        property var groupList: []
         property bool isController: false
         AppMenuItem {
             text: qsTr("Umbenennen …")
@@ -3169,6 +3277,44 @@ ApplicationWindow {
             enabled: windowMenu.currentName.length > 0
             icon.source: window.icon("x")
             onTriggered: { const w = windows.windowById(windowMenu.windowId); if (w) w.name = "" }
+        }
+        MenuSeparator {}
+        // --- Window-Gruppen (QTMUX-83, Stufe 5) ---
+        MenuItem {
+            enabled: false
+            height: 26
+            contentItem: Text {
+                text: qsTr("Gruppe"); color: Theme.textDim
+                font.pixelSize: 10; font.bold: true
+                verticalAlignment: Text.AlignVCenter; leftPadding: 8
+            }
+        }
+        Repeater {
+            model: windowMenu.groupList
+            delegate: AppMenuItem {
+                id: wGroupItem
+                required property string modelData
+                text: modelData
+                checkable: true
+                onTriggered: windows.setWindowGroup(windowMenu.row,
+                                 wGroupItem.modelData === windowMenu.currentGroup ? "" : wGroupItem.modelData)
+                Binding {
+                    target: wGroupItem
+                    property: "checked"
+                    value: windowMenu.opened && wGroupItem.modelData === windowMenu.currentGroup
+                }
+            }
+        }
+        AppMenuItem {
+            text: qsTr("Neue Gruppe …")
+            icon.source: window.icon("plus")
+            onTriggered: groupNameDialog.start(windowMenu.row)
+        }
+        AppMenuItem {
+            text: qsTr("Aus Gruppe entfernen")
+            enabled: windowMenu.currentGroup.length > 0
+            icon.source: window.icon("x")
+            onTriggered: windows.setWindowGroup(windowMenu.row, "")
         }
         MenuSeparator {}
         AppMenuItem {
