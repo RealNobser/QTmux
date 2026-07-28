@@ -1,11 +1,14 @@
 # QTmux — Projektkontext für Claude
 
-> Diese Datei wird zu Beginn jeder Session geladen. **Kompaktfassung** (Datei-Hygiene
-> 2026-07-19): nur noch das für die Weiterentwicklung Nötige — Architektur, Build/CI,
-> Konventionen, Lektionen/Fallen, Status. Die vollständige Historien-Fassung (1426 Zeilen,
-> Stand vor der Kürzung) liegt als Backup in Confluence (DUAL: Seite **„CLAUDE.md-Archiv"** unter
-> der Entwicklerdokumentation, IDs in `CLAUDE.local.md`, je mit Datei-Anhang)
-> und in der Git-Historie dieser Datei.
+> Diese Datei wird zu Beginn jeder Session geladen — jede Zeile kostet Kontext in **jeder**
+> Session. **Pflegeregeln:** (1) nur dauerhaft Gültiges — Architektur, Build/CI, Konventionen,
+> teuer erkaufte Lektionen; (2) **kein Status-Changelog** — Verlauf steht in der Git-Historie
+> dieser Datei und in Confluence („CLAUDE.md-Archiv" unter der Entwicklerdoku, IDs in
+> `CLAUDE.local.md`); (3) **compact-fest**: Was hier nicht steht, ist nach einer
+> Kontext-Kompaktierung verloren — offene Fäden gehören darum in **„Arbeitsstand"** unten,
+> nicht nur ins Gespräch; (4) je Sachverhalt EINE Stelle, sonst driften die Fassungen
+> auseinander (schon passiert: Feature-Referenz beschrieb das Split-Modell, das QTMUX-83
+> längst ersetzt hatte).
 
 ## Was ist QTmux?
 
@@ -79,14 +82,12 @@ QT_QPA_PLATFORM=offscreen ./build/macos/qtmux.app/Contents/MacOS/qtmux   # headl
 ```
 
 > **⚠️ Läuft eine produktive Instanz aus `build/macos`, dort NICHT hineinbauen** — das
-> Überschreiben des Binaries reißt den laufenden Prozess mit (und mit ihm alle
-> Terminal-Sessions). Vorher `lsof -nP -iTCP:7345 -sTCP:LISTEN` bzw. `ps -o command`
-> prüfen und in ein eigenes Verzeichnis bauen: `cmake --preset macos -B build/macos-test`.
-> **Zweite Instanz zum Testen** (QTMUX-30 ff.): `QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`
-> — `QTMUX_MCP_PORT` wählt den MCP-Port (vor der Einstellung `mcp/port`, sonst 7345),
-> `QTMUX_PROFILE` hängt einen Suffix an den App-Namen und trennt damit die ganze
-> QSettings-Domain (sonst überschreibt die Testinstanz beim Beenden die gespeicherte
-> Session-Liste der produktiven).
+> Überschreiben des Binaries reißt den laufenden Prozess mit (und alle Terminal-Sessions).
+> Vorher `lsof -nP -iTCP:7345 -sTCP:LISTEN` prüfen, sonst in ein eigenes Verzeichnis bauen
+> (`-B build/macos-test`). **Isolierte Testinstanz** (der Standardweg für jede Verifikation,
+> alle Plattformen): `QTMUX_PROFILE=test QTMUX_MCP_PORT=7346` — `QTMUX_PROFILE` trennt die
+> ganze QSettings-Domain (sonst überschreibt die Testinstanz beim Beenden die Session-Liste
+> der produktiven), `QTMUX_MCP_PORT` den Port (vor der Einstellung `mcp/port`, sonst 7345).
 
 **DMG:** `installer/build-dmg.sh [version]` — baut `macos-release` (oder `QTMUX_BUILD_DIR`,
 wenn aus `macos-release` gerade eine Instanz läuft), `macdeployqt -qmldir=qml`
@@ -115,25 +116,20 @@ cmake --preset windows && cmake --build --preset windows
 ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein!
 ```
 
-> **⚠️ Zwei Visual Studios auf einer Maschine (QTMUX-79).** Liegt neben VS 2022 auch
-> **VS 18** („2026"), injiziert die **CMake-Tools-Erweiterung immer die NEUESTE**
-> Developer-Umgebung — eine Einstellung zur Wahl der Installation gibt es nicht
-> (geprüft in 1.23.52: nur `useVsDeveloperEnvironment` und `preferredGenerators`).
-> Zusammen mit einem Cache, der auf den VS-2022-Compiler zeigt, ergibt das
-> **VS-2022-`cl.exe` + VS-18-Standardbibliothek** → `error STL1001: Unexpected compiler
-> version, expected MSVC Compiler 19.50 or newer`. Deshalb kommt die Umgebung unter
-> Windows aus **`tools/vsdev-build.cmd`** (vswhere, hart auf die 17er-Reihe begrenzt),
-> das die VSCode-Task „CMake: build" aufruft; `cmake.useVsDeveloperEnvironment` steht
-> auf **`never`**, `configureOnOpen` auf **`false`**. Konfigurieren/Bauen laufen damit
-> über **F5 bzw. Strg+Umschalt+B**, nicht über die CMake-Statusleisten-Knöpfe.
-> VS 2022 bleibt der Standard, weil Qt als `msvc2022_64` gebaut ist und CI wie
-> `installer/build-msi.ps1` ebenfalls VS 2022 nutzen.
-> 🔑 Beim Bearbeiten von `tools/vsdev-build.cmd` beachten: **CRLF-Zeilenenden** (bei
-> reinem LF zerlegt cmd.exe die Datei und führt Kommentarzeilen aus), **rein ASCII**,
-> und `%ProgramFiles(x86)%` **nie in einer `for`-/`if`-Klammer expandieren** — die
-> Klammern aus „(x86)" schließen sie vorzeitig („Der Befehl `C:\Program` ist entweder
-> falsch geschrieben"). Der vswhere-Aufruf schreibt seine Ausgabe deshalb in eine
-> temporäre Datei statt in `for /f ... in (`…`)`.
+> **⚠️ Zwei Visual Studios auf einer Maschine (QTMUX-79).** Neben VS 2022 liegt **VS 18**
+> („2026"), und die CMake-Tools-Erweiterung injiziert immer die **neueste** Dev-Umgebung —
+> wählbar ist die Installation nicht (1.23.52 kennt nur `useVsDeveloperEnvironment` /
+> `preferredGenerators`). VS-2022-`cl.exe` + VS-18-STL ergibt `error STL1001: Unexpected
+> compiler version, expected MSVC Compiler 19.50 or newer`. Deshalb: Umgebung kommt aus
+> **`tools/vsdev-build.cmd`** (vswhere auf `[17.0,18.0)` begrenzt), aufgerufen von der Task
+> „CMake: build"; `useVsDeveloperEnvironment: never`, `configureOnOpen: false`, Debug-Pfad
+> in `launch.json` fest aufs `windows`-Preset. **Bauen/Konfigurieren also über F5 bzw.
+> Strg+Umschalt+B**, nicht über die CMake-Statusleisten-Knöpfe. VS 2022 bleibt Standard
+> (Qt ist `msvc2022_64`, CI und `build-msi.ps1` ebenso).
+> 🔑 Batch-Fallen in dieser Datei: **CRLF** Pflicht (bei LF führt cmd.exe Kommentarzeilen
+> aus), **rein ASCII**, und `%ProgramFiles(x86)%` **nie in einer `for`-/`if`-Klammer**
+> expandieren — das `)` aus „(x86)" schließt sie vorzeitig („Der Befehl `C:\Program` ist
+> entweder falsch geschrieben"). vswhere schreibt darum in eine temporäre Datei.
 
 `windeployqt` läuft als Post-Build. **MSI/ZIP:** `installer/build-msi.ps1 -Version <ver>`
 (WiX v5 als dotnet-Tool; nutzt dasselbe `windows-release`-Preset → nur 2 Build-Dirs:
@@ -141,26 +137,20 @@ ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein
 **One-Click-Release** auf der Windows-Maschine (Zugang: `CLAUDE.local.md`):
 `installer/build-release.ps1` (Desktop-Verknüpfung „Build QTmux Installer") holt den
 aktuellen Stand und baut MSI + portables ZIP; `-NoFetch` überspringt den Pull.
-- ⚠️ **Fernsteuern per SSH:** Windows-OpenSSH **beendet Kindprozesse beim Sitzungsende** —
-  einen Build also in einer *offenen* SSH-Sitzung laufen lassen, nicht per `Start-Process`
-  detachen (sonst endet er stumm mit 0-Byte-Logs).
-- ⚠️ Vor dem Bauen prüfen, worauf der Checkout steht: `_build.cmd` nutzt `-NoFetch` und
-  baut sonst klaglos eine **alte** Version (fiel erst am Dateinamen `…-1.3.1-…` auf).
-- ⚠️ **Versionsordner nie als Zeichenkette sortieren** (2026-07-27): Die Qt-Kit-Auswahl in
-  `build-release.ps1` lief über `Sort-Object Name -Descending` — damit steht `6.8.3` über
-  `6.10.3` (`"8" > "1"`), und das Release wäre nach der Qt-Angleichung **stumm gegen das
-  alte Kit** gebaut worden. Jetzt `Sort-Object { [version]$_.Name }` mit `0.0.0`-Fallback
-  für Nicht-Versionsordner (Tools, Licenses). Dieselbe Klasse Fehler wie `-NoFetch` oben:
-  ein falsches Ergebnis, das wie ein normaler Lauf aussieht. Gegentest ist Pflicht — alte
-  Logik muss nachweislich das falsche, neue das richtige Kit wählen.
-- PowerShell ist dort Standard-Shell: `&` als Trenner ist ungültig, `-Filter` nimmt nur
-  EINE Zeichenkette, `Get-CimInstance -Filter` verträgt keine verschachtelten Quotes.
-  Pfade mit Klammern (`…\Visual Studio\… (x86)…`) über SSH **nicht** inline quoten —
-  PowerShell wertet `(x86)` als Befehl; stattdessen ein `.cmd` lokal erzeugen und per
-  `scp` übertragen. cmake/ninja/ctest liegen dort nicht im PATH, sondern in den
-  Build Tools unter `Common7\IDE\CommonExtensions\Microsoft\CMake\`.
-- Gegenprüfen, dass wirklich die neue Version im Paket steckt (nicht nur im Dateinamen):
-  `strings qtmux.exe` auf Version **und** ein neues Merkmal (z. B. `enterDelayMs`).
+- ⚠️ **Fehler, die wie ein normaler Lauf aussehen** — beide Male eine falsche Version
+  gebaut: `_build.cmd` nutzt `-NoFetch` (baut klaglos einen **alten** Checkout, fiel erst am
+  Dateinamen auf), und die Qt-Kit-Auswahl sortierte Versionsordner als **Zeichenkette**
+  (`6.8.3` > `6.10.3`, weil `"8" > "1"`) → `Sort-Object { [version]$_.Name }` mit
+  `0.0.0`-Fallback. Für solche Fälle ist der **Gegentest Pflicht**: die alte Logik muss
+  nachweislich das falsche, die neue das richtige Ergebnis liefern. Und gegenprüfen, dass
+  die neue Version wirklich im Paket steckt (nicht nur im Dateinamen): `strings qtmux.exe`
+  auf Version **und** ein neues Merkmal.
+- ⚠️ **Fernsteuern per SSH:** Windows-OpenSSH beendet Kindprozesse beim Sitzungsende — Build
+  in einer *offenen* Sitzung laufen lassen, nicht per `Start-Process` detachen (endet sonst
+  stumm mit 0-Byte-Logs). PowerShell dort: `&` ist kein Trenner, `-Filter` nimmt nur EINE
+  Zeichenkette, Pfade mit Klammern (`… (x86)…`) **nicht** inline quoten (PowerShell wertet
+  `(x86)` als Befehl) → `.cmd` lokal erzeugen und per `scp` übertragen. cmake/ninja/ctest
+  liegen unter `Common7\IDE\CommonExtensions\Microsoft\CMake\`.
 
 Vor Windows-Releases: `tests/release-visual-check.ps1` (screenshottet alle Menüs in
 beiden Themes + MCP-Smoke — Theming-Regressionen sind unit-test-unsichtbar).
@@ -175,12 +165,10 @@ beiden Themes + MCP-Smoke — Theming-Regressionen sind unit-test-unsichtbar).
   (sonst erben sie die ctest-Konsole); ohne Qt-bin im PATH → Exit `0xc0000135`.
 - VS-Code-Debugger: `launch.json` braucht **`"console": "externalTerminal"`**
   (internalConsole leitet Std-Handles um → ConPTY-Kindshells hängen).
-- **PS-5.1-Umlaut-Mojibake** („für"→„fÃ¼r"): conhost/ConPTY interpretiert Kind-Ausgabe als
-  CP1252 und re-kodiert nach UTF-8, BEVOR die Bytes QTmux erreichen (per rohen UTF-8-Bytes
-  aufs OS-Handle bewiesen). **Keine Shell-Einstellung hilft** (alles getestet — chcp 65001,
-  Console.OutputEncoding etc.). Echte Abhilfen: PowerShell 7 oder System-Option „UTF-8 für
-  weltweite Sprachunterstützung". Bekannte kosmetische Einschränkung; kein QTmux-Bug —
-  bewusst KEIN Dekodier-Hack im Datenstrom.
+- **PS-5.1-Umlaut-Mojibake** („für"→„fÃ¼r"): conhost re-kodiert Kind-Ausgabe von CP1252 nach
+  UTF-8, **bevor** die Bytes QTmux erreichen (per rohen UTF-8-Bytes bewiesen). Keine
+  Shell-Einstellung hilft (chcp/OutputEncoding alles getestet); Abhilfe nur PowerShell 7 oder
+  die System-Option „UTF-8 weltweit". Kein QTmux-Bug → bewusst **kein** Dekodier-Hack.
 - `Pty::currentWorkingDirectory()` Windows via PEB (`NtQueryInformationProcess` +
   `ReadProcessMemory`) implementiert — **Funktionstest offen = QTMUX-2** (braucht Windows).
 - Debug-Qt asserted „QSGGeometryNode is missing geometry": jedem GeometryNode beim Anlegen
@@ -206,66 +194,50 @@ macOS/Windows/Linux; Qt via `jurplel/install-qt-action` (Module **qtserialport**
 Anbindung). Linux-Job baut zusätzlich das AppImage (Artefakt `QTmux-AppImage`).
 Actions warnen über Node-20-Deprecation (ab Sept. 2026) — bei Gelegenheit anheben.
 
-> **⚠️ `env.QT_VERSION` ist bewusst gewählt — nicht blind hochziehen** (2026-07-19 mühsam
-> eingegrenzt): **Nicht 6.8.x** — dessen CMake-Config verlinkt das aus dem macOS-SDK
-> entfernte **AGL-Framework** → `ld: framework 'AGL' not found` (fiel lokal nicht auf, da
-> Homebrew-Qt 6.11 AGL-frei ist). Ausweichen auf `macos-13`-Runner funktioniert NICHT
-> (werden nicht mehr zugeteilt → 24-h-Queue-Timeout). **Nicht 6.11.x** — Windows-Metadaten
-> via aqtinstall nicht abrufbar (aqtinstall 3.3.0 ist bereits das neueste 3.x).
-> **Aktuell 6.10.3** (überall auflösbar, AGL-frei, Lauf 2026-07-19 grün).
-> Künftige Bumps vorher **lokal** prüfen: `pip install "aqtinstall==3.3.*"` →
-> `aqt list-qt <windows|mac|linux> desktop --arch <ver>` — Fehler = Version unbrauchbar.
->
-> **Nachprüfung 2026-07-27:** Sperre besteht, aber die Fehlermeldung hat gewechselt — jetzt
-> `Failed to download checksum for … Updates.xml` statt `Failed to locate XML data`. Das
-> *sieht* nach Netzwerkflattern aus, ist aber keins: **3/3 Wiederholungen scheitern, während
-> 6.10.3 im selben Durchlauf durchläuft** (dieser Gegentest ist der Punkt — ohne ihn hält man
-> es für einen Mirror-Aussetzer und zieht die Version doch hoch). Betrifft 6.11.0, 6.11.1 und
-> 6.12.0; `list-qt` *listet* sie, nur die Arch-Abfrage bricht ab. macOS/Linux lösen 6.11.1
-> sauber auf (`clang_64`/`linux_gcc_64`, inkl. qtserialport/qtshadertools) — der Blocker ist
-> allein Windows. Ausweg wäre der offizielle Installer (`use-official` der Action bzw.
-> `aqt install-qt-official`), der aber **Qt-Account-Zugangsdaten als Secrets** braucht — und
-> das Repo ist öffentlich: Fork-PRs bekommen keine Secrets, der Windows-Job bräche für jeden
-> externen Beitrag. Deshalb bleibt 6.10.3.
+> **⚠️ `env.QT_VERSION` (6.10.3) ist bewusst gewählt — nicht blind hochziehen.**
+> **Nicht 6.8.x:** dessen CMake-Config verlinkt das aus dem macOS-SDK entfernte
+> **AGL-Framework** → `ld: framework 'AGL' not found` (lokal unsichtbar, Homebrew-Qt ist
+> AGL-frei); Ausweichen auf `macos-13`-Runner geht nicht (werden nicht mehr zugeteilt).
+> **Nicht 6.11/6.12:** aqtinstall kann die **Windows**-Arch-Metadaten nicht abrufen
+> (macOS/Linux lösen sie sauber auf — der Blocker ist allein Windows). Der offizielle
+> Installer bräuchte **Qt-Account-Secrets**; das Repo ist öffentlich, Fork-PRs bekommen
+> keine → der Windows-Job bräche für jeden externen Beitrag.
+> 🔑 Die Fehlermeldung wechselt (zuletzt `Failed to download checksum for … Updates.xml`)
+> und *sieht* nach Mirror-Flattern aus. Nur der **Gegentest** entlarvt es: 3/3
+> Wiederholungen scheitern, während 6.10.3 im selben Lauf durchläuft. Vor jedem Bump
+> lokal prüfen: `aqt list-qt <windows|mac|linux> desktop --arch <ver>` (aqtinstall 3.3.x)
+> — Fehler = Version unbrauchbar.
 
 ## Projekt-Doku: Confluence (DUAL: on-prem + Cloud)
 
 Bei jeder Doku-Änderung **beide** aktualisieren (identischer Storage-Inhalt). Token nur
-einlesen, **nie ausgeben/committen**; Credential-Dateien in der Repo-Wurzel, git-ignoriert.
+einlesen, **nie ausgeben/committen**. **Hosts, Space-Keys, Seiten-IDs und Board-ID stehen
+nur in `CLAUDE.local.md`** (git-ignoriert, damit das Repo öffentlich sein kann; auf der
+Windows-Maschine existiert die Datei nicht → dort sind Doku-/Jira-Pflege nicht möglich).
 
-> **Konkrete Hosts, Space-Keys und Seiten-IDs stehen in `CLAUDE.local.md`** (ebenfalls
-> git-ignoriert). Bewusst nicht hier: Das Repo soll öffentlich werden können, ohne die
-> interne Infrastruktur preiszugeben.
-
-1. **On-prem** — Confluence Server, `Credential-Confluence.txt` (**Bearer**,
-   `verify_ssl=false` → `curl -k`); Seitenbaum: Home → Benutzerdoku ·
-   Entwicklerdoku → Unterseiten.
-2. **Cloud** — Atlassian Cloud, `Credential-Atlassian.txt` (**Basic**
-   `email:api_token`), Pfade unter `/wiki/rest/api/content/<id>`; gleicher Seitenbaum.
-
-**Update:** `GET …?expand=version` → `PUT` mit `version.number+1`, `body.storage` =
-XHTML-Storage. **Neue Seite:** `POST` mit `space.key` + `ancestors:[{id:<parent>}]`.
-Makro-Differenz: Mermaid heißt on-prem `mermaid-macro`, Cloud `mermaid-cloud`.
-**⚠️ Entity-Falle:** Cloud-Storage kodiert Umlaute als HTML-Entities (`n&ouml;tig`),
-on-prem als UTF-8 — String-Anker mit Umlauten auf der Cloud-Seite zusätzlich in der
-Entity-Variante probieren; eingefügter UTF-8-Text wird von beiden akzeptiert.
-
+- **On-prem** Confluence Server, `Credential-Confluence.txt` (**Bearer**, `verify_ssl=false`
+  → `curl -k`); **Cloud** Atlassian, `Credential-Atlassian.txt` (**Basic** `email:api_token`),
+  Pfade `/wiki/rest/api/content/<id>`. Seitenbaum beidseitig: Home → Benutzerdoku ·
+  Entwicklerdoku → Unterseiten.
+- **Update:** `GET …?expand=version` → `PUT` mit `version.number+1`, `body.storage` = XHTML.
+  **Neu:** `POST` mit `space.key` + `ancestors:[{id:<parent>}]`. Mermaid-Makro heißt on-prem
+  `mermaid-macro`, in der Cloud `mermaid-cloud`.
+- **⚠️ Entity-Falle:** Cloud-Storage kodiert Umlaute als HTML-Entities (`n&ouml;tig`), on-prem
+  als UTF-8 — String-Anker mit Umlauten in der Cloud zusätzlich als Entity-Variante probieren;
+  eingefügtes UTF-8 akzeptieren beide.
 
 ## Jira (DUAL: on-prem + Cloud)
 
-Beide Projekte Key **QTMUX**, identischer Issue-Satz (Abgleich per Summary), Typ **Task**.
-Hosts und Board-ID: `CLAUDE.local.md`.
-- **On-prem** Jira Server, `Credential-Jira.txt` (**Bearer**-PAT, `verify_ssl=false`),
-  API `/rest/api/2/`, description = Klartext.
-- **Cloud** Atlassian Cloud, `Credential-Atlassian.txt` (**Basic**), API `/rest/api/3/`,
-  **description braucht ADF** (`{type:doc,version:1,…}`).
-  Suche: on-prem `GET /search?jql=…`, Cloud `POST /search/jql`.
-
+Beide Projekte Key **QTMUX**, identischer Issue-Satz (Abgleich per Summary), Typ **Task**;
+idempotent anlegen (Summaries vorher holen). On-prem `Credential-Jira.txt` (**Bearer**-PAT,
+`verify_ssl=false`), API `/rest/api/2/`, description = Klartext, Suche `GET /search?jql=…`.
+Cloud **Basic**, API `/rest/api/3/`, **description braucht ADF**
+(`{type:doc,version:1,…}`), Suche `POST /search/jql`. Kein Atlassian-MCP (nur Cloud +
+interaktives OAuth) — einheitlicher REST-Weg.
 **Kanban-Konvention (Anwender-Vorgabe):** bei jedem Fortschritt **dual** weiterschieben —
-Arbeitsbeginn → „In Progress" (on-prem Transition 31) / „In Arbeit" (Cloud 21); fertig +
-verifiziert → „Done" (41) / „Erledigt" (41) mit Kurzkommentar. Transition-IDs je Issue via
-`GET /issue/<key>/transitions` prüfen. Idempotent anlegen (Summaries vorher holen).
-Kein Atlassian-MCP nutzen (nur Cloud, interaktives OAuth) — einheitlicher REST-Weg.
+Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); fertig + verifiziert →
+„Done"/„Erledigt" (41) mit Kurzkommentar. Transition-IDs je Issue via
+`GET /issue/<key>/transitions` prüfen.
 
 ## Konventionen
 
@@ -297,34 +269,61 @@ komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Pl
 MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **36 MCP-Tools**
 (GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert.
 
-**QTMUX-83 (B1: Per-Window-Layouts) — ALLE 5 STUFEN KOMPLETT (auf `main`, ungereleast):**
-Umbau vom EINEN globalen Split-Layout auf das tmux-Modell: Sidebar = **Windows** (Tabs),
-jedes Window hat **sein eigenes** Split-Layout; Splits = Panes IM Window; Klick/`focus_window`
-schaltet das ganze Layout um. Blätter referenzieren Sessions per stabiler `sessionId` (kein
-Row-Remap mehr); `Session::id()` bleibt MCP-Adress-Token. Stufen: **1** Datenmodell
-(`Window`/`WindowModel`/`Session::windowId`/Migration), **2** QML-Flip (Sidebar/Layout/
-Lebenszyklus auf Windows; extern erzeugte Sessions per `_wrapPending` in ein Window verpackt),
-**3** Persistenz (neues `windows`-QSettings-Schema: Layout+Proportionen+**farbiger Scrollback je
-paneId**; sauberer Quit auf **SIGTERM/SIGINT** in `main.cpp` → onClosing persistiert), **4** MCP-
-Window-Tools (`list/focus/new/rename/close_window`, `get_layout windowId`), **5** Window-Gruppen
-(Gruppen-Mechanik von SessionModel auf WindowModel portiert, `ListView.section`-Sidebar,
-`set_window_group`). Alles mit MCP-e2e + `--screenshot` verifiziert (17/17 ctest). Umsetzungs-/
-Verifikationsdetails: `docs/design/per-window-layouts/Umsetzung.md`. Vorarbeit: **QTMUX-80/81/82**;
-**stiller Selbst-Screenshot** `--screenshot <png>` (offscreen `grabWindow`, kein TCC).
+**Window-Modell (QTMUX-83, auf `main`, ungereleast):** Kein globales Split-Layout mehr,
+sondern das tmux-Modell — Sidebar = **Windows** (Tabs), jedes Window hat sein eigenes
+Split-Layout, Splits = Panes **im** Window, `focus_window` schaltet das ganze Layout um.
+Gruppen sind seither **Window**-Gruppen. Details/Verifikation:
+`docs/design/per-window-layouts/Umsetzung.md`; Mechanik unten in der Feature-Referenz.
+Vorarbeit QTMUX-80/81/82, dabei **stiller Selbst-Screenshot** `--screenshot <png>`
+(offscreen `grabWindow`, kein TCC) — der Standardweg für visuelle Abnahmen.
 
-> ⚠️ **build/macos trägt einen WIP-Zwischenstand** (durch einen `-B`-Fehler landeten frühe
-> B1-Builds dort; die Produktivinstanz PID 72801 läuft im Memory-Image weiter). Der **verifizierte
-> Endstand liegt in `build/macos-test`**. Vor dem nächsten Prod-Neustart `build/macos` aus dem
-> finalen `main`-Stand neu bauen (`cmake --build build/macos`, NICHT `--preset` mit `-B`) —
-> möglichst erst, wenn die laufende Instanz beendet werden kann.
+## Nächster Schritt (Wiedereinstieg nach /compact)
 
-> **Ältere Status-Historie (v1.4–1.6, QTMUX-30…79):** die früheren Feature-Einträge
-> (Sitzungsgruppen, Pane-Zoom, Scrollback-Suche, nicht-modales Prefs-Fenster, Rückfrage vor
-> Beenden, klickbare Links, MCP-Ereigniskanal/Signal-Tools, Windows-VS-Toolchain-Fix,
-> Split-Cramping …) stehen in der **Git-Historie** dieser Datei und — wo dauerhaft relevant —
-> unten in **Feature-Referenz** und den **Build-Abschnitten**. Hier bewusst nicht mehr
-> ausgeschrieben (Datei-Hygiene 2026-07-28: Status-Changelog gekürzt, spart ~250 Zeilen je
-> Session; Lektionen/Fallen blieben erhalten).
+Stand **2026-07-28** · Branch `main`, letzter Commit `eef2f99`, **synchron mit origin** ·
+Working Tree: nur diese CLAUDE.md-Aufräumung (uncommitted). Windows-Maschine: Debug- und
+Release-Build frisch, `ctest -E "^test_pty$"` **14/14 grün** (test_pty fällt hier
+umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell, ConPTY).
+
+**Nächster Punkt (Kandidat, vom Owner NICHT beauftragt):** Meta-Kodierung `Alt+<Taste>` →
+`ESC`+Taste, damit Claude Codes **Alt+V** (Bild aus der Zwischenablage) und die
+readline-Kürzel Alt+B/F/D überhaupt beim Agenten ankommen.
+- Einstieg: [src/core/KeyEncoding.cpp](src/core/KeyEncoding.cpp) `encodeKeyBytes` —
+  Alt wird dort **nur** bei Enter behandelt, sonst greift `text()` (unter Windows bei
+  Alt+Buchstabe leer → 0 Bytes gehen raus).
+- Vorgehen: Alt + druckbares Zeichen → `\x1b` + Zeichen; **nur Windows/Linux** (`#ifdef`),
+  macOS unverändert (Option erzeugt dort Sonderzeichen, physisches Ctrl ist schon Meta);
+  Alt+Enter (QTMUX-43) und Ctrl-Steuercodes nicht anfassen; Fälle in
+  [tests/tst_keyencoding.cpp](tests/tst_keyencoding.cpp) ergänzen.
+- Bauen/Testen: `tools\vsdev-build.cmd windows all` dann
+  `ctest --test-dir build\windows -E "^test_pty$"`; Release: `… windows-release`.
+- Abnahme: Screenshot in die Zwischenablage, in einer Claude-Code-Session Alt+V drücken,
+  per MCP `read_screen` prüfen, ob die `[Image #1]`-Markierung erscheint. Bilddaten laufen
+  **nie** durchs PTY — Claude Code liest die Zwischenablage selbst.
+- Beachten: neue Nummer vergeben (höchste belegte ist **QTMUX-83**), Jira dual anlegen
+  (nur auf dem Mac möglich), i18n nicht betroffen.
+
+**Danach:** (1) Jira-Nachträge QTMUX-46 + QTMUX-79 (Mac) · (2) `build/macos` aus dem finalen
+`main`-Stand neu bauen (s. Arbeitsstand) · (3) offene Jira QTMUX-40/38/2/13 nach Priorität.
+
+### Arbeitsstand (compact-fest — hier pflegen, nicht im Gespräch lassen)
+
+- ⚠️ **`build/macos` trägt einen WIP-Zwischenstand** (früher `-B`-Fehler; Produktivinstanz
+  PID 72801 läuft aus dem Memory-Image weiter). Verifizierter Endstand: `build/macos-test`.
+  Vor dem nächsten Prod-Neustart `build/macos` neu bauen (`cmake --build build/macos`,
+  NICHT `--preset` mit `-B`) — erst wenn die laufende Instanz beendet werden darf.
+- **Jira-Nachtrag offen** (Windows-Maschine hat keine Credentials — `CLAUDE.local.md` und
+  `Credential-*.txt` liegen nur auf dem Mac): **QTMUX-46** (Paritätslücken MCP/Palette/
+  Einstellungen) und **QTMUX-79** (VSCode-Build auf VS 2022 festgenagelt) sind umgesetzt +
+  gepusht, aber in keinem der beiden Jira angelegt.
+- **Befund ohne Auftrag (2026-07-28): Alt+&lt;Taste&gt; wird gar nicht ans PTY gemeldet.**
+  `encodeKeyBytes` behandelt Alt nur bei Enter; sonst greift `text()`, das unter Windows bei
+  Alt+Buchstabe leer ist → 0 Bytes. Damit erreicht **Alt+V** (Claude Codes Bild-Einfügen
+  unter Windows, weil Ctrl+V dort Text-Paste ist) den Agenten nie, und readline-Kürzel
+  (Alt+B/F/D) fehlen ebenso. Alt+V ist **nicht** doppelt belegt: Mnemonics sind
+  D/B/A/S/H, in der Hotkey-Registry existiert kein Alt-Kürzel. Fix wäre die
+  xterm-Meta-Kodierung Alt+X → `ESC`+x, **nur Windows/Linux** (auf macOS erzeugt Option
+  Sonderzeichen und physisches Ctrl ist schon Meta). Bilddaten laufen nie durchs PTY —
+  Claude Code liest die Zwischenablage selbst, QTmux muss nur die Taste melden.
 
 **Offene Jira:** **QTMUX-40** (OSC-8-Hyperlinks — deferred; die Heuristik-Links aus QTMUX-39
 decken den Agenten-Fall ab, OSC-8 bräuchte Cursor-Span-Tracking + neues `Cell`-Feld, teuer da
@@ -359,28 +358,20 @@ Quellen-Hinweis) · Screenshot im README.
 
 ## Git-/GitHub-Lektionen (teuer erkauft)
 
-- **`git filter-repo --replace-text` fasst NUR Dateiinhalte an, keine Commit-Nachrichten.**
-  Dafür braucht es `--replace-message`, für Autoren-Adressen `--mailmap`. Und: `git grep`
-  durchsucht **keine** Commit-Nachrichten — eine Verifikation nur damit übersieht sie
-  komplett. Vor einem Public-Schalten alle vier Ebenen prüfen: Dateiinhalte,
-  Commit-Nachrichten, Autor-/Committer-Metadaten, Tag-Nachrichten.
-- **Force-Push löscht nichts.** Alte Commits bleiben auf GitHub per SHA abrufbar, solange
-  etwas sie referenziert — und **jeder Actions-Lauf referenziert seinen Commit**. Deshalb
-  war ein frisches Repo der einzige verlässliche Weg, um die Historie wirklich loszuwerden.
-- **Jeder Rewrite zieht eine Kette nach sich:** Force-Push (Schutz kurz lockern und sofort
-  wieder setzen) → Tag neu → Release-Target umhängen → **alle Klone neu klonen**
-  (auch die Build-Maschine). Deshalb Textkorrekturen sammeln, nicht einzeln umschreiben.
-  **Force-Push ist vom Anwender freigegeben** (2026-07-21) — keine Rückfrage nötig, aber
-  die Sorgfalt bleibt: vorher `git bundle create ~/QTmux-backup-<datum>.bundle --all`,
-  hinterher die ganze Kette abarbeiten und die Klone melden. Blockiert der
-  Sicherheitsfilter des Harness den Vorgang („Schutz lockern + force-pushen"), nicht
-  umgehen, sondern melden.
-- **Persönliche GitHub-Repos kennen keine Collaborator-Rollen**: „In a private repository,
-  repository owners can only grant write access to collaborators." Ein Downgrade per API
-  meldet `204 No Content` und ändert **nichts**. Abgestufte Rollen gibt es nur in
-  Organisationen; Branch Protection für private Repos nur mit Pro — bei öffentlichen frei.
-- `gh api -X PUT …/protection/allow_force_pushes` existiert **nicht** (404); die
-  Einstellung geht nur über den kompletten Protection-Payload.
+- **Historien-Rewrites betreffen vier Ebenen:** `git filter-repo --replace-text` fasst nur
+  **Dateiinhalte** an — Commit-Nachrichten brauchen `--replace-message`, Autor-Adressen
+  `--mailmap`, Tag-Nachrichten eigene Behandlung. `git grep` durchsucht **keine**
+  Commit-Nachrichten, eine Verifikation nur damit übersieht sie komplett.
+- **Force-Push löscht nichts:** Alte Commits bleiben per SHA abrufbar, solange etwas sie
+  referenziert — und **jeder Actions-Lauf referenziert seinen Commit**. Ein frisches Repo war
+  der einzige verlässliche Weg. Jeder Rewrite zieht eine Kette nach sich: Force-Push → Tag neu
+  → Release-Target umhängen → **alle Klone neu klonen** (auch die Build-Maschine). Deshalb
+  Textkorrekturen sammeln. Force-Push ist freigegeben (2026-07-21), aber vorher
+  `git bundle create ~/QTmux-backup-<datum>.bundle --all`; blockiert der Sicherheitsfilter
+  des Harness den Vorgang, nicht umgehen, sondern melden.
+- Persönliche Repos kennen **keine** abgestuften Collaborator-Rollen (API meldet
+  `204 No Content` und ändert nichts); `gh api …/protection/allow_force_pushes` existiert
+  nicht (404) — Protection nur über den kompletten Payload setzen.
 
 ## Feature-Referenz (kompakt, mit Lektionen)
 
@@ -417,25 +408,18 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   bewusst in Kauf genommen, unmodifiziertes Enter bleibt CR). Copy/Paste macOS Cmd+C/V,
   sonst Ctrl+Shift+C/V; Smart Ctrl+C (Auswahl→Copy, sonst SIGINT). Bracketed Paste +
   Multiline-Warnung; Copy-on-Select + Rechtsklick-Paste optional.
-- **Klickbare Links (QTMUX-39):** `LinkDetector` (Gui-frei, `qtmux_core`) findet in einer
-  Zeile **URLs** (Scheme-Whitelist http/https/ftp/mailto/file — KI-Output darf keinen
-  beliebigen Handler starten) und **existierende Dateipfade** (gegen Session-CWD aufgelöst;
-  die `QFileInfo::exists`-Prüfung IST der Fehlalarm-Filter, nackte Wörter ohne Trenner
-  bleiben außen vor). **Auffindbarkeit (2026-07-26):** `TerminalItem` unterstreicht schon beim
-  **einfachen Drüberfahren** (Overlay-Quad wie Selektion, Link-Blau) + Hand-Cursor, und
-  `SplitNode.qml` zeigt unten links im Pane eine dezente Statuszeilen-Pille **„⌘/Strg-Klick
-  zum Öffnen: <ziel>"** (Property `hoverLinkTarget` + Signal `hoverLinkChanged`). Das
-  **Öffnen** bleibt an **Cmd/Ctrl-Klick** gebunden (`QDesktopServices::openUrl`) — der Modifier
-  ist die bewusste Geste gegen versehentliches Öffnen; ein reiner Klick selektiert normal.
-  🔑 Ursprünglich lief die Erkennung nur bei gehaltenem Modifier (keine `QFileInfo`-Syscalls
-  je Mausbewegung) — ohne sichtbaren Hinweis fand der Anwender den Cmd-Klick aber nicht. Jetzt
-  läuft `detect()` beim Hover, aber **je Zeile gecacht** (`m_hoverDetectRow`/`m_hoverDetectText`
-  → nur bei Zeilen-/Textwechsel neu, nicht je Pixel). Klick läuft **vor** der
-  App-Maus-Weiterleitung (wie Shift die Selektion erzwingt). Zeilentext aus
-  `absLineText(absRow)` (1 Zeichen/Spalte; Spalten↔Zeichen 1:1, solange keine Emoji davor).
-  Tests: `tst_linkdetector` (11 Fälle) + `tst_vtscreen::linkDetectionOnScreenLine`
-  (Integration VtScreen→Text→Detector); die Hover-Anzeige ist rein visuell → Anwender-Abnahme.
-  **OSC 8 (explizite Hyperlinks) bewusst NICHT** — s. QTMUX-40 unten.
+- **Klickbare Links (QTMUX-39):** `LinkDetector` (Gui-frei) findet **URLs**
+  (Scheme-Whitelist http/https/ftp/mailto/file — KI-Output darf keinen beliebigen Handler
+  starten) und **existierende Dateipfade** (gegen Session-CWD; die `QFileInfo::exists`-Prüfung
+  IST der Fehlalarm-Filter). Unterstreichung + Hand-Cursor schon beim **Hover**, Pane-Pille
+  „⌘/Strg-Klick zum Öffnen: <ziel>" (`hoverLinkTarget`); das **Öffnen** bleibt an
+  Cmd/Ctrl-Klick (`QDesktopServices::openUrl`) — bewusste Geste gegen versehentliches Öffnen.
+  🔑 Erkennung lief zuerst nur bei gehaltenem Modifier (Syscall-Sparen) — ohne sichtbaren
+  Hinweis fand der Anwender die Geste nicht. Jetzt Hover, aber **je Zeile gecacht**
+  (`m_hoverDetectRow`), nicht je Pixel. Klick läuft **vor** der App-Maus-Weiterleitung.
+  Zeilentext aus `absLineText(absRow)` (Spalten↔Zeichen 1:1, solange kein Emoji davor).
+  Tests: `tst_linkdetector` + `tst_vtscreen::linkDetectionOnScreenLine`.
+  **OSC 8 bewusst NICHT** — s. offene Jira (QTMUX-40).
 
 ### PTY-Layer
 - `UnixPty`: forkpty, O_NONBLOCK-Master. **⚠️ `write()` ist gepuffert** (`pending` +
@@ -456,32 +440,24 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `m_restoring`-Guard (Restore erbt kein fremdes CWD, führt keine Login-Scripts aus).
   Neue Shell **erbt das Live-CWD** der aktiven Session (nur Shell-Quellen, explizites
   Verzeichnis hat Vorrang).
-- **Sitzungsgruppen (QTMUX-42):** Frei benannte Gruppen fassen in der Sidebar die
-  Sessions einer Aufgabe zusammen (Kopfzeile mit Anzahl, einklappbar, Farbmarke aus dem
-  Namen gehasht); Zuordnung per Rechtsklick oder MCP-Tool `set_session_group`, persistiert
-  mit der Sitzungsliste. 🔑 Angezeigt über **`ListView.section`** — das setzt
-  **zusammenhängende Blöcke** voraus, also sortiert das **Model** um (`setSessionGroup`
-  → `regroupRow`), nicht die View. Zwei Fallen, beide durch `tst_sessiongroups` abgesichert:
-  `moveSession` (Drag) übernimmt bewusst die Gruppe der neuen Nachbarschaft — deshalb darf
-  das Umgruppieren NICHT über `moveSession` laufen (`moveRowInternal`), sonst überschriebe
-  der Nachbar die gerade gesetzte Gruppe. Und die **gruppenlosen** Sessions sind KEIN
-  schützenswerter Block (ihre Section ist unsichtbar) — sonst springt die erste Zuordnung
-  die Kachel ans Listenende. `groups()`/`groupSize()` sind Funktionen ohne Property →
-  QML-Bindungen brauchen den Anker `groupsChanged`/`window.groupsRevision`, sonst frieren
-  Kopfzeile und Kontextmenü auf ihrem ersten Stand ein.
-- **Einzug + kollisionsfreie Marke (QTMUX-45):** Gruppierte Kacheln sind **12 px eingerückt**,
-  die Gruppenzugehörigkeit ist damit an der **Form** erkennbar statt nur an der Farbe; die
-  Farbmarke sitzt in der Einzugsspalte, der rote MCP-Controller-Tab am Rand der eingerückten
-  Kachel. Vorher teilten sich beide den linken Kachelrand und die Marke war per
-  `visible: … && !mcpController` **abgeschaltet** — die Gruppe war genau an der Kachel
-  unsichtbar, die man am ehesten sucht (der Controller). 🔑 Eingerückt wird der **Inhalt über
-  Margins**, NICHT die Delegate-Wurzel: ein `x`-Binding auf dem Delegate ist wirkungslos, weil
-  die `ListView` die Querachsen-Position ihrer Delegates selbst setzt — die Kachel blieb links
-  stehen und die (relativ dazu positionierte) Marke rutschte aus dem `clip: true`-Viewport,
-  war also ersatzlos weg. Deshalb trägt ein inneres `card`-Rechteck die Kachel-Optik
-  (Auswahl/Hover, respektiert den Einzug) und Inhalt/Fortschrittsbalken bekommen
-  `leftMargin: 10 + groupIndent`. Rein visuell → unit-test-unsichtbar, verifiziert per
-  Screenshot in beiden Themes (Controller-in-Gruppe + Auswahl auf gruppierter Kachel).
+- **Gruppen in der Sidebar (QTMUX-42/45, seit QTMUX-83 **Window**-Gruppen):** Frei benannte,
+  einklappbare Gruppen mit Kopfzeile + Anzahl; Farbe aus dem Namen gehasht. Zuordnung per
+  Rechtsklick, Palette oder MCP (`set_window_group`, `set_session_group` wirkt aufs Window
+  der Session). 🔑 Angezeigt über **`ListView.section`** → verlangt **zusammenhängende
+  Blöcke**, also sortiert das **Model** um, nicht die View. Drei Fallen (Model-Teil durch
+  `tst_sessiongroups` abgesichert): Umgruppieren darf **nicht** über `moveSession` laufen
+  (Drag übernimmt bewusst die Gruppe der Nachbarschaft und überschriebe die neue);
+  **gruppenlose** Einträge sind KEIN schützenswerter Block (unsichtbare Section — sonst
+  springt die erste Zuordnung ans Listenende); `groups()`/`groupSize()` sind Funktionen ohne
+  Property → QML braucht den Anker `groupsChanged`/`groupsRevision`, sonst frieren Kopfzeile
+  und Kontextmenü ein.
+  🔑 **Einzug statt nur Farbe:** Gruppierte Kacheln sind 12 px eingerückt (Form erkennbar,
+  nicht nur Farbe), die Farbmarke sitzt in der Einzugsspalte, der rote MCP-Controller-Tab am
+  Rand der Kachel — vorher teilten sich beide den Kachelrand und die Marke war per
+  `!mcpController` abgeschaltet, also genau an der interessantesten Kachel unsichtbar.
+  Eingerückt wird der **Inhalt über Margins**, NICHT die Delegate-Wurzel: ein `x`-Binding
+  dort ist wirkungslos (die ListView setzt die Querachse selbst) und schob die Marke aus dem
+  `clip:true`-Viewport. Ein inneres `card`-Rechteck trägt Auswahl/Hover.
 - **Befehlspalette (Strg/Cmd+K):** Das Such-/Befehlsfeld in der Toolbar ist die zentrale
   Sammelstelle **aller** Funktionen — feste Befehle plus dynamisch je Plugin-Backend, je
   Verbindungsprofil, je Sitzungsgruppe und je offener Session („Wechseln zu: …"). Sie wird
@@ -504,27 +480,21 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   ablehnt — dadurch greift dieselbe Rückfrage auch für Schließkreuz und Alt+F4.
   `quitConfirmed` schaltet die Frage für den bestätigten Durchlauf ab (sonst fragt der
   Wächter beim `close()` aus `onAccepted` erneut).
-- **Einstellungsfenster (QTMUX-47):** Nicht-modales `qml/PrefsWindow.qml` (Rail + View,
-  Variante 1c 1060×700) statt der modalen Dialoge. Neun Kategorie-Seiten `qml/prefs/Cat*.qml`
-  auf einem `CatPage`-Gerüst (Flickable + Kopfzeile + Default-Content). 🔑 **Brücken-Muster:**
-  ein eigenes `Window` sieht die IDs aus `Main.qml` NICHT → `app`(=window)/`sessions`/`mcp` +
-  die noch modalen Editier-Dialoge (Profil/Secret/Master-PW/Schema-Import) werden als
-  `property var` ins PrefsWindow gereicht und von den Seiten über `host.*` genutzt; globale
-  Registry-Singletons (Theme/App/ColorSchemes/Profiles/Hotkeys/Vault/AgentEvents/Plugins) sind
-  Context-Properties und überall direkt. Kürzel-Aufnahme läuft **inline** (kein
-  `hotkeyCaptureDialog` mehr); `prefs.capturing` deaktiviert währenddessen alle globalen
-  App-Shortcuts (Main.qml) und die Fenster-Shortcuts. **Agenten-Abo-Matrix**:
-  Zellen/Chips sind Toggle-Kacheln (TapHandler), KEINE CheckBoxen — deren `checked`-Bindung
-  bräche beim Klick, was bei den Kreuzeffekten (leere Quell-Liste = „alle", Abwählen
-  materialisiert die explizite Liste) Stände veralten ließe. **Suche**: `PrefAnchor` umschließt
-  je Kategorie die Sektionen (bewusst Sektions-, nicht Grid-Zellen-Ebene — das bräche die
-  GridLayouts) und blendet bei einem Treffer über `host.pendingSetting` einmalig ~1,2 s auf.
-  🔑 **Fallen:** `MultiEffect` braucht `import QtQuick.Effects` je Datei; deutsche `„…"`-Strings
-  mit typografischem Schluss `"` (gerader `"` bricht den qsTr-String); verschachtelte
+- **Einstellungsfenster (QTMUX-47):** Nicht-modales `qml/PrefsWindow.qml` (Rail + View) mit
+  neun Kategorie-Seiten `qml/prefs/Cat*.qml` auf einem `CatPage`-Gerüst. 🔑 **Brücken-Muster:**
+  ein eigenes `Window` sieht die IDs aus `Main.qml` NICHT → `app`/`sessions`/`mcp` und die noch
+  modalen Editier-Dialoge werden als `property var` hineingereicht (`host.*`); globale
+  Registries (Theme/App/ColorSchemes/Profiles/Hotkeys/Vault/AgentEvents/Plugins) sind
+  Context-Properties und überall direkt. Kürzel-Aufnahme inline; `prefs.capturing` deaktiviert
+  währenddessen ALLE App-Shortcuts. **Abo-Matrix**: Toggle-Kacheln (TapHandler), KEINE
+  CheckBoxen — deren `checked`-Bindung bräche beim Klick und die Kreuzeffekte (leere Liste =
+  „alle") ließen Stände veralten. **Suche**: `PrefAnchor` je Sektion (nicht je Grid-Zelle, das
+  bräche die GridLayouts) + `host.pendingSetting` blendet ~1,2 s auf.
+  🔑 **Fallen:** `MultiEffect` braucht `import QtQuick.Effects` **je Datei**; typografisches
+  Schluss-Anführungszeichen in `qsTr` (gerades `"` bricht den String); verschachtelte
   Repeater-Delegates brauchen `pragma ComponentBehavior: Bound` + qualifizierte IDs.
-  Verifikation headless: PrefsWindow referenziert alle 9 Cat-Typen → ein defekter Typ bricht
-  den ganzen App-Start; zusätzlich jede Seite einzeln via `defaults write
-  com.qtmux.QTmux-<profil> ui.prefsCategory <kat>` vorgeseedet instanziiert.
+  Headless-Verifikation: das Fenster referenziert alle 9 Cat-Typen → ein defekter Typ bricht
+  den App-Start; Seiten einzeln über vorgeseedetes `ui.prefsCategory` instanziierbar.
 - **Agent-Awareness:** OSC 133 (Prompt-Marker → Activity-Ring), OSC 9/777 (Notify),
   OSC 9;4 (Progress-Balken), Bell → Attention-Pulse (blau); MCP-Controller-Tab rot.
   🔑 **Reduzierte Bewegung (QTMUX-47):** `App.reduceMotion` (AppController, beim Start
@@ -536,12 +506,14 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `done|question|error|info` via OSC `777;qtmux-event` oder MCP `post_event`; Zustellung
   über MCP-Long-Poll `wait_for_events`. **⚠️ Hook-stdout wird vom Agenten gekapselt** —
   aus KI-Hooks immer `post_event` (HTTP) statt OSC nutzen.
-- **Split-Layout:** rekursiver JS-Baum (`window.layout`: Blatt `{paneId, sessionRow}` /
-  Split `{orientation, children}`), QML-Rekursion via Loader — **`setSource(url,{props})`
-  VOR dem Laden** (sonst evaluieren Bindungen mit `win===undefined` und brechen dauerhaft).
-  `pruneLeaves(pred)` entfernt Blätter gelöschter Sessions (sonst teilen sich Panes eine
-  Session und kämpfen um `resize()` → Verzerrung). Pane-Reorder: `DragHandler(target:null)`
-  + manueller Szenen-Hit-Test (Qt-`Drag`/`DropArea` war fragil).
+- **Split-Layout je Window (QTMUX-83):** rekursiver JS-Baum **pro Window** — Blatt
+  `{paneId, sessionId}` (stabile `Session::id()`, **kein** Row-Index mehr → kein Remap beim
+  Umsortieren), Split `{orientation, children}`; QML-Rekursion via Loader —
+  **`setSource(url,{props})` VOR dem Laden** (sonst evaluieren Bindungen mit
+  `win===undefined` und brechen dauerhaft). `pruneLeaves(pred)` entfernt Blätter gelöschter
+  Sessions (sonst teilen sich Panes eine Session und kämpfen um `resize()` → Verzerrung).
+  Pane-Reorder: `DragHandler(target:null)` + manueller Szenen-Hit-Test (Qt-`Drag`/`DropArea`
+  war fragil). Extern (MCP) erzeugte Sessions werden per `_wrapPending` in ein Window verpackt.
 - 🔑 `TerminalItem::setSession` ruft `recomputeGrid` **nur bei gültiger Größe** — ein
   ungelayoutetes Item resizte die geteilte Session sonst auf 1×1 und verwarf den Inhalt.
 - **Backend-Ownership:** Backend gehört NUR dem `unique_ptr` (kein `setParent`);
@@ -621,44 +593,32 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   heraus — daher Hierarchie statt `QTMUX_SESSION_ID`-Lesen); Fallback `attach_controller`.
 - **Long-Poll `wait_for_events`**: vor `callTool` abgezweigt, Socket bleibt offen
   (`PendingPoll` + QTimer, Default 25 s); `disconnected`-Handler räumt Polls ab.
-- **QTMUX-29 (Layout/Profile):** Der Layout-Baum lebt in QML → Tools laufen über
-  *Requested-Signale, deren QML-Handler **synchron** (Direct-Connection) ausgeführt werden
-  und via **`provideResult`-Brücke** (`bridgedCall` in McpServer.h) antworten; ohne UI →
-  „UI nicht verbunden". `list_profiles` ohne Geheimniswerte (nur Flags); `connect_profile`
-  löst Vault-Passwörter **intern** (nie über MCP). `ConnectionProfileRegistry::indexOf`
-  ist privat → Existenzprüfung via `profile(name).isEmpty()`.
+- **Layout/Profile-Tools (QTMUX-29):** Layout und Windows leben in QML → diese Tools laufen
+  über `*Requested`-Signale, deren QML-Handler **synchron** (Direct-Connection) läuft und über
+  die **`provideResult`-Brücke** (`bridgedCall`) antwortet; ohne UI → „UI nicht verbunden".
+  `list_profiles` liefert nur Flags, `connect_profile` löst Vault-Passwörter **intern**.
 - **QTMUX-31 (`send_text`):** Das Enter geht **zeitlich abgesetzt** raus
   (`Session::writeWithEnter`, Vorgabe 60 ms, Tool-Parameter `enterDelayMs`). TUI-Apps
   (belegt mit Claude Code) werten einen in EINEM Rutsch ankommenden Block als
   Einfügevorgang → das `\r` wurde zum Zeilenumbruch im Eingabefeld statt zum Absenden,
   und der Aufruf meldete trotzdem `ok`. Regressionstest bricht bei `enterDelayMs: 0`.
-- **QTMUX-30 (Ereignis-Kanal):** Der Kanal ist korrekt — es fehlte die **Quelle**.
-  QTmux leitet **nichts** aus Bildschirm/Prozesszustand ab (Claude-Code-Worker senden
-  von sich aus nichts, auch keine Bell/OSC 9). Belegt: Worker beendet Aufgabe → Hub
-  bleibt leer. Antwort darauf ist Ehrlichkeit statt erzwungener Ereignisse:
-  `subscribe_events` meldet je Quelle `hasPostedEvents` + `sourcesWithEventsSoFar`,
-  `wait_for_events` bricht ohne Abo **sofort** ab (statt 25 s Stille) und legt bei
-  Leerlauf einen `hinweis` bei. Worker ereignisfähig machen: Stop-Hook auf
-  `shell-integration/qtmux-emit.sh` (Unix) / `qtmux-emit.ps1` (Windows) — **als Skript,
-  nicht als curl-Einzeiler**: die dreifache Escape-Verschachtelung im Hook scheitert
-  still, und das sieht exakt aus wie „gerade passiert nichts".
-- **QTMUX-33 (`get_layout`):** liefert `{layout, activePaneId, sessions}` — der Baum
-  allein verschweigt, welche Sessions in **keinem** Pane liegen (laufen, aber unsichtbar).
-- **QTMUX-37 (Empfangen):** `wait_for_events` ist ein **Abholen** und erreicht einen
-  **beschäftigten** Agenten nicht — der eingerichtete Stop-Hook ist nur die halbe
-  Bedingung. QTmux kann das nicht von sich aus lösen (in einen laufenden Agenten-Zug
-  reicht kein Server hinein); wecken kann nur die Agenten-Umgebung, und die tut es beim
-  **Ende eines Hintergrundbefehls**. Daher `qtmux-wait.{sh,ps1,cmd}` als wartender
-  Wächter. Drei Fallen, jede erzeugt einen stumm nichts meldenden Wächter:
-  `timeoutMs` **unter** dem HTTP-Timeout halten (sonst schneidet der Client den Long-Poll
-  ab, bevor der Server antwortet); `nextSeq` **immer** fortschreiben, auch ohne Treffer
-  (sonst Endlos-Poll über dieselben gefilterten Ereignisse); Gesamt-Deckel gegen
-  vergessene Wächter — und diesen **auch im laufenden Poll** berücksichtigen, sonst
-  überzieht er um eine volle Poll-Länge (`--max-wait 5` wartete 45 s).
-  ⚠️ POSIX-`read` verwirft das letzte Element ohne abschließendes `\n` — `printf '%s'`
-  statt `printf '%s\n'` erzeugte so ein **leeres** `kinds`/`sources`-Array, und leer heißt
-  serverseitig „kein Filter", also alles. Der erste Test war dadurch nur zufällig grün;
-  aufgefallen ist es erst am **Gegentest** (ein nicht passendes Ereignis darf NICHT wecken).
+- **QTMUX-30/37 (Ereignis-Kanal — die Quelle ist das Problem, nicht der Kanal):** QTmux
+  leitet **nichts** aus Bildschirm/Prozesszustand ab; ein Claude-Code-Worker meldet von sich
+  aus nichts (auch keine Bell). Deshalb Ehrlichkeit statt erzwungener Ereignisse:
+  `subscribe_events` meldet je Quelle `hasPostedEvents`, `wait_for_events` bricht ohne Abo
+  **sofort** ab (statt 25 s Stille) und legt bei Leerlauf einen `hinweis` bei. Worker
+  ereignisfähig machen: Stop-Hook auf `shell-integration/qtmux-emit.{sh,ps1}` — **als Skript,
+  nicht als curl-Einzeiler** (die dreifache Escape-Verschachtelung scheitert still und sieht
+  aus wie „gerade passiert nichts"). Und: `wait_for_events` ist ein **Abholen** — es erreicht
+  einen **beschäftigten** Agenten nicht; wecken kann nur dessen Umgebung, am Ende eines
+  Hintergrundbefehls → `qtmux-wait.{sh,ps1,cmd}`. 🔑 Vier Fallen, jede erzeugt einen stumm
+  nichts meldenden Wächter: `timeoutMs` **unter** dem HTTP-Timeout halten; `nextSeq` **immer**
+  fortschreiben (sonst Endlos-Poll über dieselben gefilterten Ereignisse); Gesamt-Deckel auch
+  **im laufenden Poll** prüfen (sonst überzieht er um eine Poll-Länge); POSIX-`read` verwirft
+  das letzte Element ohne `\n` (`printf '%s'` → leeres `kinds`-Array → serverseitig „kein
+  Filter" = alles; nur der **Gegentest** mit einem nicht passenden Ereignis zeigt das).
+- **`get_layout`:** liefert `{layout, windowId, activePaneId, sessions}` — der Baum allein
+  verschweigt, welche Sessions in **keinem** Pane liegen (laufen, aber unsichtbar).
 
 ## E2E-/Test-Fallen (alle Plattformen)
 
@@ -668,26 +628,30 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 - macOS-GUI-E2E: CGEvent-Tool braucht Pause zwischen MouseDown/Up (sonst nur Hover);
   App-Sprache über das App-Menü umstellen, nicht `defaults write` (cfprefsd-Cache);
   Details [[qtmux-gui-test-macos]].
-- **Ohne Bedienungshilfen-Recht testen:** System Events/`osascript` und CGEvent-Posting
-  scheitern dann hart (`-1719`, `AXIsProcessTrusted()` = false). Ein **Beenden** lässt
-  sich trotzdem echt auslösen — `NSRunningApplication(processIdentifier:)?.terminate()`
-  (Swift-Dreizeiler) schickt dasselbe Apple-Event wie Cmd+Q, **PID-genau** und damit
-  ohne Gefahr für eine parallel laufende produktive Instanz (`tell application` würde
-  über die Bundle-ID gehen und die falsche treffen). Beweiskraft nur mit **Gegentest**:
-  einmal mit eingeschalteter Rückfrage (Prozess muss leben), einmal mit ausgeschalteter
-  (Prozess muss enden). Einstellung dafür vor dem Start per `defaults write` in die
-  Profil-Domain (`com.qtmux.QTmux-<profil>`, Key `window.confirmQuit`) — QSettings
-  schreibt `/` als `.`.
+- **Ohne Bedienungshilfen-Recht testen:** System Events/`osascript`/CGEvent scheitern hart
+  (`-1719`, `AXIsProcessTrusted()`=false). Ein **Beenden** geht trotzdem echt:
+  `NSRunningApplication(processIdentifier:)?.terminate()` — dasselbe Apple-Event wie Cmd+Q,
+  aber **PID-genau** (`tell application` ginge über die Bundle-ID und träfe die produktive
+  Instanz). Beweiskraft nur mit **Gegentest** (mit Rückfrage: Prozess lebt; ohne: er endet);
+  Einstellungen dafür vorher per `defaults write` in die Profil-Domain
+  (`com.qtmux.QTmux-<profil>`) — QSettings schreibt `/` als `.`.
 - ⚠️ Ein temporärer Test-Hook kann selbst der Fehler sein: `Dialog.accept()` direkt in
   `onOpened` wird verschluckt (Popup ist mitten im Öffnen) und sah exakt aus wie ein
   kaputter Bestätigen-Pfad. Erst ein Timer (~400 ms) zeigte die Kette vollständig.
 - Windows-E2E: Foreground nur zuverlässig mit `AttachThreadInput`; ein Alt-Stoß vor ESC
   schaltet den Qt-Menümodus (ESC schließt dann nur den). Menüs via UIA-`InvokePattern`
   öffnen. Synthetische Tasten erst nach Warteschleife aufs `MainWindowHandle`.
-- MCP-E2E ist der Standard-Verifikationsweg gegen die echte GUI (create_session/
-  send_text/read_screen; `read_screen scrollback:true` für Historie). Dafür eine
-  **zweite Instanz** starten (`QTMUX_PROFILE`/`QTMUX_MCP_PORT`) — nie gegen eine
-  Instanz testen, in der jemand arbeitet.
+  ⚠️ **Nie mit `-RedirectStandardError`/`-RedirectStandardOutput` starten** — das bricht die
+  ConPTY-Anbindung der Kindshells, alle Sessions sterben und die leere Sidebar sieht wie ein
+  Regressionsbug aus (2026-07-27 genau so fehlinterpretiert). Qt-Warnungen also anders holen.
+  ⚠️ Synthetische **Mausrad**-Ereignisse (`mouse_event WHEEL`) nimmt Qt erst nach einer
+  **echten Cursorbewegung** an (Hover-Enter) und nur im Vordergrund — sonst verpuffen sie
+  spurlos und man hält ein nicht scrollendes Flickable für ein Layout-Problem.
+- MCP-E2E ist der Standard-Verifikationsweg gegen die echte GUI (create_session/send_text/
+  read_screen, `scrollback:true` für Historie) — gegen eine **isolierte Testinstanz**
+  (s. Build-Abschnitt macOS), nie gegen eine, in der jemand arbeitet. Ergebnisse möglichst
+  am **Zustand** messen statt am Screenshot (z. B. Palette-Befehl ausführen → `list_sessions`
+  prüfen); rein visuelle Änderungen brauchen `--screenshot`/Screenshot + Anwender-Abnahme.
 - **Doku-Wächter `test_doc_duplicates`** (QTMUX-34): findet doppelte Überschriften, wie
   sie beim Kompaktieren entstehen (Block eingefügt statt ersetzt → zwei gleichnamige
   Abschnitte mit widersprüchlichem Inhalt; in RAFTNG genau so passiert). Verglichen wird
