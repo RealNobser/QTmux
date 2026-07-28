@@ -101,6 +101,19 @@ int WindowModel::createWindow(const QString &name) {
     return row;
 }
 
+int WindowModel::createWindowWithId(int id, const QString &name, const QString &group) {
+    auto *w = new Window(id, this);   // Window-Ctor schreibt den Zähler auf `id` fort
+    w->setName(name);
+    w->setGroup(group);
+    const int row = count();
+    beginInsertRows({}, row, row);
+    m_windows.append(w);
+    endInsertRows();
+    wireWindow(w);
+    emit countChanged();
+    return row;
+}
+
 void WindowModel::closeWindow(int row) {
     if (row < 0 || row >= count()) return;
     Window *w = m_windows.at(row);
@@ -203,6 +216,54 @@ void WindowModel::migrateSessionsToWindows(QSettings &s) {
     s.setValue(QStringLiteral("windows/activeRow"), oldActive < olds.size() ? oldActive : 0);
     s.setValue(QStringLiteral("windows/nextWindowId"), nextWindowId);
     s.setValue(QStringLiteral("windows/nextPaneId"), nextPaneId);
+}
+
+void WindowModel::runMigration() {
+    QSettings s;
+    migrateSessionsToWindows(s);
+}
+
+void WindowModel::writeWindows(const QVariantList &wins, int activeRow, int nextPaneId) {
+    QSettings s;
+    // Altes flaches Session-Schema entfernen — ab jetzt ist `windows` maßgeblich.
+    s.remove(QStringLiteral("sessions"));
+    s.remove(QStringLiteral("windows"));
+    s.beginWriteArray(QStringLiteral("windows"), static_cast<int>(wins.size()));
+    for (int i = 0; i < wins.size(); ++i) {
+        const QVariantMap w = wins.at(i).toMap();
+        s.setArrayIndex(i);
+        s.setValue(QStringLiteral("id"), w.value(QStringLiteral("id")).toInt());
+        s.setValue(QStringLiteral("name"), w.value(QStringLiteral("name")).toString());
+        s.setValue(QStringLiteral("group"), w.value(QStringLiteral("group")).toString());
+        s.setValue(QStringLiteral("activePaneId"), w.value(QStringLiteral("activePaneId")).toInt());
+        s.setValue(QStringLiteral("layoutJson"), w.value(QStringLiteral("layoutJson")).toString());
+    }
+    s.endArray();
+    s.setValue(QStringLiteral("windows/activeRow"), activeRow);
+    s.setValue(QStringLiteral("windows/nextPaneId"), nextPaneId);
+}
+
+QVariantMap WindowModel::readWindows() const {
+    QSettings s;
+    QVariantMap out;
+    out[QStringLiteral("present")] = s.contains(QStringLiteral("windows/size"));
+    QVariantList list;
+    const int n = s.beginReadArray(QStringLiteral("windows"));
+    for (int i = 0; i < n; ++i) {
+        s.setArrayIndex(i);
+        QVariantMap w;
+        w[QStringLiteral("id")]           = s.value(QStringLiteral("id")).toInt();
+        w[QStringLiteral("name")]         = s.value(QStringLiteral("name")).toString();
+        w[QStringLiteral("group")]        = s.value(QStringLiteral("group")).toString();
+        w[QStringLiteral("activePaneId")] = s.value(QStringLiteral("activePaneId")).toInt();
+        w[QStringLiteral("layoutJson")]   = s.value(QStringLiteral("layoutJson")).toString();
+        list.append(w);
+    }
+    s.endArray();
+    out[QStringLiteral("windows")]    = list;
+    out[QStringLiteral("activeRow")]  = s.value(QStringLiteral("windows/activeRow"), 0).toInt();
+    out[QStringLiteral("nextPaneId")] = s.value(QStringLiteral("windows/nextPaneId"), 1).toInt();
+    return out;
 }
 
 } // namespace qtmux

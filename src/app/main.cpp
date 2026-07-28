@@ -10,6 +10,10 @@
 
 #if defined(Q_OS_WIN)
 #  include <windows.h>
+#else
+#  include <QSocketNotifier>
+#  include <csignal>
+#  include <unistd.h>
 #endif
 
 #if defined(Q_OS_MACOS)
@@ -198,6 +202,12 @@ int main(int argc, char *argv[])
     if (appc)
         applyLanguage(app, engine, active, appc->language());
 
+    // Screenshot-Modus für QML sichtbar machen: dann darf aboutToQuit NICHT persistieren
+    // (der stille Screenshot startet mit frischem Zustand und würde sonst beim exit() das
+    // Window-Layout des Profils überschreiben, QTMUX-83 Stufe 3).
+    engine.rootContext()->setContextProperty(QStringLiteral("qtmuxScreenshotMode"),
+                                             !shotPath.isEmpty());
+
     engine.loadFromModule("QTmux", "Main");
 
     // Screenshot-Modus: nach kurzer Settle-Zeit die Root-QQuickWindow-Szene grabben,
@@ -223,6 +233,27 @@ int main(int argc, char *argv[])
                              applyLanguage(app, engine, active, lang);
                          });
     }
+
+#if !defined(Q_OS_WIN)
+    // Sauberer Quit auf SIGTERM/SIGINT (Logout, Shutdown, `kill`): async-signal-sicher über
+    // ein Self-Pipe an den Event-Loop reichen → quitConfirmed setzen (die „Beenden
+    // bestätigen"-Rückfrage übergehen, sonst lehnt onClosing ab) → QCoreApplication::quit()
+    // → onClosing persistiert Windows/Layout/Scrollback (QTMUX-83, Stufe 3). Ohne das
+    // beendete ein SIGTERM den Prozess hart und der Zustand ginge verloren.
+    static int s_sigPipe[2] = {-1, -1};
+    if (::pipe(s_sigPipe) == 0) {
+        std::signal(SIGTERM, [](int) { char c = 1; ssize_t n = ::write(s_sigPipe[1], &c, 1); (void)n; });
+        std::signal(SIGINT,  [](int) { char c = 1; ssize_t n = ::write(s_sigPipe[1], &c, 1); (void)n; });
+        auto *sn = new QSocketNotifier(s_sigPipe[0], QSocketNotifier::Read, &app);
+        QObject::connect(sn, &QSocketNotifier::activated, &app, [sn, &engine]() {
+            char c; ssize_t n = ::read(s_sigPipe[0], &c, 1); (void)n;
+            sn->setEnabled(false);
+            const auto roots = engine.rootObjects();
+            if (!roots.isEmpty()) roots.first()->setProperty("quitConfirmed", true);
+            QCoreApplication::quit();
+        });
+    }
+#endif
 
     return app.exec();
 }

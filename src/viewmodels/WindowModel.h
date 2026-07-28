@@ -2,6 +2,8 @@
 
 #include <QAbstractListModel>
 #include <QList>
+#include <QVariantList>
+#include <QVariantMap>
 #include <qqmlintegration.h>
 
 QT_FORWARD_DECLARE_CLASS(QSettings)
@@ -62,6 +64,10 @@ public:
     /// Legt ein leeres Window an (für „+" bzw. das künftige MCP-Tool `new_window`)
     /// und gibt dessen Zeile zurück. Panes entstehen erst durch das Layout.
     Q_INVOKABLE int createWindow(const QString &name = {});
+    /// Wie createWindow, aber mit einer VORGEGEBENEN (restaurierten) Window-ID —
+    /// die ID muss über Neustarts stabil bleiben (der Zähler wird auf `id`
+    /// fortgeschrieben). Für den Restore (Stufe 3). name/group werden gesetzt.
+    Q_INVOKABLE int createWindowWithId(int id, const QString &name = {}, const QString &group = {});
     /// Entfernt das Window der Zeile. Die zugehörigen Sessions werden **nicht** hier
     /// beendet — sie gehören dem SessionModel; `windowClosed()` meldet sie dem Besitzer.
     Q_INVOKABLE void closeWindow(int row);
@@ -75,6 +81,18 @@ public:
     /// legt erst in Stufe 3 um). Statischer, reiner QSettings-Transform → unit-testbar ohne
     /// GUI/Sessions.
     static void migrateSessionsToWindows(QSettings &s);
+    /// QML-Auslöser für die Migration (Stufe 3): führt migrateSessionsToWindows auf der
+    /// Default-QSettings-Domain aus. Idempotent (läuft nur, wenn `windows` fehlt).
+    Q_INVOKABLE void runMigration();
+
+    /// Persistiert das Window-Layout (Stufe 3). `wins` = Liste von Maps
+    /// {id,name,group,activePaneId,layoutJson}; layoutJson trägt in den Blättern den
+    /// SessionConfig als `cfg` (damit die Sessions restaurierbar sind). Schreibt das
+    /// `windows`-Array + activeRow + nextPaneId und entfernt das alte `sessions`-Schema.
+    Q_INVOKABLE void writeWindows(const QVariantList &wins, int activeRow, int nextPaneId);
+    /// Liest das persistierte Window-Layout zurück:
+    /// {present:bool, windows:[{id,name,group,activePaneId,layoutJson}], activeRow, nextPaneId}.
+    Q_INVOKABLE QVariantMap readWindows() const;
 
 signals:
     void countChanged();

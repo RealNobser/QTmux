@@ -525,9 +525,9 @@ void SessionModel::saveHistory() const {
 }
 
 void SessionModel::shutdownAll() {
-    // Farbgetreuen Verlauf sichern, SOLANGE die Screens noch leben (vor der Zerstörung
-    // der Backends) — Session-Restore Stufe 2 (QTMUX-81).
-    saveHistory();
+    // Scrollback wird im Window-Modell (QTMUX-83, Stufe 3) von QML VOR shutdownAll über
+    // saveHistoryFor(row, paneId) gesichert (nach paneId statt Zeilenindex) — daher hier
+    // KEIN index-basiertes saveHistory() mehr (das überschriebe die paneId-Dumps).
     // Nur Prozesse beenden (keine Modelländerung) — wird beim App-Quit aufgerufen.
     // m_shuttingDown verhindert, dass die dabei ausgelösten Closed-Signale die
     // (zuvor von saveState gesicherte) Session-Liste per Auto-Remove leeren.
@@ -626,6 +626,65 @@ int SessionModel::restoreState() {
     m_activeRow = s.value(QStringLiteral("sessions/activeRow"), n > 0 ? 0 : -1).toInt();
     if (m_activeRow >= count()) m_activeRow = count() - 1;
     return m_activeRow;
+}
+
+// --- Per-Window-Persistenz (QTMUX-83, Stufe 3) ------------------------------
+
+QVariantMap SessionModel::sessionConfig(int row) const {
+    QVariantMap m;
+    if (row < 0 || row >= m_configs.size()) return m;
+    const SessionConfig &cfg = m_configs.at(row);
+    m[QStringLiteral("type")]       = cfg.type;
+    m[QStringLiteral("serialPort")] = cfg.serialPort;
+    m[QStringLiteral("baud")]       = cfg.baud;
+    m[QStringLiteral("host")]       = cfg.host;
+    m[QStringLiteral("sshPort")]    = cfg.sshPort;
+    m[QStringLiteral("user")]       = cfg.user;
+    m[QStringLiteral("identity")]   = cfg.identity;
+    // Arbeitsverzeichnis bei Shells live abfragen (wie saveState).
+    QString dir = cfg.workingDir;
+    if (cfg.type == static_cast<int>(Session::Type::Shell) && row < m_sessions.size()) {
+        const QString live = m_sessions.at(row)->currentWorkingDirectory();
+        if (!live.isEmpty()) dir = live;
+    }
+    m[QStringLiteral("workingDir")] = dir;
+    m[QStringLiteral("program")]    = cfg.program;
+    m[QStringLiteral("pluginId")]   = cfg.pluginId;
+    m[QStringLiteral("pluginType")] = cfg.pluginType;
+    return m;
+}
+
+void SessionModel::saveHistoryFor(int row, int key) const {
+    if (row < 0 || row >= m_sessions.size()) return;
+    const QString dir = historyDir();
+    QDir().mkpath(dir);
+    Session *s = m_sessions.at(row);
+    const QByteArray dump = s && s->screen() ? s->screen()->serializeAnsi() : QByteArray();
+    const QString path = dir + QStringLiteral("/%1.ans").arg(key);
+    if (dump.isEmpty()) { QFile::remove(path); return; }
+    QFile f(path);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) { f.write(dump); f.close(); }
+}
+
+void SessionModel::loadHistoryFor(int row, int key) const {
+    if (row < 0 || row >= m_sessions.size()) return;
+    QFile hf(historyDir() + QStringLiteral("/%1.ans").arg(key));
+    if (!hf.open(QIODevice::ReadOnly)) return;
+    const QByteArray dump = hf.readAll();
+    hf.close();
+    if (!dump.isEmpty() && m_sessions.at(row)->screen())
+        m_sessions.at(row)->screen()->inputWrite(dump);
+}
+
+void SessionModel::pruneHistoryExcept(const QList<int> &keys) const {
+    QDir d(historyDir());
+    if (!d.exists()) return;
+    const QStringList files = d.entryList(QStringList() << QStringLiteral("*.ans"), QDir::Files);
+    for (const QString &f : files) {
+        bool ok = false;
+        const int n = f.left(f.size() - 4).toInt(&ok);   // "<n>.ans" -> n
+        if (ok && !keys.contains(n)) QFile::remove(d.filePath(f));
+    }
 }
 
 } // namespace qtmux

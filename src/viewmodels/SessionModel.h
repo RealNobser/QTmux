@@ -3,6 +3,7 @@
 #include <QAbstractListModel>
 #include <QList>
 #include <QVariantList>
+#include <QVariantMap>
 #include <qqmlintegration.h>
 
 QT_BEGIN_NAMESPACE
@@ -121,6 +122,20 @@ public:
     Q_INVOKABLE int restoreState();
     /// Schreibt den aktuellen Zustand (Session-Liste + aktive Zeile) in die Einstellungen.
     Q_INVOKABLE void saveState() const;
+
+    // --- Per-Window-Persistenz (QTMUX-83, Stufe 3) --------------------------
+    /// Persistierbare Beschreibung der Session als Map (für das Blatt-`cfg` des
+    /// Window-Baums). Das Arbeitsverzeichnis wird bei Shells LIVE abgefragt.
+    Q_INVOKABLE QVariantMap sessionConfig(int row) const;
+    /// Schreibt den farbgetreuen Scrollback der Session in <historyDir>/<key>.ans.
+    /// `key` = paneId (stabil über Neustarts) statt des flüchtigen Save-Index.
+    Q_INVOKABLE void saveHistoryFor(int row, int key) const;
+    /// Liest <historyDir>/<key>.ans und speist ihn in den Screen ein (vor erster
+    /// Backend-Ausgabe aufrufen, damit er als Scrollback nach oben rollt).
+    Q_INVOKABLE void loadHistoryFor(int row, int key) const;
+    /// Entfernt alle <historyDir>/<n>.ans, deren n NICHT in `keys` (den aktuellen
+    /// paneIds) liegt — räumt Dumps geschlossener Panes weg.
+    Q_INVOKABLE void pruneHistoryExcept(const QList<int> &keys) const;
 
 signals:
     void countChanged();

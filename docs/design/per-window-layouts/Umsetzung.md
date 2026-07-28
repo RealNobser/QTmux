@@ -182,15 +182,46 @@ alten `sessions`-Profils erzeugt N Ein-Pane-Windows (Unit-getestet). Noch KEINE 
 > Instanz beim Überschreiben NICHT mit (Memory-Image), aber build/macos trägt danach einen WIP —
 > vor dem nächsten Prod-Neustart sauber neu bauen.
 
-**NÄCHSTER SCHRITT — Stufe 3 (per-Window-Persistenz):** `windows`-Schema (QSettings) statt
-`sessions`-Array: je Window `{id,name,group,activePaneId,layoutJson}`, Blätter tragen `cfg`;
-Migration alt→Windows (bereits als `WindowModel::migrateSessionsToWindows` vorhanden) beim Restore
-laufen lassen und Sessions je Blatt aus `cfg` neu erzeugen; Scrollback `.ans` je **sessionId**;
-`nextWindowId`/`nextPaneId` fortschreiben. Danach Stufe 4 (MCP-Window-Tools) + Stufe 5 (Gruppen).
+- **Stufe 3** (per-Window-Persistenz) — **erledigt + verifiziert**. Neues `windows`-Schema
+  (QSettings) statt `sessions`-Array: je Window `{id,name,group,activePaneId,layoutJson}`, Blätter
+  tragen den `cfg` (Typ/CWD/Programm/SSH), Splits die `sizes` (Proportionen). Orchestriert in QML
+  (`restoreWindows`/`persistWindows`/`_enrichTree`/`_restoreTreeLeaves`/`_createSessionFromCfg`),
+  C++-Helfer: `WindowModel::writeWindows/readWindows/createWindowWithId/runMigration`,
+  `SessionModel::sessionConfig/saveHistoryFor/loadHistoryFor/pruneHistoryExcept`. **Scrollback
+  `.ans` je paneId** (stabil über Neustarts, statt Save-Index); `shutdownAll` schreibt KEIN
+  index-basiertes saveHistory mehr. Migration alt→Windows läuft beim Start (`runMigration`,
+  idempotent); alte index-`.ans` werden dabei verworfen (Plan-Entscheidung).
+  **Sauberer Quit auf SIGTERM/SIGINT** (main.cpp: Self-Pipe→QSocketNotifier→quitConfirmed setzen
+  →quit()) + `aboutToQuit`-Backup in QML → Logout/Shutdown/`kill` persistieren jetzt (vorher
+  ging der Zustand verloren). Screenshot-Modus persistiert bewusst NICHT (Context-Property
+  `qtmuxScreenshotMode`).
+  **Verifiziert:** 17/17 ctest; MCP-e2e-Rundlauf (Lauf 1 Split+send_text → SIGTERM → `windows`-
+  Array mit sizes geschrieben; Lauf 2 Restore → Layout+Proportionen+**farbiger Scrollback**
+  (`read_screen` zeigt den Marker) wiederhergestellt); Migration eines **echten** alten Profils
+  (240 Session-Keys → je Session ein Window, aktives erhalten); Restore-Screenshot (2 Kacheln,
+  „▦2"-Badge, Split gerendert).
+
+> ⚠️ **QUIT-LEKTION:** `confirmQuit` (Standard **true**) lässt `onClosing` das Schließen ablehnen —
+> ein per `quit()` (SIGTERM) ausgelöster Beenden-Wunsch lief deshalb ins Leere (Prozess hing, kein
+> `aboutToQuit`). Fix: der Signal-Notifier setzt `quitConfirmed=true` am Root-Window, BEVOR er
+> `quit()` ruft. Headless-Quit-Test geht daher NUR über SIGTERM (das der Notifier abfängt) — der
+> Swift-`terminate()` erreicht eine **offscreen**-Instanz nicht (keine Window-Server-Registrierung).
+
+**NÄCHSTER SCHRITT — Stufe 4 (MCP-Window-Tools):** neue Tools `list_windows`/`focus_window`/
+`rename_window`/`close_window`/`new_window`; `get_layout` optional per `windowId`; `create_session`
+= neues Window (schon so durch Auto-Wrap), `split_pane` = Pane im aktiven Window (schon so);
+`assign_session` endgültig deprecaten; `docs/MCP.md` + `test_doc_duplicates` pflegen. Danach
+Stufe 5 (Window-Gruppen: Gruppen-Mechanik von SessionModel auf WindowModel, `set_window_group`).
 
 **Verifikation:** `ctest --test-dir build/macos-test` (17/17). MCP-e2e gegen zweite Instanz
-(`QT_QPA_PLATFORM=offscreen QTMUX_PROFILE=… QTMUX_MCP_PORT=… qtmux &`, dann curl JSON-RPC).
-Visueller Split-Beweis: `--screenshot` mit langem `--settle` + parallel MCP-Split treiben.
+(`QT_QPA_PLATFORM=offscreen QTMUX_PROFILE=… QTMUX_MCP_PORT=… qtmux &`, curl JSON-RPC). Quit-Test:
+`kill -TERM <pid>` (löst sauberen Quit+Persistenz aus). Visueller Split-Beweis: `--screenshot`
+mit langem `--settle` + parallel MCP-Split treiben (Screenshot-Modus persistiert nicht).
+
+> ⚠️ **build/macos trägt seit dem `-B`-Fehler einen WIP-Stand** (die Produktivinstanz läuft im
+> Memory-Image weiter, PID 72801). Vor dem nächsten Prod-Neustart muss build/macos aus dem
+> FINALEN Quellstand sauber neu gebaut werden (nach Stufe 5), sonst startet der Anwender einen
+> halbfertigen Build. Bis dahin ausschließlich in build/macos-test bauen.
 
 **Referenzen:** Plan `~/.claude/plans/quizzical-chasing-flame.md`; Jira-Epic **QTMUX-83** (dual,
 In Progress); Tasks #3 (Stufe 2, in Arbeit) … #6. Entscheidungen: Gruppen→Window-Gruppen,

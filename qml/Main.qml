@@ -822,24 +822,116 @@ ApplicationWindow {
         return wr
     }
 
-    // Beim Start je restaurierter Session ein Ein-Pane-Window erzeugen (in-memory-
-    // Migration; die per-Window-Persistenz folgt in Stufe 3). `activeRow` = zuvor aktive
-    // Session-Zeile → deren Window wird aktiviert.
-    function buildWindowsFromSessions(activeRow) {
+    // --- Per-Window-Persistenz (QTMUX-83, Stufe 3) --------------------------
+    // Beim Start das persistierte `windows`-Schema wiederherstellen (Layout + Proportionen
+    // + farbiger Scrollback je Pane). Migriert einmalig ein altes `sessions`-Profil.
+    function restoreWindows() {
+        windows.runMigration()                    // altes sessions-Array -> windows (idempotent)
+        const data = windows.readWindows()
+        if (!data.present || !data.windows || data.windows.length === 0) { newSession(); return }
+        window.nextPaneId = Math.max(1, data.nextPaneId)
+        const activeRow = data.activeRow
         let activeWid = -1
-        for (let i = 0; i < sessions.count; ++i) {
-            const s = sessions.sessionAt(i)
-            const wr = windows.createWindow("")
+        for (let i = 0; i < data.windows.length; ++i) {
+            const pw = data.windows[i]
+            let tree = null
+            try { tree = JSON.parse(pw.layoutJson) } catch (e) { tree = null }
+            const built = window._restoreTreeLeaves(tree, pw.id)   // Sessions je Blatt erzeugen
+            if (!built) continue                  // leeres/kaputtes Window überspringen
+            const wr = windows.createWindowWithId(pw.id, pw.name || "", pw.group || "")
             const w = windows.windowAt(wr)
-            const pid = window.nextPaneId++
-            s.windowId = w.windowId
-            w.layoutJson = JSON.stringify({ paneId: pid, sessionId: s.sessionId })
-            w.activePaneId = pid
-            if (i === activeRow) activeWid = w.windowId
+            w.layoutJson = JSON.stringify(built)
+            w.activePaneId = pw.activePaneId
+            if (i === activeRow) activeWid = pw.id
         }
-        if (activeWid < 0 && windows.count > 0) activeWid = windows.windowAt(0).windowId
+        if (windows.count === 0) { newSession(); return }
+        if (activeWid < 0) {
+            const r = Math.max(0, Math.min(activeRow, windows.count - 1))
+            activeWid = windows.windowAt(r).windowId
+        }
         window.activeWindowId = -1
         window.loadWindow(activeWid)
+        window.pruneAllHistory()                  // Dumps geschlossener Panes aufräumen
+    }
+    // Baut einen persistierten Baum (Blätter tragen `cfg`) in einen Live-Baum um: je Blatt
+    // eine Session aus cfg erzeugen, sessionId zuweisen, Scrollback nach paneId laden.
+    // Leere/kaputte Blätter (z. B. fehlendes Plugin) entfallen; Splits kollabieren dann.
+    function _restoreTreeLeaves(node, windowId) {
+        if (!node) return null
+        if (node.children === undefined) {
+            const row = window._createSessionFromCfg(node.cfg || {})
+            if (row < 0) return null
+            const s = sessions.sessionAt(row)
+            if (s) s.windowId = windowId
+            window.nextPaneId = Math.max(window.nextPaneId, (node.paneId || 0) + 1)
+            if (s) sessions.loadHistoryFor(row, node.paneId)   // farbiger Scrollback (vor 1. Ausgabe)
+            return { paneId: node.paneId, sessionId: s ? s.sessionId : -1 }
+        }
+        const kids = []
+        for (let i = 0; i < node.children.length; ++i) {
+            const c = window._restoreTreeLeaves(node.children[i], windowId)
+            if (c) kids.push(c)
+        }
+        if (kids.length === 0) return null
+        if (kids.length === 1) return kids[0]
+        const o = { orientation: node.orientation, children: kids }
+        if (node.sizes && node.sizes.length === kids.length) o.sizes = node.sizes
+        return o
+    }
+    function _createSessionFromCfg(cfg) {
+        const t = cfg.type || 0                   // Session::Type: 0 Shell,1 Ssh,2 Serial,3 App
+        if (t === 1) return sessions.createSshSession(cfg.host || "", cfg.sshPort || 22, cfg.user || "", cfg.identity || "")
+        if (t === 2) return sessions.createSerialSession(cfg.serialPort || "", cfg.baud || 115200)
+        if (t === 3) return sessions.createPluginSession(cfg.pluginId || "", cfg.pluginType || "")
+        return sessions.createShellSession(cfg.workingDir || "", cfg.program || "")
+    }
+
+    // Beim Beenden alle Windows persistieren: je Blatt den SessionConfig (`cfg`) in den
+    // Baum schreiben und den farbigen Scrollback nach paneId sichern.
+    function persistWindows() {
+        syncActiveTree()                          // aktives Window in sein layoutJson spiegeln
+        const wins = []
+        const paneKeys = []
+        for (let i = 0; i < windows.count; ++i) {
+            const w = windows.windowAt(i)
+            const enriched = window._enrichTree(w.layoutJson, paneKeys)
+            wins.push({ id: w.windowId, name: w.name || "", group: w.group || "",
+                        activePaneId: w.activePaneId, layoutJson: enriched })
+        }
+        windows.writeWindows(wins, windows.activeRow, window.nextPaneId)
+        sessions.pruneHistoryExcept(paneKeys)     // Dumps geschlossener Panes wegräumen
+    }
+    // Persistierbaren Baum bauen: Blatt {paneId, cfg}; Scrollback je Pane sichern.
+    function _enrichTree(json, paneKeys) {
+        let tree = null; try { tree = JSON.parse(json) } catch (e) { return "null" }
+        const walk = function(n) {
+            if (!n) return null
+            if (n.children === undefined) {
+                const row = window.rowForSessionId(n.sessionId)
+                let cfg = {}
+                if (row >= 0) { cfg = sessions.sessionConfig(row); sessions.saveHistoryFor(row, n.paneId); paneKeys.push(n.paneId) }
+                return { paneId: n.paneId, cfg: cfg }
+            }
+            const kids = []
+            for (let i = 0; i < n.children.length; ++i) { const c = walk(n.children[i]); if (c) kids.push(c) }
+            if (kids.length === 0) return null
+            if (kids.length === 1) return kids[0]
+            const o = { orientation: n.orientation, children: kids }
+            if (n.sizes) o.sizes = n.sizes
+            return o
+        }
+        const built = walk(tree)
+        return JSON.stringify(built)
+    }
+    // paneIds aller Windows sammeln und fremde .ans-Dumps entfernen.
+    function pruneAllHistory() {
+        const keys = []
+        for (let i = 0; i < windows.count; ++i) {
+            const w = windows.windowAt(i)
+            const ids = w.paneIds()
+            for (let k = 0; k < ids.length; ++k) keys.push(ids[k])
+        }
+        sessions.pruneHistoryExcept(keys)
     }
 
     // Beschneidet einen (als JSON übergebenen) Layout-Baum um alle Blätter, deren
@@ -1103,13 +1195,11 @@ ApplicationWindow {
         // Start nicht verhindern.
         try { window.collapsedGroups = JSON.parse(window.collapsedGroupsJson) || [] }
         catch (e) { window.collapsedGroups = [] }
-        const active = sessions.restoreState()
-        if (sessions.count === 0)
-            newSession()                       // erzeugt Session + eigenes Window
-        else
-            // Stufe 2: je restaurierter Session ein Ein-Pane-Window (in-memory-Migration);
-            // die per-Window-Persistenz (Splits/Namen/Gruppen über Neustarts) folgt in Stufe 3.
-            window.buildWindowsFromSessions(active >= 0 ? active : 0)
+        // Per-Window-Persistenz (Stufe 3): Windows + Layout + Proportionen + farbiger
+        // Scrollback aus dem `windows`-Schema wiederherstellen (migriert einmalig ein
+        // altes `sessions`-Profil). Kein sessions.restoreState() mehr — die Sessions
+        // entstehen je Blatt aus dem gespeicherten cfg.
+        window.restoreWindows()
     }
 
     // Wird das Fenster (wieder) aktiv, den Tastaturfokus auf das aktive Pane legen,
@@ -1130,8 +1220,23 @@ ApplicationWindow {
             quitConfirmDialog.open()
             return
         }
-        sessions.saveState()
+        if (!window._persisted) { window.persistWindows(); window._persisted = true }   // Stufe 3
         sessions.shutdownAll()
+    }
+
+    // Schutz vor SIGTERM/SIGINT (main.cpp ruft QCoreApplication::quit()): dann feuert
+    // onClosing NICHT (kein Fenster-Schließen), aber aboutToQuit — hier noch persistieren,
+    // solange die Screens leben. Der _persisted-Guard verhindert Doppel-Speichern (das
+    // zweite liefe nach shutdownAll auf toten Screens → leerer Scrollback).
+    property bool _persisted: false
+    Connections {
+        target: Qt.application
+        function onAboutToQuit() {
+            // Im stillen Screenshot-Modus NICHT persistieren (frischer Zustand würde sonst
+            // das gespeicherte Layout überschreiben).
+            if (typeof qtmuxScreenshotMode !== "undefined" && qtmuxScreenshotMode) return
+            if (!window._persisted) { window.persistWindows(); window._persisted = true; sessions.shutdownAll() }
+        }
     }
 
     // Fenstergeometrie + gewählter Session-Typ über Neustarts erhalten.
