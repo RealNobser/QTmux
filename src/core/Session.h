@@ -74,6 +74,20 @@ public:
     /// PID des zugrundeliegenden Prozesses (Shell), oder -1 — für MCP-Zuordnung.
     qint64 processId() const { return m_backend ? m_backend->processId() : -1; }
     QString agentId() const { return m_agentId; }
+    /// Die Kommandozeile, mit der zuletzt ein Agent gestartet wurde (z. B.
+    /// "claude --dangerously-skip-permissions"). Wird beim Erkennen in observeInput
+    /// gesichert und über den Blatt-`cfg` persistiert (QTMUX-85). Leer = kein Agent.
+    QString agentCommand() const { return m_agentCommand; }
+
+    /// Vermerkt einen beim Neustart wiederhergestellten Agenten (QTMUX-85): setzt
+    /// Kennung, Sidebar-Titel und die gemerkte Kommandozeile.
+    /// 🔑 Die Kennung MUSS explizit gesetzt werden: gestartet wird der Agent über das
+    /// Login-Script, und runLoginScript() schreibt direkt ans Backend — es läuft damit
+    /// an observeInput vorbei, der Agent würde sonst nie erkannt (kein Ring, kein Titel).
+    /// `commandLine` ist die Original-Zeile OHNE Fortsetzungs-Argumente, damit sich
+    /// `--continue` über mehrere Neustarts nicht aufsummiert; die tatsächlich
+    /// abgesetzte Zeile kommt als Login-Script über setLoginScript() herein.
+    void setRestoredAgent(const QString &agentId, const QString &commandLine);
     bool needsAttention() const { return m_needsAttention; }
     Activity activity() const { return m_activity; }
     int activityInt() const { return static_cast<int>(m_activity); }
@@ -185,6 +199,7 @@ private:
     QString m_title = QStringLiteral("Shell");
     QString m_workingDir;      // gecachtes Arbeitsverzeichnis (nur Shell)
     QString m_agentId;
+    QString m_agentCommand;    // zuletzt erkannte Agenten-Kommandozeile (QTMUX-85)
     QString m_group;           // Sidebar-Gruppe (QTMUX-42), leer = ohne Gruppe
     int m_windowId = -1;       // Window-Zugehörigkeit (QTMUX-83, B1), -1 = keins
     QString m_inputLine;       // Puffer der aktuell getippten Zeile

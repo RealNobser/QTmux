@@ -327,6 +327,10 @@ void Session::observeInput(const QByteArray &data) {
                     m_agentId = agent->id;
                     emit agentChanged();
                 }
+                // Die getippte Zeile mitsamt Argumenten aufbewahren — nur damit lässt
+                // sich der Agent beim nächsten Start wieder herstellen (QTMUX-85).
+                // Muss VOR dem clear() geschehen, das sie sonst verwirft.
+                m_agentCommand = m_inputLine.trimmed();
                 m_titleFromAgent = true;
                 setTitle(agent->displayName);
             }
@@ -339,6 +343,26 @@ void Session::observeInput(const QByteArray &data) {
             // Steuerzeichen (Ctrl-C, Pfeiltasten-Escapes …) verwerfen die Zeilenannahme.
             m_inputLine.clear();
         }
+    }
+}
+
+void Session::setRestoredAgent(const QString &agentId, const QString &commandLine) {
+    if (commandLine.trimmed().isEmpty()) return;
+    m_agentCommand = commandLine.trimmed();
+
+    // Kennung und Titel sofort setzen: das Login-Script schreibt später direkt ans
+    // Backend und läuft damit an observeInput vorbei — ohne diese Zeilen bliebe die
+    // Sidebar bei "zsh" stehen, obwohl ein Agent läuft.
+    QString id = agentId;
+    const AgentInfo *info = AgentRegistry::detect(m_agentCommand);
+    if (id.isEmpty() && info) id = info->id;
+    if (!id.isEmpty() && m_agentId != id) {
+        m_agentId = id;
+        emit agentChanged();
+    }
+    if (info) {
+        m_titleFromAgent = true;
+        setTitle(info->displayName);
     }
 }
 

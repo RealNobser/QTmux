@@ -432,6 +432,13 @@ ApplicationWindow {
     property bool pasteWarnMultiline: true  // Vor mehrzeiligem Einfügen warnen
     property bool confirmQuit: true         // Vor dem Beenden nachfragen (QTMUX-41)
 
+    // Agenten-Wiederherstellung (QTMUX-85) — beide bewusst mit Vorgabe AUS: Beim Start
+    // liefe sonst unaufgefordert ein Programm los. `restoreAgents` setzt den zuletzt
+    // erkannten Agenten neu ab, `resumeAgentSessions` hängt zusätzlich dessen
+    // Fortsetzungs-Argument an (nur bei Agenten, die das können).
+    property bool restoreAgents: false
+    property bool resumeAgentSessions: false
+
     // Beenden mit Rückfrage (QTMUX-41): Cmd+Q/Alt+F4 reißt sonst alle Sessions
     // samt laufender Prozesse ohne Vorwarnung mit. `quitConfirmed` schaltet die
     // Rückfrage für den bestätigten Durchlauf ab (sonst fragte onClosing erneut).
@@ -900,6 +907,13 @@ ApplicationWindow {
     // Beim Start das persistierte `windows`-Schema wiederherstellen (Layout + Proportionen
     // + farbiger Scrollback je Pane). Migriert einmalig ein altes `sessions`-Profil.
     function restoreWindows() {
+        // Restore-Modus: sonst erbt eine Session mit leerem `workingDir` das Verzeichnis
+        // der zuletzt angelegten (SessionModel::createShellSession) — der Agent startete
+        // dann im falschen Projekt. Der Guard hing bisher am toten restoreState()-Pfad.
+        sessions.setRestoring(true)
+        try { window._restoreWindowsInner() } finally { sessions.setRestoring(false) }
+    }
+    function _restoreWindowsInner() {
         windows.runMigration()                    // altes sessions-Array -> windows (idempotent)
         const data = windows.readWindows()
         if (!data.present || !data.windows || data.windows.length === 0) { newSession(); return }
@@ -954,10 +968,31 @@ ApplicationWindow {
     }
     function _createSessionFromCfg(cfg) {
         const t = cfg.type || 0                   // Session::Type: 0 Shell,1 Ssh,2 Serial,3 App
-        if (t === 1) return sessions.createSshSession(cfg.host || "", cfg.sshPort || 22, cfg.user || "", cfg.identity || "")
         if (t === 2) return sessions.createSerialSession(cfg.serialPort || "", cfg.baud || 115200)
         if (t === 3) return sessions.createPluginSession(cfg.pluginId || "", cfg.pluginType || "")
-        return sessions.createShellSession(cfg.workingDir || "", cfg.program || "")
+        // Agenten-Wiederherstellung (QTMUX-85, Vorgabe AUS): Der Agent lief nicht als
+        // `program`, sondern wurde in die Shell getippt — er kommt darum als Kommando
+        // über das Login-Script zurück, sobald der erste Prompt steht (nur Shell/SSH,
+        // seriell und Plugin nehmen kein Login-Script).
+        // 🔑 Die Startzeile MUSS als Argument von create*Session mitgehen: nur dort
+        // steht sie VOR dem Start fest. Nachträglich gesetzt kann der Prompt schon
+        // durch sein, und der Fallback-Timer wird erst beim nächsten Output scharf —
+        // bei einer wartenden Shell kommt der nie.
+        const wantsAgent = window.restoreAgents && !!cfg.agentCommand
+        const launch = wantsAgent
+            ? sessions.agentLaunchCommand(cfg.agentCommand, window.resumeAgentSessions) : ""
+        const row = (t === 1)
+            ? sessions.createSshSession(cfg.host || "", cfg.sshPort || 22, cfg.user || "",
+                                        cfg.identity || "", launch)
+            : sessions.createShellSession(cfg.workingDir || "", cfg.program || "", launch)
+        if (row >= 0 && cfg.agentCommand) {
+            if (wantsAgent) sessions.markRestoredAgent(row, cfg.agentId || "", cfg.agentCommand)
+            // Auch OHNE Wiederherstellung vormerken, sonst überschreibt das nächste
+            // Beenden den gespeicherten Befehl mit Leer und ein späteres Einschalten
+            // des Schalters fände nichts mehr vor.
+            else sessions.seedAgentConfig(row, cfg.agentId || "", cfg.agentCommand)
+        }
+        return row
     }
 
     // Beim Beenden alle Windows persistieren: je Blatt den SessionConfig (`cfg`) in den
@@ -1346,6 +1381,8 @@ ApplicationWindow {
         property alias rightClickPaste: window.rightClickPaste
         property alias pasteWarnMultiline: window.pasteWarnMultiline
         property alias confirmQuit: window.confirmQuit
+        property alias restoreAgents: window.restoreAgents
+        property alias resumeAgentSessions: window.resumeAgentSessions
         property alias collapsedGroups: window.collapsedGroupsJson
         // (paneLayout entfällt: das Split-Layout lebt jetzt je Window; die per-Window-
         //  Persistenz über Neustarts kommt in Stufe 3 als eigenes `windows`-Schema.)
@@ -1802,6 +1839,8 @@ ApplicationWindow {
                             { title: qsTr("Rechtsklick fügt ein"),       sub: "",             icon: "clipboard",       run: function(){ window.rightClickPaste = !window.rightClickPaste } },
                             { title: qsTr("Vor mehrzeiligem Einfügen warnen"), sub: "",       icon: "info",            run: function(){ window.pasteWarnMultiline = !window.pasteWarnMultiline } },
                             { title: qsTr("Vor dem Beenden nachfragen"),  sub: "",             icon: "info",            run: function(){ window.confirmQuit = !window.confirmQuit } },
+                            { title: qsTr("Agenten beim Start wiederherstellen"), sub: "",     icon: "robot",           run: function(){ window.restoreAgents = !window.restoreAgents } },
+                            { title: qsTr("Agenten-Unterhaltung fortsetzen"), sub: "",         icon: "robot",           run: function(){ window.resumeAgentSessions = !window.resumeAgentSessions } },
                             { title: qsTr("Design: Wie System"),         sub: "",             icon: "gear",            run: function(){ Theme.mode = Theme.System } },
                             { title: qsTr("Design: Hell"),               sub: "",             icon: "sun",             run: function(){ Theme.mode = Theme.Light } },
                             { title: qsTr("Design: Dunkel"),             sub: "",             icon: "moon",            run: function(){ Theme.mode = Theme.Dark } },
@@ -2163,6 +2202,21 @@ ApplicationWindow {
                 text: qsTr("Neue Agent-Session …")
                 icon.source: window.icon("robot"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 onTriggered: window.newSession()
+            }
+            MenuSeparator {}
+            // Auch in den Einstellungen und in der Palette erreichbar (QTMUX-46).
+            ShortcutMenuItem {
+                text: qsTr("Agenten beim Start wiederherstellen")
+                checkable: true
+                checked: window.restoreAgents
+                onTriggered: window.restoreAgents = !window.restoreAgents
+            }
+            ShortcutMenuItem {
+                text: qsTr("Agenten-Unterhaltung fortsetzen")
+                checkable: true
+                enabled: window.restoreAgents
+                checked: window.resumeAgentSessions
+                onTriggered: window.resumeAgentSessions = !window.resumeAgentSessions
             }
         }
         ThemedMenu {

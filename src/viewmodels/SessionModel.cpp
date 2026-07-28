@@ -1,4 +1,5 @@
 #include "SessionModel.h"
+#include "AgentRegistry.h"
 #include "Session.h"
 #include "VtScreen.h"
 #include "PluginHost.h"
@@ -651,7 +652,38 @@ QVariantMap SessionModel::sessionConfig(int row) const {
     m[QStringLiteral("program")]    = cfg.program;
     m[QStringLiteral("pluginId")]   = cfg.pluginId;
     m[QStringLiteral("pluginType")] = cfg.pluginType;
+    // Agent (QTMUX-85): der LIVE erkannte Agent hat Vorrang; hat die Session keinen
+    // (typisch, wenn die Wiederherstellung abgeschaltet ist), tritt der beim Restore
+    // vorgemerkte Wert ein. Ohne diesen Rückfall löschte ein einziger Start mit
+    // abgeschaltetem Schalter den gespeicherten Befehl unwiederbringlich.
+    QString agentId = cfg.agentId, agentCommand = cfg.agentCommand;
+    if (row < m_sessions.size() && !m_sessions.at(row)->agentCommand().isEmpty()) {
+        agentId      = m_sessions.at(row)->agentId();
+        agentCommand = m_sessions.at(row)->agentCommand();
+    }
+    m[QStringLiteral("agentId")]      = agentId;
+    m[QStringLiteral("agentCommand")] = agentCommand;
     return m;
+}
+
+QString SessionModel::agentLaunchCommand(const QString &commandLine, bool resume) const {
+    // Fortsetzungs-Argumente kennt nur die Registry — QML muss davon nichts wissen.
+    return resume ? AgentRegistry::resumeCommand(commandLine) : commandLine;
+}
+
+void SessionModel::seedAgentConfig(int row, const QString &agentId,
+                                   const QString &commandLine) {
+    if (row < 0 || row >= m_configs.size()) return;
+    m_configs[row].agentId      = agentId;
+    m_configs[row].agentCommand = commandLine.trimmed();
+}
+
+void SessionModel::markRestoredAgent(int row, const QString &agentId,
+                                     const QString &commandLine) {
+    if (row < 0 || row >= m_sessions.size()) return;
+    if (commandLine.trimmed().isEmpty()) return;
+    seedAgentConfig(row, agentId, commandLine);
+    m_sessions.at(row)->setRestoredAgent(agentId, commandLine);
 }
 
 void SessionModel::saveHistoryFor(int row, int key) const {

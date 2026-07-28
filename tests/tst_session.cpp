@@ -24,6 +24,8 @@ private slots:
     void sshPasswordAutoFillOnPrompt();
     void enterIsSentSeparatelyAfterText();
     void writeWithEnterKeepsOrderOnRapidCalls();
+    void agentCommandLineIsRemembered();
+    void restoredAgentSetsIdentityAndRunsCommand();
 };
 
 static QString rowText(const VtScreen &vt, int row) {
@@ -307,6 +309,56 @@ void TestSession::writeWithEnterKeepsOrderOnRapidCalls() {
     QVERIFY2(out.indexOf("RAPID_ONE") < out.indexOf("RAPID_TWO"),
              "Reihenfolge vertauscht");
 
+    sess.write("\x03");
+    sess.shutdown();
+}
+
+// QTMUX-85: Die getippte Agenten-Zeile muss MIT ihren Argumenten erhalten bleiben —
+// sie ist die einzige Quelle, aus der sich der Agent später wiederherstellen lässt
+// (er läuft nicht als `program`, sondern wird in die Shell getippt). write() ruft
+// observeInput vor dem Backend, der Test braucht darum kein PTY — und startet so
+// auch garantiert keinen echten Agenten.
+void TestSession::agentCommandLineIsRemembered() {
+    Session sess;
+    QVERIFY(sess.agentCommand().isEmpty());
+
+    sess.write("qwen --model x\r");
+    QCOMPARE(sess.agentId(), QStringLiteral("qwen"));
+    QCOMPARE(sess.agentCommand(), QStringLiteral("qwen --model x"));
+
+    // Ein normaler Befehl danach überschreibt die gemerkte Agenten-Zeile NICHT.
+    sess.write("ls -la\r");
+    QCOMPARE(sess.agentCommand(), QStringLiteral("qwen --model x"));
+}
+
+// QTMUX-85: setRestoredAgent muss Kennung und Titel SELBST setzen — gestartet wird der
+// Agent über das Login-Script, und das schreibt direkt ans Backend, läuft also an
+// observeInput vorbei. Zweiter Teil: die vor dem Start gesetzte Startzeile wird
+// tatsächlich abgesetzt. Niemand tippt — taucht der Marker auf, kam er von dort.
+void TestSession::restoredAgentSetsIdentityAndRunsCommand() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    const auto sh = qtmux_test::interactiveShell();
+    pty->setProgram(sh.program);
+    pty->setArguments(sh.args);
+
+    // Kennung/gemerkter Befehl einerseits, tatsächlich laufende Startzeile andererseits.
+    sess.setRestoredAgent(QStringLiteral("qwen"), QStringLiteral("qwen --model x"));
+    sess.setLoginScript(QStringLiteral("echo QTMUX_AGENT_RESTORE_MARKER"));
+    QCOMPARE(sess.agentId(), QStringLiteral("qwen"));
+    QCOMPARE(sess.agentCommand(), QStringLiteral("qwen --model x"));
+    QCOMPARE(sess.title(), QStringLiteral("Qwen Coder"));
+
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.setActive(true);
+    sess.start(80, 24);
+
+    bool found = false;
+    for (int attempt = 0; attempt < 100 && !found; ++attempt) {
+        QTest::qWait(100);
+        if (sess.screenText().contains("QTMUX_AGENT_RESTORE_MARKER")) found = true;
+    }
+    QVERIFY2(found, "Die Agenten-Startzeile wurde nie abgesetzt");
     sess.write("\x03");
     sess.shutdown();
 }

@@ -341,14 +341,14 @@ wurde; Details + A/B-Belege in der Feature-Referenz („Session-Größe wird ent
 Einzel-Window wechseln — der Prompt muss stehen bleiben. Der Schaden an bereits betroffenen
 Sessions bleibt bestehen (Inhalt liegt in deren Scrollback); ein Neustart der Session räumt auf.
 
-**Nächster Punkt:** **QTMUX-85 — Wiederherstellung konfigurierbar + zuletzt aktive Session**
-(Owner-Wunsch 2026-07-28, Backlog unten). Vorher klären, was schon läuft: `activePaneId`
-**ist** je Window persistiert ([src/viewmodels/WindowModel.cpp](src/viewmodels/WindowModel.cpp)
-Z. 213/370/390), und jedes Blatt trägt einen `cfg` **inklusive `program`/`pluginId`** — die
-Bausteine sind also da. Zu bauen ist: der Schalter (Default **aus**) und der Nachweis, dass
-Agenten-Sessions wirklich mit ihrem Programm zurückkommen (Owner sieht derzeit nur die
-Verzeichnisse). ⚠️ Owner-Vorgabe: die zuletzt sichtbare Session ist **nicht** automatisch
-die neueste gefundene → am gespeicherten `activePaneId` festhalten, nicht heuristisch raten.
+**QTMUX-85 (Agenten-Wiederherstellung) ist umgesetzt + verifiziert (2026-07-28), Owner-Abnahme
+offen.** Zwei Schalter, beide **Vorgabe AUS**: „Agenten beim Start wiederherstellen" und
+„Unterhaltung fortsetzen" (Einstellungen → Agenten & MCP, Menü **Agent**, Palette,
+Suchindex). Mechanik in der Feature-Referenz unter „Agenten überleben den Neustart".
+Der zweite Teil des Tickets — die **zuletzt aktive Session** — war bereits erledigt:
+`activePaneId` je Window und `windows/activeRow` sind persistiert
+([WindowModel.cpp](src/viewmodels/WindowModel.cpp) Z. 213/370/390) und werden in
+`restoreWindows`/`loadWindow` ausgewertet; nichts wird heuristisch geraten.
 
 **Danach:** (1) ~~Jira-Nachträge~~ **erledigt (2026-07-28)** — QTMUX-84/85/86/87 dual
 angelegt, Nummern in beiden Systemen deckungsgleich; QTMUX-46 und -79 waren entgegen der
@@ -359,7 +359,7 @@ zurzeit sperrt sie `qtmux.exe`/`qtmux_echo_plugin.dll` · (3) `build/macos` aus 
 ### Arbeitsstand (compact-fest — hier pflegen, nicht im Gespräch lassen)
 
 - ⚠️ **`build/macos` trägt einen WIP-Zwischenstand** (früher `-B`-Fehler; Produktivinstanz
-  PID 72801 läuft aus dem Memory-Image weiter). Verifizierter Endstand: `build/macos-test`.
+  PID 36412 läuft aus dem Memory-Image weiter). Verifizierter Endstand: `build/macos-test`.
   Vor dem nächsten Prod-Neustart `build/macos` neu bauen (`cmake --build build/macos`,
   NICHT `--preset` mit `-B`) — erst wenn die laufende Instanz beendet werden darf.
 - **Jira-Nachträge erledigt (2026-07-28):** QTMUX-84/85/86/87 dual angelegt (on-prem und
@@ -390,18 +390,14 @@ Windows ohne stdout) · **QTMUX-2** (Windows-`currentWorkingDirectory`-Funktions
 **QTMUX-13** (native macOS-Menü-Icons — Qt reicht `icon.source`/`icon.name` in nativen Menüs
 nicht durch; einziger Weg wäre ein QMenuBar-Umbau, deferred; [[qtmux-native-menu-icons]]).
 
-**QTMUX-85 (Owner-Wunsch 2026-07-28, hinten im Backlog): Wiederherstellung konfigurierbar +
-zuletzt aktive Session.** Beim Neustart sollen nicht nur die Verzeichnisse zurückkommen,
-sondern **die geladenen Agenten** samt der Session, **die im Window zuletzt aktiv war** —
-per Einstellung, **Vorgabe aus**. ⚠️ Owner-Vorgabe: die zuletzt sichtbare Session ist
-**nicht** zwangsläufig die neueste gefundene → es braucht einen **konkreten Speicher für
-die ID**, keine Heuristik. Vorhandene Bausteine (nicht neu bauen): `activePaneId` je Window
-und `windows/activeRow` global sind schon persistiert
-([src/viewmodels/WindowModel.cpp](src/viewmodels/WindowModel.cpp)), und jedes Blatt trägt
-einen `cfg` inkl. `program`/`pluginId`. Zu tun: Schalter + Nachweis, dass Agenten-Sessions
-wirklich mit ihrem Programm starten (Owner-Beobachtung: es kommen nur die Verzeichnisse).
-**Nicht** Teil davon: die Rückfrage vor dem Beenden — die gibt es schon (QTMUX-41,
-`window/confirmQuit`, Vorgabe an, Einstellungen → Allgemein → „Fenster" + Datei-Menü + Palette).
+**QTMUX-85 (Agenten-Wiederherstellung) ist umgesetzt** — Mechanik und Fallen in der
+Feature-Referenz („Agenten überleben den Neustart"). **Owner-Abnahme offen**: Schalter in
+Einstellungen → Agenten & MCP anschalten, mit echtem `claude` arbeiten, QTmux beenden und
+neu starten; danach zusätzlich „Unterhaltung fortsetzen" prüfen.
+⚠️ **Offen als Folgeticket:** Welche Agenten unterstützt werden und mit welchen
+Fortsetzungs-Argumenten — `resumeArgs` ist derzeit nur für claude/agy/opencode/hermes am
+`--help` verifiziert, für codex/gemini/aider/cursor/qwen bewusst **leer** (siehe auch
+QTMUX-**91**, Agenten-Startprofile).
 
 **Aus der Air-Evaluation (2026-07-28, air.dev):** QTMUX-**89** (Ruhezustand verhindern,
 solange Agenten arbeiten) · **90** (Prompt-Queue je Session) · **91** (Agenten-Startprofile —
@@ -633,6 +629,32 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `SPI_GETCLIENTAREAANIMATION`, sonst false; Env-Override `QTMUX_REDUCE_MOTION` für Tests)
   schaltet die drei Sidebar-Puls-Animationen ab (`running: … && !App.reduceMotion`) → Ring
   in Akzentfarbe und Rahmen statisch statt pulsierend.
+- **Agenten überleben den Neustart (QTMUX-85):** Ein Agent läuft **nicht** als `program` —
+  er wird in eine Shell **getippt** und in `Session::observeInput` über
+  `AgentRegistry::detect` erkannt. Deshalb speichert die Session die erkannte Zeile in
+  `m_agentCommand` (vor dem `m_inputLine.clear()`, dort ging sie bisher verloren);
+  `sessionConfig()` legt sie als `agentCommand`/`agentId` ins Blatt-`cfg`. Beim Restore baut
+  `_createSessionFromCfg` daraus ein **Login-Script** (QTMUX-23) — nicht `program`: Letzteres
+  wird direkt exec't und bei argumentloser Angabe als Login-Shell markiert (`argv0 = "-claude"`),
+  der Agent liefe ohne Shell-Umgebung und sein `exit` schlösse das Pane.
+  Zwei Schalter, beide **Vorgabe AUS**: `window/restoreAgents` und `window/resumeAgentSessions`
+  (Letzteres hängt `AgentInfo::resumeArgs` an). Verifiziert am `--help`: `--continue` für
+  claude, agy, opencode, hermes; übrige `resumeArgs` **leer** — ein geratenes Flag lässt den
+  Start scheitern und sieht wie ein QTmux-Fehler aus.
+  🔑 **Drei Fallen, jede einzeln erlebt:** (1) Die Startzeile MUSS als `loginScript`-Argument
+  von `create*Session` mitgehen — **vor** dem Start. Nachträglich gesetzt kann der Prompt
+  schon durch sein, und `armLoginScript` wird erst beim **nächsten** Output scharf; eine
+  wartende Shell liefert keinen mehr, der Agent startete nie. (2) `runLoginScript` schreibt
+  **direkt ans Backend** und läuft an `observeInput` vorbei → Kennung und Titel muss
+  `Session::setRestoredAgent` selbst setzen, sonst steht in der Sidebar weiter „zsh".
+  (3) `sessionConfig()` braucht den **Rückfall** auf den vorgemerkten `cfg`-Wert
+  (`seedAgentConfig`): Ein einziger Start mit **abgeschaltetem** Schalter schrieb sonst den
+  leeren Laufzeitwert zurück und **löschte** den gespeicherten Befehl — ein späteres
+  Einschalten fand nichts mehr vor. `resumeCommand` setzt die Argumente **hinter dem
+  Kommando-Token** ein (nicht am Ende, sonst bräche eine Subkommando-Form) und ist
+  idempotent, sonst sammelt sich `--continue --continue …` über Neustarts an.
+  Tests: `tst_agent` (Einfügen/Idempotenz/unbekannt), `tst_session`
+  (`agentCommandLineIsRemembered`, `restoredAgentSetsIdentityAndRunsCommand`).
 - **AgentEventHub** (Gui-frei, Ringpuffer 256, monotone `seq`): Inter-Agenten-Ereignisse
   `done|question|error|info` via OSC `777;qtmux-event` oder MCP `post_event`; Zustellung
   über MCP-Long-Poll `wait_for_events`. **⚠️ Hook-stdout wird vom Agenten gekapselt** —
@@ -809,6 +831,21 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   (s. Build-Abschnitt macOS), nie gegen eine, in der jemand arbeitet. Ergebnisse möglichst
   am **Zustand** messen statt am Screenshot (z. B. Palette-Befehl ausführen → `list_sessions`
   prüfen); rein visuelle Änderungen brauchen `--screenshot`/Screenshot + Anwender-Abnahme.
+  ⚠️ **Den MCP-Port VOR dem Messen auf Eigentümerschaft prüfen** (`lsof -nP -iTCP:<port>
+  -sTCP:LISTEN`): Läuft dort schon eine fremde Testinstanz (paralleler Worker!), bindet die
+  eigene still **nicht** — jede Antwort kommt dann von der fremden Instanz und sieht völlig
+  plausibel aus. Genau so ging 2026-07-28 ein kompletter Messdurchlauf an die falsche App.
+  ⚠️ **Persistenz nach dem Beenden mit `defaults read <domain>` lesen, NICHT mit `plutil` auf
+  der `.plist`** — cfprefsd hält die Datei zurück; die Datei zeigte „gar keine `windows`-
+  Schlüssel", während `defaults read` den korrekt geschriebenen Stand lieferte.
+- **Agenten-Neustart prüfen (QTMUX-85):** Ein **Stub-Agent** ist der saubere Messfühler —
+  eine ausführbare Datei, die wie ein Agent aus der Registry heißt (`opencode`, `qwen`) und
+  `pid`, `pwd` und ihre Argumente ausgibt. 🔑 Sie über den **absoluten Pfad** aufrufen, nicht
+  über `PATH`: Die Login-Shell baut `PATH` per `path_helper`/`.zshrc` um und stellt den echten
+  Agenten davor — sonst startet man versehentlich das Original (passiert). 🔑 Die **PID im
+  Marker** ist entscheidend: Der wiederhergestellte Scrollback enthält die *alte* Startzeile,
+  ein bloßes „Marker gefunden" beweist also nichts; erst eine **neue** PID belegt einen echten
+  Neustart. 🔑 Und `detect` prüft den **ersten** Token — `cd /tmp && opencode` erkennt nichts.
 - **Doku-Wächter `test_doc_duplicates`** (QTMUX-34): findet doppelte Überschriften, wie
   sie beim Kompaktieren entstehen (Block eingefügt statt ersetzt → zwei gleichnamige
   Abschnitte mit widersprüchlichem Inhalt; in RAFTNG genau so passiert). Verglichen wird

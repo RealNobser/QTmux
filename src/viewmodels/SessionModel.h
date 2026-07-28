@@ -137,6 +137,32 @@ public:
     /// paneIds) liegt — räumt Dumps geschlossener Panes weg.
     Q_INVOKABLE void pruneHistoryExcept(const QList<int> &keys) const;
 
+    // --- Agenten-Wiederherstellung (QTMUX-85) -------------------------------
+    /// Die tatsächlich abzusetzende Startzeile eines Agenten: mit `resume` um die
+    /// Fortsetzungs-Argumente aus der AgentRegistry ergänzt, sonst unverändert.
+    /// Gedacht als `loginScript`-Argument von createShellSession/createSshSession —
+    /// nur dort steht das Kommando VOR dem Start fest, und nur dann greift die
+    /// erprobte Auslösung am ersten Prompt zuverlässig.
+    Q_INVOKABLE QString agentLaunchCommand(const QString &commandLine, bool resume) const;
+
+    /// Vermerkt den wiederhergestellten Agenten an `row`: setzt Kennung und Titel der
+    /// Session (das Login-Script läuft an der Tipp-Beobachtung vorbei) und hält
+    /// Kennung + Befehl im SessionConfig fest, damit sie erneut persistiert werden.
+    Q_INVOKABLE void markRestoredAgent(int row, const QString &agentId,
+                                       const QString &commandLine);
+
+    /// Merkt den gespeicherten Agenten NUR im SessionConfig vor — ohne ihn zu starten.
+    /// Nötig, wenn die Wiederherstellung abgeschaltet ist: sonst schriebe das Beenden
+    /// den leeren Laufzeitwert zurück und löschte den gespeicherten Befehl.
+    Q_INVOKABLE void seedAgentConfig(int row, const QString &agentId,
+                                     const QString &commandLine);
+
+    /// Schaltet den Restore-Modus (QTMUX-85): unterdrückt die CWD-Vererbung von der
+    /// aktiven Session und das redundante Zurückschreiben des Alt-Schemas, während
+    /// QML die Windows wiederherstellt. Der Guard existierte bisher nur im
+    /// (seit dem Window-Modell toten) restoreState()-Pfad.
+    Q_INVOKABLE void setRestoring(bool on) { m_restoring = on; }
+
 signals:
     void countChanged();
     /// Eine Gruppenzuordnung hat sich geändert (QTMUX-42). groups()/groupSize()
@@ -170,6 +196,13 @@ private:
         QString pluginId;    // Plugin-Session (QTMUX-8): Plugin- und
         QString pluginType;  // Backend-Typ-ID für die Wiederherstellung
         QString group;       // Sidebar-Gruppe (QTMUX-42), leer = ohne Gruppe
+        // Agent aus dem gespeicherten Zustand (QTMUX-85). Dient als RÜCKFALL für
+        // sessionConfig(): Wurde die Session ohne Agenten wiederhergestellt (Schalter
+        // aus), hat sie zur Laufzeit keinen — ohne diesen Halt würde das Beenden den
+        // gespeicherten Befehl mit Leer überschreiben und ein späteres Einschalten
+        // des Schalters liefe ins Nichts.
+        QString agentId;
+        QString agentCommand;
     };
 
     /// Verschiebt die Zeile ans Ende des Blocks ihrer eigenen Gruppe (bzw. für

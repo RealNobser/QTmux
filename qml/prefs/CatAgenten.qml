@@ -86,6 +86,50 @@ CatPage {
     readonly property int labelW: 172
     readonly property int cellW: 42
 
+    // --- Wiederherstellung beim Start (QTMUX-85) ---
+    PrefAnchor {
+        settingKey: "agenten.restore"
+        page: page
+        ColumnLayout {
+            spacing: 4
+            Layout.fillWidth: true
+            SectionLabel { text: qsTr("Wiederherstellung") }
+            CheckBox {
+                text: qsTr("Agenten beim Start wiederherstellen")
+                checked: page.host.app.restoreAgents
+                onToggled: page.host.app.restoreAgents = checked
+            }
+            Text {
+                text: qsTr("Setzt in jedem Pane den zuletzt erkannten Agenten erneut ab, "
+                         + "sobald die Shell bereit ist. Es wird ausschließlich ein bekannter "
+                         + "Agent gestartet — beliebige Befehle laufen nicht automatisch los.")
+                color: Theme.textDim
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.leftMargin: 6
+                Layout.bottomMargin: 4
+            }
+            CheckBox {
+                text: qsTr("Unterhaltung fortsetzen")
+                enabled: page.host.app.restoreAgents
+                checked: page.host.app.resumeAgentSessions
+                onToggled: page.host.app.resumeAgentSessions = checked
+            }
+            Text {
+                text: qsTr("Hängt das Fortsetzungs-Argument des Agenten an (z. B. --continue), "
+                         + "sodass er die vorherige Unterhaltung weiterführt. Nur bei Agenten, "
+                         + "die das können; ohne vorherige Unterhaltung meldet der Agent einen Fehler.")
+                color: Theme.textDim
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.leftMargin: 26
+                Layout.bottomMargin: 4
+            }
+        }
+    }
+
     // --- Agenten-Benachrichtigungen (Matrix) ---
     PrefAnchor { settingKey: "agenten.notifications"; page: page
     ColumnLayout {
