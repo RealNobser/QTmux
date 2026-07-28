@@ -22,7 +22,7 @@
       "program": "${command:cmake.buildDirectory}/qtmux",
       "args": [],
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "CMake: build",
+      "preLaunchTask": "CMake: build qtmux",
       "osx": {
         "MIMode": "lldb",
         "program": "${command:cmake.buildDirectory}/qtmux.app/Contents/MacOS/qtmux"

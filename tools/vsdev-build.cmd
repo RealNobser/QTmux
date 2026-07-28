@@ -69,10 +69,15 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Preset/Target GEQUOTET durchgeben: Der Aufrufer ist auch die VSCode-Task, und die
+REM setzt das AKTIVE Preset per ${command:cmake.activeBuildPresetName} ein. Kaeme dort
+REM je nach Erweiterungsversion ein Anzeigename wie "Windows (MSVC)" an, wuerde ein
+REM ungequotetes %PRESET% an Leerzeichen zerfallen und die Klammern die Zeile zerlegen.
+REM Mit Quoting meldet stattdessen cmake sauber "No such build preset".
 echo [vsdev-build] Preset %PRESET%, Target %TARGET%
-cmake --preset %PRESET%
+cmake --preset "%PRESET%"
 if errorlevel 1 exit /b 1
-cmake --build --preset %PRESET% --target %TARGET%
+cmake --build --preset "%PRESET%" --target "%TARGET%"
 if errorlevel 1 exit /b 1
 
 echo [vsdev-build] Fertig.

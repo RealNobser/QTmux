@@ -6,13 +6,25 @@
   //   error STL1001: Unexpected compiler version, expected MSVC Compiler 19.50
   // Eine Einstellung zur Wahl der VS-Installation gibt es nicht, deshalb kommt die
   // Umgebung deterministisch aus tools\vsdev-build.cmd (vswhere, auf VS 2022 begrenzt),
-  // das die Task „CMake: build" aufruft. Konfigurieren und Bauen laufen damit über
-  // F5 bzw. Strg+Umschalt+B — nicht über die CMake-Knöpfe in der Statusleiste.
-  // (Auf macOS/Linux ist die Einstellung wirkungslos.)
+  // das die Task „CMake: build" aufruft. (Auf macOS/Linux ist die Einstellung wirkungslos.)
   "cmake.useVsDeveloperEnvironment": "never",
-  // Kein automatisches Konfigurieren beim Öffnen: sonst legt die Erweiterung den Cache
-  // ungefragt mit der falschen (oder ganz ohne) Toolchain an. Das Skript konfiguriert.
+  // ⚠️ Folgefehler von „never" (2026-07-28): Der EIGENE Build-Prozess der Erweiterung
+  // erbte dann gar keine VS-Umgebung mehr. Compiler und Linker findet Ninja noch über die
+  // absoluten Pfade aus dem Cache, aber INCLUDE/LIB fehlen — der Build-Knopf scheiterte an
+  //   fatal error C1083: "type_traits": No such file or directory        (INCLUDE fehlt)
+  //   LINK : fatal error LNK1104: "iphlpapi.lib" nicht geöffnet          (LIB fehlt)
+  // während dasselbe Preset im Release „ging", weil dort nichts zu übersetzen war.
+  // Deshalb baut die Erweiterung NICHT mehr selbst, sondern über tasks.json → Skript.
+  // Damit tun der Build-Knopf, Strg+Umschalt+B und F5 dasselbe.
+  "cmake.buildTask": true,
+  // Alle drei automatischen Konfigurationsläufe aus: die Erweiterung würde sie mit der
+  // leeren Umgebung starten (der Compiler-Test scheitert dann bzw. der Cache wird
+  // verdorben) — beim Öffnen, beim Speichern einer CMakeLists.txt und beim Wechsel des
+  // Presets in der Statusleiste. Konfiguriert wird ausschließlich im Skript, das jedem
+  // Build ein `cmake --preset` voranstellt.
   "cmake.configureOnOpen": false,
+  "cmake.configureOnEdit": false,
+  "cmake.automaticReconfigure": false,
   "cmake.options.statusBarVisibility": "visible",
   "C_Cpp.default.compileCommands": "${workspaceFolder}/build/${command:cmake.activeConfigurePresetName}/compile_commands.json",
   "files.associations": {

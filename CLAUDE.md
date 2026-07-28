@@ -122,10 +122,24 @@ ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein
 > `preferredGenerators`). VS-2022-`cl.exe` + VS-18-STL ergibt `error STL1001: Unexpected
 > compiler version, expected MSVC Compiler 19.50 or newer`. Deshalb: Umgebung kommt aus
 > **`tools/vsdev-build.cmd`** (vswhere auf `[17.0,18.0)` begrenzt), aufgerufen von der Task
-> „CMake: build"; `useVsDeveloperEnvironment: never`, `configureOnOpen: false`, Debug-Pfad
-> in `launch.json` fest aufs `windows`-Preset. **Bauen/Konfigurieren also über F5 bzw.
-> Strg+Umschalt+B**, nicht über die CMake-Statusleisten-Knöpfe. VS 2022 bleibt Standard
-> (Qt ist `msvc2022_64`, CI und `build-msi.ps1` ebenso).
+> „CMake: build"; `useVsDeveloperEnvironment: never`, Debug-Pfad in `launch.json` fest aufs
+> `windows`-Preset. VS 2022 bleibt Standard (Qt ist `msvc2022_64`, CI und `build-msi.ps1`
+> ebenso).
+> ⚠️ **Folgefehler von `never` (2026-07-28) — alle drei Wege müssen durchs Skript.** Ohne
+> Injektion baute der **eigene** Prozess der Erweiterung ganz ohne VS-Umgebung: Compiler und
+> Linker findet Ninja noch über die absoluten Cache-Pfade, aber `INCLUDE`/`LIB` fehlen →
+> `fatal error C1083: "type_traits"` und `LNK1104: "iphlpapi.lib"`. Tückisch: **dasselbe
+> Preset im Release „ging"**, weil dort nichts zu übersetzen war (`ninja: no work to do`
+> braucht keinen Compiler) — der Fehler sah preset-spezifisch aus, war aber nur
+> „Debug hatte etwas zu tun". Abhilfe: **`cmake.buildTask: true`** (der Build-Knopf führt
+> tasks.json aus statt selbst zu bauen) plus `configureOnOpen`/`configureOnEdit`/
+> `automaticReconfigure` **alle aus** (jeder automatische Konfigurationslauf der Erweiterung
+> liefe mit der leeren Umgebung und verdirbt den Cache; `automaticReconfigure` feuert beim
+> **Preset-Wechsel** in der Statusleiste). Damit tun Build-Knopf, Strg+Umschalt+B und F5
+> dasselbe. Die Task setzt das **aktive** Preset ein
+> (`${command:cmake.activeBuildPresetName}`) — sonst baut der Knopf bei gewähltem Release
+> stumm Debug; das Argument ist im Skript **gequotet**, damit ein etwaiger Anzeigename
+> („Windows (MSVC)") sauber als `No such preset` scheitert statt die Batch-Zeile zu zerlegen.
 > 🔑 Batch-Fallen in dieser Datei: **CRLF** Pflicht (bei LF führt cmd.exe Kommentarzeilen
 > aus), **rein ASCII**, und `%ProgramFiles(x86)%` **nie in einer `for`-/`if`-Klammer**
 > expandieren — das `)` aus „(x86)" schließt sie vorzeitig („Der Befehl `C:\Program` ist

@@ -2,32 +2,51 @@
   "version": "2.0.0",
   "tasks": [
     {
-      // Wird von launch.json als preLaunchTask verwendet.
+      // Standard-Build-Task. Sie wird von DREI Wegen benutzt, die dadurch identisch sind:
+      //   1. Strg+Umschalt+B
+      //   2. der „Build"-Knopf der CMake-Tools-Statusleiste (wegen "cmake.buildTask": true)
+      //   3. F5 (über den zweiten Task unten, nur schneller: Ziel nur qtmux)
       //
-      // macOS/Linux: baut über das aktive CMake-Build-Preset (Statusleiste).
+      // macOS/Linux: direkt über das aktive CMake-Build-Preset.
       //
-      // Windows: läuft bewusst NICHT über die CMake-Tools-Erweiterung, sondern über
+      // Windows: bewusst NICHT über die CMake-Tools-Erweiterung, sondern über
       // tools\vsdev-build.cmd (QTMUX-79). Sind — wie hier — MEHRERE Visual Studios
-      // installiert (VS 2022 + VS 18), injiziert die Erweiterung immer die Umgebung
-      // der NEUESTEN Installation. Zusammen mit einem Cache, der auf den Compiler aus
-      // VS 2022 zeigt, ergibt das VS-2022-cl.exe + VS-18-Standardbibliothek und damit
+      // installiert (VS 2022 + VS 18), injiziert die Erweiterung immer die Umgebung der
+      // NEUESTEN Installation; zusammen mit einem Cache, der auf den Compiler aus VS 2022
+      // zeigt, ergibt das VS-2022-cl.exe + VS-18-Standardbibliothek und damit
       //   error STL1001: Unexpected compiler version, expected MSVC Compiler 19.50
-      // Eine Einstellung zur Wahl der VS-Installation bietet CMake Tools nicht, deshalb
-      // holt das Skript die Umgebung selbst (vswhere, eingegrenzt auf die 17er-Reihe).
-      // Preset fest "windows": F5 debuggt den Debug-Build. Für einen Release-Lauf
-      // "tools\vsdev-build.cmd windows-release" von Hand aufrufen.
+      // Schaltet man die Injektion ab ("useVsDeveloperEnvironment": "never"), baut die
+      // Erweiterung ohne JEDE VS-Umgebung — dann fehlen INCLUDE/LIB (C1083 "type_traits",
+      // LNK1104 "iphlpapi.lib"). Beide Fallen entfallen, wenn die Umgebung aus dem Skript
+      // kommt (vswhere, auf die 17er-Reihe = VS 2022 begrenzt).
+      //
+      // Das Preset kommt aus der Statusleiste, damit der Knopf das gewählte Preset baut
+      // (Debug ODER Release) und nicht stillschweigend ein anderes.
       "label": "CMake: build",
       "type": "shell",
-      "command": "cmake --build --preset ${command:cmake.activeBuildPresetName} --target qtmux",
+      "command": "cmake --build --preset ${command:cmake.activeBuildPresetName} --target all",
       "windows": {
-        "command": "${workspaceFolder}\\tools\\vsdev-build.cmd windows qtmux"
+        "command": "${workspaceFolder}\\tools\\vsdev-build.cmd \"${command:cmake.activeBuildPresetName}\" all"
       },
       "group": {
         "kind": "build",
         "isDefault": true
       },
       "problemMatcher": ["$gcc", "$msCompile"],
-      "detail": "Baut das QTmux-Target (Windows: in der VS-2022-Umgebung)"
+      "detail": "Baut alles inkl. Tests im aktiven Preset (Windows: in der VS-2022-Umgebung)"
+    },
+    {
+      // Schneller Pfad für F5 (preLaunchTask in launch.json): nur die App, ohne die
+      // 17 Test-Binaries. Sonst identisch zur Task oben.
+      "label": "CMake: build qtmux",
+      "type": "shell",
+      "command": "cmake --build --preset ${command:cmake.activeBuildPresetName} --target qtmux",
+      "windows": {
+        "command": "${workspaceFolder}\\tools\\vsdev-build.cmd \"${command:cmake.activeBuildPresetName}\" qtmux"
+      },
+      "group": "build",
+      "problemMatcher": ["$gcc", "$msCompile"],
+      "detail": "Baut nur das qtmux-Target im aktiven Preset (Debug-Start)"
     }
   ]
 }
