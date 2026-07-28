@@ -125,23 +125,30 @@ ApplicationWindow {
         // er sieht nur die Panes, nicht aber, welche seiner Sessions gerade GAR NICHT
         // sichtbar sind (die liegen nur in der Seitenleiste). Deshalb liefern wir den
         // Baum unter "layout" plus eine Sitzungsübersicht mit Pane-Zuordnung.
-        onLayoutRequested: {
-            const inPane = ({})   // sessionId -> paneId (nur die des AKTIVEN Windows)
+        onLayoutRequested: (windowId) => {
+            const w = (windowId >= 0) ? windows.windowById(windowId) : window.activeWindowObj()
+            if (!w) { mcp.provideResult(false, qsTr("Unbekannte windowId.")); return }
+            const isActive = (w.windowId === window.activeWindowId)
+            // Aktives Window: der Live-Baum (window.layout) ist am frischesten; andere
+            // Windows aus ihrem gespeicherten layoutJson.
+            let tree = isActive ? window.layout : null
+            if (!isActive) { try { tree = JSON.parse(w.layoutJson) } catch (e) { tree = null } }
+            if (!tree) { mcp.provideResult(false, qsTr("Kein Layout vorhanden.")); return }
+            const activePaneId = isActive ? window.activePaneId : w.activePaneId
+            const inPane = ({})   // sessionId -> paneId (nur die dieses Windows)
             function ser(node) {
                 if (window.isLeaf(node)) {
-                    const s = window.sessionById(node.sessionId)
-                    if (s) inPane[s.sessionId] = node.paneId
+                    inPane[node.sessionId] = node.paneId
                     return { paneId: node.paneId,
                              sessionId: node.sessionId,
-                             active: node.paneId === window.activePaneId }
+                             active: node.paneId === activePaneId }
                 }
                 return { orientation: node.orientation === Qt.Vertical ? "v" : "h",
                          children: node.children.map(ser) }
             }
-            if (!window.layout) { mcp.provideResult(false, qsTr("Kein Layout vorhanden.")); return }
-            const tree = ser(window.layout)
-            // Sitzungsübersicht: alle Sessions, mit Pane-Zuordnung im AKTIVEN Window
-            // (QTMUX-33). Sessions anderer Windows laufen weiter, sind hier aber „unsichtbar".
+            const serTree = ser(tree)
+            // Sitzungsübersicht: alle Sessions, mit Pane-Zuordnung IN DIESEM Window
+            // (QTMUX-33). Sessions anderer Windows laufen weiter, sind hier „unsichtbar".
             const list = []
             for (let i = 0; i < sessions.rowCount(); ++i) {
                 const s = sessions.sessionAt(i)
@@ -152,12 +159,49 @@ ApplicationWindow {
                             windowId: s.windowId,
                             paneId: pid === undefined ? null : pid,
                             visible: pid !== undefined,
-                            active: pid !== undefined && pid === window.activePaneId })
+                            active: pid !== undefined && pid === activePaneId })
             }
-            mcp.provideResult(true, JSON.stringify({ layout: tree,
-                                                     windowId: window.activeWindowId,
-                                                     activePaneId: window.activePaneId,
+            mcp.provideResult(true, JSON.stringify({ layout: serTree,
+                                                     windowId: w.windowId,
+                                                     activePaneId: activePaneId,
                                                      sessions: list }))
+        }
+        // --- Window-Steuerung (QTMUX-83, Stufe 4) ---
+        onListWindowsRequested: {
+            const arr = []
+            for (let i = 0; i < windows.count; ++i) {
+                const w = windows.windowAt(i)
+                arr.push({ windowId: w.windowId,
+                           title: window.windowTitle(w),
+                           group: w.group || "",
+                           paneCount: w.paneIds().length,
+                           active: w.windowId === window.activeWindowId,
+                           sessionIds: w.sessionIds() })
+            }
+            mcp.provideResult(true, JSON.stringify(arr))
+        }
+        onFocusWindowRequested: (id) => {
+            if (!windows.windowById(id)) { mcp.provideResult(false, qsTr("Unbekannte windowId.")); return }
+            window.loadWindow(id)
+            mcp.provideResult(true, "ok")
+        }
+        onNewWindowRequested: {
+            window.newSession()                 // neue Shell in eigenem Window (wird aktiv)
+            const w = window.activeWindowObj()
+            const ids = w ? w.sessionIds() : []
+            mcp.provideResult(true, String(ids.length ? ids[0] : -1))
+        }
+        onRenameWindowRequested: (id, name) => {
+            const w = windows.windowById(id)
+            if (!w) { mcp.provideResult(false, qsTr("Unbekannte windowId.")); return }
+            w.name = name
+            mcp.provideResult(true, "ok")
+        }
+        onCloseWindowRequested: (id) => {
+            const row = windows.rowForId(id)
+            if (row < 0) { mcp.provideResult(false, qsTr("Unbekannte windowId.")); return }
+            window.closeWindowRow(row)
+            mcp.provideResult(true, "ok")
         }
         onSplitPaneRequested: (o) => {
             const sid = window.splitPane(o === "v" ? Qt.Vertical : Qt.Horizontal)

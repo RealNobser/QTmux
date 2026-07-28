@@ -207,11 +207,23 @@ alten `sessions`-Profils erzeugt N Ein-Pane-Windows (Unit-getestet). Noch KEINE 
 > `quit()` ruft. Headless-Quit-Test geht daher NUR über SIGTERM (das der Notifier abfängt) — der
 > Swift-`terminate()` erreicht eine **offscreen**-Instanz nicht (keine Window-Server-Registrierung).
 
-**NÄCHSTER SCHRITT — Stufe 4 (MCP-Window-Tools):** neue Tools `list_windows`/`focus_window`/
-`rename_window`/`close_window`/`new_window`; `get_layout` optional per `windowId`; `create_session`
-= neues Window (schon so durch Auto-Wrap), `split_pane` = Pane im aktiven Window (schon so);
-`assign_session` endgültig deprecaten; `docs/MCP.md` + `test_doc_duplicates` pflegen. Danach
-Stufe 5 (Window-Gruppen: Gruppen-Mechanik von SessionModel auf WindowModel, `set_window_group`).
+- **Stufe 4** (MCP-Window-Tools) — **erledigt + verifiziert**. Neue Tools `list_windows`/
+  `focus_window`/`new_window`/`rename_window`/`close_window`; `get_layout` optional per
+  `windowId` (auch nicht-aktive Windows abfragbar); `get_layout`-Antwort um `windowId` erweitert,
+  Sitzungsliste trägt `windowId`. `create_session`/`split_pane`/`focus_session`-Beschreibungen
+  ans Window-Modell angepasst; `assign_session` deprecated (Hinweis). Signals in `McpServer.h`
+  (`layoutRequested(int)` + 5 Window-Signale), Handler in `McpServer.cpp`, QML-Handler im
+  `McpServer{}`-Block in Main.qml. `docs/MCP.md` (Tool-Tabelle + Windows-Abschnitt) und CLAUDE.md
+  (35 statt 30 Tools) gepflegt. **Verifiziert** (MCP-e2e Port 7416): new_window/split_pane/
+  list_windows/rename_window/focus_window/get_layout(windowId)/close_window/assign_session-Hinweis.
+  ⚠️ C++-String-Falle: gerade `"` in deutschen Beschreibungen bricht den String — `„…“` nutzen.
+
+**NÄCHSTER SCHRITT — Stufe 5 (Window-Gruppen):** Gruppen-Mechanik von `SessionModel` auf
+`WindowModel` übertragen (Window hat bereits ein `group`-Feld): `setWindowGroup`/`groups`/
+`groupSize`/`renameGroup`/`moveGroup`/`moveGroupToRow` + Contiguity-Invariante + `ListView.section`
+in der Sidebar; MCP `set_session_group`→`set_window_group` (Alias/Hinweis); Test
+`tst_sessiongroups`→`tst_windowgroups`. Danach: **build/macos aus finalem Stand neu bauen**
+(s. u.), CLAUDE.md-Status + Memory aktualisieren, Jira/Confluence (dual) pflegen.
 
 **Verifikation:** `ctest --test-dir build/macos-test` (17/17). MCP-e2e gegen zweite Instanz
 (`QT_QPA_PLATFORM=offscreen QTMUX_PROFILE=… QTMUX_MCP_PORT=… qtmux &`, curl JSON-RPC). Quit-Test:

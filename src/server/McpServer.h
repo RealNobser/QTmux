@@ -64,7 +64,19 @@ signals:
     void setThemeRequested(int mode);
     // --- Layout-/Profil-Steuerung (QTMUX-29). Handler antworten via provideResult. ---
     /// Layout-Baum als JSON liefern (Blatt: paneId/sessionId/active; Split: orientation/children).
-    void layoutRequested();
+    /// windowId < 0 = aktives Window (QTMUX-83, Stufe 4).
+    void layoutRequested(int windowId);
+    // --- Window-Steuerung (QTMUX-83, Stufe 4). Handler antworten via provideResult. ---
+    /// Alle Windows (Tabs) als JSON-Array liefern.
+    void listWindowsRequested();
+    /// Ein Window aktivieren (das ganze Layout umschalten).
+    void focusWindowRequested(int windowId);
+    /// Ein Window umbenennen (leerer Name = automatischer Titel).
+    void renameWindowRequested(int windowId, const QString &name);
+    /// Ein Window samt seiner Sessions schließen.
+    void closeWindowRequested(int windowId);
+    /// Ein neues Window (mit einer Shell) anlegen und aktivieren.
+    void newWindowRequested();
     /// Aktives Pane teilen ("h" = nebeneinander, "v" = untereinander).
     void splitPaneRequested(const QString &orientation);
     /// Pane schließen (paneId < 0 = aktives Pane). Schließt wie die GUI auch die Session.

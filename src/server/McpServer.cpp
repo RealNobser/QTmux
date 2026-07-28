@@ -460,9 +460,10 @@ QJsonObject McpServer::toolsList() const {
                       "progress).",
                       {}, {}));
     tools.append(tool("create_session",
-                      "Erstellt eine Session. type: 'shell' (Standard), 'ssh', 'serial' oder "
-                      "'plugin'. Je nach Typ die passenden Felder füllen (siehe unten). Gibt die "
-                      "neue Session-ID zurück.",
+                      "Erstellt eine Session in einem NEUEN Window (Tab) und aktiviert es. "
+                      "type: 'shell' (Standard), 'ssh', 'serial' oder 'plugin'. Je nach Typ die "
+                      "passenden Felder füllen (siehe unten). Gibt die neue Session-ID zurück. "
+                      "(Für ein Pane IM aktiven Window: split_pane.)",
                       QJsonObject{{"type", strProp("'shell' | 'ssh' | 'serial' | 'plugin'")},
                                   // Shell
                                   {"program", strProp("Shell: Programm/Kommandozeile (optional, leer = Standard-Shell). Siehe list_shells.")},
@@ -504,7 +505,9 @@ QJsonObject McpServer::toolsList() const {
                       QJsonObject{{"name", strProp("Gruppenname")},
                                   {"direction", strProp("'up' = nach oben | 'down' = nach unten")}},
                       QJsonArray{"name", "direction"}));
-    tools.append(tool("focus_session", "Fokussiert eine Session und lädt sie ins aktive Pane.",
+    tools.append(tool("focus_session",
+                      "Aktiviert das Window, in dem diese Session als Pane liegt (Window-Modell, "
+                      "QTMUX-83). Die Session selbst bleibt an ihrem Pane.",
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
     tools.append(tool("attach_controller",
                       "Markiert die Session mit dieser ID als steuernde MCP-Controller-Session "
@@ -548,16 +551,19 @@ QJsonObject McpServer::toolsList() const {
     // Layout-/Pane-Steuerung (QTMUX-29): dieselben Operationen wie die Split-Menüs
     // der GUI — für AI-Companions, die Sessions nebeneinander anordnen wollen.
     tools.append(tool("get_layout",
-                      "Liefert die Pane-Aufteilung als JSON: {layout, activePaneId, sessions}. "
-                      "'layout' ist der Baum (Blatt: {paneId, sessionId, active}; Split: "
-                      "{orientation:'h'|'v', children:[…]}). 'sessions' listet ALLE Sessions "
-                      "mit ihrer Pane-Zuordnung — paneId=null/visible=false heißt: läuft, ist "
-                      "aber gerade nicht zu sehen (nur in der Seitenleiste). Ist das Fenster "
-                      "ungeteilt, besteht 'layout' erwartungsgemäß aus einem einzigen Blatt.",
-                      {}, {}));
+                      "Liefert das Pane-Layout des AKTIVEN Windows als JSON: {layout, windowId, "
+                      "activePaneId, sessions}. 'layout' ist der Baum (Blatt: {paneId, sessionId, "
+                      "active}; Split: {orientation:'h'|'v', children:[…]}). 'sessions' listet ALLE "
+                      "Sessions mit ihrer Pane-Zuordnung im aktiven Window — paneId=null/"
+                      "visible=false heißt: läuft in einem ANDEREN Window (nicht sichtbar). Mit "
+                      "'windowId' das Layout eines bestimmten Windows abfragen (siehe list_windows).",
+                      QJsonObject{{"windowId", intProp("Window-ID (optional, sonst aktives Window)")}},
+                      {}));
     tools.append(tool("split_pane",
-                      "Teilt das aktive Pane wie die GUI-Splits: erzeugt eine neue "
-                      "Shell-Session im neuen Pane (wird aktiv) und liefert deren Session-ID.",
+                      "Teilt das aktive Pane IM AKTIVEN WINDOW (wie die GUI-Splits): erzeugt eine "
+                      "neue Shell-Session im neuen Pane (wird aktiv) und liefert deren Session-ID. "
+                      "Anders als create_session (das ein neues Window öffnet) bleibt der Split im "
+                      "selben Window.",
                       QJsonObject{{"orientation", strProp("'h' = nebeneinander | 'v' = untereinander")}},
                       QJsonArray{"orientation"}));
     tools.append(tool("close_pane",
@@ -577,11 +583,38 @@ QJsonObject McpServer::toolsList() const {
                       "der Zoom aufgehoben.",
                       QJsonObject{{"paneId", intProp("Pane-ID aus get_layout (fehlend/-1 = Zoom aus)")}},
                       {}));
+    // Window-Steuerung (QTMUX-83, Stufe 4): die Sidebar listet Windows (Tabs), jedes mit
+    // eigenem Split-Layout. Sessions bleiben per Session-ID adressierbar (send_text/…).
+    tools.append(tool("list_windows",
+                      "Listet alle Windows (Tabs) mit ihrem aggregierten Status: {windowId, "
+                      "title, group, paneCount, active, sessionIds}. Jedes Window hat sein "
+                      "eigenes Split-Layout (siehe get_layout windowId).",
+                      {}, {}));
+    tools.append(tool("focus_window",
+                      "Aktiviert ein Window (schaltet das ganze Layout auf dessen Panes um).",
+                      QJsonObject{{"windowId", intProp("Window-ID (siehe list_windows)")}},
+                      QJsonArray{"windowId"}));
+    tools.append(tool("new_window",
+                      "Öffnet ein neues Window (Tab) mit einer Shell-Session und aktiviert es. "
+                      "Liefert die Session-ID der neuen Shell.",
+                      {}, {}));
+    tools.append(tool("rename_window",
+                      "Benennt ein Window um. Leerer/fehlender 'name' stellt den automatischen "
+                      "Titel (Titel des aktiven Panes) wieder her.",
+                      QJsonObject{{"windowId", intProp("Window-ID")},
+                                  {"name", strProp("neuer Name (leer = automatisch)")}},
+                      QJsonArray{"windowId"}));
+    tools.append(tool("close_window",
+                      "Schließt ein Window (Tab) samt ALLER seiner Sessions/Panes.",
+                      QJsonObject{{"windowId", intProp("Window-ID")}},
+                      QJsonArray{"windowId"}));
     tools.append(tool("assign_session",
-                      "Lädt eine Session in ein Pane (macht es aktiv). Ohne paneId ins "
-                      "aktive Pane (wie ein Sidebar-Klick).",
+                      "VERALTET (Window-Modell, QTMUX-83): Es gibt kein „Session in ein Pane "
+                      "laden“ mehr — jede Session gehört fest zu einem Window/Pane. Nutze "
+                      "focus_session (Window der Session aktivieren) bzw. focus_window. Der "
+                      "Aufruf meldet nur noch einen Hinweis.",
                       QJsonObject{{"id", intProp("Session-ID")},
-                                  {"paneId", intProp("Ziel-Pane aus get_layout (optional)")}},
+                                  {"paneId", intProp("(ignoriert)")}},
                       QJsonArray{"id"}));
     // Verbindungsprofile (QTMUX-29): gespeicherte Verbindungen nutzbar machen.
     // Ein Vault-Passwort wird beim Verbinden INTERN aufgelöst (gleicher Weg wie der
@@ -1001,7 +1034,36 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
     // Der Layout-Baum lebt in QML (window.layout); die Signale laufen synchron in
     // die dortigen Handler, das Ergebnis kommt über die provideResult-Brücke zurück.
     if (name == "get_layout") {
-        bridgedCall([this] { emit layoutRequested(); }, isError, text);
+        const int windowId = args.value("windowId").toInt(-1);
+        bridgedCall([this, windowId] { emit layoutRequested(windowId); }, isError, text);
+        return {};
+    }
+    // --- Window-Steuerung (QTMUX-83, Stufe 4) ------------------------------
+    if (name == "list_windows") {
+        bridgedCall([this] { emit listWindowsRequested(); }, isError, text);
+        return {};
+    }
+    if (name == "focus_window") {
+        const int windowId = args.value("windowId").toInt(-1);
+        if (windowId < 0) { isError = true; text = QStringLiteral("windowId (>= 0) ist erforderlich; list_windows liefert die IDs."); return {}; }
+        bridgedCall([this, windowId] { emit focusWindowRequested(windowId); }, isError, text);
+        return {};
+    }
+    if (name == "new_window") {
+        bridgedCall([this] { emit newWindowRequested(); }, isError, text);
+        return {};
+    }
+    if (name == "rename_window") {
+        const int windowId = args.value("windowId").toInt(-1);
+        if (windowId < 0) { isError = true; text = QStringLiteral("windowId (>= 0) ist erforderlich."); return {}; }
+        const QString wname = args.value("name").toString();
+        bridgedCall([this, windowId, &wname] { emit renameWindowRequested(windowId, wname); }, isError, text);
+        return {};
+    }
+    if (name == "close_window") {
+        const int windowId = args.value("windowId").toInt(-1);
+        if (windowId < 0) { isError = true; text = QStringLiteral("windowId (>= 0) ist erforderlich."); return {}; }
+        bridgedCall([this, windowId] { emit closeWindowRequested(windowId); }, isError, text);
         return {};
     }
     if (name == "split_pane") {

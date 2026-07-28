@@ -32,12 +32,12 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | Tool | Argumente | Zweck |
 |---|---|---|
 | `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification, workingDir, progress*) |
-| `create_session` | `type` ("shell"/"serial"/"ssh"/"plugin"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?`, `pluginId?`, `typeId?`, `loginScript?` | Session anlegen → gibt neue **id** zurück |
+| `create_session` | `type` ("shell"/"serial"/"ssh"/"plugin"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?`, `pluginId?`, `typeId?`, `loginScript?` | Session in einem **neuen Window** (Tab) anlegen → gibt neue **id** zurück (Pane *im* aktiven Window: `split_pane`) |
 | `close_session` | `id` | Session schließen |
 | `set_session_group` | `id`, `group?` | Session einer **Sidebar-Gruppe** zuordnen; leerer/fehlender `group`-Wert nimmt sie heraus (s. u.) |
 | `rename_group` | `from`, `to?` | Bestehende Gruppe umbenennen (alle Mitglieder) bzw. **auflösen** (leeres `to`) |
 | `move_group` | `name`, `direction` | Ganze Gruppe als Block in der Sidebar verschieben (`direction`: `up`/`down`) |
-| `focus_session` | `id` | Session sichtbar/fokussiert machen |
+| `focus_session` | `id` | **Window** aktivieren, in dem die Session als Pane liegt (Window-Modell) |
 | `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard 60), `broadcast?` | Text in die Session tippen; Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt) |
 | `read_screen` | `id`, `scrollback?` | Sichtbaren Bildschirm als Klartext lesen; mit `scrollback:true` zusätzlich die Historie davor |
 | `attach_controller` | `id` | Markiert die Session als steuernde **MCP-Controller**-Session (roter Tab) |
@@ -53,12 +53,17 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `clear_attention` | `sessionId?` | Aufmerksamkeits-Markierung wieder löschen |
 | `set_activity` | `state`, `sessionId?` | Dauer-Zustand für den Sidebar-Ring: `idle`(dim)/`busy`(grün)/`waiting`(amber)/`error`(rot) |
 | `wait_for_events` | `sessionId?`, `afterSeq?`, `timeoutMs?` | **Long-Poll**: blockiert bis ein abonniertes Ereignis vorliegt/Timeout |
-| `get_layout` | – | `{layout, activePaneId, sessions}` — Baum **plus** Pane-Zuordnung aller Sessions (s. u.) |
-| `split_pane` | `orientation` ("h"/"v") | Aktives Pane teilen (neue Shell-Session im neuen Pane, wird aktiv) → neue **Session-id** |
+| `get_layout` | `windowId?` | `{layout, windowId, activePaneId, sessions}` — Baum des **aktiven** (oder per `windowId` gewählten) Windows plus Pane-Zuordnung (s. u.) |
+| `split_pane` | `orientation` ("h"/"v") | Aktives Pane **im aktiven Window** teilen (neue Shell im neuen Pane, wird aktiv) → neue **Session-id** |
 | `close_pane` | `paneId?` | Pane **mitsamt Session** schließen (GUI-Semantik); ohne `paneId` das aktive Pane |
 | `focus_pane` | `paneId` | Bestehendes Pane **aktiv** setzen (reiner Fokuswechsel, ohne die Session zu ändern) |
 | `zoom_pane` | `paneId?` | Pane maximieren („zoomen"); ohne/`-1` = Zoom aufheben |
-| `assign_session` | `id`, `paneId?` | Session in ein Pane laden (ohne `paneId` ins aktive — wie ein Sidebar-Klick) |
+| `list_windows` | – | Alle **Windows** (Tabs): `{windowId, title, group, paneCount, active, sessionIds}` |
+| `focus_window` | `windowId` | Window aktivieren (ganzes Layout umschalten) |
+| `new_window` | – | Neues Window (Tab) mit einer Shell → gibt neue **Session-id** zurück |
+| `rename_window` | `windowId`, `name?` | Window umbenennen (leerer `name` = automatischer Titel) |
+| `close_window` | `windowId` | Window **samt aller** seiner Sessions/Panes schließen |
+| `assign_session` | `id`, `paneId?` | **VERALTET** (Window-Modell): kein „Session in Pane laden" mehr → nutze `focus_session`/`focus_window` |
 | `list_profiles` | – | Gespeicherte Verbindungsprofile; **ohne Geheimniswerte** (nur `hasPasswordSecret`/`hasLoginScript`-Flags) |
 | `connect_profile` | `name` | Profil verbinden — ein Vault-Passwort wird **intern** aufgelöst (nie über MCP ausgegeben) → neue **Session-id** |
 
@@ -103,25 +108,36 @@ Deshalb schreibt QTmux erst den Text und schickt das Enter **60 ms später** als
 Tastendruck hinterher. Bei besonders trägen Oberflächen `enterDelayMs` erhöhen;
 `enterDelayMs: 0` stellt das alte Verhalten (alles in einem Block) wieder her.
 
+### Windows (Tabs) — das Bedienmodell (QTMUX-83)
+
+Die Sidebar listet **Windows** (Tabs); **jedes Window hat sein eigenes Split-Layout**.
+`create_session`/`new_window` öffnen ein neues Window, `split_pane` erzeugt ein Pane *im*
+aktiven Window, `focus_window`/`focus_session` schalten das ganze Layout um. Sessions
+bleiben stabil per **Session-`id`** adressierbar (`send_text`/`read_screen`/…), egal in
+welchem Window sie liegen. `list_windows` gibt die Übersicht, `get_layout` den Baum eines
+Windows (Standard: das aktive; `windowId` wählt ein anderes).
+
 ### `get_layout` — Baum **und** unsichtbare Sessions (QTMUX-33)
 
-Der Baum allein beantwortet die Frage eines Controllers nicht: Sessions, die in *keinem*
-Pane liegen, laufen weiter, sind aber nicht zu sehen. Die Antwort umfasst daher:
+Der Baum allein beantwortet die Frage eines Controllers nicht: Sessions in **anderen**
+Windows laufen weiter, sind im abgefragten Window aber nicht zu sehen. Die Antwort umfasst
+daher zusätzlich die `windowId` und die Sitzungsübersicht:
 
 ```jsonc
 {
   "layout": { "orientation": "h", "children": [ {"paneId":1,"sessionId":5,"active":false},
                                                 {"paneId":2,"sessionId":6,"active":true} ] },
+  "windowId": 2,
   "activePaneId": 2,
-  "sessions": [ {"sessionId":5,"title":"Zsh","paneId":1,"visible":true,"active":false},
-                {"sessionId":6,"title":"claude","paneId":2,"visible":true,"active":true},
-                {"sessionId":7,"title":"Zsh","paneId":null,"visible":false,"active":false} ]
+  "sessions": [ {"sessionId":5,"title":"Zsh","windowId":2,"paneId":1,"visible":true,"active":false},
+                {"sessionId":6,"title":"claude","windowId":2,"paneId":2,"visible":true,"active":true},
+                {"sessionId":7,"title":"Zsh","windowId":3,"paneId":null,"visible":false,"active":false} ]
 }
 ```
 
-`paneId: null` / `visible: false` heißt: läuft, ist aber gerade nicht sichtbar (nur in der
-Seitenleiste). Ist das Fenster ungeteilt, besteht `layout` erwartungsgemäß aus einem
-einzigen Blatt — das ist kein Fehler.
+`paneId: null` / `visible: false` heißt: läuft in einem **anderen** Window (`windowId`).
+Ist das Window ungeteilt, besteht `layout` erwartungsgemäß aus einem einzigen Blatt — das
+ist kein Fehler.
 
 ### Parameternamen: Eingabe ist immer `id` (QTMUX-32)
 
