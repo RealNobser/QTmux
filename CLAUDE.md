@@ -297,18 +297,26 @@ komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Pl
 MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **36 MCP-Tools**
 (GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert.
 
-**In Arbeit — QTMUX-83 (B1: Per-Window-Layouts):** Umbau vom EINEN globalen Split-Layout
-(Sidebar = Sessions, Klick lädt Session ins aktive Pane) auf das tmux-Modell: Sidebar =
-**Windows** (Tabs), jedes Window hat **sein eigenes** Split-Layout; Splits = Panes IM Window.
-Blätter referenzieren Sessions per stabiler `Session::id()` statt Zeilen-Index; `Session::id()`
-bleibt MCP-Adress-Token. Entscheidungen: Gruppen → Window-Gruppen; Window-Name auto+umbenennbar;
-Migration je Session → Ein-Pane-Window. **Stufe 1** (Window/WindowModel + `Session::windowId` +
-Migration, additiv) erledigt+gepusht; **Stufe 2** (QML-Flip) läuft. Umsetzungsanweisung:
-`docs/design/per-window-layouts/`. Vorarbeit gepusht: **QTMUX-80** (Terminal-Crispness:
-Zellmaße auf ganze Geräte-Pixel + Pane-Sub-Pixel-Snapping), **QTMUX-81** (Layout- +
-farbgetreue Scrollback-Persistenz), **QTMUX-82** (SplitView verteilt Repeater-Kinder
-gleichmäßig — Cramping-Fix). Neu: **stiller Selbst-Screenshot** `--screenshot <png>`
-(offscreen `grabWindow`, kein TCC — RAFTNG-Vorbild) für GUI-Verifikation.
+**QTMUX-83 (B1: Per-Window-Layouts) — ALLE 5 STUFEN KOMPLETT (auf `main`, ungereleast):**
+Umbau vom EINEN globalen Split-Layout auf das tmux-Modell: Sidebar = **Windows** (Tabs),
+jedes Window hat **sein eigenes** Split-Layout; Splits = Panes IM Window; Klick/`focus_window`
+schaltet das ganze Layout um. Blätter referenzieren Sessions per stabiler `sessionId` (kein
+Row-Remap mehr); `Session::id()` bleibt MCP-Adress-Token. Stufen: **1** Datenmodell
+(`Window`/`WindowModel`/`Session::windowId`/Migration), **2** QML-Flip (Sidebar/Layout/
+Lebenszyklus auf Windows; extern erzeugte Sessions per `_wrapPending` in ein Window verpackt),
+**3** Persistenz (neues `windows`-QSettings-Schema: Layout+Proportionen+**farbiger Scrollback je
+paneId**; sauberer Quit auf **SIGTERM/SIGINT** in `main.cpp` → onClosing persistiert), **4** MCP-
+Window-Tools (`list/focus/new/rename/close_window`, `get_layout windowId`), **5** Window-Gruppen
+(Gruppen-Mechanik von SessionModel auf WindowModel portiert, `ListView.section`-Sidebar,
+`set_window_group`). Alles mit MCP-e2e + `--screenshot` verifiziert (17/17 ctest). Umsetzungs-/
+Verifikationsdetails: `docs/design/per-window-layouts/Umsetzung.md`. Vorarbeit: **QTMUX-80/81/82**;
+**stiller Selbst-Screenshot** `--screenshot <png>` (offscreen `grabWindow`, kein TCC).
+
+> ⚠️ **build/macos trägt einen WIP-Zwischenstand** (durch einen `-B`-Fehler landeten frühe
+> B1-Builds dort; die Produktivinstanz PID 72801 läuft im Memory-Image weiter). Der **verifizierte
+> Endstand liegt in `build/macos-test`**. Vor dem nächsten Prod-Neustart `build/macos` aus dem
+> finalen `main`-Stand neu bauen (`cmake --build build/macos`, NICHT `--preset` mit `-B`) —
+> möglichst erst, wenn die laufende Instanz beendet werden kann.
 
 > **Ältere Status-Historie (v1.4–1.6, QTMUX-30…79):** die früheren Feature-Einträge
 > (Sitzungsgruppen, Pane-Zoom, Scrollback-Suche, nicht-modales Prefs-Fenster, Rückfrage vor
