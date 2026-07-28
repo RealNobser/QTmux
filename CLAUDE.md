@@ -350,8 +350,9 @@ Agenten-Sessions wirklich mit ihrem Programm zurückkommen (Owner sieht derzeit 
 Verzeichnisse). ⚠️ Owner-Vorgabe: die zuletzt sichtbare Session ist **nicht** automatisch
 die neueste gefundene → am gespeicherten `activePaneId` festhalten, nicht heuristisch raten.
 
-**Danach:** (1) Jira-Nachträge QTMUX-46 + QTMUX-79 + **QTMUX-84** + **QTMUX-85** (Mac) ·
-(2) `build/windows` (Debug) neu bauen, sobald die laufende Instanz beendet werden darf —
+**Danach:** (1) ~~Jira-Nachträge~~ **erledigt (2026-07-28)** — QTMUX-84/85/86/87 dual
+angelegt, Nummern in beiden Systemen deckungsgleich; QTMUX-46 und -79 waren entgegen der
+alten Notiz längst vorhanden (beide Done) · (2) `build/windows` (Debug) neu bauen, sobald die laufende Instanz beendet werden darf —
 zurzeit sperrt sie `qtmux.exe`/`qtmux_echo_plugin.dll` · (3) `build/macos` aus dem finalen
 `main`-Stand neu bauen (s. Arbeitsstand) · (4) offene Jira QTMUX-40/38/2/13 nach Priorität.
 
@@ -361,10 +362,12 @@ zurzeit sperrt sie `qtmux.exe`/`qtmux_echo_plugin.dll` · (3) `build/macos` aus 
   PID 72801 läuft aus dem Memory-Image weiter). Verifizierter Endstand: `build/macos-test`.
   Vor dem nächsten Prod-Neustart `build/macos` neu bauen (`cmake --build build/macos`,
   NICHT `--preset` mit `-B`) — erst wenn die laufende Instanz beendet werden darf.
-- **Jira-Nachtrag offen** (Windows-Maschine hat keine Credentials — `CLAUDE.local.md` und
-  `Credential-*.txt` liegen nur auf dem Mac): **QTMUX-46** (Paritätslücken MCP/Palette/
-  Einstellungen) und **QTMUX-79** (VSCode-Build auf VS 2022 festgenagelt) sind umgesetzt +
-  gepusht, aber in keinem der beiden Jira angelegt.
+- **Jira-Nachträge erledigt (2026-07-28):** QTMUX-84/85/86/87 dual angelegt (on-prem und
+  Cloud standen beide bei 83, daher stimmen die Nummern mit dieser Datei überein); 84/86/87
+  auf Done, 85 im Backlog. 🔑 **Lektion:** Vor dem Anlegen eines neuen Tickets prüfen, ob in
+  der Doku bereits höhere Nummern *vergeben* sind — sonst kollidiert der nächste Key mit dem,
+  was hier steht. Die alte Notiz „QTMUX-46/-79 nicht angelegt" war schlicht falsch, beide
+  existieren und sind Done — Behauptungen dieser Art vor dem Handeln gegenprüfen.
 - **QTMUX-84 fertig + abgenommen (2026-07-28).** Meta-Kodierung umgesetzt, Debug **und**
   Release gebaut, `ctest -E "^test_pty$"` beidseitig 16/16. Abnahme in einer **echten
   Claude-Code-Session** (v2.1.220): Bild in der Zwischenablage → Alt+V → `❯  [Image #1]`
@@ -376,7 +379,10 @@ zurzeit sperrt sie `qtmux.exe`/`qtmux_echo_plugin.dll` · (3) `build/macos` aus 
   Alt+u gefüllt) — der Agent sah also ein normales `u` statt des Akkords. Beide Wege sind
   jetzt abgedeckt (text() gefüllt → ESC davor; leer → Zeichen aus dem Key-Code).
 
-**Offene Jira:** **QTMUX-40** (OSC-8-Hyperlinks — deferred; die Heuristik-Links aus QTMUX-39
+**Offene Jira:** **QTMUX-88** (AgentRegistry deckt nur 8 CLI-Agenten ab und enthält einen
+Fehler — `cursor` statt `cursor-agent`; Ticket trägt die Arbeitsanweisung inkl. Alias-Umbau,
+Recherchestand 2026-07-28 und der Begründung, warum `air`/`q`/`warp` **nicht** hineingehören) ·
+**QTMUX-40** (OSC-8-Hyperlinks — deferred; die Heuristik-Links aus QTMUX-39
 decken den Agenten-Fall ab, OSC-8 bräuchte Cursor-Span-Tracking + neues `Cell`-Feld, teuer da
 `VtScreen` den Sichtbereich lazy aus libvterm bildet) · **QTMUX-38** (Shell-Helfer für
 Installationsnutzer unerreichbar — nur im Repo, in keinem Paket; AppImage-Mount-Pfad wechselt,
@@ -396,6 +402,21 @@ einen `cfg` inkl. `program`/`pluginId`. Zu tun: Schalter + Nachweis, dass Agente
 wirklich mit ihrem Programm starten (Owner-Beobachtung: es kommen nur die Verzeichnisse).
 **Nicht** Teil davon: die Rückfrage vor dem Beenden — die gibt es schon (QTMUX-41,
 `window/confirmQuit`, Vorgabe an, Einstellungen → Allgemein → „Fenster" + Datei-Menü + Palette).
+
+**Aus der Air-Evaluation (2026-07-28, air.dev):** QTMUX-**89** (Ruhezustand verhindern,
+solange Agenten arbeiten) · **90** (Prompt-Queue je Session) · **91** (Agenten-Startprofile —
+gehört mit QTMUX-85 zusammen) · **92** (Container-Backend Docker/Podman) · **93** (Spike ACP —
+der strukturierte Gegenentwurf zur dokumentierten Schwäche „Worker meldet von sich aus
+nichts", berührt 55/73/75/90). Aus der vollständigen Doku-Sichtung (jetbrains.com/help/air,
+51 Seiten) zusätzlich **94** (Terminal-Ausgabe als Kontext an einen Agenten — Air holt sie
+sich mühsam, bei uns liegt sie in `VtScreen`) · **95** (Auslöser: Zeitplan/Webhook am
+vorhandenen MCP-HTTP-Server, lokal statt Cloud) · **96** (Agenten-Befehle aus
+`.claude/commands` &amp; Co. in der Palette). Bereits abgedeckt und deshalb NICHT neu angelegt:
+Worktrees (72), Diff/Review (73), Agentenfragen (75), Status/Fortschritt (55), Kanban (76),
+Ports (69) — 69/72/76/92 haben stattdessen Ergänzungskommentare bekommen.
+🔑 **Bewusst nicht übernommen:** alles Editor-artige (Symbols, Go-to-Definition, Datei-Baum,
+projektweite Suche, Commit-Erzeugung, Diff-Kommentare) und die Cloud-Hälfte — QTmux ist ein
+Terminal-Manager, kein IDE-Ersatz. Diese Linie beim nächsten Feature-Vergleich wiederverwenden.
 
 **Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) · Signierung/Notarisierung
 (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff (CAN-FD, ID-Filter,
