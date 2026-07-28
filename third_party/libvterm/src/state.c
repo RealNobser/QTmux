@@ -398,6 +398,22 @@ static int on_text(const char bytes[], size_t len, void *user)
       width += this_width;
     }
 
+    /* QTMUX: Emoji-Presentation nach Unicode TR#51. Ein Basiszeichen mit Text-Default
+     * (z. B. U+26A0 WARNING SIGN) wird durch VARIATION SELECTOR-16 (U+FE0F) zur
+     * farbigen Emoji-Form — und die ist in jedem Emoji-Font zwei Zellen breit.
+     * Ohne diese Regel bliebe die Zelle einspaltig, waehrend der Renderer die
+     * doppelt breite Glyphe zeichnet: sie ueberlappt dann die Nachbarzelle.
+     * VS-15 (U+FE0E) erzwingt umgekehrt die einspaltige Textform. */
+    {
+      int ci;
+      for(ci = 0; ci < glyph_ends - glyph_starts; ci++) {
+        if(chars[ci] == 0xFE0F && width == 1)
+          width = 2;
+        else if(chars[ci] == 0xFE0E && width == 2)
+          width = 1;
+      }
+    }
+
     while(i < npoints && vterm_unicode_is_combining(codepoints[i]))
       i++;
 

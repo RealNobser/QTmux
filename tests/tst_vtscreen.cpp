@@ -22,6 +22,7 @@ private slots:
     void oscAgentEvent();
     void trueColorRgb();
     void faintAttribute();
+    void emojiPresentationWidth();
     void lineWrapContinuation();
     void mouseReporting();
     void linkDetectionOnScreenLine();
@@ -93,6 +94,30 @@ void TestVtScreen::faintAttribute() {
 // Eine zu lange Eingabe bricht (Autowrap) auf die nächste Zeile um; diese Zeile ist
 // dann eine Flow-Fortsetzung. Genutzt von Copy, um einen umbrochenen Befehl als EINE
 // logische Zeile (ohne \n) zu kopieren statt fälschlich als mehrzeilig.
+void TestVtScreen::emojiPresentationWidth() {
+    // Unicode TR#51: Basiszeichen mit Text-Default + VS-16 (U+FE0F) ist die farbige
+    // Emoji-Form und belegt ZWEI Zellen. Ohne diese Regel bleibt die Zelle einspaltig,
+    // die Glyphe wird aber doppelt breit gezeichnet und beschädigt die Nachbarzelle
+    // (Symptom: fremde Emoji-Bruchstücke auf ganz anderen Zeichen).
+    {   // U+26A0 + VS-16: zwei Zellen, Folgezeichen erst in Spalte 2.
+        VtScreen vt(24, 80);
+        vt.inputWrite("\xe2\x9a\xa0\xef\xb8\x8fN");
+        QCOMPARE(int(vt.cell(0, 0).width), 2);
+        QCOMPARE(vt.cell(0, 2).text, QStringLiteral("N"));
+    }
+    {   // Dasselbe Basiszeichen OHNE VS-16 bleibt die einspaltige Textform.
+        VtScreen vt(24, 80);
+        vt.inputWrite("\xe2\x9a\xa0N");
+        QCOMPARE(int(vt.cell(0, 0).width), 1);
+        QCOMPARE(vt.cell(0, 1).text, QStringLiteral("N"));
+    }
+    {   // VS-15 (U+FE0E) erzwingt umgekehrt die Textform bei einem Emoji-Default.
+        VtScreen vt(24, 80);
+        vt.inputWrite("\xe2\x9c\x85\xef\xb8\x8eN");   // U+2705 + VS-15
+        QCOMPARE(int(vt.cell(0, 0).width), 1);
+    }
+}
+
 void TestVtScreen::lineWrapContinuation() {
     VtScreen vt(24, 10);                 // 10 Spalten breit
     vt.inputWrite("ABCDEFGHIJKLMNO");     // 15 Zeichen -> wickelt nach Spalte 10 um

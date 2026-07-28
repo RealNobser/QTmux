@@ -1,7 +1,9 @@
 #include "GlyphAtlas.h"
 
+#include <QFontMetricsF>
 #include <QGlyphRun>
 #include <QPainter>
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
@@ -118,12 +120,31 @@ const GlyphAtlas::Entry &GlyphAtlas::glyph(const QString &text, bool bold,
     {
         QPainter p(&m_image);
         p.setRenderHint(QPainter::TextAntialiasing, true);
+        // ⚠️ Harte Kachelgrenze: Farb-Emoji sind rund doppelt so breit wie eine Zelle.
+        // Ohne Clip malt so eine Glyphe in die NACHBARKACHEL des Atlas — dort bleibt der
+        // Überhang stehen (spätere Glyphen werden nur darübergemalt) und `tileHasColor()`
+        // stempelt den Nachbarn als Farb-Glyphe ab, die der Shader dann nicht mehr einfärbt.
+        // Symptom: ein fremdes Emoji-Bruchstück sitzt auf einem völlig anderen Zeichen.
+        p.setClipRect(rect);
         p.setFont(f);
         p.setPen(Qt::white);
         // In Geräte-Pixeln zeichnen: Baseline relativ zur Kachel.
         p.translate(rect.topLeft());
         p.scale(m_dpr, m_dpr);
-        p.drawText(QPointF(0, m_baseline), text);
+        // Passt die Tinte trotz korrekter Zellzahl nicht (exotischer Fallback-Font),
+        // proportional einpassen statt abzuschneiden. Gemessen wird das Ink-Rechteck,
+        // NICHT der Advance — Emoji-Bitmaps haben Seitenränder, ein Advance-Vergleich
+        // würde sonst jedes Doppelzellen-Emoji grundlos verkleinern.
+        const qreal avail = m_cellW * std::max(1, cellWidthUnits);
+        const QRectF ink = QFontMetricsF(f).tightBoundingRect(text);
+        const qreal need = std::max(ink.right(), ink.width());
+        if (need > avail && need > 0) {
+            const qreal s = avail / need;
+            p.scale(s, s);
+            p.drawText(QPointF(0, m_baseline / s), text);
+        } else {
+            p.drawText(QPointF(0, m_baseline), text);
+        }
     }
 
     m_penX += tileW + kPad;

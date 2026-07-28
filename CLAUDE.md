@@ -199,6 +199,13 @@ C CXX)` ist Pflicht (ohne `C` → leere `vterm.lib` → Linkfehler).
 > `VTERM_ATTR_FAINT` ans Enum-**Ende** (ABI), SGR 2 + erweitertes SGR 22 in pen.c,
 > Durchreichung bis `get_cell`/`attrs_differ`). `VtScreen` → `Cell.faint`;
 > `TerminalItem::effectiveFg()` dimmt 45 % Richtung bg. Tests `trueColorRgb`/`faintAttribute`.
+>
+> **Patch 2 — Emoji-Presentation (Unicode TR#51), `state.c` (QTMUX-97):** Basiszeichen mit
+> Text-Default + **VS-16 (U+FE0F)** → Breite **2** (VS-15/U+FE0E umgekehrt → 1). libvterm 0.3.3
+> führt U+FE00–FE0F in seiner `combining`-Tabelle (Breite 0) und kennt die Emoji-Form nicht;
+> `fullwidth.inc` deckt nur Zeichen mit Emoji-**Default** ab (✅ ❌ 😀 sind drin, **U+26A0 nicht**).
+> Betroffen ist also genau die VS-16-Klasse: ⚠️ ©️ ®️ ❤️ ‼️ ✔️ … Test
+> `tst_vtscreen::emojiPresentationWidth`.
 
 ## CI (GitHub Actions)
 
@@ -298,6 +305,10 @@ aufräumender Agent würde sich sonst selbst abschalten) — es meldet einen Hin
 Window-ID: Nur damit weiß man, was man `send_text`/`read_screen` übergibt.
 Vorarbeit QTMUX-80/81/82, dabei **stiller Selbst-Screenshot** `--screenshot <png>`
 (offscreen `grabWindow`, kein TCC) — der Standardweg für visuelle Abnahmen.
+⚠️ **Aber: `--screenshot` setzt `QTMUX_NO_GPU=1`** ([src/app/main.cpp](src/app/main.cpp)) und
+fotografiert damit den **QPainter-Fallback**, nicht den GPU-Pfad. Fehler, die im Glyph-Atlas
+sitzen (QTMUX-97), sind darauf **prinzipiell unsichtbar** — dafür braucht es den Atlas selbst
+als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
@@ -307,6 +318,21 @@ Working Tree: nur diese CLAUDE.md-Ergänzung. Windows-Maschine: `windows` (Debug
 hier umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell, ConPTY).
 Die Instrumentierung aus der QTMUX-86-Untersuchung ist **zurückgenommen**, `windows-release`
 danach sauber neu gebaut.
+
+**QTMUX-97 (Emoji-Artefakte im Terminal) ist behoben + Owner-abgenommen (2026-07-28).**
+Gelbe Dreiecks-Bruchstücke auf fremden Zeichen und einzelne Buchstaben in Emoji-Farbe.
+Ursache **zweistufig**: libvterm gab `⚠️` (U+26A0+VS-16) nur **1 Zelle**, Qt malte die
+Emoji-Form **2,15 Zellen** breit → Überhang in die Nachbarkachel des Glyph-Atlas. Fix in
+[third_party/libvterm/src/state.c](third_party/libvterm/src/state.c) (TR#51-Breite, s.
+libvterm-Abschnitt) + hartes Kachel-Clipping in
+[src/terminal/GlyphAtlas.cpp](src/terminal/GlyphAtlas.cpp) (Details in der Feature-Referenz
+unter „Rendering"). Debug **und** Release 18/18 grün; neuer Test
+`tst_vtscreen::emojiPresentationWidth` (Gegentest ohne Patch: FAIL). Abnahme durch den
+Owner am laufenden A/B: Testinstanz **7346** (mit Fix) gegen die alte aus `build/macos`
+auf **7347** — „Neu ist gut, alt ist Murx."
+⚠️ **Noch nicht in der produktiven Instanz**: die läuft aus `build/macos` (WIP-Stand) und
+bekommt den Fix erst bei einem Neubau dieses Verzeichnisses — der die laufenden Sessions
+mitreißt, also nur nach Owner-Freigabe.
 
 **QTMUX-86 (leeres Pane beim Window-Wechsel) ist behoben** — Ursache war **nicht** das
 Rendering, sondern eine transiente Layout-Größe (2 Zeilen), die bis zur Session durchgereicht
@@ -427,6 +453,19 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   brechen oder loggen) — der GPU-Ligatur-Code war einmal toter Code (`useGpu()`-Bedingung
   nicht geändert) und die „Verifikation" lief unbemerkt über den korrekten Fallback.
 - Fallback: `gpuRendering=false` / Env `QTMUX_NO_GPU=1` → `QPainter`-Pfad (Run-basiert).
+- 🔑 **Keine Glyphe darf über ihre Kachel hinausmalen (QTMUX-97).** `glyph()` zeichnet mit
+  hartem `setClipRect(rect)`; passt die **Tinte** trotz korrekter Zellzahl nicht, wird
+  proportional eingepasst (gemessen am `tightBoundingRect`, **nicht** am Advance — Emoji-
+  Bitmaps haben Seitenränder, ein Advance-Vergleich verkleinerte sonst jedes Doppelzellen-
+  Emoji grundlos). Vorher blutete ein Farb-Emoji (**2,15 Zellen breit**) in die
+  **Nachbarkachel** des Shelf-Packers; der Überhang blieb dort stehen (spätere Glyphen
+  werden nur *darüber*gemalt) und — perfider — `tileHasColor()` stempelte den verunreinigten
+  Nachbarn als **Farb-Glyphe** ab, die der Shader dann nicht mehr einfärbt. Symptome daher
+  zweierlei: fremde Emoji-Bruchstücke auf beliebigen Zeichen **und einzelne Buchstaben in
+  Emoji-Farbe**. Wen es traf, entschied allein die Einfüge-Reihenfolge in den Atlas → wirkte
+  zufällig. Die Wurzel lag aber in libvterm (VS-16-Breite, s. o.): Der Atlas-Clip ist das
+  Sicherheitsnetz, die Zellbreite der Fix. Messung: Überhang **21 px → 0 px**; live per MCP
+  `read_screen` gegengeprüft (114 Spalten: **57** ⚠️ pro Zeile statt 100 in einer).
 
 ### Terminal-Verhalten
 - **Scrollback** (Cap 10000) in `VtScreen`; Selektion in **absoluten** Inhalts-Zeilen
