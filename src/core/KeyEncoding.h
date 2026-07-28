@@ -20,4 +20,16 @@ namespace qtmux {
 /// Enter ohne Modifier, das bleibt unverändert CR.
 QByteArray encodeKeyBytes(int key, Qt::KeyboardModifiers mods, const QString &text);
 
+/// QTMUX-84: xterm-Meta-Kodierung für Alt+<druckbares Zeichen> → `ESC` + Zeichen.
+/// Liefert eine leere Sequenz, wenn die Kombination NICHT meta-kodiert werden darf
+/// (kein Alt, AltGr, Steuercode, nicht-ASCII). Bewusst immer verfügbar — auch auf
+/// macOS, wo `encodeKeyBytes` sie nicht benutzt —, damit die Logik plattformunabhängig
+/// unit-testbar bleibt.
+QByteArray encodeMetaSequence(int key, Qt::KeyboardModifiers mods, const QString &text);
+
+/// true auf Windows/Linux, false auf macOS. Dort erzeugt die Wahltaste Sonderzeichen
+/// (Option+v = „√"), und physisches Ctrl ist bereits Meta — eine Meta-Kodierung würde
+/// die Zeicheneingabe kaputtmachen statt etwas hinzuzufügen.
+bool metaPrefixEnabled();
+
 } // namespace qtmux

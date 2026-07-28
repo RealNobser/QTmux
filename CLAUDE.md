@@ -68,7 +68,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37) |
-| `tests/` | 15 ctest-Tests: 14 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding) + `test_doc_duplicates` (reines CMake-Skript) |
+| `tests/` | 17 ctest-Tests: 16 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
 
@@ -279,31 +279,24 @@ Vorarbeit QTMUX-80/81/82, dabei **stiller Selbst-Screenshot** `--screenshot <png
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-28** · Branch `main`, letzter Commit `eef2f99`, **synchron mit origin** ·
-Working Tree: nur diese CLAUDE.md-Aufräumung (uncommitted). Windows-Maschine: Debug- und
-Release-Build frisch, `ctest -E "^test_pty$"` **14/14 grün** (test_pty fällt hier
-umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell, ConPTY).
+Stand **2026-07-28** · Branch `main`, letzter Commit `9c55f33` (**ungepusht**) · Working
+Tree: QTMUX-84 (Meta-Kodierung) uncommitted. Windows-Maschine: `windows` (Debug) **und**
+`windows-release` frisch, `ctest -E "^test_pty$"` beidseitig **16/16 grün** (test_pty fällt
+hier umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell, ConPTY).
 
-**Nächster Punkt (Kandidat, vom Owner NICHT beauftragt):** Meta-Kodierung `Alt+<Taste>` →
-`ESC`+Taste, damit Claude Codes **Alt+V** (Bild aus der Zwischenablage) und die
-readline-Kürzel Alt+B/F/D überhaupt beim Agenten ankommen.
-- Einstieg: [src/core/KeyEncoding.cpp](src/core/KeyEncoding.cpp) `encodeKeyBytes` —
-  Alt wird dort **nur** bei Enter behandelt, sonst greift `text()` (unter Windows bei
-  Alt+Buchstabe leer → 0 Bytes gehen raus).
-- Vorgehen: Alt + druckbares Zeichen → `\x1b` + Zeichen; **nur Windows/Linux** (`#ifdef`),
-  macOS unverändert (Option erzeugt dort Sonderzeichen, physisches Ctrl ist schon Meta);
-  Alt+Enter (QTMUX-43) und Ctrl-Steuercodes nicht anfassen; Fälle in
-  [tests/tst_keyencoding.cpp](tests/tst_keyencoding.cpp) ergänzen.
-- Bauen/Testen: `tools\vsdev-build.cmd windows all` dann
-  `ctest --test-dir build\windows -E "^test_pty$"`; Release: `… windows-release`.
-- Abnahme: Screenshot in die Zwischenablage, in einer Claude-Code-Session Alt+V drücken,
-  per MCP `read_screen` prüfen, ob die `[Image #1]`-Markierung erscheint. Bilddaten laufen
-  **nie** durchs PTY — Claude Code liest die Zwischenablage selbst.
-- Beachten: neue Nummer vergeben (höchste belegte ist **QTMUX-83**), Jira dual anlegen
-  (nur auf dem Mac möglich), i18n nicht betroffen.
+**Nächster Punkt:** **QTMUX-85 — Wiederherstellung konfigurierbar + zuletzt aktive Session**
+(Owner-Wunsch 2026-07-28, Backlog unten). Vorher klären, was schon läuft: `activePaneId`
+**ist** je Window persistiert ([src/viewmodels/WindowModel.cpp](src/viewmodels/WindowModel.cpp)
+Z. 213/370/390), und jedes Blatt trägt einen `cfg` **inklusive `program`/`pluginId`** — die
+Bausteine sind also da. Zu bauen ist: der Schalter (Default **aus**) und der Nachweis, dass
+Agenten-Sessions wirklich mit ihrem Programm zurückkommen (Owner sieht derzeit nur die
+Verzeichnisse). ⚠️ Owner-Vorgabe: die zuletzt sichtbare Session ist **nicht** automatisch
+die neueste gefundene → am gespeicherten `activePaneId` festhalten, nicht heuristisch raten.
 
-**Danach:** (1) Jira-Nachträge QTMUX-46 + QTMUX-79 (Mac) · (2) `build/macos` aus dem finalen
-`main`-Stand neu bauen (s. Arbeitsstand) · (3) offene Jira QTMUX-40/38/2/13 nach Priorität.
+**Danach:** (1) Jira-Nachträge QTMUX-46 + QTMUX-79 + **QTMUX-84** + **QTMUX-85** (Mac) ·
+(2) `build/windows` (Debug) neu bauen, sobald die laufende Instanz beendet werden darf —
+zurzeit sperrt sie `qtmux.exe`/`qtmux_echo_plugin.dll` · (3) `build/macos` aus dem finalen
+`main`-Stand neu bauen (s. Arbeitsstand) · (4) offene Jira QTMUX-40/38/2/13 nach Priorität.
 
 ### Arbeitsstand (compact-fest — hier pflegen, nicht im Gespräch lassen)
 
@@ -315,15 +308,16 @@ readline-Kürzel Alt+B/F/D überhaupt beim Agenten ankommen.
   `Credential-*.txt` liegen nur auf dem Mac): **QTMUX-46** (Paritätslücken MCP/Palette/
   Einstellungen) und **QTMUX-79** (VSCode-Build auf VS 2022 festgenagelt) sind umgesetzt +
   gepusht, aber in keinem der beiden Jira angelegt.
-- **Befund ohne Auftrag (2026-07-28): Alt+&lt;Taste&gt; wird gar nicht ans PTY gemeldet.**
-  `encodeKeyBytes` behandelt Alt nur bei Enter; sonst greift `text()`, das unter Windows bei
-  Alt+Buchstabe leer ist → 0 Bytes. Damit erreicht **Alt+V** (Claude Codes Bild-Einfügen
-  unter Windows, weil Ctrl+V dort Text-Paste ist) den Agenten nie, und readline-Kürzel
-  (Alt+B/F/D) fehlen ebenso. Alt+V ist **nicht** doppelt belegt: Mnemonics sind
-  D/B/A/S/H, in der Hotkey-Registry existiert kein Alt-Kürzel. Fix wäre die
-  xterm-Meta-Kodierung Alt+X → `ESC`+x, **nur Windows/Linux** (auf macOS erzeugt Option
-  Sonderzeichen und physisches Ctrl ist schon Meta). Bilddaten laufen nie durchs PTY —
-  Claude Code liest die Zwischenablage selbst, QTmux muss nur die Taste melden.
+- **QTMUX-84 fertig + abgenommen (2026-07-28).** Meta-Kodierung umgesetzt, Debug **und**
+  Release gebaut, `ctest -E "^test_pty$"` beidseitig 16/16. Abnahme in einer **echten
+  Claude-Code-Session** (v2.1.220): Bild in der Zwischenablage → Alt+V → `❯  [Image #1]`
+  erscheint. Gegentest gegen das Binary von 11:22:57 zeigte `probe:u` statt der Marke;
+  AltGr am deutschen Layout unversehrt (`altgr:@`). Harness-Skripte liegen im Scratchpad
+  (`alt-meta-e2e.ps1`, `altgr-e2e.ps1`, `altv-claude-e2e.ps1`) — nicht im Repo.
+- **Korrektur eines früheren Befunds:** notiert war „Alt+&lt;Taste&gt; → 0 Bytes" (aus dem
+  Code gelesen). Empirisch geht das **nackte Zeichen** raus (`text()` war bei synthetischem
+  Alt+u gefüllt) — der Agent sah also ein normales `u` statt des Akkords. Beide Wege sind
+  jetzt abgedeckt (text() gefüllt → ESC davor; leer → Zeichen aus dem Key-Code).
 
 **Offene Jira:** **QTMUX-40** (OSC-8-Hyperlinks — deferred; die Heuristik-Links aus QTMUX-39
 decken den Agenten-Fall ab, OSC-8 bräuchte Cursor-Span-Tracking + neues `Cell`-Feld, teuer da
@@ -332,6 +326,19 @@ Installationsnutzer unerreichbar — nur im Repo, in keinem Paket; AppImage-Moun
 Windows ohne stdout) · **QTMUX-2** (Windows-`currentWorkingDirectory`-Funktionstest via PEB) ·
 **QTMUX-13** (native macOS-Menü-Icons — Qt reicht `icon.source`/`icon.name` in nativen Menüs
 nicht durch; einziger Weg wäre ein QMenuBar-Umbau, deferred; [[qtmux-native-menu-icons]]).
+
+**QTMUX-85 (Owner-Wunsch 2026-07-28, hinten im Backlog): Wiederherstellung konfigurierbar +
+zuletzt aktive Session.** Beim Neustart sollen nicht nur die Verzeichnisse zurückkommen,
+sondern **die geladenen Agenten** samt der Session, **die im Window zuletzt aktiv war** —
+per Einstellung, **Vorgabe aus**. ⚠️ Owner-Vorgabe: die zuletzt sichtbare Session ist
+**nicht** zwangsläufig die neueste gefundene → es braucht einen **konkreten Speicher für
+die ID**, keine Heuristik. Vorhandene Bausteine (nicht neu bauen): `activePaneId` je Window
+und `windows/activeRow` global sind schon persistiert
+([src/viewmodels/WindowModel.cpp](src/viewmodels/WindowModel.cpp)), und jedes Blatt trägt
+einen `cfg` inkl. `program`/`pluginId`. Zu tun: Schalter + Nachweis, dass Agenten-Sessions
+wirklich mit ihrem Programm starten (Owner-Beobachtung: es kommen nur die Verzeichnisse).
+**Nicht** Teil davon: die Rückfrage vor dem Beenden — die gibt es schon (QTMUX-41,
+`window/confirmQuit`, Vorgabe an, Einstellungen → Allgemein → „Fenster" + Datei-Menü + Palette).
 
 **Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) · Signierung/Notarisierung
 (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff (CAN-FD, ID-Filter,
@@ -408,6 +415,21 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   bewusst in Kauf genommen, unmodifiziertes Enter bleibt CR). Copy/Paste macOS Cmd+C/V,
   sonst Ctrl+Shift+C/V; Smart Ctrl+C (Auswahl→Copy, sonst SIGINT). Bracketed Paste +
   Multiline-Warnung; Copy-on-Select + Rechtsklick-Paste optional.
+- **Meta-Kodierung Alt+&lt;Zeichen&gt; → `ESC`+Zeichen (QTMUX-84):** `encodeMetaSequence`
+  (eigene Funktion, damit sie **plattformunabhängig** testbar bleibt) + Gate
+  `metaPrefixEnabled()` = **Windows/Linux, auf macOS aus** (dort erzeugt Option
+  Sonderzeichen und physisches Ctrl ist bereits Meta). Damit kommen Claude Codes **Alt+V**
+  (Bild aus der Zwischenablage — unter Windows, weil Ctrl+V dort Text-Paste ist) und die
+  readline-Kürzel Alt+B/F/D beim Agenten an. Kodiert wird im `default`-Zweig, Enter (QTMUX-43),
+  Backspace und die Steuertasten bleiben also unberührt.
+  🔑 **Teuerste Falle: AltGr meldet Windows als Ctrl+Alt.** Ohne die Ausnahme
+  `if (mods & Qt::ControlModifier) return {}` würden auf deutschen Tastaturen `@` (AltGr+q),
+  `€`, `\ ~ | [ ] { }` zerstört — der Fix wäre schlimmer als der Fehler. Am echten Layout
+  gegengeprüft (`keybd_event` mit VK_RMENU): `altgr:@` bleibt `@`.
+  🔑 Zwei Quellen für das Zeichen: ist `text()` gefüllt (Linux), wird es layout-treu
+  übernommen; ist es leer (Windows bei Alt+Buchstabe), wird das Zeichen aus dem **Key-Code**
+  gebildet (`Qt::Key_V == 'V'`, ohne Shift kleingeschrieben). Nicht-ASCII-Keycodes ohne
+  `text()` werden abgelehnt, statt ein Zeichen zu erfinden.
 - **Klickbare Links (QTMUX-39):** `LinkDetector` (Gui-frei) findet **URLs**
   (Scheme-Whitelist http/https/ftp/mailto/file — KI-Output darf keinen beliebigen Handler
   starten) und **existierende Dateipfade** (gegen Session-CWD; die `QFileInfo::exists`-Prüfung
@@ -473,7 +495,8 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `IdRole`/`"sessionId"`; im Delegate `required property int sessionId`. Bewusst NICHT der
   Zeilenindex (der wandert beim Umsortieren/Gruppieren).
 - **Beenden mit Rückfrage (QTMUX-41):** Dialog listet die offenen Sitzungen auf, bevor
-  alles geschlossen wird; abschaltbar (`window/confirmQuit`, Einstellungen → Fenster).
+  alles geschlossen wird; abschaltbar (`window/confirmQuit`, **Vorgabe an**; Einstellungen →
+  **Allgemein**, Abschnitt „Fenster" — dazu Datei-Menü und Palette, QTMUX-46).
   🔑 Zentraler Wächter ist **`Window.onClosing`** (`close.accepted = false`), NICHT die
   Beenden-Aktion: Seit **Qt 6.5** läuft auch ein Anwendungs-Quit (natives macOS-App-Menü,
   Cmd+Q, `Qt.quit()`) über das Schließen aller Fenster und bricht ab, wenn ein Fenster
@@ -641,6 +664,18 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 - Windows-E2E: Foreground nur zuverlässig mit `AttachThreadInput`; ein Alt-Stoß vor ESC
   schaltet den Qt-Menümodus (ESC schließt dann nur den). Menüs via UIA-`InvokePattern`
   öffnen. Synthetische Tasten erst nach Warteschleife aufs `MainWindowHandle`.
+  ⚠️ **Anhängen an den Ziel-Thread allein genügt nicht**, wenn eine andere App den
+  Vordergrund hält (hier VS Code): `AttachThreadInput` zusätzlich an den Thread des
+  **aktuellen Vordergrundfensters** + `SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT,0)`,
+  sonst schlägt `SetForegroundWindow` still fehl und die Tasten landen in der IDE.
+  Vordergrund **prüfen** (`GetForegroundWindow()`), nicht annehmen — und den PID des
+  Vordergrundfensters mitloggen, das benennt den Dieb sofort.
+- ⚠️ **Marker-Kollision = falsch-positiver E2E-Beweis.** Wird eine Marke per Befehl in die
+  Session eingerichtet (`Set-PSReadLineKeyHandler … Insert("META_OK")`), steht sie durch das
+  **Echo der Befehlszeile** schon auf dem Bildschirm — `read_screen` findet sie, obwohl nie
+  eine Taste ankam. Marke im Befehl **zusammensetzen** (`'MET'+'A_OK'`), damit nur die
+  tatsächliche Einfügung sie als Ganzes erzeugt. Aufgefallen nur, weil der Gegentest gegen
+  das alte Binary „bestanden" meldete.
   ⚠️ **Nie mit `-RedirectStandardError`/`-RedirectStandardOutput` starten** — das bricht die
   ConPTY-Anbindung der Kindshells, alle Sessions sterben und die leere Sidebar sieht wie ein
   Regressionsbug aus (2026-07-27 genau so fehlinterpretiert). Qt-Warnungen also anders holen.

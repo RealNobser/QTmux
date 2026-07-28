@@ -54,6 +54,76 @@ private slots:
         QCOMPARE(encodeKeyBytes(Qt::Key_F12, Qt::NoModifier, QString()), QByteArray("\x1b[24~"));
     }
 
+    // --- QTMUX-84: Meta-Kodierung Alt+<Zeichen> → ESC + Zeichen ---------------
+
+    void altLetterBecomesMetaSequence() {
+        // Der Windows-Fall: text() ist bei Alt+Buchstabe LEER — vorher gingen darum
+        // 0 Bytes raus (Alt+V für Claude Codes Bild-Einfügen kam nie an).
+        QCOMPARE(encodeMetaSequence(Qt::Key_V, Qt::AltModifier, QString()),
+                 QByteArray("\x1b" "v"));
+        // readline-Kürzel, dieselbe Klasse.
+        QCOMPARE(encodeMetaSequence(Qt::Key_B, Qt::AltModifier, QString()),
+                 QByteArray("\x1b" "b"));
+        QCOMPARE(encodeMetaSequence(Qt::Key_D, Qt::AltModifier, QString()),
+                 QByteArray("\x1b" "d"));
+        // Der Linux-Fall: text() ist gefüllt und wird layout-treu übernommen.
+        QCOMPARE(encodeMetaSequence(Qt::Key_V, Qt::AltModifier, QStringLiteral("v")),
+                 QByteArray("\x1b" "v"));
+    }
+
+    void altShiftKeepsUpperCase() {
+        QCOMPARE(encodeMetaSequence(Qt::Key_V, Qt::AltModifier | Qt::ShiftModifier, QString()),
+                 QByteArray("\x1b" "V"));
+    }
+
+    void altGrIsNotMetaEncoded() {
+        // ⚠️ Gegenprobe zur teuersten Falle: Windows meldet AltGr als Ctrl+Alt.
+        // AltGr+q muss „@" bleiben, nicht ESC q werden.
+        QCOMPARE(encodeMetaSequence(Qt::Key_Q,
+                                    Qt::AltModifier | Qt::ControlModifier,
+                                    QStringLiteral("@")),
+                 QByteArray());
+        QCOMPARE(encodeKeyBytes(Qt::Key_Q, Qt::AltModifier | Qt::ControlModifier,
+                                QStringLiteral("@")),
+                 QByteArray("@"));
+    }
+
+    void metaSequenceRejectsNonCandidates() {
+        // Ohne Alt gar nichts.
+        QCOMPARE(encodeMetaSequence(Qt::Key_V, Qt::NoModifier, QStringLiteral("v")),
+                 QByteArray());
+        // Steuercodes bleiben unangetastet (kein ESC vor \x02).
+        QCOMPARE(encodeMetaSequence(Qt::Key_B, Qt::AltModifier, QStringLiteral("\x02")),
+                 QByteArray());
+        // Doppelte Kodierung vermeiden, wenn die Plattform das ESC selbst liefert.
+        QCOMPARE(encodeMetaSequence(Qt::Key_V, Qt::AltModifier, QStringLiteral("\x1b" "v")),
+                 QByteArray());
+        // Nicht-ASCII-Keycode ohne text() → nichts erfinden.
+        QCOMPARE(encodeMetaSequence(Qt::Key_Adiaeresis, Qt::AltModifier, QString()),
+                 QByteArray());
+    }
+
+    void altEnterKeepsQtmux43Behaviour() {
+        // Die Meta-Kodierung darf QTMUX-43 nicht kapern: Enter wird im switch
+        // behandelt, erreicht den Meta-Zweig also nie.
+        QCOMPARE(encodeKeyBytes(Qt::Key_Return, Qt::AltModifier, QStringLiteral("\r")),
+                 QByteArray("\x1b\r"));
+        // Und Alt+Backspace bleibt DEL (Meta-Kodierung greift nur im default-Zweig).
+        QCOMPARE(encodeKeyBytes(Qt::Key_Backspace, Qt::AltModifier, QString()),
+                 QByteArray("\x7f"));
+    }
+
+    void encodeKeyUsesMetaOnlyOffMac() {
+        // Plattform-Gate am Windows-Realfall (Alt+V ohne text()): Windows/Linux
+        // kodieren Meta, macOS nicht — dort erzeugt Option Sonderzeichen (Option+v =
+        // „√") und physisches Ctrl ist schon Meta.
+        const QByteArray got = encodeKeyBytes(Qt::Key_V, Qt::AltModifier, QString());
+        if (metaPrefixEnabled())
+            QCOMPARE(got, QByteArray("\x1b" "v"));
+        else
+            QCOMPARE(got, QByteArray()); // wie vor QTMUX-84: nichts zu senden
+    }
+
     void printableFallsBackToText() {
         // Druckbare Zeichen (und Ctrl-Steuercodes) kommen aus QKeyEvent::text().
         QCOMPARE(encodeKeyBytes(Qt::Key_A, Qt::NoModifier, QStringLiteral("a")),

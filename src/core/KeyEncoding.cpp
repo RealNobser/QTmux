@@ -41,8 +41,53 @@ QByteArray encodeKeyBytes(int key, Qt::KeyboardModifiers mods, const QString &te
     case Qt::Key_F11:      return "\x1b[23~";
     case Qt::Key_F12:      return "\x1b[24~";
     default:
+        // QTMUX-84: Alt+<Zeichen> als Meta-Sequenz, bevor der text()-Fallback greift.
+        if (metaPrefixEnabled()) {
+            const QByteArray meta = encodeMetaSequence(key, mods, text);
+            if (!meta.isEmpty())
+                return meta;
+        }
         return text.toUtf8();
     }
+}
+
+QByteArray encodeMetaSequence(int key, Qt::KeyboardModifiers mods, const QString &text) {
+    if (!(mods & Qt::AltModifier))
+        return {};
+    // ⚠️ AltGr meldet Windows als Ctrl+Alt. Würden wir das meta-kodieren, gingen auf
+    // deutschen Tastaturen @ (AltGr+q), € (AltGr+e), \ ~ | [ ] { } verloren — der Fix
+    // wäre schlimmer als der Fehler. Ctrl+Alt bleibt darum beim text()-Fallback.
+    if (mods & Qt::ControlModifier)
+        return {};
+
+    QString ch = text;
+    if (ch.isEmpty()) {
+        // Windows liefert bei Alt+Buchstabe ein LEERES text() (genau der Grund, warum
+        // Alt-Kürzel bisher spurlos verpufften) → Zeichen aus dem Key-Code bilden.
+        // Qt::Key_V == 'V'; ohne Shift der Kleinbuchstabe, wie xterm es sendet.
+        if (key < 0x20 || key > 0x7e)
+            return {};
+        ch = QChar(key);
+        if (!(mods & Qt::ShiftModifier))
+            ch = ch.toLower();
+    } else {
+        const QChar c = ch.at(0);
+        // Bereits meta-kodiert (manche X11-Layouts liefern ESC selbst) → nicht doppeln.
+        if (c == QChar(0x1b))
+            return {};
+        // Steuercodes (Ctrl-Kombinationen, Backspace) bleiben unangetastet.
+        if (c.unicode() < 0x20 || c == QChar(0x7f))
+            return {};
+    }
+    return QByteArray("\x1b") + ch.toUtf8();
+}
+
+bool metaPrefixEnabled() {
+#if defined(Q_OS_MACOS)
+    return false;
+#else
+    return true;
+#endif
 }
 
 } // namespace qtmux
