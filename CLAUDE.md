@@ -288,6 +288,14 @@ sondern das tmux-Modell — Sidebar = **Windows** (Tabs), jedes Window hat sein 
 Split-Layout, Splits = Panes **im** Window, `focus_window` schaltet das ganze Layout um.
 Gruppen sind seither **Window**-Gruppen. Details/Verifikation:
 `docs/design/per-window-layouts/Umsetzung.md`; Mechanik unten in der Feature-Referenz.
+🔑 **Zwei Nachbesserungen aus dem Anwendertest (QTMUX-87):** (1) Das **letzte** Fenster zu
+schließen **beendet QTmux** (`requestQuit`, normale Rückfrage) — vorher entstand sofort ein
+neues, leeres Fenster mit höherer ID, was wie ein durchlaufender Zähler aussah und die
+Meldung „Sessions nicht wiederhergestellt" erzeugte (in Wahrheit hatte das Schließen die
+Sessions beendet). Über **MCP** beendet `close_window` die App bewusst **nicht** (ein
+aufräumender Agent würde sich sonst selbst abschalten) — es meldet einen Hinweis.
+(2) Die Kachel zeigt wieder die **Session-ID des aktiven Panes** (QTMUX-44), nicht die
+Window-ID: Nur damit weiß man, was man `send_text`/`read_screen` übergibt.
 Vorarbeit QTMUX-80/81/82, dabei **stiller Selbst-Screenshot** `--screenshot <png>`
 (offscreen `grabWindow`, kein TCC) — der Standardweg für visuelle Abnahmen.
 

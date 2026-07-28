@@ -201,6 +201,13 @@ ApplicationWindow {
         onCloseWindowRequested: (id) => {
             const row = windows.rowForId(id)
             if (row < 0) { mcp.provideResult(false, qsTr("Unbekannte windowId.")); return }
+            // Das letzte Fenster zu schließen beendet in der GUI die App (QTMUX-87). Über MCP
+            // wird das bewusst NICHT getan: ein aufräumender Agent würde sonst QTmux samt
+            // seiner eigenen Sitzung beenden. Stattdessen ein klarer Hinweis.
+            if (windows.count <= 1) {
+                mcp.provideResult(false, qsTr("Letztes Fenster: Schließen würde QTmux beenden — über MCP nicht möglich. Nutze close_pane/close_session oder beende die App in der Oberfläche."))
+                return
+            }
             window.closeWindowRow(row)
             mcp.provideResult(true, "ok")
         }
@@ -248,6 +255,9 @@ ApplicationWindow {
     property var _removingIds: []
     // Neu eingefügte sessionIds, die auf ihr Auto-Wrapping in ein Window warten.
     property var _pendingWrap: []
+    // Solange der Restore läuft, darf ein kurzzeitig leerer Fensterstand die App NICHT
+    // beenden (s. pruneSessionsFromWindows).
+    property bool _starting: true
 
     // Extern (per MCP/C++) erzeugte Sessions haben keinen Window — sie kommen mit
     // windowId==-1 an und würden sonst in keinem Pane sichtbar. QML-erzeugte Sessions
@@ -725,6 +735,21 @@ ApplicationWindow {
         }
         walk(tree); return found
     }
+    // Session-ID des AKTIVEN Panes eines Windows — das ist die Nummer, mit der man die
+    // Sitzung per MCP anspricht (`send_text`, `read_screen` …), und genau das, was die
+    // Kachel anzeigt (QTMUX-44). Beim aktiven Window ist der Live-Baum maßgeblich, sonst
+    // das gespeicherte layoutJson. Fällt auf das erste Blatt zurück.
+    function windowActiveSessionId(w) {
+        if (!w) return -1
+        if (w.windowId === window.activeWindowId) {
+            const f = findLeaf(window.activePaneId)
+            if (f && f.leaf) return f.leaf.sessionId
+        }
+        const sid = window.sessionIdForPane(w, w.activePaneId)
+        if (sid >= 0) return sid
+        const ids = w.sessionIds()
+        return ids.length ? ids[0] : -1
+    }
     function windowTitle(w) {
         if (!w) return qsTr("Fenster")
         if (w.name && w.name.length > 0) return w.name
@@ -815,6 +840,10 @@ ApplicationWindow {
         captureSplitStates()
         w.layoutJson = JSON.stringify(serializeLayoutNode(window.layout))
         w.activePaneId = window.activePaneId
+        // Strukturänderung im aktiven Window (Split/Schließen/Pane-Wechsel) → die in QML
+        // berechneten Kachel-Werte (Pane-Zahl, Session-ID des aktiven Panes) neu auswerten.
+        // Ohne diesen Anker fror z. B. das ▦-Badge auf dem Stand beim Anlegen ein.
+        window.windowsRevision++
     }
     // persistLayout = syncActiveTree (Alias, in rebuildLayout genutzt).
     function persistLayout() { syncActiveTree() }
@@ -1017,7 +1046,16 @@ ApplicationWindow {
             if (w && w.windowId === window.activeWindowId) activeClosed = true
             windows.closeWindow(closeRows[k])
         }
-        if (windows.count === 0) { window.activeWindowId = -1; window.layout = null; newSession(); return }
+        // Verschwindet damit das LETZTE Fenster (z. B. `exit` in der einzigen Shell), ist
+        // QTmux leer — dann beenden statt ein Geister-Fenster nachzuschieben (QTMUX-87).
+        // Der Startup-Guard verhindert, dass ein kurzzeitig leerer Zustand während des
+        // Restores die App beendet.
+        if (windows.count === 0) {
+            window.activeWindowId = -1
+            window.layout = null
+            if (!window._starting) window.requestQuit()
+            return
+        }
         if (activeClosed) {
             const nr = Math.max(0, Math.min(windows.activeRow >= 0 ? windows.activeRow : 0, windows.count - 1))
             const nw = windows.windowAt(nr)
@@ -1036,9 +1074,14 @@ ApplicationWindow {
     }
 
     // Ein Window (Tab) samt seiner Sessions schließen.
+    // Das LETZTE Fenster zu schließen beendet QTmux (Anwender-Entscheidung, QTMUX-87):
+    // vorher entstand stattdessen sofort ein neues, leeres Fenster mit höherer ID — das
+    // sah aus wie ein durchlaufender Zähler und wirkte, als sei nichts geschlossen worden.
+    // requestQuit() nutzt die normale Beenden-Rückfrage (listet die offenen Sitzungen).
     function closeWindowRow(row) {
         const w = windows.windowAt(row)
         if (!w) return
+        if (windows.count <= 1) { window.requestQuit(); return }
         const wasActive = (w.windowId === window.activeWindowId)
         const sids = w.sessionIds()            // C++ QList<int> -> JS-Array
         // Erst das Window aus dem Model nehmen, damit das Session-Pruning es nicht mehr sieht.
@@ -1056,7 +1099,6 @@ ApplicationWindow {
             const rr = window.rowForSessionId(sids[i])
             if (rr >= 0) sessions.closeSession(rr)
         }
-        if (windows.count === 0) newSession()
     }
 
     function rebuildLayout() {
@@ -1246,6 +1288,7 @@ ApplicationWindow {
         // altes `sessions`-Profil). Kein sessions.restoreState() mehr — die Sessions
         // entstehen je Blatt aus dem gespeicherten cfg.
         window.restoreWindows()
+        window._starting = false   // ab jetzt darf ein leerer Fensterstand beenden
     }
 
     // Wird das Fenster (wieder) aktiv, den Tastaturfokus auf das aktive Pane legen,
@@ -2256,6 +2299,7 @@ ApplicationWindow {
                         readonly property int aggState: (window.sessionsRevision, window.windowRunState(wobj))
                         readonly property bool attention: (window.sessionsRevision, window.windowAttention(wobj))
                         readonly property bool controller: (window.sessionsRevision, window.windowController(wobj))
+                        readonly property int activeSid: (window.sessionsRevision, window.windowsRevision, window.windowActiveSessionId(wobj))
                         readonly property bool selected: tile.index === windows.activeRow
                         // Eingeklappte Gruppen: Kachel verschwindet (Window läuft weiter).
                         readonly property bool hidden: group.length > 0 && window.isGroupCollapsed(group)
@@ -2382,9 +2426,13 @@ ApplicationWindow {
                                         font.pixelSize: 10
                                         Layout.alignment: Qt.AlignVCenter
                                     }
-                                    // Stabile Window-ID (Nachschlag für MCP focus_window).
+                                    // Stabile SESSION-ID des aktiven Panes (QTMUX-44): genau
+                                    // die Nummer für send_text/read_screen. Bewusst NICHT die
+                                    // Window-ID — die ist ein internes, stetig wachsendes
+                                    // Adress-Token und wirkte als Kachel-Nummer wie ein
+                                    // durchlaufender Zähler (QTMUX-87).
                                     Text {
-                                        text: "#" + tile.windowId
+                                        text: tile.activeSid >= 0 ? "#" + tile.activeSid : ""
                                         color: Theme.textDim
                                         font.pixelSize: 10
                                         font.family: window.terminalFontFamily
