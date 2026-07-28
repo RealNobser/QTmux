@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <limits>        // std::numeric_limits (NaN-Fall) — MSVC zieht es transitiv, GCC/Clang nicht
 
 #include "TerminalGrid.h"
 
