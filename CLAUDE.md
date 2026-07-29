@@ -120,41 +120,34 @@ ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein
 > („2026"), und die CMake-Tools-Erweiterung injiziert immer die **neueste** Dev-Umgebung —
 > wählbar ist die Installation nicht (1.23.52 kennt nur `useVsDeveloperEnvironment` /
 > `preferredGenerators`). VS-2022-`cl.exe` + VS-18-STL ergibt `error STL1001: Unexpected
-> compiler version, expected MSVC Compiler 19.50 or newer`. Deshalb: Umgebung kommt aus
-> **`tools/vsdev-build.cmd`** (vswhere auf `[17.0,18.0)` begrenzt), aufgerufen von der Task
-> „CMake: build"; `useVsDeveloperEnvironment: never`, Debug-Pfad in `launch.json` fest aufs
-> `windows`-Preset. VS 2022 bleibt Standard (Qt ist `msvc2022_64`, CI und `build-msi.ps1`
-> ebenso).
-> ⚠️ **Folgefehler von `never` (2026-07-28) — alle drei Wege müssen durchs Skript.** Ohne
-> Injektion baute der **eigene** Prozess der Erweiterung ganz ohne VS-Umgebung: Compiler und
-> Linker findet Ninja noch über die absoluten Cache-Pfade, aber `INCLUDE`/`LIB` fehlen →
-> `fatal error C1083: "type_traits"` und `LNK1104: "iphlpapi.lib"`. Tückisch: **dasselbe
-> Preset im Release „ging"**, weil dort nichts zu übersetzen war (`ninja: no work to do`
-> braucht keinen Compiler) — der Fehler sah preset-spezifisch aus, war aber nur
-> „Debug hatte etwas zu tun". Gegenprobe, die das festnagelt: **derselbe** Befehl der
-> Erweiterung scheitert in einer normalen Shell mit `C1083`, durch den Wrapper (unten) läuft
-> er durch — es ist die Umgebung, nicht der Code.
-> ⚠️ **`cmake.buildTask: true` löst das NICHT** (2026-07-29 verworfen, war einen Tag lang als
-> Abhilfe eingetragen): `findBuildTask()` in `dist/main.js` holt die Task per
-> `fetchTasks({ type: "cmake" })` — eine **`type: shell`**-Task findet sie nicht und baut
-> **still wieder selbst**. Im Log erkennbar daran, dass dort weiter
-> `[proc] Executing command: … cmake.EXE --build …` steht statt eines Task-Terminals.
-> ✅ **Was trägt:** `tools/cmake-vsdev.cmd` — ein cmake-**Wrapper**, der vswhere+vcvars64
-> (VS 2022) selbst herstellt und alle Argumente durchreicht. Eintrag in die **Benutzer**-
-> Einstellungen (nicht ins Repo, `.vscode/settings.json` gilt auch für macOS/Linux):
-> `"cmake.cmakePath": "…/tools/cmake-vsdev.cmd"`. Damit läuft **jeder** cmake-Aufruf der
-> Erweiterung (Build-Knopf, Palette, Konfigurieren) in der richtigen Umgebung. Unabhängig
-> davon bleiben `configureOnOpen`/`configureOnEdit`/`automaticReconfigure` **aus**
-> (`automaticReconfigure` feuert beim **Preset-Wechsel**), und Strg+Umschalt+B / F5 gehen
-> über die Tasks → `tools/vsdev-build.cmd`. Die Task setzt das **aktive** Preset ein
-> (`${command:cmake.activeBuildPresetName}`) — sonst baut sie bei gewähltem Release stumm
-> Debug; das Argument ist im Skript **gequotet**, damit ein etwaiger Anzeigename
-> („Windows (MSVC)") sauber als `No such preset` scheitert statt die Batch-Zeile zu zerlegen.
-> 🔑 **Zweiter, latenter Fehler (2026-07-29 mitgefunden):** Das `windows`-Preset hatte als
-> Qt-Fallback `C:/Qt/6.10.3/msvc2022_64` — auf dieser Maschine ist nur **6.11.1** installiert.
-> Bestehende Build-Verzeichnisse merkten das nicht (Qt lag schon im Cache), ein **frisches**
-> hätte Qt nicht gefunden. Jetzt 6.11.1; die CI ist davon unabhängig (sie ruft `cmake` direkt
-> mit `QT_ROOT_DIR` auf, ohne Presets). Eigene Qt-Installation weiter über `QTMUX_QT_PREFIX`.
+> compiler version, expected MSVC Compiler 19.50 or newer`. VS 2022 bleibt Standard (Qt ist
+> `msvc2022_64`, CI und `build-msi.ps1` ebenso), die Umgebung kommt deterministisch aus
+> **`tools/vsdev-build.cmd`** (vswhere auf `[17.0,18.0)` begrenzt).
+> **Wer die Umgebung woher bekommt** (drei Wege, alle einmal falsch gewesen):
+> - **Strg+Umschalt+B / F5** → Task → `tools/vsdev-build.cmd`. Die Task setzt das **aktive**
+>   Preset ein (`${command:cmake.activeBuildPresetName}`), sonst baut sie bei gewähltem Release
+>   stumm Debug; im Skript **gequotet**, damit ein etwaiger Anzeigename („Windows (MSVC)")
+>   sauber als `No such preset` scheitert statt die Batch-Zeile zu zerlegen.
+> - **Build-Knopf / Palette / automatische Konfigurationsläufe** = die Erweiterung ruft cmake
+>   **selbst**. Mit `useVsDeveloperEnvironment: never` erbt sie gar keine VS-Umgebung: Ninja
+>   findet Compiler und Linker über die absoluten Cache-Pfade, aber `INCLUDE`/`LIB` fehlen →
+>   `C1083 "type_traits"`, `LNK1104 "iphlpapi.lib"`. Abhilfe ist ein cmake-**Wrapper**
+>   ([tools/cmake-vsdev.cmd](tools/cmake-vsdev.cmd), stellt vswhere+vcvars64 selbst her und
+>   reicht alle Argumente durch), eingetragen in die **Benutzer**-Einstellungen:
+>   `"cmake.cmakePath": "…/tools/cmake-vsdev.cmd"` — nicht ins Repo, `.vscode/settings.json`
+>   gilt auch für macOS/Linux. `configureOnOpen`/`configureOnEdit`/`automaticReconfigure`
+>   bleiben trotzdem **aus** (`automaticReconfigure` feuert beim **Preset-Wechsel**).
+> - ❌ **`cmake.buildTask: true` trägt NICHT** (einen Tag lang irrig eingetragen):
+>   `findBuildTask()` in `dist/main.js` holt nur `fetchTasks({ type: "cmake" })` — eine
+>   `type: shell`-Task findet sie nicht und baut **still wieder selbst**.
+> 🔑 **Zwei Diagnose-Merkmale, die Zeit sparen:** „Release geht, Debug nicht" heißt hier **nicht**
+> preset-spezifisch, sondern nur „Release hatte nichts zu übersetzen" (`ninja: no work to do`
+> braucht keinen Compiler). Und baut die Erweiterung noch selbst, steht im Log
+> `[proc] Executing command: … cmake.EXE --build …` statt eines Task-Terminals.
+> 🔑 **Qt-Pfad:** Das `windows`-Preset nimmt `$env{QTMUX_QT_PREFIX}` und fällt sonst auf
+> `C:/Qt/6.11.1/msvc2022_64` zurück (stand bis 2026-07-29 auf dem hier nicht installierten
+> 6.10.3 — bestehende Build-Dirs merkten das nicht, weil Qt im Cache lag, ein **frisches**
+> hätte Qt nicht gefunden). Die CI ist unabhängig davon (eigener `cmake`-Aufruf mit `QT_ROOT_DIR`).
 > 🔑 Batch-Fallen in dieser Datei: **CRLF** Pflicht (bei LF führt cmd.exe Kommentarzeilen
 > aus), **rein ASCII**, und `%ProgramFiles(x86)%` **nie in einer `for`-/`if`-Klammer**
 > expandieren — das `)` aus „(x86)" schließt sie vorzeitig („Der Befehl `C:\Program` ist
@@ -300,24 +293,20 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 
 ## Status (2026-07-29)
 
-**Aktuell:** v1.6.1 ausgeliefert (alle 4 Installer: DMG/MSI+ZIP/AppImage). Phasen 0–6
+**Ausgeliefert: v1.7.1** (Tag `v1.7.1`, alle 4 Installer: DMG/MSI+ZIP/AppImage). Phasen 0–6
 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Plugins +
 MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **37 MCP-Tools**
 (GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert.
 
-**Window-Modell (QTMUX-83, auf `main`, ungereleast):** Kein globales Split-Layout mehr,
-sondern das tmux-Modell — Sidebar = **Windows** (Tabs), jedes Window hat sein eigenes
-Split-Layout, Splits = Panes **im** Window, `focus_window` schaltet das ganze Layout um.
-Gruppen sind seither **Window**-Gruppen. Details/Verifikation:
+**Window-Modell (QTMUX-83, seit v1.7.0):** Kein globales Split-Layout mehr, sondern das
+tmux-Modell — Sidebar = **Windows** (Tabs), jedes Window hat sein eigenes Split-Layout,
+Splits = Panes **im** Window, `focus_window` schaltet das ganze Layout um. Gruppen sind
+seither **Window**-Gruppen. Details/Verifikation:
 `docs/design/per-window-layouts/Umsetzung.md`; Mechanik unten in der Feature-Referenz.
-🔑 **Zwei Nachbesserungen aus dem Anwendertest (QTMUX-87):** (1) Das **letzte** Fenster zu
-schließen **beendet QTmux** (`requestQuit`, normale Rückfrage) — vorher entstand sofort ein
-neues, leeres Fenster mit höherer ID, was wie ein durchlaufender Zähler aussah und die
-Meldung „Sessions nicht wiederhergestellt" erzeugte (in Wahrheit hatte das Schließen die
-Sessions beendet). Über **MCP** beendet `close_window` die App bewusst **nicht** (ein
-aufräumender Agent würde sich sonst selbst abschalten) — es meldet einen Hinweis.
-(2) Die Kachel zeigt wieder die **Session-ID des aktiven Panes** (QTMUX-44), nicht die
-Window-ID: Nur damit weiß man, was man `send_text`/`read_screen` übergibt.
+🔑 Aus dem Anwendertest (QTMUX-87): Das **letzte** Fenster zu schließen **beendet QTmux**
+(`requestQuit` + normale Rückfrage) — vorher entstand sofort ein neues, leeres Fenster mit
+höherer ID, was wie ein durchlaufender Zähler aussah. Über **MCP** beendet `close_window`
+die App bewusst **nicht** (ein aufräumender Agent würde sich sonst selbst abschalten).
 Vorarbeit QTMUX-80/81/82, dabei **stiller Selbst-Screenshot** `--screenshot <png>`
 (offscreen `grabWindow`, kein TCC) — der Standardweg für visuelle Abnahmen.
 ⚠️ **Aber: `--screenshot` setzt `QTMUX_NO_GPU=1`** ([src/app/main.cpp](src/app/main.cpp)) und
@@ -327,91 +316,39 @@ als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-29** · Branch `main`, letzter **Code**-Commit `0dd1cc5` (QTMUX-98), gefolgt von
-der Doku-Konsolidierung `a16d8ac`; beides **gepusht**, Working Tree sauber.
-macOS: `macos-test` und `macos-release` tragen den
-Endstand (18/18 grün, Debug und Release). Windows-Maschine (Stand 2026-07-29): `windows`
-(Debug) **und** `windows-release` frisch auf diesem Stand, `ctest -E "^test_pty$"` beidseitig
+Stand **2026-07-29** · Branch `main`, letzter Commit **`21d622d`** (QTMUX-100), **gepusht**,
+Working Tree sauber · Version **1.7.1** (Tag `v1.7.1` ausgeliefert).
+**Teststände:** macOS `macos-test` (Debug) und `macos-release` **18/18 grün**;
+Windows `windows` (Debug) und `windows-release` frisch, `ctest -E "^test_pty$"` beidseitig
 **17/17 grün** (test_pty fällt hier umgebungsbedingt auch auf unverändertem Stand —
-nicht-interaktive Shell, ConPTY). Die Instrumentierung aus der QTMUX-86-Untersuchung ist
-**zurückgenommen**. 🔑 Auf dieser Maschine zeigt `"cmake.cmakePath"` in den **Benutzer**-
-Einstellungen auf `tools/cmake-vsdev.cmd` — ohne diesen Eintrag scheitert der Build-Knopf der
-CMake-Tools an fehlendem `INCLUDE`/`LIB` (Begründung im QTMUX-79-Kasten oben).
+nicht-interaktive Shell, ConPTY). Instrumentierungen aus den QTMUX-86-/QTMUX-100-Unter-
+suchungen sind **zurückgenommen**.
+🔑 Auf der **Windows**-Maschine zeigt `"cmake.cmakePath"` in den **Benutzer**-Einstellungen auf
+`tools/cmake-vsdev.cmd`; ohne diesen Eintrag scheitert der Build-Knopf der CMake-Tools an
+fehlendem `INCLUDE`/`LIB` (Begründung im QTMUX-79-Kasten oben).
 
-⚠️ **Einstellungs-Audit 2026-07-29 — „die Schalter fehlen im Dialog" war die falsche Fährte.**
-Anlass: Die Agenten-Optionen aus QTMUX-85/98 waren in der laufenden App nicht auffindbar.
-Ursache ist **nicht** der Dialog, sondern das **Alter der laufenden Instanz**: PID 9561 läuft
-aus `build/macos`, dessen Binary vom **28.07. 22:30** stammt — also **vor** QTMUX-85 (23:47)
-und QTMUX-98 (01:52). Gegentest über die Dialogtexte im Binary
-(`grep -ac "Agenten beim Start wiederherstellen"`): `build/macos` **0**, `build/macos-test`
-**6**, `build/macos-release` **6**. Die Schalter existieren also, sie sind nur nicht in dem
-Programm, das gerade läuft.
-Die daraus abgeleitete Dauerregel steht in den E2E-Fallen („Fehlt die Funktion, oder nur das
-Binary?").
-🔑 **Ergebnis des vollständigen Abgleichs** (`Settings`-Block in [qml/Main.qml](qml/Main.qml)
-gegen [qml/prefs/](qml/prefs/)): **alle** Nutzer-Einstellungen liegen im Dialog. Nicht dort sind
-nur `newSessionType` und `collapsedGroups` — beides **Laufzeitzustand**, keine Einstellung, also
-korrekt. Sprache/Theme (`ui/language`, `ui/themeMode`) sitzen in `CatAllgemein`, MCP-Port und
--Schalter in `CatAgenten`.
-🔑 **Eine echte Lücke hat der Audit trotzdem gefunden → QTMUX-99:** Für die **Agenten** gibt es
-die Wahl, für die **Sessions** selbst nicht — `window.restoreWindows()` läuft in
-[qml/Main.qml](qml/Main.qml) Z. 1331 **bedingungslos**. Wer beim Start bewusst leer anfangen
-will, kann das nicht einstellen.
+**Nächster Punkt:** **`build/macos` neu bauen** und die Produktivinstanz darauf umstellen —
+erst damit sind QTMUX-85/97/98/99/100 überhaupt bedienbar und abnehmbar (Bedingungen im
+Arbeitsstand). Danach die Owner-Abnahmen, dann offene Jira nach Priorität: 88/40/38/2/13.
 
-**QTMUX-97 (Emoji-Artefakte im Terminal) ist behoben + Owner-abgenommen (2026-07-28).**
-Gelbe Dreiecks-Bruchstücke auf fremden Zeichen und einzelne Buchstaben in Emoji-Farbe.
-Ursache **zweistufig**: libvterm gab `⚠️` (U+26A0+VS-16) nur **1 Zelle**, Qt malte die
-Emoji-Form **2,15 Zellen** breit → Überhang in die Nachbarkachel des Glyph-Atlas. Fix in
-[third_party/libvterm/src/state.c](third_party/libvterm/src/state.c) (TR#51-Breite, s.
-libvterm-Abschnitt) + hartes Kachel-Clipping in
-[src/terminal/GlyphAtlas.cpp](src/terminal/GlyphAtlas.cpp) (Details in der Feature-Referenz
-unter „Rendering"). Debug **und** Release 18/18 grün; neuer Test
-`tst_vtscreen::emojiPresentationWidth` (Gegentest ohne Patch: FAIL). Abnahme durch den
-Owner am laufenden A/B: Testinstanz **7346** (mit Fix) gegen die alte aus `build/macos`
-auf **7347** — „Neu ist gut, alt ist Murx."
-⚠️ **Noch nicht in der produktiven Instanz**: die läuft aus `build/macos` (WIP-Stand) und
-bekommt den Fix erst bei einem Neubau dieses Verzeichnisses — der die laufenden Sessions
-mitreißt, also nur nach Owner-Freigabe.
+**Seit v1.7.1 auf `main`, jeweils umgesetzt + selbst verifiziert — Owner-Abnahme offen.**
+Mechanik und Fallen stehen je Ticket in der Feature-Referenz, hier nur der Zeiger:
 
-**QTMUX-86 (leeres Pane beim Window-Wechsel) ist behoben** — Ursache war **nicht** das
-Rendering, sondern eine transiente Layout-Größe (2 Zeilen), die bis zur Session durchgereicht
-wurde; Details + A/B-Belege in der Feature-Referenz („Session-Größe wird entprellt").
-**Owner-Abnahme offen:** in der eigenen Instanz mehrfach zwischen Splitscreen- und
-Einzel-Window wechseln — der Prompt muss stehen bleiben. Der Schaden an bereits betroffenen
-Sessions bleibt bestehen (Inhalt liegt in deren Scrollback); ein Neustart der Session räumt auf.
+| Ticket | Was | Wo nachlesen | Abnahme |
+|---|---|---|---|
+| **97** | Emoji-Artefakte (VS-16-Breite + Atlas-Überlauf) | „Rendering", libvterm-Abschnitt | **abgenommen** 2026-07-28 |
+| **86** | leeres Pane beim Window-Wechsel | „Session-Größe wird entprellt" | mehrfach zwischen Splitscreen- und Einzel-Window wechseln, Prompt muss stehen bleiben |
+| **85** | Agenten beim Start wiederherstellen (Vorgabe AUS) | „Agenten überleben den Neustart" | Schalter an, mit echtem `claude` arbeiten, beenden, neu starten |
+| **98** | Unterhaltung fortsetzen, 4 Modi (Vorgabe: gar nicht) | „Unterhaltung fortsetzen ist eine WAHL" | die vier Modi durchspielen; Modus 3 braucht vorher `set_agent_session` |
+| **99** | Umfang der Wiederherstellung, 3 Modi (Vorgabe: alles) | „Umfang der Wiederherstellung ist eine WAHL" | Modus 0 setzen, beenden, neu starten — gespeicherter Stand muss **unberührt** bleiben |
+| **100** | Sidebar-Drag ließ die übrigen Kacheln weglaufen | „Niemals ein ListView-Delegat als `DragHandler.target`" | Kachel ziehen (auch die letzte), Reihenfolge muss stimmen |
 
-**QTMUX-85 + QTMUX-98 (Agenten-Wiederherstellung) sind umgesetzt und verifiziert
-(2026-07-28/29), beide Jira dual auf „In Progress"/„In Arbeit" — Owner-Abnahme offen.**
-Ein Schalter „Agenten beim Start wiederherstellen" (Vorgabe **AUS**) plus die **Wahl**
-„Unterhaltung fortsetzen" mit vier Modi (QTMUX-98, Vorgabe **gar nicht**); beides in
-Einstellungen → Agenten & MCP, Menü **Agent**, Palette und Suchindex. Mechanik samt Fallen
-in der Feature-Referenz unter „Agenten überleben den Neustart" und „Unterhaltung fortsetzen
-ist eine WAHL". Der zweite Teil von QTMUX-85 — die **zuletzt aktive Session** — war bereits
-erledigt: `activePaneId` je Window und `windows/activeRow` sind persistiert
-([WindowModel.cpp](src/viewmodels/WindowModel.cpp) Z. 213/370/390) und werden in
-`restoreWindows`/`loadWindow` ausgewertet; nichts wird heuristisch geraten.
-**Abnahme-Rezept:** Schalter in Einstellungen → Agenten & MCP anschalten, mit echtem `claude`
-arbeiten, QTmux beenden und neu starten; danach die vier Fortsetzungs-Modi durchspielen (für
-Modus 3 muss der Agent vorher per MCP `set_agent_session` seine Kennung gemeldet haben).
-⚠️ Geht **nur an einer frisch gebauten Instanz** — die laufende kennt die Schalter nicht
-(s. Einstellungs-Audit oben).
-
-**QTMUX-99 (Umfang der Wiederherstellung) ist umgesetzt und verifiziert (2026-07-29),
-Owner-Abnahme offen.** Dreiwahl statt Schalter (Owner-Entscheidung); Mechanik und die beiden
-Fallen in der Feature-Referenz unter „Umfang der Wiederherstellung ist eine WAHL".
-
-**QTMUX-100 (Sidebar-Drag lief weg) ist behoben und verifiziert (2026-07-29), Owner-Abnahme
-offen.** Ursache und Messwerte in der Feature-Referenz („Niemals ein ListView-Delegat als
-`DragHandler.target`"); der Messweg für Maus-Gesten steht in den E2E-Fallen.
-⚠️ **Nebenbefund, ungeprüft:** Wird eine Kachel auf Zeile 0 geschoben, während die Liste
-**gescrollt** ist, driftet `contentY` über mehrere Vorgänge (im Nachbau 160 → 144 → 84 → 24).
-Anderer Pfad als der behobene, in der App **nicht** gegengeprüft — im Ticket QTMUX-100 notiert.
-
-**Danach:** (1) **`build/macos` neu bauen** und die Produktivinstanz darauf umstellen — erst
-damit sind QTMUX-85/97/98/99 überhaupt bedienbar und abnehmbar (s. Arbeitsstand) ·
-(2) Owner-Abnahme QTMUX-85/98/99 und QTMUX-86 · (3) `build/windows` (Debug) auf den aktuellen
-`main` heben, sobald die dortige Instanz beendet werden darf — zurzeit sperrt sie
-`qtmux.exe`/`qtmux_echo_plugin.dll` · (4) offene Jira nach Priorität: 88/40/38/2/13.
+⚠️ **Alle Abnahmen brauchen eine frisch gebaute Instanz** — die laufende kennt die Schalter
+nicht (Begründung im Arbeitsstand). QTMUX-86 heilt bereits beschädigte Sessions **nicht**
+(deren Inhalt liegt im Scrollback); die betroffenen Sessions neu starten.
+⚠️ **Nebenbefund QTMUX-100, ungeprüft:** Kachel auf Zeile 0 schieben, während die Liste
+**gescrollt** ist → `contentY` driftet über mehrere Vorgänge (im Nachbau 160 → 144 → 84 → 24).
+Anderer Pfad als der behobene, in der App nicht gegengeprüft, im Ticket notiert.
 
 ### Arbeitsstand (compact-fest — hier pflegen, nicht im Gespräch lassen)
 
@@ -437,16 +374,14 @@ damit sind QTMUX-85/97/98/99 überhaupt bedienbar und abnehmbar (s. Arbeitsstand
   🔑 **Werkzeug-Falle:** Für die **Cloud** schlägt Python-`urllib` hier mit
   `CERTIFICATE_VERIFY_FAILED` fehl (kein Issuer im Store) — ADF-Rumpf mit Python **bauen**,
   aber mit `curl --data @datei` **senden**. On-prem braucht ohnehin `curl -k`.
-- **QTMUX-84 fertig + abgenommen (2026-07-28).** Meta-Kodierung umgesetzt, Debug **und**
-  Release gebaut, `ctest -E "^test_pty$"` beidseitig 16/16. Abnahme in einer **echten
-  Claude-Code-Session** (v2.1.220): Bild in der Zwischenablage → Alt+V → `❯  [Image #1]`
-  erscheint. Gegentest gegen das Binary von 11:22:57 zeigte `probe:u` statt der Marke;
-  AltGr am deutschen Layout unversehrt (`altgr:@`). Harness-Skripte liegen im Scratchpad
-  (`alt-meta-e2e.ps1`, `altgr-e2e.ps1`, `altv-claude-e2e.ps1`) — nicht im Repo.
-- **Korrektur eines früheren Befunds:** notiert war „Alt+&lt;Taste&gt; → 0 Bytes" (aus dem
-  Code gelesen). Empirisch geht das **nackte Zeichen** raus (`text()` war bei synthetischem
-  Alt+u gefüllt) — der Agent sah also ein normales `u` statt des Akkords. Beide Wege sind
-  jetzt abgedeckt (text() gefüllt → ESC davor; leer → Zeichen aus dem Key-Code).
+- **Zwei Sessions arbeiten parallel in DERSELBEN Arbeitskopie** (Mac und Windows-Maschine,
+  je eine Claude-Session). Daraus folgen drei Regeln, alle schon einmal gebraucht:
+  gezielt stagen (`git add <datei>`, **nie** `-A`, sonst wandert halbfertige Arbeit der
+  anderen Session mit); **vor** dem Push `git fetch` und bei Divergenz erst committen, dann
+  mergen (nicht umgekehrt — sonst kann ein Konflikt eigene, uncommittete Arbeit treffen);
+  nach jedem Merge, der die CLAUDE.md anfasst, `test_doc_duplicates` laufen lassen. Dass
+  beide Sessions denselben Fehler (`#include <limits>`) unabhängig fixten, war der harmlose
+  Fall — der Merge blieb sauber, weil die Zeile identisch war.
 
 **Offene Jira:** **QTMUX-88** (AgentRegistry deckt nur 8 CLI-Agenten ab und enthält einen
 Fehler — `cursor` statt `cursor-agent`; Ticket trägt die Arbeitsanweisung inkl. Alias-Umbau,
@@ -466,13 +401,11 @@ nicht durch; einziger Weg wäre ein QMenuBar-Umbau, deferred; [[qtmux-native-men
 solange Agenten arbeiten) · **90** (Prompt-Queue je Session) · **91** (Agenten-Startprofile —
 gehört mit QTMUX-85 zusammen) · **92** (Container-Backend Docker/Podman) · **93** (Spike ACP —
 der strukturierte Gegenentwurf zur dokumentierten Schwäche „Worker meldet von sich aus
-nichts", berührt 55/73/75/90). Aus der vollständigen Doku-Sichtung (jetbrains.com/help/air,
-51 Seiten) zusätzlich **94** (Terminal-Ausgabe als Kontext an einen Agenten — Air holt sie
-sich mühsam, bei uns liegt sie in `VtScreen`) · **95** (Auslöser: Zeitplan/Webhook am
-vorhandenen MCP-HTTP-Server, lokal statt Cloud) · **96** (Agenten-Befehle aus
-`.claude/commands` &amp; Co. in der Palette). Bereits abgedeckt und deshalb NICHT neu angelegt:
-Worktrees (72), Diff/Review (73), Agentenfragen (75), Status/Fortschritt (55), Kanban (76),
-Ports (69) — 69/72/76/92 haben stattdessen Ergänzungskommentare bekommen.
+nichts", berührt 55/73/75/90) · **94** (Terminal-Ausgabe als Agenten-Kontext — Air holt sie
+mühsam, bei uns liegt sie in `VtScreen`) · **95** (Auslöser Zeitplan/Webhook am vorhandenen
+MCP-Server, lokal statt Cloud) · **96** (Agenten-Befehle aus `.claude/commands` in der
+Palette). Schon abgedeckt und darum NICHT neu angelegt: 55/69/72/73/75/76 — Begründungen je
+Ticket in Jira.
 🔑 **Bewusst nicht übernommen:** alles Editor-artige (Symbols, Go-to-Definition, Datei-Baum,
 projektweite Suche, Commit-Erzeugung, Diff-Kommentare) und die Cloud-Hälfte — QTmux ist ein
 Terminal-Manager, kein IDE-Ersatz. Diese Linie beim nächsten Feature-Vergleich wiederverwenden.
@@ -790,8 +723,9 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   🔑 **Positivkontrolle ist hier Pflicht**, sonst „behebt" man den Fehler, indem man den Drag
   abschaltet: Der Versatz muss dem Zeiger 1:1 folgen (gemessen: Maus −372 px → `dy −372`) und
   das Loslassen muss umsortieren (`#1 #2 #3` → `#3 #1 #2`).
-- 🔑 `TerminalItem::setSession` ruft `recomputeGrid` **nur bei gültiger Größe** — ein
-  ungelayoutetes Item resizte die geteilte Session sonst auf 1×1 und verwarf den Inhalt.
+- 🔑 `TerminalItem::setSession` ruft `recomputeGrid` **bedingungslos** — die Regel „ohne
+  belastbare Größe nichts ableiten" liegt seit QTMUX-86 in `gridFor()` (s. o.), also an
+  EINER Stelle. Vorher stand sie nur in `setSession`, und `geometryChange` hatte sie nicht.
 - **Backend-Ownership:** Backend gehört NUR dem `unique_ptr` (kein `setParent`);
   stateChanged-Handler nimmt den State aus dem **Signal-Argument** (feuert während der
   Backend-Zerstörung).
@@ -915,13 +849,15 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 - macOS-GUI-E2E: CGEvent-Tool braucht Pause zwischen MouseDown/Up (sonst nur Hover);
   App-Sprache über das App-Menü umstellen, nicht `defaults write` (cfprefsd-Cache);
   Details [[qtmux-gui-test-macos]].
-- **Ohne Bedienungshilfen-Recht testen:** System Events/`osascript`/CGEvent scheitern hart
-  (`-1719`, `AXIsProcessTrusted()`=false). Ein **Beenden** geht trotzdem echt:
-  `NSRunningApplication(processIdentifier:)?.terminate()` — dasselbe Apple-Event wie Cmd+Q,
-  aber **PID-genau** (`tell application` ginge über die Bundle-ID und träfe die produktive
-  Instanz). Beweiskraft nur mit **Gegentest** (mit Rückfrage: Prozess lebt; ohne: er endet);
-  Einstellungen dafür vorher per `defaults write` in die Profil-Domain
+- **Ohne Bedienungshilfen-Recht testen (macOS):** System Events/`osascript`/CGEvent scheitern
+  hart (`-1719`, `AXIsProcessTrusted()`=false). Zwei Wege gehen trotzdem:
+  (a) **Beenden** per `NSRunningApplication(processIdentifier:)?.terminate()` — dasselbe
+  Apple-Event wie Cmd+Q, aber **PID-genau** (`tell application` ginge über die Bundle-ID und
+  träfe die produktive Instanz); Beweiskraft nur mit **Gegentest** (mit Rückfrage: Prozess
+  lebt; ohne: er endet); Einstellungen vorher per `defaults write` in die Profil-Domain
   (`com.qtmux.QTmux-<profil>`) — QSettings schreibt `/` als `.`.
+  (b) **Maus-Gesten** per synthetischem `QMouseEvent` in den eigenen Prozess (s. QTMUX-100
+  weiter unten) — braucht ebenfalls kein Recht.
 - ⚠️ Ein temporärer Test-Hook kann selbst der Fehler sein: `Dialog.accept()` direkt in
   `onOpened` wird verschluckt (Popup ist mitten im Öffnen) und sah exakt aus wie ein
   kaputter Bestätigen-Pfad. Erst ein Timer (~400 ms) zeigte die Kette vollständig.
