@@ -312,8 +312,9 @@ als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-29** · Branch `main`, letzter Commit `0dd1cc5` (QTMUX-98), **gepusht** ·
-Working Tree: nur diese CLAUDE.md-Pflege. macOS: `macos-test` und `macos-release` tragen den
+Stand **2026-07-29** · Branch `main`, letzter **Code**-Commit `0dd1cc5` (QTMUX-98), gefolgt von
+der Doku-Konsolidierung `a16d8ac`; beides **gepusht**, Working Tree sauber.
+macOS: `macos-test` und `macos-release` tragen den
 Endstand (18/18 grün, Debug und Release). Windows-Maschine: `windows` (Debug) **und**
 `windows-release` auf dem Stand von QTMUX-84, `ctest -E "^test_pty$"` beidseitig **16/16 grün**
 (test_pty fällt hier umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell,
