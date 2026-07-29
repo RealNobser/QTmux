@@ -6,6 +6,8 @@
 #include <QGuiApplication>
 #include <QClipboard>
 #include <QCoreApplication>
+#include <QDesktopServices>
+#include <QUrl>
 #include <QProcess>
 #include <QTcpServer>
 #include <QHostAddress>
@@ -75,6 +77,11 @@ QString AppController::languageName(const QString &code) const {
 
 void AppController::copyToClipboard(const QString &text) const {
     if (auto *cb = QGuiApplication::clipboard()) cb->setText(text);
+}
+
+bool AppController::openLocalPath(const QString &path) const {
+    if (path.isEmpty()) return false;
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
 }
 
 QString AppController::keyChord(int key, int modifiers) const {

@@ -790,6 +790,27 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   🔑 **Positivkontrolle ist hier Pflicht**, sonst „behebt" man den Fehler, indem man den Drag
   abschaltet: Der Versatz muss dem Zeiger 1:1 folgen (gemessen: Maus −372 px → `dy −372`) und
   das Loslassen muss umsortieren (`#1 #2 #3` → `#3 #1 #2`).
+  Der Versatz ist zusätzlich auf den Inhaltsbereich geklemmt (QTMUX-102, `[-tile.y,
+  contentHeight-tile.height-tile.y]`) — sonst zieht man die Kachel aus dem Bild und sieht
+  nicht mehr, was man gerade bewegt.
+- **ToolTips (QTMUX-101):** [qml/Ui/AppToolTip.qml](qml/Ui/AppToolTip.qml), Verzögerung 600 ms.
+  Wie bei `ThemedMenu`/`AppPopupBg` gilt: Popups erben die Window-`palette` **nicht** → Farben
+  explizit aus `Theme`, sonst dunkle Schrift auf dunklem Grund. In beiden Designs per
+  `--screenshot` abgenommen. Die Sidebar-Kachel zeigt darin vollen Titel, `#Session-ID` und
+  Arbeitsverzeichnis — die Kachel elidiert, und bei mehreren Agenten im selben Projekt sind
+  die Titel vorne identisch.
+  🔑 **Kein `qsTr`-Plural in neuen Strings**, solange `FinishSourceLanguageTs.cmake` die
+  `numerusform` der **Quellsprache** leer lässt (bestehendes `%n Einträge` steht deshalb bis
+  heute auf `unfinished`). Entweder die Zahl erst ab 2 anzeigen und eine feste Form nehmen,
+  oder die deutschen Pluralformen von Hand pflegen.
+- **Arbeitsverzeichnis (QTMUX-103):** `windowWorkingDir(w)` liefert das CWD des **aktiven**
+  Panes, leer bei seriellen/Plugin-Sessions — daran hängen „Arbeitsverzeichnis öffnen" und
+  „Pfad kopieren" ihr `enabled`. Geöffnet wird über `App.openLocalPath` (C++,
+  `QUrl::fromLocalFile` + `QDesktopServices`) statt per `"file://" + pfad` in QML: nur so
+  werden Leerzeichen kodiert und aus `C:\Pfad` ein gültiges `file:///C:/Pfad`.
+  ⚠️ `Session::workingDirectory()` ist ein **Cache**, den `SessionModel` alle **1500 ms**
+  auffrischt — direkt nach dem Start ist er noch leer. Wer ihn in einem Test ausliest, misst
+  sonst „" und hält die Funktion für kaputt (genau so passiert).
 - 🔑 `TerminalItem::setSession` ruft `recomputeGrid` **nur bei gültiger Größe** — ein
   ungelayoutetes Item resizte die geteilte Session sonst auf 1×1 und verwarf den Inhalt.
 - **Backend-Ownership:** Backend gehört NUR dem `unique_ptr` (kein `setParent`);

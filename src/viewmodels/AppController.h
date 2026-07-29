@@ -48,6 +48,13 @@ public:
     /// Kopiert Text in die System-Zwischenablage (z. B. ein Vault-Geheimnis).
     Q_INVOKABLE void copyToClipboard(const QString &text) const;
 
+    /// Öffnet ein lokales Verzeichnis (oder eine Datei) im Dateimanager des Systems
+    /// (QTMUX-103). Bewusst hier in C++ statt per `"file://" + pfad` in QML: nur
+    /// `QUrl::fromLocalFile` kodiert Leerzeichen und Sonderzeichen korrekt und macht
+    /// aus `C:\Pfad` unter Windows ein gültiges `file:///C:/Pfad`.
+    /// Liefert false, wenn der Pfad leer ist oder das System das Öffnen ablehnt.
+    Q_INVOKABLE bool openLocalPath(const QString &path) const;
+
     /// Installierte Monospace-Schriftfamilien (für die Terminal-Schriftwahl).
     Q_INVOKABLE QStringList monospaceFonts() const;
     /// Plattformübliche Standard-Monospace-Familie (Default der Terminal-Schrift).

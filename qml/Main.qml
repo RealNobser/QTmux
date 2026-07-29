@@ -779,6 +779,27 @@ ApplicationWindow {
         if (!s) s = window.sessionById(ids[0])
         return s ? s.title : qsTr("Fenster %1").arg(w.windowId)
     }
+    // Arbeitsverzeichnis des gerade aktiven Panes — die Palette hat keine Kachel als
+    // Bezug und muss es sich selbst holen (QTMUX-103).
+    function currentWorkingDir() {
+        return window.windowWorkingDir(windows.windowById(window.activeWindowId))
+    }
+    // Verzeichnis im Dateimanager öffnen (QTMUX-103). Schlägt das fehl, sagen wir es —
+    // ein stumm wirkungsloser Menüpunkt ist schlimmer als eine Fehlermeldung.
+    function openWorkingDir(dir) {
+        if (!dir || dir.length === 0) return
+        if (!App.openLocalPath(dir))
+            window.notifyToast(qsTr("Verzeichnis lässt sich nicht öffnen: %1").arg(dir))
+    }
+    // Arbeitsverzeichnis des AKTIVEN Panes eines Windows (QTMUX-101/103). Leer, wenn es
+    // keines gibt — serielle Sessions und Plugin-Backends haben kein Verzeichnis, und
+    // genau daran hängen die Menüeinträge ihre `enabled`-Bedingung.
+    function windowWorkingDir(w) {
+        const sid = window.windowActiveSessionId(w)
+        if (sid < 0) return ""
+        const s = window.sessionById(sid)
+        return s ? (s.workingDirectory || "") : ""
+    }
     // Aggregierter Laufzustand (wie Session.state: 0 Start,1 Run,2 Warte,3 Fehler,4 Zu),
     // höchste Dringlichkeit gewinnt: Fehler > WartetEingabe > Läuft > Start > Zu.
     function windowRunState(w) {
@@ -1873,6 +1894,12 @@ ApplicationWindow {
                             { title: qsTr("Sessions wiederherstellen: gar nicht"), sub: "",    icon: "terminal-window", run: function(){ window.restoreSessionMode = 0 } },
                             { title: qsTr("Sessions wiederherstellen: ohne Verlauf"), sub: "", icon: "terminal-window", run: function(){ window.restoreSessionMode = 1 } },
                             { title: qsTr("Sessions wiederherstellen: alles"), sub: "",        icon: "terminal-window", run: function(){ window.restoreSessionMode = 2 } },
+                            // QTMUX-103: was im Kontextmenü liegt, muss auch die Palette können (QTMUX-46).
+                            { title: qsTr("Arbeitsverzeichnis öffnen"),   sub: "",             icon: "bookmark",        run: function(){ window.openWorkingDir(window.currentWorkingDir()) } },
+                            { title: qsTr("Pfad kopieren"),               sub: "",             icon: "copy",            run: function(){
+                                  const d = window.currentWorkingDir()
+                                  if (d.length === 0) { window.notifyToast(qsTr("Diese Session hat kein Arbeitsverzeichnis.")); return }
+                                  App.copyToClipboard(d); window.notifyToast(qsTr("Pfad kopiert: %1").arg(d)) } },
                             { title: qsTr("Agenten beim Start wiederherstellen"), sub: "",     icon: "robot",           run: function(){ window.restoreAgents = !window.restoreAgents } },
                             { title: qsTr("Unterhaltung fortsetzen: gar nicht"), sub: "",      icon: "robot",           run: function(){ window.resumeAgentMode = 0 } },
                             { title: qsTr("Unterhaltung fortsetzen: jüngste im Verzeichnis"), sub: "", icon: "robot",   run: function(){ window.resumeAgentMode = 1 } },
@@ -2444,6 +2471,23 @@ ApplicationWindow {
 
                         HoverHandler { id: hover }
                         TapHandler { onTapped: window.loadWindowRow(tile.index) }
+                        // Voller Titel + Verzeichnis + Session-ID (QTMUX-101): Die Kachel
+                        // elidiert lange Titel, und bei mehreren Agenten im selben Projekt
+                        // sind die Titel vorne identisch — ohne ToolTip ist nicht
+                        // unterscheidbar, welche Kachel welche ist.
+                        AppToolTip {
+                            visible: hover.hovered && !dragH.active && text.length > 0
+                            text: {
+                                const dir = window.windowWorkingDir(tile.wobj)
+                                let t = tile.dispTitle
+                                if (tile.activeSid >= 0) t += "  #" + tile.activeSid
+                                // Bewusst kein qsTr-Plural: Der Zähler erscheint erst ab 2,
+                                // und die Pluralformen der Quellsprache bleiben beim
+                                // automatischen Finalisieren leer (numerusform ohne Inhalt).
+                                if (tile.paneN > 1) t += "  (" + qsTr("%1 Panes").arg(tile.paneN) + ")"
+                                return dir.length > 0 ? t + "\n" + dir : t
+                            }
+                        }
                         // Rechtsklick: Window-Kontextmenü (umbenennen/Gruppe/schließen).
                         TapHandler {
                             acceptedButtons: Qt.RightButton
@@ -2453,6 +2497,7 @@ ApplicationWindow {
                                 windowMenu.currentName = (tile.wobj && tile.wobj.name) ? tile.wobj.name : ""
                                 windowMenu.currentGroup = tile.group
                                 windowMenu.isController = tile.controller
+                                windowMenu.currentDir = window.windowWorkingDir(tile.wobj)
                                 windowMenu.groupList = windows.groups()
                                 windowMenu.popup()
                             }
@@ -2475,7 +2520,16 @@ ApplicationWindow {
                             target: null
                             xAxis.enabled: false
                             yAxis.enabled: true
-                            onActiveTranslationChanged: if (active) tile.dragDy = activeTranslation.y
+                            // Versatz auf den Inhaltsbereich der Liste begrenzen (QTMUX-102):
+                            // sonst lässt sich die Kachel beliebig weit hinausziehen (gemessen
+                            // −372 px bei 164 px Listenhöhe) und man sieht nicht mehr, was man
+                            // gerade zieht. Geklemmt wird der optische Versatz, nicht die Geste.
+                            onActiveTranslationChanged: {
+                                if (!active) return
+                                const minDy = -tile.y
+                                const maxDy = Math.max(minDy, sessionList.contentHeight - tile.height - tile.y)
+                                tile.dragDy = Math.max(minDy, Math.min(maxDy, activeTranslation.y))
+                            }
                             onActiveChanged: {
                                 if (active) { tile.dragDy = 0; return }
                                 const from = tile.index
@@ -3456,6 +3510,9 @@ ApplicationWindow {
         property string currentGroup: ""
         property var groupList: []
         property bool isController: false
+        // Arbeitsverzeichnis des aktiven Panes (QTMUX-103) — beim Öffnen des Menüs gesetzt,
+        // damit die beiden Einträge nicht bei jedem Zeichnen einen Getter aufrufen.
+        property string currentDir: ""
         AppMenuItem {
             text: qsTr("Umbenennen …")
             icon.source: window.icon("terminal-window")
@@ -3466,6 +3523,26 @@ ApplicationWindow {
             enabled: windowMenu.currentName.length > 0
             icon.source: window.icon("x")
             onTriggered: { const w = windows.windowById(windowMenu.windowId); if (w) w.name = "" }
+        }
+        MenuSeparator {}
+        // --- Arbeitsverzeichnis (QTMUX-103) ---
+        // Beide deaktiviert, wenn es keines gibt: serielle Sessions und Plugin-Backends
+        // haben kein Verzeichnis, ein ausgegrauter Eintrag erklärt das besser als ein
+        // fehlender.
+        AppMenuItem {
+            text: qsTr("Arbeitsverzeichnis öffnen")
+            enabled: windowMenu.currentDir.length > 0
+            icon.source: window.icon("bookmark")
+            onTriggered: window.openWorkingDir(windowMenu.currentDir)
+        }
+        AppMenuItem {
+            text: qsTr("Pfad kopieren")
+            enabled: windowMenu.currentDir.length > 0
+            icon.source: window.icon("copy")
+            onTriggered: {
+                App.copyToClipboard(windowMenu.currentDir)
+                window.notifyToast(qsTr("Pfad kopiert: %1").arg(windowMenu.currentDir))
+            }
         }
         MenuSeparator {}
         // --- Window-Gruppen (QTMUX-83, Stufe 5) ---
