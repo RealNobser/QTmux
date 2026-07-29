@@ -98,6 +98,13 @@ void SessionModel::wireSession(Session *s, int row) {
     connect(s, &Session::progressChanged, this, refresh);
     connect(s, &Session::workingDirectoryChanged, this, refresh);
 
+    // Ruhezustands-Sperre an den Aktivitätszustand koppeln (QTMUX-89). Bewusst eine
+    // eigene Verbindung statt eines Anhängsels an `refresh`: Die Sidebar-Aktualisierung
+    // ist rein kosmetisch, das hier greift ins System und muss auch dann laufen, wenn
+    // an der Anzeige einmal etwas geändert wird.
+    connect(s, &Session::activityChanged, this, &SessionModel::updateSleepInhibit);
+    connect(s, &Session::stateChanged,    this, &SessionModel::updateSleepInhibit);
+
     // Steigt die Aufmerksamkeit, das Fenster informieren (Dock-/Taskbar-Alert).
     connect(s, &Session::attentionChanged, this, [this, s]() {
         if (s->needsAttention()) {
@@ -307,6 +314,10 @@ void SessionModel::closeSession(int row) {
     s->deleteLater();
     emit countChanged();
     emit groupsChanged();
+    // Die geschlossene Session kann die letzte gewesen sein, die „busy" meldete. Ihre
+    // Signalverbindung stirbt mit ihr, also hier ausdrücklich nachführen — sonst bliebe
+    // die Sperre stehen und der Rechner schliefe nie wieder ein (QTMUX-89).
+    updateSleepInhibit();
     saveState();
 }
 
@@ -533,6 +544,9 @@ void SessionModel::shutdownAll() {
     // m_shuttingDown verhindert, dass die dabei ausgelösten Closed-Signale die
     // (zuvor von saveState gesicherte) Session-Liste per Auto-Remove leeren.
     m_shuttingDown = true;
+    // Beim Beenden die Sperre in jedem Fall freigeben (QTMUX-89).
+    m_preventSleep = false;
+    updateSleepInhibit();
     // Quit-Modus: terminate() killt den Prozessbaum synchron + nicht-blockierend,
     // damit auch HUP-ignorierende Nachfahren VOR dem Prozess-Exit sterben (ein
     // asynchroner Reaper-Thread liefe sonst evtl. nicht mehr rechtzeitig).
@@ -724,6 +738,34 @@ void SessionModel::loadHistoryFor(int row, int key) const {
     hf.close();
     if (!dump.isEmpty() && m_sessions.at(row)->screen())
         m_sessions.at(row)->screen()->inputWrite(dump);
+}
+
+// --- Ruhezustand verhindern (QTMUX-89) ---------------------------------------
+void SessionModel::setPreventSleep(bool on) {
+    if (on == m_preventSleep) return;
+    m_preventSleep = on;
+    emit preventSleepChanged();
+    updateSleepInhibit();          // Ausschalten gibt eine bestehende Sperre sofort frei
+}
+
+bool SessionModel::sleepInhibited() const { return m_sleepInhibitor.isActive(); }
+
+bool SessionModel::sleepInhibitSupported() const { return SleepInhibitor::isSupported(); }
+
+void SessionModel::updateSleepInhibit() {
+    // ⚠️ NUR Sessions, die ihren Zustand selbst gemeldet haben (OSC 133 oder MCP
+    // set_activity). Der Startwert von Session::m_activity ist `Running`, damit der
+    // Sidebar-Ring sofort grün ist — eine Shell ohne Integration bliebe also für immer
+    // „beschäftigt" und hielte den Rechner dauerhaft wach. Ungemeldet heißt unbekannt,
+    // und aus Unbekanntem leitet QTmux nichts ab (dieselbe Linie wie QTMUX-30/37).
+    QList<int> activities;
+    activities.reserve(m_sessions.size());
+    for (Session *s : m_sessions)
+        if (s->activityReported()) activities.append(s->activityInt());
+    const bool want = shouldPreventSleep(m_preventSleep, activities);
+    if (want == m_sleepInhibitor.isActive()) return;
+    m_sleepInhibitor.setActive(want);
+    emit sleepInhibitedChanged();
 }
 
 bool SessionModel::clearViewport(int row) const {

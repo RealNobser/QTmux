@@ -58,6 +58,8 @@ add_library(qtmux_core STATIC
     src/core/TerminalGrid.h
     src/core/TerminalGrid.cpp
     src/core/RestoreMode.h
+    src/core/SleepInhibitor.h
+    src/core/SleepInhibitor.cpp
     src/core/TerminalSearch.h
     src/core/TerminalSearch.cpp
     src/core/ColorScheme.h
@@ -94,9 +96,10 @@ if(WIN32)
     target_link_libraries(qtmux_core PRIVATE iphlpapi ws2_32)
 endif()
 
-# macOS: Carbon für den globalen Quake-Hotkey (RegisterEventHotKey).
+# macOS: Carbon für den globalen Quake-Hotkey (RegisterEventHotKey),
+# IOKit für die Ruhezustands-Sperre (IOPMAssertion, QTMUX-89).
 if(APPLE)
-    target_link_libraries(qtmux_core PRIVATE "-framework Carbon")
+    target_link_libraries(qtmux_core PRIVATE "-framework Carbon" "-framework IOKit")
 endif()
 
 # Anwendungs-Target ----------------------------------------------------------

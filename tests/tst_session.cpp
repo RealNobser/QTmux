@@ -4,6 +4,7 @@
 #include "VtScreen.h"
 #include "Session.h"
 #include "AgentEventHub.h"
+#include "SleepInhibitor.h"
 #include "TestPrograms.h"
 
 using namespace qtmux;
@@ -20,6 +21,8 @@ private slots:
     void agentEventReachesHub();
     void agentEventPulseAndExplicitAttention();
     void agentActivityStates();
+    void sleepInhibitRule();
+    void activityIsOnlyTrustedOnceReported();
     void loginScriptRunsOnConnect();
     void sshPasswordAutoFillOnPrompt();
     void enterIsSentSeparatelyAfterText();
@@ -361,6 +364,60 @@ void TestSession::restoredAgentSetsIdentityAndRunsCommand() {
     QVERIFY2(found, "Die Agenten-Startzeile wurde nie abgesetzt");
     sess.write("\x03");
     sess.shutdown();
+}
+
+// Ruhezustands-Sperre (QTMUX-89): Die Entscheidungsregel ist Gui-frei, damit genau
+// diese Tabelle ohne echte Sessions und ohne Systemaufruf prüfbar ist.
+void TestSession::sleepInhibitRule() {
+    using A = Session::Activity;
+    const QList<int> keine;
+    const QList<int> nurIdle   { int(A::Idle) };
+    const QList<int> einBusy   { int(A::Idle), int(A::Running) };
+    const QList<int> nurWarten { int(A::Idle), int(A::Waiting) };
+    const QList<int> fehler    { int(A::Error) };
+
+    // Schalter AUS: nie sperren, egal was läuft. Das ist die Vorgabe.
+    QVERIFY(!shouldPreventSleep(false, einBusy));
+    QVERIFY(!shouldPreventSleep(false, keine));
+
+    // Schalter AN: nur sperren, wenn wirklich jemand arbeitet.
+    QVERIFY(!shouldPreventSleep(true, keine));
+    QVERIFY(!shouldPreventSleep(true, nurIdle));
+    QVERIFY(shouldPreventSleep(true, einBusy));
+
+    // ⚠️ „Wartet auf Eingabe" ist KEIN Arbeiten — sonst bliebe der Rechner wegen einer
+    // offenen Rückfrage die ganze Nacht wach. Dasselbe für einen Fehlerzustand.
+    QVERIFY(!shouldPreventSleep(true, nurWarten));
+    QVERIFY(!shouldPreventSleep(true, fehler));
+
+    // Freigeben muss auf jeder Plattform gelingen, auch auf denen ohne Unterstützung —
+    // sonst bliebe eine einmal gesetzte Sperre für immer stehen.
+    SleepInhibitor inh;
+    QVERIFY(!inh.isActive());
+    QVERIFY(inh.setActive(false));
+    if (SleepInhibitor::isSupported()) {
+        QVERIFY(inh.setActive(true));
+        QVERIFY(inh.isActive());
+        QVERIFY(inh.setActive(true));    // idempotent: keine zweite Sperre
+        QVERIFY(inh.setActive(false));
+        QVERIFY(!inh.isActive());
+    }
+}
+
+// Der Startwert von Session::activity ist `Running` (Sidebar-Ring sofort grün). Wer
+// daraus Konsequenzen zieht, muss erst fragen, ob die Session ihren Zustand ueberhaupt
+// meldet — sonst hielte eine Shell ohne Integration den Rechner dauerhaft wach.
+void TestSession::activityIsOnlyTrustedOnceReported() {
+    Session s;
+    QCOMPARE(s.activityInt(), int(Session::Activity::Running));   // Anzeige-Vorgabe
+    QVERIFY2(!s.activityReported(), "frische Session darf NICHT als gemeldet gelten");
+
+    s.requestActivity(QStringLiteral("quatsch"));                 // unbekannt -> ignorieren
+    QVERIFY(!s.activityReported());
+
+    s.requestActivity(QStringLiteral("busy"));
+    QVERIFY(s.activityReported());
+    QCOMPARE(s.activityInt(), int(Session::Activity::Running));
 }
 
 QTEST_MAIN(TestSession)

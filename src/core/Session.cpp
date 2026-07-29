@@ -222,8 +222,18 @@ void Session::clearAttention() {
     emit attentionChanged();
 }
 
+void Session::markActivityReported() {
+    if (m_activityReported) return;
+    m_activityReported = true;
+    emit activityChanged();   // Wert evtl. unverändert, seine Aussagekraft aber nicht
+}
+
 void Session::requestActivity(const QString &state) {
     const QString s = state.trimmed().toLower();
+    // Ab hier meldet die Session ihren Zustand selbst (QTMUX-89).
+    if (s == QLatin1String("idle") || s == QLatin1String("busy") || s == QLatin1String("running")
+        || s == QLatin1String("waiting") || s == QLatin1String("error"))
+        markActivityReported();
     if (s == QLatin1String("idle"))         setActivity(Activity::Idle);
     else if (s == QLatin1String("busy")
           || s == QLatin1String("running")) setActivity(Activity::Running);
@@ -245,6 +255,8 @@ void Session::onProgress(int state, int value) {
 
 void Session::onPromptMarker(char kind, int exitCode) {
     // OSC 133 (FinalTerm/Shell-Integration): Befehls-Lebenszyklus verfolgen.
+    // Ein OSC-133-Marker heißt: Diese Shell hat Integration und meldet ihren Zustand.
+    markActivityReported();
     switch (kind) {
     case 'C':                       // Befehl beginnt Ausgabe
         m_commandRunning = true;
