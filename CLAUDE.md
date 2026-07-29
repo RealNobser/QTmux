@@ -372,11 +372,11 @@ Anderer Pfad als der behobene, in der App nicht gegengeprüft, im Ticket notiert
   ist „steht im Repo" **nie** gleichbedeutend mit „ist in der App". Jede Owner-Abnahme braucht
   darum entweder eine frische Testinstanz (`QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`) oder einen
   Neubau von `build/macos` mit Freigabe.
-- **Jira-Stand (2026-07-29):** bis **QTMUX-99** beidseitig geprüft synchron; 97 Done, 85 und
-  98 „In Progress"/„In Arbeit" (umgesetzt + verifiziert, Owner-Abnahme offen), 99 neu im
-  Backlog. **Ab QTMUX-100 von dieser (Windows-)Maschine aus nicht prüfbar** — Doku und Commits
-  führen 100–103 sowie 61/89, den Jira-Stand dazu **auf dem Mac gegenprüfen** (`CLAUDE.local.md`
-  existiert nur dort). 🔑 **Lektion:** Vor dem Anlegen eines Tickets die höchste Nummer in **beiden**
+- **Jira-Stand (2026-07-29, vom Mac aus beidseitig geprüft):** synchron bis **QTMUX-103**;
+  97 Done, und **61/85/89/98/99/100/101/102/103** stehen dual auf „In Progress"/„In Arbeit"
+  (umgesetzt + selbst verifiziert, Owner-Abnahme offen). Damit ist der von der Windows-Session
+  offen gelassene Punkt („ab QTMUX-100 hier nicht prüfbar", `CLAUDE.local.md` existiert nur auf
+  dem Mac) erledigt. 🔑 **Lektion:** Vor dem Anlegen eines Tickets die höchste Nummer in **beiden**
   Systemen holen (`ORDER BY key DESC`, maxResults 1) — nur solange beide gleich stehen, bleiben
   die Keys deckungsgleich. Und prüfen, ob die Doku bereits höhere Nummern *vergeben* hat.
   Die alte Notiz „QTMUX-46/-79 nicht angelegt" war schlicht falsch, beide existieren und sind
@@ -792,7 +792,9 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 - 🔑 `TerminalItem::setSession` ruft `recomputeGrid` **bedingungslos** — die Regel „ohne
   belastbare Größe nichts ableiten" liegt seit QTMUX-86 in `gridFor()` (s. o.), also an
   EINER Stelle. Vorher stand sie nur in `setSession`, und `geometryChange` hatte sie nicht
-  (der Kommentar in [TerminalItem.cpp:222](src/terminal/TerminalItem.cpp#L222) hält das fest).
+  (der Kommentar in [TerminalItem.cpp](src/terminal/TerminalItem.cpp) direkt über dem
+  `recomputeGrid()`-Aufruf in `setSession` hält das fest — Zeilennummern veralten, der
+  Anker­satz nicht).
 - **Backend-Ownership:** Backend gehört NUR dem `unique_ptr` (kein `setParent`);
   stateChanged-Handler nimmt den State aus dem **Signal-Argument** (feuert während der
   Backend-Zerstörung).
