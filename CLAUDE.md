@@ -298,7 +298,7 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
-## Status (2026-07-28)
+## Status (2026-07-29)
 
 **Aktuell:** v1.6.1 ausgeliefert (alle 4 Installer: DMG/MSI+ZIP/AppImage). Phasen 0–6
 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Plugins +
@@ -327,12 +327,33 @@ als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-28** · Branch `main`, letzter Commit `aefcb07` (QTMUX-84), **gepusht** ·
-Working Tree: nur diese CLAUDE.md-Ergänzung. Windows-Maschine: `windows` (Debug) **und**
-`windows-release` frisch, `ctest -E "^test_pty$"` beidseitig **16/16 grün** (test_pty fällt
-hier umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell, ConPTY).
-Die Instrumentierung aus der QTMUX-86-Untersuchung ist **zurückgenommen**, `windows-release`
-danach sauber neu gebaut.
+Stand **2026-07-29** · Branch `main`, letzter **Code**-Commit `0dd1cc5` (QTMUX-98), gefolgt von
+der Doku-Konsolidierung `a16d8ac`; beides **gepusht**, Working Tree sauber.
+macOS: `macos-test` und `macos-release` tragen den
+Endstand (18/18 grün, Debug und Release). Windows-Maschine: `windows` (Debug) **und**
+`windows-release` auf dem Stand von QTMUX-84, `ctest -E "^test_pty$"` beidseitig **16/16 grün**
+(test_pty fällt hier umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell,
+ConPTY). Die Instrumentierung aus der QTMUX-86-Untersuchung ist **zurückgenommen**.
+
+⚠️ **Einstellungs-Audit 2026-07-29 — „die Schalter fehlen im Dialog" war die falsche Fährte.**
+Anlass: Die Agenten-Optionen aus QTMUX-85/98 waren in der laufenden App nicht auffindbar.
+Ursache ist **nicht** der Dialog, sondern das **Alter der laufenden Instanz**: PID 9561 läuft
+aus `build/macos`, dessen Binary vom **28.07. 22:30** stammt — also **vor** QTMUX-85 (23:47)
+und QTMUX-98 (01:52). Gegentest über die Dialogtexte im Binary
+(`grep -ac "Agenten beim Start wiederherstellen"`): `build/macos` **0**, `build/macos-test`
+**6**, `build/macos-release` **6**. Die Schalter existieren also, sie sind nur nicht in dem
+Programm, das gerade läuft.
+Die daraus abgeleitete Dauerregel steht in den E2E-Fallen („Fehlt die Funktion, oder nur das
+Binary?").
+🔑 **Ergebnis des vollständigen Abgleichs** (`Settings`-Block in [qml/Main.qml](qml/Main.qml)
+gegen [qml/prefs/](qml/prefs/)): **alle** Nutzer-Einstellungen liegen im Dialog. Nicht dort sind
+nur `newSessionType` und `collapsedGroups` — beides **Laufzeitzustand**, keine Einstellung, also
+korrekt. Sprache/Theme (`ui/language`, `ui/themeMode`) sitzen in `CatAllgemein`, MCP-Port und
+-Schalter in `CatAgenten`.
+🔑 **Eine echte Lücke hat der Audit trotzdem gefunden → QTMUX-99:** Für die **Agenten** gibt es
+die Wahl, für die **Sessions** selbst nicht — `window.restoreWindows()` läuft in
+[qml/Main.qml](qml/Main.qml) Z. 1331 **bedingungslos**. Wer beim Start bewusst leer anfangen
+will, kann das nicht einstellen.
 
 **QTMUX-97 (Emoji-Artefakte im Terminal) ist behoben + Owner-abgenommen (2026-07-28).**
 Gelbe Dreiecks-Bruchstücke auf fremden Zeichen und einzelne Buchstaben in Emoji-Farbe.
@@ -356,33 +377,53 @@ wurde; Details + A/B-Belege in der Feature-Referenz („Session-Größe wird ent
 Einzel-Window wechseln — der Prompt muss stehen bleiben. Der Schaden an bereits betroffenen
 Sessions bleibt bestehen (Inhalt liegt in deren Scrollback); ein Neustart der Session räumt auf.
 
-**QTMUX-85 (Agenten-Wiederherstellung) ist umgesetzt + verifiziert (2026-07-28), Owner-Abnahme
-offen.** Zwei Schalter, beide **Vorgabe AUS**: „Agenten beim Start wiederherstellen" und
-„Unterhaltung fortsetzen" (Einstellungen → Agenten & MCP, Menü **Agent**, Palette,
-Suchindex). Mechanik in der Feature-Referenz unter „Agenten überleben den Neustart".
-Der zweite Teil des Tickets — die **zuletzt aktive Session** — war bereits erledigt:
-`activePaneId` je Window und `windows/activeRow` sind persistiert
+**QTMUX-85 + QTMUX-98 (Agenten-Wiederherstellung) sind umgesetzt und verifiziert
+(2026-07-28/29), beide Jira dual auf „In Progress"/„In Arbeit" — Owner-Abnahme offen.**
+Ein Schalter „Agenten beim Start wiederherstellen" (Vorgabe **AUS**) plus die **Wahl**
+„Unterhaltung fortsetzen" mit vier Modi (QTMUX-98, Vorgabe **gar nicht**); beides in
+Einstellungen → Agenten & MCP, Menü **Agent**, Palette und Suchindex. Mechanik samt Fallen
+in der Feature-Referenz unter „Agenten überleben den Neustart" und „Unterhaltung fortsetzen
+ist eine WAHL". Der zweite Teil von QTMUX-85 — die **zuletzt aktive Session** — war bereits
+erledigt: `activePaneId` je Window und `windows/activeRow` sind persistiert
 ([WindowModel.cpp](src/viewmodels/WindowModel.cpp) Z. 213/370/390) und werden in
 `restoreWindows`/`loadWindow` ausgewertet; nichts wird heuristisch geraten.
+**Abnahme-Rezept:** Schalter in Einstellungen → Agenten & MCP anschalten, mit echtem `claude`
+arbeiten, QTmux beenden und neu starten; danach die vier Fortsetzungs-Modi durchspielen (für
+Modus 3 muss der Agent vorher per MCP `set_agent_session` seine Kennung gemeldet haben).
+⚠️ Geht **nur an einer frisch gebauten Instanz** — die laufende kennt die Schalter nicht
+(s. Einstellungs-Audit oben).
 
-**Danach:** (1) ~~Jira-Nachträge~~ **erledigt (2026-07-28)** — QTMUX-84/85/86/87 dual
-angelegt, Nummern in beiden Systemen deckungsgleich; QTMUX-46 und -79 waren entgegen der
-alten Notiz längst vorhanden (beide Done) · (2) `build/windows` (Debug) neu bauen, sobald die laufende Instanz beendet werden darf —
-zurzeit sperrt sie `qtmux.exe`/`qtmux_echo_plugin.dll` · (3) `build/macos` aus dem finalen
-`main`-Stand neu bauen (s. Arbeitsstand) · (4) offene Jira QTMUX-40/38/2/13 nach Priorität.
+**Danach:** (1) **`build/macos` neu bauen** und die Produktivinstanz darauf umstellen — erst
+damit sind QTMUX-85/97/98 überhaupt bedienbar und abnehmbar (s. Arbeitsstand) · (2) Owner-Abnahme
+QTMUX-85/98 (Rezept oben) und QTMUX-86 · (3) `build/windows` (Debug) auf den aktuellen `main`
+heben, sobald die dortige Instanz beendet werden darf — zurzeit sperrt sie
+`qtmux.exe`/`qtmux_echo_plugin.dll` · (4) offene Jira nach Priorität: QTMUX-99 (Sessions-Schalter,
+klein und in sich abgeschlossen), dann 88/40/38/2/13.
 
 ### Arbeitsstand (compact-fest — hier pflegen, nicht im Gespräch lassen)
 
-- ⚠️ **`build/macos` trägt einen WIP-Zwischenstand** (früher `-B`-Fehler; Produktivinstanz
-  PID 36412 läuft aus dem Memory-Image weiter). Verifizierter Endstand: `build/macos-test`.
-  Vor dem nächsten Prod-Neustart `build/macos` neu bauen (`cmake --build build/macos`,
-  NICHT `--preset` mit `-B`) — erst wenn die laufende Instanz beendet werden darf.
-- **Jira-Nachträge erledigt (2026-07-28):** QTMUX-84/85/86/87 dual angelegt (on-prem und
-  Cloud standen beide bei 83, daher stimmen die Nummern mit dieser Datei überein); 84/86/87
-  auf Done, 85 im Backlog. 🔑 **Lektion:** Vor dem Anlegen eines neuen Tickets prüfen, ob in
-  der Doku bereits höhere Nummern *vergeben* sind — sonst kollidiert der nächste Key mit dem,
-  was hier steht. Die alte Notiz „QTMUX-46/-79 nicht angelegt" war schlicht falsch, beide
-  existieren und sind Done — Behauptungen dieser Art vor dem Handeln gegenprüfen.
+- ⚠️ **`build/macos` ist der Nachzügler — und die Produktivinstanz läuft daraus.** Stand des
+  Binaries: **28.07. 22:30**, also ohne QTMUX-85, -97 und -98. Die laufende Instanz (zuletzt
+  PID 9561, gestartet 29.07. 01:55) hat deren Funktionen deshalb **nicht** — genau daraus
+  entstand die Fehlannahme, die Einstellungen seien nicht im Dialog gelandet. Verifizierte
+  Endstände: `build/macos-test` (Debug) und `build/macos-release`.
+  **Vor dem nächsten Prod-Neustart** `build/macos` neu bauen (`cmake --build build/macos`,
+  NICHT `--preset` mit `-B`) — erst wenn die laufende Instanz beendet werden darf, denn der
+  Neubau überschreibt das Binary und reißt alle Terminal-Sessions mit.
+  🔑 **Dauerhafte Konsequenz:** Solange die Produktivinstanz aus einem Build-Verzeichnis läuft,
+  ist „steht im Repo" **nie** gleichbedeutend mit „ist in der App". Jede Owner-Abnahme braucht
+  darum entweder eine frische Testinstanz (`QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`) oder einen
+  Neubau von `build/macos` mit Freigabe.
+- **Jira-Stand (2026-07-29):** beide Systeme laufen synchron bis **QTMUX-99**; 97 Done, 85 und
+  98 „In Progress"/„In Arbeit" (umgesetzt + verifiziert, Owner-Abnahme offen), 99 neu im
+  Backlog. 🔑 **Lektion:** Vor dem Anlegen eines Tickets die höchste Nummer in **beiden**
+  Systemen holen (`ORDER BY key DESC`, maxResults 1) — nur solange beide gleich stehen, bleiben
+  die Keys deckungsgleich. Und prüfen, ob die Doku bereits höhere Nummern *vergeben* hat.
+  Die alte Notiz „QTMUX-46/-79 nicht angelegt" war schlicht falsch, beide existieren und sind
+  Done — Behauptungen dieser Art vor dem Handeln gegenprüfen.
+  🔑 **Werkzeug-Falle:** Für die **Cloud** schlägt Python-`urllib` hier mit
+  `CERTIFICATE_VERIFY_FAILED` fehl (kein Issuer im Store) — ADF-Rumpf mit Python **bauen**,
+  aber mit `curl --data @datei` **senden**. On-prem braucht ohnehin `curl -k`.
 - **QTMUX-84 fertig + abgenommen (2026-07-28).** Meta-Kodierung umgesetzt, Debug **und**
   Release gebaut, `ctest -E "^test_pty$"` beidseitig 16/16. Abnahme in einer **echten
   Claude-Code-Session** (v2.1.220): Bild in der Zwischenablage → Alt+V → `❯  [Image #1]`
@@ -394,9 +435,17 @@ zurzeit sperrt sie `qtmux.exe`/`qtmux_echo_plugin.dll` · (3) `build/macos` aus 
   Alt+u gefüllt) — der Agent sah also ein normales `u` statt des Akkords. Beide Wege sind
   jetzt abgedeckt (text() gefüllt → ESC davor; leer → Zeichen aus dem Key-Code).
 
-**Offene Jira:** **QTMUX-88** (AgentRegistry deckt nur 8 CLI-Agenten ab und enthält einen
+**Offene Jira:** **QTMUX-99** (Sessions beim Start wiederherstellen — Schalter fehlt, nur die
+Agenten sind konfigurierbar; Vorschlag `window/restoreSessions` Vorgabe AN, Einstellungen →
+Allgemein neben `confirmQuit`, dazu Palette/Suchindex. ⚠️ Bei AUS den gespeicherten Stand
+**nicht löschen**, nur nicht laden — sonst räumt `persistWindows()` beim Beenden den Speicher
+leer und ein einmaliges Ausschalten ist unwiderruflich, dieselbe Falle wie `sessionConfig()`
+in QTMUX-85) · **QTMUX-88** (AgentRegistry deckt nur 8 CLI-Agenten ab und enthält einen
 Fehler — `cursor` statt `cursor-agent`; Ticket trägt die Arbeitsanweisung inkl. Alias-Umbau,
-Recherchestand 2026-07-28 und der Begründung, warum `air`/`q`/`warp` **nicht** hineingehören) ·
+Recherchestand 2026-07-28 und der Begründung, warum `air`/`q`/`warp` **nicht** hineingehören;
+dort gehört auch hinein, für welche Agenten die **Fortsetzungs**-Vorlagen aus QTMUX-98 noch
+fehlen — verifiziert sind nur claude/agy/opencode/hermes, codex/gemini/aider/cursor/qwen
+sind bewusst leer, s. a. QTMUX-**91**) ·
 **QTMUX-40** (OSC-8-Hyperlinks — deferred; die Heuristik-Links aus QTMUX-39
 decken den Agenten-Fall ab, OSC-8 bräuchte Cursor-Span-Tracking + neues `Cell`-Feld, teuer da
 `VtScreen` den Sichtbereich lazy aus libvterm bildet) · **QTMUX-38** (Shell-Helfer für
@@ -404,15 +453,6 @@ Installationsnutzer unerreichbar — nur im Repo, in keinem Paket; AppImage-Moun
 Windows ohne stdout) · **QTMUX-2** (Windows-`currentWorkingDirectory`-Funktionstest via PEB) ·
 **QTMUX-13** (native macOS-Menü-Icons — Qt reicht `icon.source`/`icon.name` in nativen Menüs
 nicht durch; einziger Weg wäre ein QMenuBar-Umbau, deferred; [[qtmux-native-menu-icons]]).
-
-**QTMUX-85 (Agenten-Wiederherstellung) ist umgesetzt** — Mechanik und Fallen in der
-Feature-Referenz („Agenten überleben den Neustart"). **Owner-Abnahme offen**: Schalter in
-Einstellungen → Agenten & MCP anschalten, mit echtem `claude` arbeiten, QTmux beenden und
-neu starten; danach zusätzlich „Unterhaltung fortsetzen" prüfen.
-⚠️ **Offen als Folgeticket:** Welche Agenten unterstützt werden und mit welchen
-Fortsetzungs-Argumenten — `resumeArgs` ist derzeit nur für claude/agy/opencode/hermes am
-`--help` verifiziert, für codex/gemini/aider/cursor/qwen bewusst **leer** (siehe auch
-QTMUX-**91**, Agenten-Startprofile).
 
 **Aus der Air-Evaluation (2026-07-28, air.dev):** QTMUX-**89** (Ruhezustand verhindern,
 solange Agenten arbeiten) · **90** (Prompt-Queue je Session) · **91** (Agenten-Startprofile —
@@ -637,6 +677,13 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Repeater-Delegates brauchen `pragma ComponentBehavior: Bound` + qualifizierte IDs.
   Headless-Verifikation: das Fenster referenziert alle 9 Cat-Typen → ein defekter Typ bricht
   den App-Start; Seiten einzeln über vorgeseedetes `ui.prefsCategory` instanziierbar.
+  🔑 **Vollständigkeit prüfen** (Audit 2026-07-29, Stand: lückenlos): Die **einzige** Quelle
+  echter Nutzer-Einstellungen ist der `Settings`-Block in [qml/Main.qml](qml/Main.qml) (plus
+  `ui/language`, `ui/themeMode`, `mcp/port` aus C++). Jeden Alias von dort gegen
+  [qml/prefs/](qml/prefs/) greppen — was fehlt, ist entweder eine Lücke oder bewusst
+  **Laufzeitzustand** (`newSessionType`, `collapsedGroups`; die gehören NICHT in den Dialog).
+  Alles unter `windows/*` in [WindowModel.cpp](src/viewmodels/WindowModel.cpp) ist ebenfalls
+  Zustand, keine Einstellung.
 - **Agent-Awareness:** OSC 133 (Prompt-Marker → Activity-Ring), OSC 9/777 (Notify),
   OSC 9;4 (Progress-Balken), Bell → Attention-Pulse (blau); MCP-Controller-Tab rot.
   🔑 **Reduzierte Bewegung (QTMUX-47):** `App.reduceMotion` (AppController, beim Start
@@ -810,6 +857,17 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 - **Nach einem Rebuild `open qtmux.app` NICHT auf eine laufende Instanz** — `open`
   aktiviert nur; das alte Binary antwortet dann (z. B. „Unbekanntes Tool"). Erst beenden,
   dann starten.
+- ⚠️ **„Fehlt die Funktion, oder nur das Binary?" — erst datieren, dann suchen.** Meldet
+  jemand, eine gebaute Funktion sei in der GUI nicht auffindbar, ist die **erste** Messung das
+  Alter des laufenden Programms: `ps -o pid,lstart,command -p <pid>` liefert den Pfad,
+  `ls -la` darauf die mtime des Binaries — liegt sie **vor** dem Commit, ist die Frage
+  beantwortet, ohne eine Zeile Quellcode zu lesen. Beweiskraft gibt der **Gegentest am
+  Artefakt**: Dialogtexte sind als Klartext im Binary auffindbar
+  (`grep -ac "<Text aus dem Dialog>" …/MacOS/qtmux`) — alt **0**, neu **>0**.
+  🔑 `strings | grep` versagt dabei: QML wird per qmlcachegen eingebettet, `strings` fand 0
+  Treffer in **beiden** Binaries und hätte den Fehlschluss „auch der neue Build hat es nicht"
+  gestützt. `grep -a` direkt auf die Datei trennt sauber. Passiert am 2026-07-29 mit den
+  Agenten-Schaltern aus QTMUX-85/98 (Quelle korrekt, Instanz vom Vortag).
 - macOS-GUI-E2E: CGEvent-Tool braucht Pause zwischen MouseDown/Up (sonst nur Hover);
   App-Sprache über das App-Menü umstellen, nicht `defaults write` (cfprefsd-Cache);
   Details [[qtmux-gui-test-macos]].
