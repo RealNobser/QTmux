@@ -400,6 +400,13 @@ Modus 3 muss der Agent vorher per MCP `set_agent_session` seine Kennung gemeldet
 Owner-Abnahme offen.** Dreiwahl statt Schalter (Owner-Entscheidung); Mechanik und die beiden
 Fallen in der Feature-Referenz unter „Umfang der Wiederherstellung ist eine WAHL".
 
+**QTMUX-100 (Sidebar-Drag lief weg) ist behoben und verifiziert (2026-07-29), Owner-Abnahme
+offen.** Ursache und Messwerte in der Feature-Referenz („Niemals ein ListView-Delegat als
+`DragHandler.target`"); der Messweg für Maus-Gesten steht in den E2E-Fallen.
+⚠️ **Nebenbefund, ungeprüft:** Wird eine Kachel auf Zeile 0 geschoben, während die Liste
+**gescrollt** ist, driftet `contentY` über mehrere Vorgänge (im Nachbau 160 → 144 → 84 → 24).
+Anderer Pfad als der behobene, in der App **nicht** gegengeprüft — im Ticket QTMUX-100 notiert.
+
 **Danach:** (1) **`build/macos` neu bauen** und die Produktivinstanz darauf umstellen — erst
 damit sind QTMUX-85/97/98/99 überhaupt bedienbar und abnehmbar (s. Arbeitsstand) ·
 (2) Owner-Abnahme QTMUX-85/98/99 und QTMUX-86 · (3) `build/windows` (Debug) auf den aktuellen
@@ -769,6 +776,20 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Sessions (sonst teilen sich Panes eine Session und kämpfen um `resize()` → Verzerrung).
   Pane-Reorder: `DragHandler(target:null)` + manueller Szenen-Hit-Test (Qt-`Drag`/`DropArea`
   war fragil). Extern (MCP) erzeugte Sessions werden per `_wrapPending` in ein Window verpackt.
+- 🔑 **Niemals ein ListView-Delegat als `DragHandler.target` (QTMUX-100).** Ein ListView
+  vergibt die `y` seiner Delegates **selbst** und leitet daraus die Ausdehnung des Inhalts ab.
+  Zieht man die **letzte** Kachel nach oben, schrumpft diese Ausdehnung, Flickable korrigiert
+  `contentY` ins Negative — und schiebt damit **alle übrigen** Kacheln nach unten. Die
+  Korrektur verschiebt die gezogene Kachel erneut gegenüber dem Zeiger → nächste Korrektur:
+  eine **Rückkopplung**, die erst endet, wenn nichts mehr im Bild ist. Gemessen (3 Kacheln,
+  ohne Gruppen): letzte Kachel `contentY` 0 → −6 → −52 → −100 → −163 → −213 …, erste und
+  mittlere Kachel dagegen konstant 0. Daher auch der Anwender-Befund „nur ohne Gruppen": ein
+  Section-Header hält die Ausdehnung unten fest. **Richtig ist `target: null` + rein optischer
+  Versatz per `transform: Translate { y: … }`** aus `activeTranslation`; die Zielzeile beim
+  Loslassen aus Layout-`y` **plus** Versatz. Gilt für Kachel- **und** Gruppen-Header-Drag.
+  🔑 **Positivkontrolle ist hier Pflicht**, sonst „behebt" man den Fehler, indem man den Drag
+  abschaltet: Der Versatz muss dem Zeiger 1:1 folgen (gemessen: Maus −372 px → `dy −372`) und
+  das Loslassen muss umsortieren (`#1 #2 #3` → `#3 #1 #2`).
 - 🔑 `TerminalItem::setSession` ruft `recomputeGrid` **nur bei gültiger Größe** — ein
   ungelayoutetes Item resizte die geteilte Session sonst auf 1×1 und verwarf den Inhalt.
 - **Backend-Ownership:** Backend gehört NUR dem `unique_ptr` (kein `setParent`);
@@ -919,6 +940,23 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Rendering-Fehler, keine Daten weg". Erst der Blick auf den **Live**-Bildschirm (ohne
   Scrollback) zeigte: 0 Zeichen. **Regel:** Beim Suchen eines Verlusts das Messfenster genau
   so eng wählen wie die Behauptung — sonst beweist man die eigene Vermutung.
+- **Maus-Gesten ohne Bedienungshilfen-Recht testen (QTMUX-100):** CGEvent scheitert hier
+  (`AXIsProcessTrusted()` = false), aber **synthetische `QMouseEvent` in den eigenen Prozess**
+  brauchen kein Recht: temporäres `Q_INVOKABLE dbgMouse(art, x, y)` auf dem AppController →
+  `QGuiApplication::sendEvent(window, &ev)` mit press/move/release, dazu ein QML-Timer, der die
+  Positionen protokolliert. Damit läuft der **echte** DragHandler gegen das **echte** Modell.
+  🔑 Zwei Fallen dabei: (1) Ereignisse **realistisch schnell** schicken (16 ms/Schritt) — bei
+  400 ms sieht Flickable keine Geschwindigkeit und verhält sich anders. (2) Ausgabe in eine
+  **Datei** leiten, nicht in eine Pipe: wird der Prozess abgeschossen, geht der Pipe-Puffer
+  verloren und es sieht aus, als hätte die App nichts gemeldet.
+- ⚠️ **Ein Nachbau ist kein Beweis — er kann am Original vorbeigehen (QTMUX-100).** Für den
+  Sidebar-Drag stand ein QML-Minimalnachbau, der eine Drift zeigte; die Ursache dort war aber
+  die **Zielzeile 0 bei gescrollter Liste**, nicht der eigentliche Fehler. Erst die Messung an
+  der echten App mit echten Ereignissen zeigte den wahren Auslöser (letzte Kachel, `contentY`).
+  Der Nachbau hatte also *eine* Drift reproduziert und zu einer falschen Diagnose verleitet.
+  **Regel:** Am Nachbau darf man Hypothesen bilden, entschieden wird am Original — und die
+  Reproduktion muss die **konkret gemeldeten** Bedingungen treffen (hier: 3 Kacheln, keine
+  Gruppen, bis an den Rand). Mit 5 Kacheln und einer mittleren Kachel war nichts zu sehen.
 - ⚠️ **Instrumentierung ohne Aufrufstelle beweist nichts.** Ein Log meldete 98 abgefangene
   Nullgrößen — daraus schloss ich auf die Ursache. Mit mitgeloggter Aufrufstelle kamen **alle**
   aus einem Aufruf, den *dieselbe Änderung* neu eingeführt hatte; im alten Code gab es sie

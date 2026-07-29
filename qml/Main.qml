@@ -2346,6 +2346,8 @@ ApplicationWindow {
                         readonly property bool collapsed: window.isGroupCollapsed(section)
                         z: hdrDrag.active ? 3 : 0
                         opacity: hdrDrag.active ? 0.85 : 1.0
+                        property real dragDy: 0
+                        transform: Translate { y: groupHeader.dragDy }
 
                         Rectangle {
                             anchors.fill: parent
@@ -2386,12 +2388,16 @@ ApplicationWindow {
                             }
                             DragHandler {
                                 id: hdrDrag
-                                target: groupHeader
+                                // Wie beim Kachel-Drag: nicht die Position des vom ListView
+                                // verwalteten Elements anfassen, sondern nur eine Transform.
+                                target: null
                                 xAxis.enabled: false
                                 yAxis.enabled: true
+                                onActiveTranslationChanged: if (active) groupHeader.dragDy = activeTranslation.y
                                 onActiveChanged: {
-                                    if (active) return
-                                    const cy = groupHeader.y + groupHeader.height / 2
+                                    if (active) { groupHeader.dragDy = 0; return }
+                                    const cy = groupHeader.y + groupHeader.dragDy + groupHeader.height / 2
+                                    groupHeader.dragDy = 0
                                     const target = window.rowNearestTo(cy, -1)
                                     if (target >= 0) window.moveGroupToRow(groupHeader.section, target)
                                     sessionList.forceLayout()
@@ -2431,6 +2437,10 @@ ApplicationWindow {
                         z: dragH.active ? 2 : 0
                         opacity: dragH.active ? 0.85 : 1.0
                         scale: dragH.active ? 1.02 : 1.0
+                        // Optischer Versatz beim Ziehen. Bewusst eine Transform statt einer
+                        // Positionsänderung: die Layout-Position gehört dem ListView (s. dragH).
+                        property real dragDy: 0
+                        transform: Translate { y: tile.dragDy }
 
                         HoverHandler { id: hover }
                         TapHandler { onTapped: window.loadWindowRow(tile.index) }
@@ -2450,13 +2460,28 @@ ApplicationWindow {
                         // Drag-to-Reorder: vertikal ziehen, Zielzeile aus der Position bestimmen.
                         DragHandler {
                             id: dragH
-                            target: tile
+                            // ⚠️ `target` bleibt NULL — die Kachel wird optisch über eine
+                            // Translate-Transform versetzt (s. `transform` oben), nicht über
+                            // ihre Position. Ein ListView vergibt die `y` seiner Delegates
+                            // selbst und leitet daraus die Ausdehnung des Inhalts ab; wird
+                            // die LETZTE Kachel per `target` nach oben gezogen, schrumpft
+                            // diese Ausdehnung, Flickable korrigiert `contentY` ins Negative
+                            // und schiebt damit alle übrigen Kacheln nach unten. Die
+                            // Korrektur verschiebt die gezogene Kachel erneut gegenüber dem
+                            // Zeiger → nächste Korrektur: die Liste läuft weg, bis nichts
+                            // mehr im Bild ist. Gemessen: contentY 0 → −6 → −52 → −100 →
+                            // −163 → −213 …, und nur beim Ziehen der letzten Kachel.
+                            // Eine Transform ist rein visuell und lässt das Layout in Ruhe.
+                            target: null
                             xAxis.enabled: false
                             yAxis.enabled: true
+                            onActiveTranslationChanged: if (active) tile.dragDy = activeTranslation.y
                             onActiveChanged: {
-                                if (active) return
+                                if (active) { tile.dragDy = 0; return }
                                 const from = tile.index
-                                const ni = window.rowNearestTo(tile.y + tile.height / 2, from)
+                                // Zielzeile aus der GEZOGENEN Lage (Layout-y + optischer Versatz).
+                                const ni = window.rowNearestTo(tile.y + tile.dragDy + tile.height / 2, from)
+                                tile.dragDy = 0
                                 if (ni >= 0 && ni !== from) window.moveWindowRow(from, ni)
                                 sessionList.forceLayout()
                             }
