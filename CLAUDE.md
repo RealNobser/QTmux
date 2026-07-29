@@ -131,15 +131,30 @@ ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein
 > `fatal error C1083: "type_traits"` und `LNK1104: "iphlpapi.lib"`. Tückisch: **dasselbe
 > Preset im Release „ging"**, weil dort nichts zu übersetzen war (`ninja: no work to do`
 > braucht keinen Compiler) — der Fehler sah preset-spezifisch aus, war aber nur
-> „Debug hatte etwas zu tun". Abhilfe: **`cmake.buildTask: true`** (der Build-Knopf führt
-> tasks.json aus statt selbst zu bauen) plus `configureOnOpen`/`configureOnEdit`/
-> `automaticReconfigure` **alle aus** (jeder automatische Konfigurationslauf der Erweiterung
-> liefe mit der leeren Umgebung und verdirbt den Cache; `automaticReconfigure` feuert beim
-> **Preset-Wechsel** in der Statusleiste). Damit tun Build-Knopf, Strg+Umschalt+B und F5
-> dasselbe. Die Task setzt das **aktive** Preset ein
-> (`${command:cmake.activeBuildPresetName}`) — sonst baut der Knopf bei gewähltem Release
-> stumm Debug; das Argument ist im Skript **gequotet**, damit ein etwaiger Anzeigename
+> „Debug hatte etwas zu tun". Gegenprobe, die das festnagelt: **derselbe** Befehl der
+> Erweiterung scheitert in einer normalen Shell mit `C1083`, durch den Wrapper (unten) läuft
+> er durch — es ist die Umgebung, nicht der Code.
+> ⚠️ **`cmake.buildTask: true` löst das NICHT** (2026-07-29 verworfen, war einen Tag lang als
+> Abhilfe eingetragen): `findBuildTask()` in `dist/main.js` holt die Task per
+> `fetchTasks({ type: "cmake" })` — eine **`type: shell`**-Task findet sie nicht und baut
+> **still wieder selbst**. Im Log erkennbar daran, dass dort weiter
+> `[proc] Executing command: … cmake.EXE --build …` steht statt eines Task-Terminals.
+> ✅ **Was trägt:** `tools/cmake-vsdev.cmd` — ein cmake-**Wrapper**, der vswhere+vcvars64
+> (VS 2022) selbst herstellt und alle Argumente durchreicht. Eintrag in die **Benutzer**-
+> Einstellungen (nicht ins Repo, `.vscode/settings.json` gilt auch für macOS/Linux):
+> `"cmake.cmakePath": "…/tools/cmake-vsdev.cmd"`. Damit läuft **jeder** cmake-Aufruf der
+> Erweiterung (Build-Knopf, Palette, Konfigurieren) in der richtigen Umgebung. Unabhängig
+> davon bleiben `configureOnOpen`/`configureOnEdit`/`automaticReconfigure` **aus**
+> (`automaticReconfigure` feuert beim **Preset-Wechsel**), und Strg+Umschalt+B / F5 gehen
+> über die Tasks → `tools/vsdev-build.cmd`. Die Task setzt das **aktive** Preset ein
+> (`${command:cmake.activeBuildPresetName}`) — sonst baut sie bei gewähltem Release stumm
+> Debug; das Argument ist im Skript **gequotet**, damit ein etwaiger Anzeigename
 > („Windows (MSVC)") sauber als `No such preset` scheitert statt die Batch-Zeile zu zerlegen.
+> 🔑 **Zweiter, latenter Fehler (2026-07-29 mitgefunden):** Das `windows`-Preset hatte als
+> Qt-Fallback `C:/Qt/6.10.3/msvc2022_64` — auf dieser Maschine ist nur **6.11.1** installiert.
+> Bestehende Build-Verzeichnisse merkten das nicht (Qt lag schon im Cache), ein **frisches**
+> hätte Qt nicht gefunden. Jetzt 6.11.1; die CI ist davon unabhängig (sie ruft `cmake` direkt
+> mit `QT_ROOT_DIR` auf, ohne Presets). Eigene Qt-Installation weiter über `QTMUX_QT_PREFIX`.
 > 🔑 Batch-Fallen in dieser Datei: **CRLF** Pflicht (bei LF führt cmd.exe Kommentarzeilen
 > aus), **rein ASCII**, und `%ProgramFiles(x86)%` **nie in einer `for`-/`if`-Klammer**
 > expandieren — das `)` aus „(x86)" schließt sie vorzeitig („Der Befehl `C:\Program` ist

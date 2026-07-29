@@ -14,9 +14,17 @@
   //   fatal error C1083: "type_traits": No such file or directory        (INCLUDE fehlt)
   //   LINK : fatal error LNK1104: "iphlpapi.lib" nicht geöffnet          (LIB fehlt)
   // während dasselbe Preset im Release „ging", weil dort nichts zu übersetzen war.
-  // Deshalb baut die Erweiterung NICHT mehr selbst, sondern über tasks.json → Skript.
-  // Damit tun der Build-Knopf, Strg+Umschalt+B und F5 dasselbe.
-  "cmake.buildTask": true,
+  //
+  // ⚠️ `"cmake.buildTask": true` hilft dagegen NICHT und ist deshalb bewusst NICHT gesetzt:
+  // die Erweiterung sucht die Task mit `fetchTasks({ type: "cmake" })` (findBuildTask in
+  // dist/main.js) — eine `type: shell`-Task findet sie nicht und baut still wieder selbst.
+  // Der Weg, der wirklich trägt: die Erweiterung auf den cmake-Wrapper zeigen lassen, der
+  // die VS-2022-Umgebung selbst herstellt (Details in tools/cmake-vsdev.cmd):
+  //     "cmake.cmakePath": "d:\\projects\\_ClaudeWorkspace\\QTmux\\tools\\cmake-vsdev.cmd"
+  // Das gehört in die BENUTZER-Einstellungen und nicht hierher: diese Datei gilt für alle
+  // Plattformen, der Pfad existiert nur unter Windows. Ohne den Wrapper bleiben
+  // Strg+Umschalt+B und F5 (beide gehen über tasks.json → tools/vsdev-build.cmd) die
+  // verlässlichen Wege; der Build-Knopf der Erweiterung scheitert dann an INCLUDE/LIB.
   // Alle drei automatischen Konfigurationsläufe aus: die Erweiterung würde sie mit der
   // leeren Umgebung starten (der Compiler-Test scheitert dann bzw. der Cache wird
   // verdorben) — beim Öffnen, beim Speichern einer CMakeLists.txt und beim Wechsel des
