@@ -6,6 +6,8 @@
 #include <QVariantMap>
 #include <qqmlintegration.h>
 
+#include "SleepInhibitor.h"   // Mitglied, daher vollständige Definition nötig
+
 QT_BEGIN_NAMESPACE
 class QTimer;
 QT_END_NAMESPACE
@@ -20,6 +22,8 @@ class SessionModel : public QAbstractListModel {
     Q_OBJECT
     QML_ELEMENT
     Q_PROPERTY(int count READ count NOTIFY countChanged)
+    Q_PROPERTY(bool preventSleep READ preventSleep WRITE setPreventSleep NOTIFY preventSleepChanged)
+    Q_PROPERTY(bool sleepInhibited READ sleepInhibited NOTIFY sleepInhibitedChanged)
 public:
     enum Roles {
         TitleRole = Qt::UserRole + 1,
@@ -179,7 +183,22 @@ public:
     /// (seit dem Window-Modell toten) restoreState()-Pfad.
     Q_INVOKABLE void setRestoring(bool on) { m_restoring = on; }
 
+    // --- Ruhezustand verhindern (QTMUX-89) ---------------------------------------
+    /// Anwender-Schalter, **Vorgabe AUS**. Ist er an, hält QTmux das System wach,
+    /// solange mindestens eine Session `busy` meldet — die Regel steht Gui-frei in
+    /// [SleepInhibitor.h](../core/SleepInhibitor.h) (`shouldPreventSleep`).
+    bool preventSleep() const { return m_preventSleep; }
+    void setPreventSleep(bool on);
+    /// Hält die Sperre gerade? Für die Anzeige — so ist nachvollziehbar, warum der
+    /// Rechner wach bleibt, statt dass es wie ein Fehler wirkt.
+    bool sleepInhibited() const;
+    /// Kann diese Plattform das überhaupt? (Linux: derzeit nein.)
+    Q_INVOKABLE bool sleepInhibitSupported() const;
+
 signals:
+    void preventSleepChanged();
+    /// Die Sperre wurde gesetzt oder freigegeben.
+    void sleepInhibitedChanged();
     void countChanged();
     /// Eine Gruppenzuordnung hat sich geändert (QTMUX-42). groups()/groupSize()
     /// sind Funktionen, keine Properties — QML-Bindungen darauf brauchen diesen
@@ -234,6 +253,12 @@ private:
     QList<Session *> m_sessions;
     QList<SessionConfig> m_configs;   // parallel zu m_sessions
     QTimer *m_cwdPoll = nullptr;      // pollt das Arbeitsverzeichnis aller Sessions
+
+    /// Sperre nachführen: bei jedem Aktivitätswechsel, beim Anlegen/Schließen einer
+    /// Session und beim Umlegen des Schalters. Idempotent — setActive prüft selbst.
+    void updateSleepInhibit();
+    bool m_preventSleep = false;      // Vorgabe AUS (Anwender-Entscheidung)
+    SleepInhibitor m_sleepInhibitor;
     int m_activeRow = -1;
     bool m_restoring = false;         // unterdrückt Persistierung während restoreState()
     bool m_shuttingDown = false;      // App-Quit: kein Auto-Remove/Save mehr (Zustand ist gesichert)

@@ -102,6 +102,15 @@ public:
     bool needsAttention() const { return m_needsAttention; }
     Activity activity() const { return m_activity; }
     int activityInt() const { return static_cast<int>(m_activity); }
+    /// Hat diese Session ihren Zustand jemals SELBST gemeldet — über OSC-133-Marker der
+    /// Shell-Integration oder MCP `set_activity`?
+    ///
+    /// ⚠️ Wichtig für alles, was aus der Aktivität Konsequenzen zieht (QTMUX-89): Der
+    /// Startwert von `m_activity` ist `Running`, damit der Sidebar-Ring sofort grün ist.
+    /// Ohne Shell-Integration bleibt er das für immer — eine Session am untätigen Prompt
+    /// sähe also dauerhaft „beschäftigt" aus. Wer daraus etwas ableitet, muss deshalb
+    /// zuerst hier fragen: ungemeldet heißt **unbekannt**, nicht „arbeitet".
+    bool activityReported() const { return m_activityReported; }
     QString lastNotification() const { return m_lastNotification; }
     bool mcpController() const { return m_mcpController; }
     bool progressActive() const { return m_progressActive; }
@@ -229,6 +238,12 @@ private:
     int m_progressState = 0;     // 1=normal,2=Fehler,3=unbestimmt,4=pausiert
     int m_progressValue = 0;     // 0..100
     Activity m_activity = Activity::Running;
+    bool m_activityReported = false;   // s. activityReported()
+    /// Merkt „ab jetzt meldet diese Session selbst" und stößt dabei EINMAL
+    /// activityChanged an. Nötig, weil die erste Meldung oft `busy` ist und damit den
+    /// Startwert `Running` gar nicht ändert: setActivity meldete dann nichts, und alles,
+    /// was an activityChanged hängt (Ruhezustands-Sperre, QTMUX-89), liefe nie an.
+    void markActivityReported();
     QString m_lastNotification;
     bool m_commandRunning = false;   // zwischen OSC 133;C und ;D
     bool m_enterPending = false;     // abgesetztes Enter noch offen (QTMUX-31)

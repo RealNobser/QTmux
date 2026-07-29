@@ -665,6 +665,30 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `unknownRestoreModeFallsBackToFull` (Gegenprobe mit umgedrehter Fallback-Richtung: FAIL).
   🔑 Modus 1 lässt nur `loadHistoryFor` weg — die Dumps bleiben liegen, ein späteres „Alles"
   findet sie wieder vor.
+- **Ruhezustand verhindern (QTMUX-89):** `SleepInhibitor` ([src/core/SleepInhibitor.h](src/core/SleepInhibitor.h),
+  plattform-gekapselt wie `GlobalHotkey`) — macOS `IOPMAssertionCreateWithName`
+  (`PreventUserIdleSystemSleep`, IOKit-Framework), Windows `SetThreadExecutionState`
+  (⚠️ **pro Thread**: Setzen und Aufheben aus demselben Thread), **Linux noch Stub**
+  (login1/DBus wäre hier nicht lauffähig prüfbar — eine hängende Sperre ist schlimmer als
+  keine). Nur **System**schlaf, nie das Display. Schalter `window/preventSleep`,
+  **Vorgabe AUS** (Anwender-Vorgabe: ungefragt den Ruhezustand aushebeln ist ein Ärgernis);
+  Einstellungen → Allgemein → „Energie" mit Live-Anzeige, ob gerade gesperrt ist, dazu Palette
+  und Suchindex. Regel Gui-frei in `shouldPreventSleep` (Test `tst_session::sleepInhibitRule`).
+  🔑 **`Activity` allein ist als Auslöser UNBRAUCHBAR** — der Startwert ist `Running`, damit
+  der Sidebar-Ring sofort grün ist. Eine Shell **ohne** Shell-Integration meldet nie etwas und
+  bliebe für immer „beschäftigt": Der Rechner schliefe nie wieder ein. Deshalb zählt nur, was
+  eine Session **selbst gemeldet** hat (`Session::activityReported()`, gesetzt von OSC 133 und
+  MCP `set_activity`) — ungemeldet heißt **unbekannt**, nicht „arbeitet". Dieselbe Linie wie
+  QTMUX-30/37: QTmux leitet nichts ab. Empirisch aufgefallen: `pmset -g assertions` zeigte die
+  Sperre direkt nach dem Start, ohne dass irgendwer arbeitete.
+  🔑 **Die erste Meldung ist oft `busy` und ändert den Startwert `Running` gar nicht** →
+  `setActivity` feuert kein `activityChanged`, und die Neuberechnung liefe nie an. Deshalb
+  `markActivityReported()`, das beim Übergang „ungemeldet → gemeldet" **einmal**
+  `activityChanged` auslöst. Symptom vorher: Die Sperre kam erst beim **zweiten** `busy`
+  (nach einem Umweg über `waiting`) — sah aus wie ein Wettlauf, war aber ein fehlendes Signal.
+  🔑 `Waiting` zählt bewusst **nicht** als Arbeiten: Da wartet der Agent auf einen Menschen,
+  und dann darf der Rechner schlafen (Gegenprobe im Test: FAIL, wenn man es mitzählt).
+  Abnahme mit `pmset -g assertions` über alle Zustände, inkl. Freigabe beim Beenden.
 - **Agenten überleben den Neustart (QTMUX-85):** Ein Agent läuft **nicht** als `program` —
   er wird in eine Shell **getippt** und in `Session::observeInput` über
   `AgentRegistry::detect` erkannt. Deshalb speichert die Session die erkannte Zeile in

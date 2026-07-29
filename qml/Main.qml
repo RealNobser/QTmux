@@ -440,6 +440,12 @@ ApplicationWindow {
     property bool pasteWarnMultiline: true  // Vor mehrzeiligem Einfügen warnen
     property bool confirmQuit: true         // Vor dem Beenden nachfragen (QTMUX-41)
 
+    // Ruhezustand verhindern, solange ein Agent arbeitet (QTMUX-89) — Vorgabe AUS.
+    // Bewusste Anwender-Entscheidung: Eine App, die ungefragt den Ruhezustand des
+    // Rechners aushebelt, ist ein Ärgernis; wer es will, schaltet es ein.
+    property bool preventSleep: false
+    onPreventSleepChanged: sessions.preventSleep = preventSleep
+
     // Umfang der Wiederherstellung beim Start (QTMUX-99, qtmux::RestoreMode):
     // 0 gar nicht · 1 ohne Verlauf · 2 alles (Vorgabe = bisheriges Verhalten).
     // Die Regeln stehen Gui-frei in RestoreMode.h; abgefragt wird ausschließlich über
@@ -1382,6 +1388,10 @@ ApplicationWindow {
         // Scrollback aus dem `windows`-Schema wiederherstellen (migriert einmalig ein
         // altes `sessions`-Profil). Kein sessions.restoreState() mehr — die Sessions
         // entstehen je Blatt aus dem gespeicherten cfg.
+        // Gespeicherten Schalter an das Model durchreichen (QTMUX-89). Ausdrücklich hier
+        // und nicht nur über onPreventSleepChanged: Entspricht der gespeicherte Wert der
+        // Vorgabe, feuert beim Start gar kein Änderungssignal.
+        sessions.preventSleep = window.preventSleep
         window.restoreWindows()
         window._starting = false   // ab jetzt darf ein leerer Fensterstand beenden
     }
@@ -1442,6 +1452,7 @@ ApplicationWindow {
         property alias pasteWarnMultiline: window.pasteWarnMultiline
         property alias confirmQuit: window.confirmQuit
         property alias restoreSessionMode: window.restoreSessionMode
+        property alias preventSleep: window.preventSleep
         property alias restoreAgents: window.restoreAgents
         property alias resumeAgentMode: window.resumeAgentMode
         property alias collapsedGroups: window.collapsedGroupsJson
@@ -1912,6 +1923,8 @@ ApplicationWindow {
                             { title: qsTr("Sessions wiederherstellen: gar nicht"), sub: "",    icon: "terminal-window", run: function(){ window.restoreSessionMode = 0 } },
                             { title: qsTr("Sessions wiederherstellen: ohne Verlauf"), sub: "", icon: "terminal-window", run: function(){ window.restoreSessionMode = 1 } },
                             { title: qsTr("Sessions wiederherstellen: alles"), sub: "",        icon: "terminal-window", run: function(){ window.restoreSessionMode = 2 } },
+                            { title: window.preventSleep ? qsTr("Ruhezustand wieder zulassen") : qsTr("Ruhezustand verhindern, solange Agenten arbeiten"),
+                              sub: "", icon: "robot", run: function(){ window.preventSleep = !window.preventSleep } },
                             // QTMUX-103: was im Kontextmenü liegt, muss auch die Palette können (QTMUX-46).
                             { title: qsTr("Arbeitsverzeichnis öffnen"),   sub: "",             icon: "bookmark",        run: function(){ window.openWorkingDir(window.currentWorkingDir()) } },
                             { title: qsTr("Pfad kopieren"),               sub: "",             icon: "copy",            run: function(){

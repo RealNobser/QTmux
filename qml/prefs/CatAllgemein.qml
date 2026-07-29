@@ -107,6 +107,7 @@ CatPage {
             }
             CheckBox {
                 text: qsTr("Quake-Modus: per globalem Hotkey ein-/ausblenden")
+                objectName: "cbQuake"
                 checked: page.host.app.quakeMode
                 enabled: Qt.platform.os === "osx"   // vorerst nur macOS
                 onToggled: page.host.app.quakeMode = checked
@@ -118,6 +119,54 @@ CatPage {
                 color: Theme.textDim
                 font.pixelSize: 11
                 Layout.leftMargin: 26
+            }
+        }
+    }
+
+    // --- Energie (QTMUX-89) ---
+    PrefAnchor {
+        settingKey: "allgemein.energie"
+        page: page
+        ColumnLayout {
+            spacing: 4
+            Layout.fillWidth: true
+            SectionLabel { text: qsTr("Energie") }
+            CheckBox {
+                text: qsTr("Ruhezustand verhindern, solange Agenten arbeiten")
+                checked: page.host.app.preventSleep
+                enabled: page.host.sessions.sleepInhibitSupported()
+                onToggled: page.host.app.preventSleep = checked
+            }
+            Text {
+                text: page.host.sessions.sleepInhibitSupported()
+                      ? qsTr("Der Rechner bleibt wach, solange mindestens eine Session „beschäftigt“ "
+                           + "meldet — und nur dann. Wartet ein Agent auf eine Antwort von dir, "
+                           + "darf der Rechner schlafen. Der Bildschirm wird nicht wachgehalten.")
+                      : qsTr("Auf dieser Plattform noch nicht verfügbar.")
+                color: Theme.textDim
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.leftMargin: 26
+                Layout.bottomMargin: 4
+            }
+            // Sichtbar machen, WANN die Sperre greift — sonst wirkt ein wacher Rechner
+            // wie ein Fehler und niemand kann es nachvollziehen.
+            RowLayout {
+                spacing: 6
+                visible: page.host.app.preventSleep
+                Layout.leftMargin: 26
+                Rectangle {
+                    width: 8; height: 8; radius: 4
+                    color: page.host.sessions.sleepInhibited ? Theme.accent : Theme.textDim
+                }
+                Text {
+                    text: page.host.sessions.sleepInhibited
+                          ? qsTr("Aktiv — der Ruhezustand ist gerade gesperrt.")
+                          : qsTr("Zurzeit nicht gesperrt: keine Session arbeitet.")
+                    color: Theme.textDim
+                    font.pixelSize: 11
+                }
             }
         }
     }
