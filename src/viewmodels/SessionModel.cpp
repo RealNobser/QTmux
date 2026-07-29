@@ -726,6 +726,12 @@ void SessionModel::loadHistoryFor(int row, int key) const {
         m_sessions.at(row)->screen()->inputWrite(dump);
 }
 
+bool SessionModel::clearViewport(int row) const {
+    if (row < 0 || row >= m_sessions.size()) return false;
+    VtScreen *screen = m_sessions.at(row)->screen();
+    return screen && screen->clearViewportKeepScrollback();
+}
+
 void SessionModel::pruneHistoryExcept(const QList<int> &keys) const {
     QDir d(historyDir());
     if (!d.exists()) return;

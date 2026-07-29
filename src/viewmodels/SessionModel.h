@@ -133,6 +133,12 @@ public:
     /// Liest <historyDir>/<key>.ans und speist ihn in den Screen ein (vor erster
     /// Backend-Ausgabe aufrufen, damit er als Scrollback nach oben rollt).
     Q_INVOKABLE void loadHistoryFor(int row, int key) const;
+
+    /// „Bildschirm leeren" unter Erhalt des Scrollbacks (QTMUX-61). Wirkt direkt auf den
+    /// Screen der Session — es wird **nichts** an die Shell geschickt: ein getipptes `clear`
+    /// verwirft je nach Agent/TUI den Verlauf und würde außerdem in der Eingabezeile eines
+    /// laufenden Agenten landen. Liefert false, wenn es nichts zu tun gab.
+    Q_INVOKABLE bool clearViewport(int row) const;
     /// Entfernt alle <historyDir>/<n>.ans, deren n NICHT in `keys` (den aktuellen
     /// paneIds) liegt — räumt Dumps geschlossener Panes weg.
     Q_INVOKABLE void pruneHistoryExcept(const QList<int> &keys) const;

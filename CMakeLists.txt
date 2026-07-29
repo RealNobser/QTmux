@@ -130,6 +130,7 @@ qt_add_qml_module(qtmux
         qml/Ui/ThemedMenu.qml
         qml/Ui/AppComboBox.qml
         qml/Ui/AppDialog.qml
+        qml/Ui/AppToolTip.qml
         qml/Ui/SectionLabel.qml
         qml/prefs/CatPage.qml
         qml/prefs/PrefAnchor.qml

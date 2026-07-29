@@ -27,7 +27,46 @@ private slots:
     void mouseReporting();
     void linkDetectionOnScreenLine();
     void serializeAnsiRoundTrip();
+    void clearViewportKeepsScrollback();
 };
+
+// „Bildschirm leeren" darf NICHTS verlieren (QTMUX-61): Alles oberhalb der Cursorzeile
+// wandert in den Scrollback, die Cursorzeile rückt nach oben. Der Test misst genau das,
+// was der Anwender fürchtet — dass der Verlauf weg ist.
+void TestVtScreen::clearViewportKeepsScrollback() {
+    VtScreen vt(10, 40);
+    QCOMPARE(vt.scrollbackCount(), 0);
+    // Fünf Zeilen Inhalt, danach steht der Cursor in Zeile 5 (0-basiert) — wie ein Prompt
+    // unter bereits gelaufener Ausgabe.
+    vt.inputWrite("eins\r\nzwei\r\ndrei\r\nvier\r\n$ ");
+    QCOMPARE(vt.cursor().y(), 4);
+    QVERIFY(vt.screenText().contains(QStringLiteral("eins")));
+
+    QVERIFY(vt.clearViewportKeepScrollback());
+
+    // Die vier Zeilen darüber liegen jetzt im Scrollback …
+    QCOMPARE(vt.scrollbackCount(), 4);
+    const QString sb = vt.scrollbackText();
+    for (const char *w : {"eins", "zwei", "drei", "vier"})
+        QVERIFY2(sb.contains(QLatin1String(w)), w);
+    // … und sind vom sichtbaren Bildschirm verschwunden.
+    QVERIFY(!vt.screenText().contains(QStringLiteral("eins")));
+    // Die Prompt-Zeile steht oben, der Cursor sitzt darauf (Spalte erhalten).
+    QCOMPARE(vt.cursor().y(), 0);
+    QCOMPARE(vt.cursor().x(), 2);
+    // Direkt an der Zelle prüfen: screenText() schneidet rechte Leerzeichen ab, ein
+    // startsWith("$ ") schlüge also fehl, obwohl die Zeile korrekt steht.
+    QCOMPARE(vt.cell(0, 0).text, QStringLiteral("$"));
+
+    // Zweiter Aufruf ohne neue Ausgabe: der Prompt steht bereits oben, es darf NICHTS
+    // passieren. Ohne die Nullprüfung läse ein Terminal CSI 0 S als „rolle um 1" und
+    // schluckte die Prompt-Zeile.
+    QVERIFY(!vt.clearViewportKeepScrollback());
+    QCOMPARE(vt.scrollbackCount(), 4);
+    // Direkt an der Zelle prüfen: screenText() schneidet rechte Leerzeichen ab, ein
+    // startsWith("$ ") schlüge also fehl, obwohl die Zeile korrekt steht.
+    QCOMPARE(vt.cell(0, 0).text, QStringLiteral("$"));
+}
 
 // Integration: ein per Terminal geschriebener Pfad/URL muss als exakt der String bei
 // LinkDetector ankommen. Sichert die Kette VtScreen-Zellen → Zeilentext → Heuristik,

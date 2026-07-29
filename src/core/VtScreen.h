@@ -42,6 +42,22 @@ public:
     /// Bytes vom Backend (PTY/SSH/…) in den Parser geben.
     void inputWrite(const QByteArray &data);
 
+    /// „Bildschirm leeren" **unter Erhalt des Scrollbacks** (QTMUX-61): Alles oberhalb der
+    /// Cursorzeile wandert in den Scrollback, die Cursorzeile (typischerweise der Prompt)
+    /// rückt an den oberen Rand. Nichts geht verloren — im Gegensatz zum `clear` der Shell,
+    /// das je nach Agent/TUI den Verlauf verwirft.
+    ///
+    /// Bewusst hier statt in der GUI: Die Sequenz wird in den **eigenen** Parser gespeist
+    /// (nicht ans PTY geschickt), die Shell bemerkt davon nichts und muss nichts neu zeichnen.
+    /// Gerollt wird mit CSI S (Scroll Up); dabei ruft libvterm für jede oben hinausgeschobene
+    /// Zeile den sb_pushline-Callback — genau darüber landet sie im Scrollback.
+    /// ⚠️ Der Cursor wandert bei CSI S **nicht** mit, er muss anschließend gesetzt werden;
+    /// sonst stünde er auf einer inzwischen leeren Zeile unterhalb des Prompts.
+    /// Steht der Cursor bereits in Zeile 0, passiert nichts (CSI 0 S würde sonst als
+    /// „scrolle um 1" gelesen und eine Zeile ohne Not verschlucken).
+    /// @return true, wenn tatsächlich gerollt wurde.
+    bool clearViewportKeepScrollback();
+
     void setSize(int rows, int cols);
     int rows() const { return m_rows; }
     int cols() const { return m_cols; }
