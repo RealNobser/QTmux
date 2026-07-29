@@ -116,6 +116,20 @@ public:
     /// {present:bool, windows:[{id,name,group,activePaneId,layoutJson}], activeRow, nextPaneId}.
     Q_INVOKABLE QVariantMap readWindows() const;
 
+    // --- Umfang der Wiederherstellung (QTMUX-99) ---------------------------------
+    // Die Regeln liegen Gui-frei in [RestoreMode.h](../core/RestoreMode.h) und sind dort
+    // dokumentiert; hier stehen nur die QML-Brücken. `mode` kommt roh aus den Einstellungen
+    // und wird in jeder der drei Funktionen normalisiert — QML muss den Wert also nicht
+    // prüfen, und ein defekter Wert fällt einheitlich auf „alles wiederherstellen" zurück.
+
+    /// Sollen Fenster, Panes und Arbeitsverzeichnisse wiederhergestellt werden?
+    Q_INVOKABLE bool restoresLayout(int mode) const;
+    /// Soll zusätzlich der farbige Scrollback je Pane geladen werden?
+    Q_INVOKABLE bool restoresHistory(int mode) const;
+    /// Darf der aktuelle Stand beim Beenden gespeichert werden? ⚠️ Bei „gar nicht" NEIN,
+    /// sonst überschreibt das erste Beenden den gespeicherten Stand unwiderruflich.
+    Q_INVOKABLE bool persistsOnQuit(int mode) const;
+
 signals:
     void countChanged();
     void activeRowChanged();

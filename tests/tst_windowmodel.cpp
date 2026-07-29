@@ -25,6 +25,8 @@ private slots:
     void windowIdsStayUniqueAfterSetNextId();
     void migrateOldSessionsToWindows();
     void groupsStayContiguous();
+    void restoreModeGatesLayoutHistoryAndPersistence();
+    void unknownRestoreModeFallsBackToFull();
 
 private:
     /// Ein Split-Baum mit zwei Blättern (Format wie im QML-Layout-Baum).
@@ -341,6 +343,44 @@ void TestWindowModel::groupsStayContiguous() {
     QVERIFY(contiguous(QStringLiteral("C")));
     m.moveGroup(QStringLiteral("C"), 1);
     QVERIFY(contiguous(QStringLiteral("C")));
+}
+
+// --- Umfang der Wiederherstellung (QTMUX-99) -------------------------------------
+// Drei Entscheidungen hängen an einer Zahl, und eine davon ist datenkritisch: ob beim
+// Beenden überhaupt gespeichert werden darf. Deshalb hier festgenagelt statt in QML
+// verstreut abgefragt.
+void TestWindowModel::restoreModeGatesLayoutHistoryAndPersistence() {
+    WindowModel m;
+
+    // 0 = gar nicht: nichts kommt zurück — und es wird auch NICHT gespeichert, sonst
+    // überschriebe das erste Beenden den gespeicherten Stand mit der leeren Session.
+    QVERIFY(!m.restoresLayout(0));
+    QVERIFY(!m.restoresHistory(0));
+    QVERIFY(!m.persistsOnQuit(0));
+
+    // 1 = ohne Verlauf: Fenster, Panes und Arbeitsverzeichnisse ja, Scrollback nein.
+    // Gespeichert wird normal — nur das Laden des Verlaufs entfällt.
+    QVERIFY(m.restoresLayout(1));
+    QVERIFY(!m.restoresHistory(1));
+    QVERIFY(m.persistsOnQuit(1));
+
+    // 2 = alles (Vorgabe, bisheriges Verhalten).
+    QVERIFY(m.restoresLayout(2));
+    QVERIFY(m.restoresHistory(2));
+    QVERIFY(m.persistsOnQuit(2));
+}
+
+// Ein unlesbarer Wert darf NIE als „gar nicht" durchgehen: das unterdrückt zusätzlich
+// das Speichern und fröre den letzten Stand stillschweigend ein — für den Anwender
+// nicht von einem Datenverlust zu unterscheiden. Sichere Richtung ist „alles".
+void TestWindowModel::unknownRestoreModeFallsBackToFull() {
+    WindowModel m;
+    const int garbage[] = { 3, 99, -1, -7 };
+    for (int v : garbage) {
+        QVERIFY2(m.restoresLayout(v),  qPrintable(QStringLiteral("Modus %1").arg(v)));
+        QVERIFY2(m.restoresHistory(v), qPrintable(QStringLiteral("Modus %1").arg(v)));
+        QVERIFY2(m.persistsOnQuit(v),  qPrintable(QStringLiteral("Modus %1").arg(v)));
+    }
 }
 
 QTEST_MAIN(TestWindowModel)

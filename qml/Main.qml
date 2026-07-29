@@ -432,6 +432,13 @@ ApplicationWindow {
     property bool pasteWarnMultiline: true  // Vor mehrzeiligem Einfügen warnen
     property bool confirmQuit: true         // Vor dem Beenden nachfragen (QTMUX-41)
 
+    // Umfang der Wiederherstellung beim Start (QTMUX-99, qtmux::RestoreMode):
+    // 0 gar nicht · 1 ohne Verlauf · 2 alles (Vorgabe = bisheriges Verhalten).
+    // Die Regeln stehen Gui-frei in RestoreMode.h; abgefragt wird ausschließlich über
+    // windows.restoresLayout/restoresHistory/persistsOnQuit, damit ein defekter Wert
+    // an EINER Stelle normalisiert wird statt an dreien.
+    property int restoreSessionMode: 2
+
     // Agenten-Wiederherstellung (QTMUX-85) — Vorgabe AUS: Beim Start liefe sonst
     // unaufgefordert ein Programm los.
     property bool restoreAgents: false
@@ -919,7 +926,12 @@ ApplicationWindow {
         try { window._restoreWindowsInner() } finally { sessions.setRestoring(false) }
     }
     function _restoreWindowsInner() {
+        // „Gar nicht wiederherstellen" (QTMUX-99): mit einer leeren Session starten und den
+        // gespeicherten Stand NICHT anfassen — weder laden noch (beim Beenden) überschreiben,
+        // s. persistWindows(). Die Migration läuft trotzdem: sie ist ein reiner Transform des
+        // alten Schemas und muss auch dann erledigt sein, wenn gerade niemand restauriert.
         windows.runMigration()                    // altes sessions-Array -> windows (idempotent)
+        if (!windows.restoresLayout(window.restoreSessionMode)) { newSession(); return }
         const data = windows.readWindows()
         if (!data.present || !data.windows || data.windows.length === 0) { newSession(); return }
         window.nextPaneId = Math.max(1, data.nextPaneId)
@@ -957,7 +969,13 @@ ApplicationWindow {
             const s = sessions.sessionAt(row)
             if (s) s.windowId = windowId
             window.nextPaneId = Math.max(window.nextPaneId, (node.paneId || 0) + 1)
-            if (s) sessions.loadHistoryFor(row, node.paneId)   // farbiger Scrollback (vor 1. Ausgabe)
+            // Farbiger Scrollback (muss VOR der ersten Ausgabe geladen sein). Im Modus
+            // „ohne Verlauf" (QTMUX-99) bleibt er weg: Fenster, Panes und Arbeits-
+            // verzeichnisse kommen zurück, die Terminals starten aber leer. Der Dump auf
+            // der Platte bleibt liegen — ein späteres Umschalten auf „alles" findet ihn
+            // wieder vor.
+            if (s && windows.restoresHistory(window.restoreSessionMode))
+                sessions.loadHistoryFor(row, node.paneId)
             return { paneId: node.paneId, sessionId: s ? s.sessionId : -1 }
         }
         const kids = []
@@ -1004,6 +1022,12 @@ ApplicationWindow {
     // Beim Beenden alle Windows persistieren: je Blatt den SessionConfig (`cfg`) in den
     // Baum schreiben und den farbigen Scrollback nach paneId sichern.
     function persistWindows() {
+        // ⚠️ QTMUX-99: Bei „gar nicht wiederherstellen" wird auch NICHT gespeichert. Sonst
+        // schriebe das erste Beenden die eine frisch geöffnete Session über den gesamten
+        // gespeicherten Stand — ein einmaliges Umstellen wäre unwiderruflich. Aus demselben
+        // Grund unterbleibt hier das pruneHistoryExcept: die Dumps gehören zum eingefrorenen
+        // Stand und dürfen nicht als „verwaist" weggeräumt werden.
+        if (!windows.persistsOnQuit(window.restoreSessionMode)) return
         syncActiveTree()                          // aktives Window in sein layoutJson spiegeln
         const wins = []
         const paneKeys = []
@@ -1387,6 +1411,7 @@ ApplicationWindow {
         property alias rightClickPaste: window.rightClickPaste
         property alias pasteWarnMultiline: window.pasteWarnMultiline
         property alias confirmQuit: window.confirmQuit
+        property alias restoreSessionMode: window.restoreSessionMode
         property alias restoreAgents: window.restoreAgents
         property alias resumeAgentMode: window.resumeAgentMode
         property alias collapsedGroups: window.collapsedGroupsJson
@@ -1845,6 +1870,9 @@ ApplicationWindow {
                             { title: qsTr("Rechtsklick fügt ein"),       sub: "",             icon: "clipboard",       run: function(){ window.rightClickPaste = !window.rightClickPaste } },
                             { title: qsTr("Vor mehrzeiligem Einfügen warnen"), sub: "",       icon: "info",            run: function(){ window.pasteWarnMultiline = !window.pasteWarnMultiline } },
                             { title: qsTr("Vor dem Beenden nachfragen"),  sub: "",             icon: "info",            run: function(){ window.confirmQuit = !window.confirmQuit } },
+                            { title: qsTr("Sessions wiederherstellen: gar nicht"), sub: "",    icon: "terminal-window", run: function(){ window.restoreSessionMode = 0 } },
+                            { title: qsTr("Sessions wiederherstellen: ohne Verlauf"), sub: "", icon: "terminal-window", run: function(){ window.restoreSessionMode = 1 } },
+                            { title: qsTr("Sessions wiederherstellen: alles"), sub: "",        icon: "terminal-window", run: function(){ window.restoreSessionMode = 2 } },
                             { title: qsTr("Agenten beim Start wiederherstellen"), sub: "",     icon: "robot",           run: function(){ window.restoreAgents = !window.restoreAgents } },
                             { title: qsTr("Unterhaltung fortsetzen: gar nicht"), sub: "",      icon: "robot",           run: function(){ window.resumeAgentMode = 0 } },
                             { title: qsTr("Unterhaltung fortsetzen: jüngste im Verzeichnis"), sub: "", icon: "robot",   run: function(){ window.resumeAgentMode = 1 } },
@@ -2101,6 +2129,22 @@ ApplicationWindow {
                 checkable: true
                 checked: window.confirmQuit
                 onTriggered: window.confirmQuit = !window.confirmQuit
+            }
+            // Gegenstück dazu: was beim NÄCHSTEN Start zurückkommt (QTMUX-99).
+            // Auch in den Einstellungen und in der Palette erreichbar (QTMUX-46).
+            ThemedMenu {
+                title: qsTr("Sessions beim Start wiederherstellen")
+                Repeater {
+                    model: [qsTr("Gar nicht"), qsTr("Ohne Verlauf"), qsTr("Alles")]
+                    ShortcutMenuItem {
+                        required property int index
+                        required property string modelData
+                        text: modelData
+                        checkable: true
+                        checked: window.restoreSessionMode === index
+                        onTriggered: window.restoreSessionMode = index
+                    }
+                }
             }
             ShortcutMenuItem { action: actQuit }
         }

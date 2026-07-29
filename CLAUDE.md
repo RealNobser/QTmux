@@ -396,12 +396,15 @@ Modus 3 muss der Agent vorher per MCP `set_agent_session` seine Kennung gemeldet
 ⚠️ Geht **nur an einer frisch gebauten Instanz** — die laufende kennt die Schalter nicht
 (s. Einstellungs-Audit oben).
 
+**QTMUX-99 (Umfang der Wiederherstellung) ist umgesetzt und verifiziert (2026-07-29),
+Owner-Abnahme offen.** Dreiwahl statt Schalter (Owner-Entscheidung); Mechanik und die beiden
+Fallen in der Feature-Referenz unter „Umfang der Wiederherstellung ist eine WAHL".
+
 **Danach:** (1) **`build/macos` neu bauen** und die Produktivinstanz darauf umstellen — erst
-damit sind QTMUX-85/97/98 überhaupt bedienbar und abnehmbar (s. Arbeitsstand) · (2) Owner-Abnahme
-QTMUX-85/98 (Rezept oben) und QTMUX-86 · (3) `build/windows` (Debug) auf den aktuellen `main`
-heben, sobald die dortige Instanz beendet werden darf — zurzeit sperrt sie
-`qtmux.exe`/`qtmux_echo_plugin.dll` · (4) offene Jira nach Priorität: QTMUX-99 (Sessions-Schalter,
-klein und in sich abgeschlossen), dann 88/40/38/2/13.
+damit sind QTMUX-85/97/98/99 überhaupt bedienbar und abnehmbar (s. Arbeitsstand) ·
+(2) Owner-Abnahme QTMUX-85/98/99 und QTMUX-86 · (3) `build/windows` (Debug) auf den aktuellen
+`main` heben, sobald die dortige Instanz beendet werden darf — zurzeit sperrt sie
+`qtmux.exe`/`qtmux_echo_plugin.dll` · (4) offene Jira nach Priorität: 88/40/38/2/13.
 
 ### Arbeitsstand (compact-fest — hier pflegen, nicht im Gespräch lassen)
 
@@ -438,12 +441,7 @@ klein und in sich abgeschlossen), dann 88/40/38/2/13.
   Alt+u gefüllt) — der Agent sah also ein normales `u` statt des Akkords. Beide Wege sind
   jetzt abgedeckt (text() gefüllt → ESC davor; leer → Zeichen aus dem Key-Code).
 
-**Offene Jira:** **QTMUX-99** (Sessions beim Start wiederherstellen — Schalter fehlt, nur die
-Agenten sind konfigurierbar; Vorschlag `window/restoreSessions` Vorgabe AN, Einstellungen →
-Allgemein neben `confirmQuit`, dazu Palette/Suchindex. ⚠️ Bei AUS den gespeicherten Stand
-**nicht löschen**, nur nicht laden — sonst räumt `persistWindows()` beim Beenden den Speicher
-leer und ein einmaliges Ausschalten ist unwiderruflich, dieselbe Falle wie `sessionConfig()`
-in QTMUX-85) · **QTMUX-88** (AgentRegistry deckt nur 8 CLI-Agenten ab und enthält einen
+**Offene Jira:** **QTMUX-88** (AgentRegistry deckt nur 8 CLI-Agenten ab und enthält einen
 Fehler — `cursor` statt `cursor-agent`; Ticket trägt die Arbeitsanweisung inkl. Alias-Umbau,
 Recherchestand 2026-07-28 und der Begründung, warum `air`/`q`/`warp` **nicht** hineingehören;
 dort gehört auch hinein, für welche Agenten die **Fortsetzungs**-Vorlagen aus QTMUX-98 noch
@@ -694,6 +692,28 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `SPI_GETCLIENTAREAANIMATION`, sonst false; Env-Override `QTMUX_REDUCE_MOTION` für Tests)
   schaltet die drei Sidebar-Puls-Animationen ab (`running: … && !App.reduceMotion`) → Ring
   in Akzentfarbe und Rahmen statisch statt pulsierend.
+- **Umfang der Wiederherstellung ist eine WAHL (QTMUX-99):** `window/restoreSessionMode` =
+  `qtmux::RestoreMode` — 0 gar nicht · 1 ohne Verlauf · 2 alles (**Vorgabe**, bisheriges
+  Verhalten). Regeln Gui-frei in [src/core/RestoreMode.h](src/core/RestoreMode.h), QML fragt
+  ausschließlich über `windows.restoresLayout/restoresHistory/persistsOnQuit` — so wird ein
+  defekter Wert an EINER Stelle normalisiert statt an dreien. Erreichbar in Einstellungen →
+  **Allgemein** (Abschnitt „Fenster", direkt beim Beenden-Schalter — das eine steuert das
+  Ende, das andere den nächsten Start), Datei-Menü, Palette, Suchindex.
+  🔑 **Der Kern des Tickets ist NICHT das Nicht-Laden, sondern das Nicht-Speichern.** Bei
+  Modus 0 kehrt `persistWindows()` sofort zurück: Sonst schriebe das erste Beenden die eine
+  frisch geöffnete Session über den gesamten gespeicherten Stand — ein einmaliges Umstellen
+  wäre unwiderruflich. Aus demselben Grund unterbleibt dort auch `pruneHistoryExcept`, sonst
+  räumt es die `.ans`-Dumps des eingefrorenen Stands als „verwaist" weg. E2E-belegt: mit
+  Wächter ist der gespeicherte Stand nach einem Modus-0-Durchlauf **bitidentisch**
+  (gleicher shasum), ohne Wächter bleibt von zwei Windows **eines** übrig und die alten
+  Arbeitsverzeichnisse sind weg.
+  🔑 **Unbekannte Werte → `Full`, nie `None`** (`restoreModeFromInt`): `None` unterdrückt ja
+  zusätzlich das Speichern; ein defekter oder aus einer neueren Version stammender Wert würde
+  sonst still den letzten Stand einfrieren und sähe für den Anwender wie Totalverlust aus.
+  Tests `tst_windowmodel::restoreModeGatesLayoutHistoryAndPersistence` und
+  `unknownRestoreModeFallsBackToFull` (Gegenprobe mit umgedrehter Fallback-Richtung: FAIL).
+  🔑 Modus 1 lässt nur `loadHistoryFor` weg — die Dumps bleiben liegen, ein späteres „Alles"
+  findet sie wieder vor.
 - **Agenten überleben den Neustart (QTMUX-85):** Ein Agent läuft **nicht** als `program` —
   er wird in eine Shell **getippt** und in `Session::observeInput` über
   `AgentRegistry::detect` erkannt. Deshalb speichert die Session die erkannte Zeile in

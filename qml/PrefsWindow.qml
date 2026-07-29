@@ -170,6 +170,7 @@ Window {
             { cat: "allgemein",        key: "allgemein.general",     label: qsTr("Design"),                            keywords: "design darstellung hell dunkel system theme modus" },
             { cat: "allgemein",        key: "allgemein.general",     label: qsTr("Sprache"),                           keywords: "sprache language deutsch englisch locale" },
             { cat: "allgemein",        key: "allgemein.window",      label: qsTr("Vor dem Beenden nachfragen"),        keywords: "beenden quit schließen rückfrage confirm warnung" },
+            { cat: "allgemein",        key: "allgemein.window",      label: qsTr("Sessions beim Start wiederherstellen"), keywords: "sessions sitzungen wiederherstellen restore start neustart layout fenster panes verlauf scrollback leer" },
             { cat: "allgemein",        key: "allgemein.window",      label: qsTr("Quake-Modus"),                       keywords: "quake hotkey einblenden ausblenden global" },
             { cat: "erscheinungsbild", key: "erscheinung.schemes",   label: qsTr("Farbschema (Dunkel)"),               keywords: "farbschema schema dunkel ansi farben iterm ghostty xresources import" },
             { cat: "erscheinungsbild", key: "erscheinung.schemes",   label: qsTr("Farbschema (Hell)"),                 keywords: "farbschema schema hell ansi farben import" },

@@ -58,6 +58,53 @@ CatPage {
                 Layout.leftMargin: 6
                 Layout.bottomMargin: 4
             }
+            // --- Wiederherstellung beim Start (QTMUX-99) ---
+            // Bewusst eine Wahl: Der teure Teil ist der Verlauf, der nützliche sind
+            // Fenster, Panes und Arbeitsverzeichnisse. Ein Schalter zwänge dazu, beides
+            // gemeinsam aufzugeben.
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 8
+                Text { text: qsTr("Sessions beim Start wiederherstellen"); color: Theme.textBright }
+                AppComboBox {
+                    Layout.fillWidth: true
+                    model: [qsTr("Gar nicht"), qsTr("Ohne Verlauf"), qsTr("Alles")]
+                    currentIndex: page.host.app.restoreSessionMode
+                    onActivated: (i) => page.host.app.restoreSessionMode = i
+                }
+            }
+            Text {
+                text: {
+                    switch (page.host.app.restoreSessionMode) {
+                    case 0: return qsTr("QTmux startet mit einer einzelnen, leeren Session. "
+                                      + "Der zuletzt gespeicherte Stand bleibt dabei erhalten — er "
+                                      + "wird beim Beenden nicht überschrieben und ist wieder da, "
+                                      + "sobald hier erneut wiederhergestellt wird.")
+                    case 1: return qsTr("Fenster, Panes und deren Arbeitsverzeichnisse kommen zurück, "
+                                      + "die Terminals starten aber leer. Der gespeicherte Verlauf "
+                                      + "bleibt liegen und wird bei „Alles“ wieder angezeigt.")
+                    default: return qsTr("Fenster, Panes und Arbeitsverzeichnisse kommen zurück, dazu "
+                                       + "der farbige Verlauf jedes Panes.")
+                    }
+                }
+                color: Theme.textDim
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.leftMargin: 6
+                Layout.bottomMargin: 4
+            }
+            Text {
+                text: qsTr("Ob die Agenten in den Panes dabei erneut starten, steht unter "
+                         + "„Agenten & MCP“.")
+                color: Theme.textDim
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.leftMargin: 6
+                Layout.bottomMargin: 4
+            }
             CheckBox {
                 text: qsTr("Quake-Modus: per globalem Hotkey ein-/ausblenden")
                 checked: page.host.app.quakeMode

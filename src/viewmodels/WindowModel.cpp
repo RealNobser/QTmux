@@ -7,6 +7,7 @@
 
 #include <algorithm>   // std::rotate, std::clamp
 
+#include "RestoreMode.h"
 #include "Window.h"
 
 namespace qtmux {
@@ -396,6 +397,21 @@ QVariantMap WindowModel::readWindows() const {
     out[QStringLiteral("activeRow")]  = s.value(QStringLiteral("windows/activeRow"), 0).toInt();
     out[QStringLiteral("nextPaneId")] = s.value(QStringLiteral("windows/nextPaneId"), 1).toInt();
     return out;
+}
+
+// --- Umfang der Wiederherstellung (QTMUX-99) -------------------------------------
+// Reine Brücken nach RestoreMode.h; die Begründungen stehen dort.
+
+bool WindowModel::restoresLayout(int mode) const {
+    return qtmux::restoresLayout(restoreModeFromInt(mode));
+}
+
+bool WindowModel::restoresHistory(int mode) const {
+    return qtmux::restoresHistory(restoreModeFromInt(mode));
+}
+
+bool WindowModel::persistsOnQuit(int mode) const {
+    return qtmux::persistsOnQuit(restoreModeFromInt(mode));
 }
 
 } // namespace qtmux
