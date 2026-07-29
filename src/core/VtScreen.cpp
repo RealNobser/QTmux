@@ -154,6 +154,18 @@ void VtScreen::inputWrite(const QByteArray &data) {
     vterm_screen_flush_damage(m_screen);
 }
 
+bool VtScreen::clearViewportKeepScrollback() {
+    const int lines = m_cursor.y();          // Zeilen oberhalb des Cursors
+    if (lines <= 0) return false;            // Prompt steht schon oben — nichts zu tun
+    // CSI <n> S rollt den Bildschirm um n Zeilen nach oben; die oben hinausgeschobenen
+    // Zeilen meldet libvterm über sb_pushline an cbPushScrollback. Danach den Cursor in
+    // Zeile 1 setzen (CSI 1;<col> H, 1-basiert) — CSI S bewegt ihn nicht mit.
+    const QByteArray seq = "\033[" + QByteArray::number(lines) + "S"
+                         + "\033[1;" + QByteArray::number(m_cursor.x() + 1) + "H";
+    inputWrite(seq);
+    return true;
+}
+
 void VtScreen::setSize(int rows, int cols) {
     if (rows == m_rows && cols == m_cols) return;
     m_rows = rows;

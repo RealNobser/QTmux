@@ -655,97 +655,97 @@
 <context>
     <name>Main</name>
     <message>
-        <location filename="../qml/Main.qml" line="604"/>
-        <location filename="../qml/Main.qml" line="1446"/>
-        <location filename="../qml/Main.qml" line="1864"/>
+        <location filename="../qml/Main.qml" line="612"/>
+        <location filename="../qml/Main.qml" line="1455"/>
+        <location filename="../qml/Main.qml" line="1881"/>
         <source>Neue Session</source>
         <translation>Neue Session</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="606"/>
-        <location filename="../qml/Main.qml" line="1465"/>
-        <location filename="../qml/Main.qml" line="1737"/>
-        <location filename="../qml/Main.qml" line="1869"/>
+        <location filename="../qml/Main.qml" line="614"/>
+        <location filename="../qml/Main.qml" line="1474"/>
+        <location filename="../qml/Main.qml" line="1754"/>
+        <location filename="../qml/Main.qml" line="1886"/>
         <source>Session schließen</source>
         <translation>Session schließen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1472"/>
-        <location filename="../qml/Main.qml" line="2092"/>
+        <location filename="../qml/Main.qml" line="1481"/>
+        <location filename="../qml/Main.qml" line="2110"/>
         <source>Helles Design</source>
         <translation>Helles Design</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1472"/>
-        <location filename="../qml/Main.qml" line="2092"/>
+        <location filename="../qml/Main.qml" line="1481"/>
+        <location filename="../qml/Main.qml" line="2110"/>
         <source>Dunkles Design</source>
         <translation>Dunkles Design</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="627"/>
-        <location filename="../qml/Main.qml" line="1479"/>
-        <location filename="../qml/Main.qml" line="1914"/>
+        <location filename="../qml/Main.qml" line="636"/>
+        <location filename="../qml/Main.qml" line="1488"/>
+        <location filename="../qml/Main.qml" line="1932"/>
         <source>Beenden</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1487"/>
-        <location filename="../qml/Main.qml" line="1878"/>
-        <location filename="../qml/Main.qml" line="2104"/>
+        <location filename="../qml/Main.qml" line="1496"/>
+        <location filename="../qml/Main.qml" line="1896"/>
+        <location filename="../qml/Main.qml" line="2122"/>
         <source>Einstellungen …</source>
         <translation>Einstellungen …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1498"/>
-        <location filename="../qml/Main.qml" line="1873"/>
+        <location filename="../qml/Main.qml" line="1507"/>
+        <location filename="../qml/Main.qml" line="1890"/>
         <source>Schrift vergrößern</source>
         <translation>Schrift vergrößern</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1505"/>
-        <location filename="../qml/Main.qml" line="1874"/>
+        <location filename="../qml/Main.qml" line="1514"/>
+        <location filename="../qml/Main.qml" line="1891"/>
         <source>Schrift verkleinern</source>
         <translation>Schrift verkleinern</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="623"/>
-        <location filename="../qml/Main.qml" line="1512"/>
-        <location filename="../qml/Main.qml" line="1875"/>
+        <location filename="../qml/Main.qml" line="631"/>
+        <location filename="../qml/Main.qml" line="1521"/>
+        <location filename="../qml/Main.qml" line="1892"/>
         <source>Schriftgröße zurücksetzen</source>
         <translation>Schriftgröße zurücksetzen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="617"/>
-        <location filename="../qml/Main.qml" line="1520"/>
-        <location filename="../qml/Main.qml" line="1876"/>
+        <location filename="../qml/Main.qml" line="625"/>
+        <location filename="../qml/Main.qml" line="1537"/>
+        <location filename="../qml/Main.qml" line="1894"/>
         <source>Eingabe an alle Sessions</source>
         <translation>Eingabe an alle Sessions</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="613"/>
-        <location filename="../qml/Main.qml" line="1556"/>
-        <location filename="../qml/Main.qml" line="1746"/>
-        <location filename="../qml/Main.qml" line="1870"/>
+        <location filename="../qml/Main.qml" line="621"/>
+        <location filename="../qml/Main.qml" line="1573"/>
+        <location filename="../qml/Main.qml" line="1763"/>
+        <location filename="../qml/Main.qml" line="1887"/>
         <source>Nebeneinander teilen</source>
         <translation>Nebeneinander teilen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="614"/>
-        <location filename="../qml/Main.qml" line="1563"/>
-        <location filename="../qml/Main.qml" line="1751"/>
-        <location filename="../qml/Main.qml" line="1871"/>
+        <location filename="../qml/Main.qml" line="622"/>
+        <location filename="../qml/Main.qml" line="1580"/>
+        <location filename="../qml/Main.qml" line="1768"/>
+        <location filename="../qml/Main.qml" line="1888"/>
         <source>Untereinander teilen</source>
         <translation>Untereinander teilen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="607"/>
-        <location filename="../qml/Main.qml" line="1570"/>
-        <location filename="../qml/Main.qml" line="1872"/>
+        <location filename="../qml/Main.qml" line="615"/>
+        <location filename="../qml/Main.qml" line="1587"/>
+        <location filename="../qml/Main.qml" line="1889"/>
         <source>Pane schließen</source>
         <translation>Pane schließen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1600"/>
+        <location filename="../qml/Main.qml" line="1617"/>
         <source>Befehlspalette …</source>
         <translation>Befehlspalette …</translation>
     </message>
@@ -754,53 +754,53 @@
         <translation type="obsolete">Befehlspalette (Strg/Cmd+K)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1760"/>
+        <location filename="../qml/Main.qml" line="1777"/>
         <source>Broadcast-Eingabe: an (an alle Sessions)</source>
         <translation>Broadcast-Eingabe: an (an alle Sessions)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1761"/>
+        <location filename="../qml/Main.qml" line="1778"/>
         <source>Eingabe an alle Sessions (Broadcast)</source>
         <translation>Eingabe an alle Sessions (Broadcast)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1930"/>
+        <location filename="../qml/Main.qml" line="1948"/>
         <source>Verbinden: %1</source>
         <translation>Verbinden: %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1890"/>
-        <location filename="../qml/Main.qml" line="2191"/>
+        <location filename="../qml/Main.qml" line="1908"/>
+        <location filename="../qml/Main.qml" line="2209"/>
         <source>Auswahl automatisch kopieren</source>
         <translation>Auswahl automatisch kopieren</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1891"/>
-        <location filename="../qml/Main.qml" line="2198"/>
+        <location filename="../qml/Main.qml" line="1909"/>
+        <location filename="../qml/Main.qml" line="2216"/>
         <source>Rechtsklick fügt ein</source>
         <translation>Rechtsklick fügt ein</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1892"/>
-        <location filename="../qml/Main.qml" line="2205"/>
+        <location filename="../qml/Main.qml" line="1910"/>
+        <location filename="../qml/Main.qml" line="2223"/>
         <source>Vor mehrzeiligem Einfügen warnen</source>
         <translation>Vor mehrzeiligem Einfügen warnen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1908"/>
-        <location filename="../qml/Main.qml" line="2244"/>
+        <location filename="../qml/Main.qml" line="1926"/>
+        <location filename="../qml/Main.qml" line="2265"/>
         <source>Design: Wie System</source>
         <translation>Design: Wie System</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1909"/>
-        <location filename="../qml/Main.qml" line="2251"/>
+        <location filename="../qml/Main.qml" line="1927"/>
+        <location filename="../qml/Main.qml" line="2272"/>
         <source>Design: Hell</source>
         <translation>Design: Hell</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1910"/>
-        <location filename="../qml/Main.qml" line="2258"/>
+        <location filename="../qml/Main.qml" line="1928"/>
+        <location filename="../qml/Main.qml" line="2279"/>
         <source>Design: Dunkel</source>
         <translation>Design: Dunkel</translation>
     </message>
@@ -833,115 +833,115 @@
         <translation type="vanished">Noch keine Profile. Lege mit „Neu …“ eine wiederverwendbare Verbindung an.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2884"/>
+        <location filename="../qml/Main.qml" line="2905"/>
         <source>Verbindungsprofil</source>
         <translation>Verbindungsprofil</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2944"/>
-        <location filename="../qml/Main.qml" line="3242"/>
+        <location filename="../qml/Main.qml" line="2965"/>
+        <location filename="../qml/Main.qml" line="3263"/>
         <source>Name</source>
         <translation>Name</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2945"/>
+        <location filename="../qml/Main.qml" line="2966"/>
         <source>z. B. Prod-Server</source>
         <translation>z. B. Prod-Server</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2946"/>
+        <location filename="../qml/Main.qml" line="2967"/>
         <source>Typ</source>
         <translation>Typ</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2969"/>
+        <location filename="../qml/Main.qml" line="2990"/>
         <source>Passwort (Vault)</source>
         <translation>Passwort (Vault)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2979"/>
+        <location filename="../qml/Main.qml" line="3000"/>
         <source>(keines)</source>
         <translation>(keines)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2994"/>
+        <location filename="../qml/Main.qml" line="3015"/>
         <source>Vault gesperrt – beim Verbinden entsperren, sonst kein Auto-Fill.</source>
         <translation>Vault gesperrt – beim Verbinden entsperren, sonst kein Auto-Fill.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3007"/>
+        <location filename="../qml/Main.qml" line="3028"/>
         <source>Programm</source>
         <translation>Programm</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3008"/>
+        <location filename="../qml/Main.qml" line="3029"/>
         <source>leer = Standard-Shell</source>
         <translation>leer = Standard-Shell</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3009"/>
+        <location filename="../qml/Main.qml" line="3030"/>
         <source>Arbeitsverzeichnis</source>
         <translation>Arbeitsverzeichnis</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3010"/>
+        <location filename="../qml/Main.qml" line="3031"/>
         <source>leer = Home</source>
         <translation>leer = Home</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3041"/>
+        <location filename="../qml/Main.qml" line="3062"/>
         <source>Befehle nach Verbindung (eine pro Zeile)</source>
         <translation>Befehle nach Verbindung (eine pro Zeile)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3060"/>
+        <location filename="../qml/Main.qml" line="3081"/>
         <source>z. B. cd ~/projekt
 source .venv/bin/activate</source>
         <translation>z. B. cd ~/projekt
 source .venv/bin/activate</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3066"/>
+        <location filename="../qml/Main.qml" line="3087"/>
         <source>Werden gesendet, sobald die Shell bereit ist (Shell-Integration: am ersten Prompt, sonst kurz nach Verbindungsaufbau). Geeignet für key-/agent-authentifizierte Verbindungen.</source>
         <translation>Werden gesendet, sobald die Shell bereit ist (Shell-Integration: am ersten Prompt, sonst kurz nach Verbindungsaufbau). Geeignet für key-/agent-authentifizierte Verbindungen.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3084"/>
+        <location filename="../qml/Main.qml" line="3105"/>
         <source>Zielordner für den Download</source>
         <translation>Zielordner für den Download</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3089"/>
+        <location filename="../qml/Main.qml" line="3110"/>
         <source>Datei zum Hochladen</source>
         <translation>Datei zum Hochladen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3097"/>
+        <location filename="../qml/Main.qml" line="3118"/>
         <source>SFTP – %1</source>
         <translation>SFTP – %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3112"/>
+        <location filename="../qml/Main.qml" line="3133"/>
         <source>Übergeordnetes Verzeichnis</source>
         <translation>Übergeordnetes Verzeichnis</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3131"/>
+        <location filename="../qml/Main.qml" line="3152"/>
         <source>Aktualisieren</source>
         <translation>Aktualisieren</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3198"/>
+        <location filename="../qml/Main.qml" line="3219"/>
         <source>Herunterladen</source>
         <translation>Herunterladen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3209"/>
+        <location filename="../qml/Main.qml" line="3230"/>
         <source>Hochladen …</source>
         <translation>Hochladen …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="621"/>
+        <location filename="../qml/Main.qml" line="629"/>
         <source>Secrets-Vault</source>
         <translation>Secrets-Vault</translation>
     </message>
@@ -981,151 +981,163 @@ source .venv/bin/activate</translation>
         <translation>Unbekanntes Profil.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="605"/>
-        <location filename="../qml/Main.qml" line="1454"/>
-        <location filename="../qml/Main.qml" line="1863"/>
+        <location filename="../qml/Main.qml" line="411"/>
+        <source>Der Bildschirm ist bereits leer.</source>
+        <translation>Der Bildschirm ist bereits leer.</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="613"/>
+        <location filename="../qml/Main.qml" line="1463"/>
+        <location filename="../qml/Main.qml" line="1880"/>
         <source>Neues Fenster</source>
         <translation>Neues Fenster</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="608"/>
-        <location filename="../qml/Main.qml" line="1577"/>
-        <location filename="../qml/Main.qml" line="1885"/>
+        <location filename="../qml/Main.qml" line="616"/>
+        <location filename="../qml/Main.qml" line="1594"/>
+        <location filename="../qml/Main.qml" line="1903"/>
         <source>Nächstes Pane</source>
         <translation>Nächstes Pane</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="609"/>
-        <location filename="../qml/Main.qml" line="1584"/>
-        <location filename="../qml/Main.qml" line="1886"/>
+        <location filename="../qml/Main.qml" line="617"/>
+        <location filename="../qml/Main.qml" line="1601"/>
+        <location filename="../qml/Main.qml" line="1904"/>
         <source>Vorheriges Pane</source>
         <translation>Vorheriges Pane</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="610"/>
-        <location filename="../qml/Main.qml" line="1591"/>
-        <location filename="../qml/Main.qml" line="1887"/>
+        <location filename="../qml/Main.qml" line="618"/>
+        <location filename="../qml/Main.qml" line="1608"/>
+        <location filename="../qml/Main.qml" line="1905"/>
         <source>Pane zoomen</source>
         <translation>Pane zoomen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="611"/>
-        <location filename="../qml/Main.qml" line="1610"/>
-        <location filename="../qml/Main.qml" line="1883"/>
+        <location filename="../qml/Main.qml" line="619"/>
+        <location filename="../qml/Main.qml" line="1627"/>
+        <location filename="../qml/Main.qml" line="1901"/>
         <source>Nächste Session</source>
         <translation>Nächste Session</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="612"/>
-        <location filename="../qml/Main.qml" line="1617"/>
-        <location filename="../qml/Main.qml" line="1884"/>
+        <location filename="../qml/Main.qml" line="620"/>
+        <location filename="../qml/Main.qml" line="1634"/>
+        <location filename="../qml/Main.qml" line="1902"/>
         <source>Vorige Session</source>
         <translation>Vorige Session</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="616"/>
-        <location filename="../qml/Main.qml" line="1882"/>
+        <location filename="../qml/Main.qml" line="624"/>
+        <location filename="../qml/Main.qml" line="1900"/>
         <source>Suchen (Scrollback)</source>
         <translation>Suchen (Scrollback)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="618"/>
+        <location filename="../qml/Main.qml" line="626"/>
         <source>Neue SSH-Verbindung</source>
         <translation>Neue SSH-Verbindung</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="619"/>
+        <location filename="../qml/Main.qml" line="627"/>
         <source>Neue serielle Verbindung</source>
         <translation>Neue serielle Verbindung</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="620"/>
+        <location filename="../qml/Main.qml" line="628"/>
         <source>Verbindungen verwalten</source>
         <translation>Verbindungen verwalten</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="776"/>
-        <location filename="../qml/Main.qml" line="780"/>
+        <location filename="../qml/Main.qml" line="632"/>
+        <location filename="../qml/Main.qml" line="1529"/>
+        <location filename="../qml/Main.qml" line="1893"/>
+        <source>Bildschirm leeren</source>
+        <translation>Bildschirm leeren</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="785"/>
+        <location filename="../qml/Main.qml" line="789"/>
         <source>Fenster %1</source>
         <translation>Fenster %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="792"/>
+        <location filename="../qml/Main.qml" line="801"/>
         <source>Verzeichnis lässt sich nicht öffnen: %1</source>
         <translation>Verzeichnis lässt sich nicht öffnen: %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1459"/>
+        <location filename="../qml/Main.qml" line="1468"/>
         <source>Kein freier MCP-Port für eine neue Instanz gefunden.</source>
         <translation>Kein freier MCP-Port für eine neue Instanz gefunden.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1460"/>
+        <location filename="../qml/Main.qml" line="1469"/>
         <source>Neues Fenster gestartet (MCP-Port %1).</source>
         <translation>Neues Fenster gestartet (MCP-Port %1).</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1548"/>
+        <location filename="../qml/Main.qml" line="1565"/>
         <source>Suchen …</source>
         <translation>Suchen …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1591"/>
-        <location filename="../qml/Main.qml" line="1887"/>
+        <location filename="../qml/Main.qml" line="1608"/>
+        <location filename="../qml/Main.qml" line="1905"/>
         <source>Pane-Zoom aufheben</source>
         <translation>Pane-Zoom aufheben</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1888"/>
+        <location filename="../qml/Main.qml" line="1906"/>
         <source>Ligaturen umschalten</source>
         <translation>Ligaturen umschalten</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1889"/>
+        <location filename="../qml/Main.qml" line="1907"/>
         <source>GPU-Rendering umschalten</source>
         <translation>GPU-Rendering umschalten</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1894"/>
+        <location filename="../qml/Main.qml" line="1912"/>
         <source>Sessions wiederherstellen: gar nicht</source>
         <translation>Sessions wiederherstellen: gar nicht</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1895"/>
+        <location filename="../qml/Main.qml" line="1913"/>
         <source>Sessions wiederherstellen: ohne Verlauf</source>
         <translation>Sessions wiederherstellen: ohne Verlauf</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1896"/>
+        <location filename="../qml/Main.qml" line="1914"/>
         <source>Sessions wiederherstellen: alles</source>
         <translation>Sessions wiederherstellen: alles</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1898"/>
-        <location filename="../qml/Main.qml" line="3533"/>
+        <location filename="../qml/Main.qml" line="1916"/>
+        <location filename="../qml/Main.qml" line="3554"/>
         <source>Arbeitsverzeichnis öffnen</source>
         <translation>Arbeitsverzeichnis öffnen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1899"/>
-        <location filename="../qml/Main.qml" line="3539"/>
+        <location filename="../qml/Main.qml" line="1917"/>
+        <location filename="../qml/Main.qml" line="3560"/>
         <source>Pfad kopieren</source>
         <translation>Pfad kopieren</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1901"/>
+        <location filename="../qml/Main.qml" line="1919"/>
         <source>Diese Session hat kein Arbeitsverzeichnis.</source>
         <translation>Diese Session hat kein Arbeitsverzeichnis.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1902"/>
-        <location filename="../qml/Main.qml" line="3544"/>
+        <location filename="../qml/Main.qml" line="1920"/>
+        <location filename="../qml/Main.qml" line="3565"/>
         <source>Pfad kopiert: %1</source>
         <translation>Pfad kopiert: %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1903"/>
-        <location filename="../qml/Main.qml" line="2289"/>
+        <location filename="../qml/Main.qml" line="1921"/>
+        <location filename="../qml/Main.qml" line="2310"/>
         <source>Agenten beim Start wiederherstellen</source>
         <translation>Agenten beim Start wiederherstellen</translation>
     </message>
@@ -1134,22 +1146,22 @@ source .venv/bin/activate</translation>
         <translation type="vanished">Agenten-Unterhaltung fortsetzen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1911"/>
+        <location filename="../qml/Main.qml" line="1929"/>
         <source>Sprache: Deutsch</source>
         <translation>Sprache: Deutsch</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1912"/>
+        <location filename="../qml/Main.qml" line="1930"/>
         <source>Sprache: English</source>
         <translation>Sprache: English</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1918"/>
+        <location filename="../qml/Main.qml" line="1936"/>
         <source>Quake-Modus umschalten</source>
         <translation>Quake-Modus umschalten</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1923"/>
+        <location filename="../qml/Main.qml" line="1941"/>
         <source>Neue Plugin-Session</source>
         <translation>Neue Plugin-Session</translation>
     </message>
@@ -1170,47 +1182,47 @@ source .venv/bin/activate</translation>
         <translation type="vanished">Session aus Gruppe nehmen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1959"/>
+        <location filename="../qml/Main.qml" line="1977"/>
         <source>Gruppe umbenennen: %1 …</source>
         <translation>Gruppe umbenennen: %1 …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1962"/>
+        <location filename="../qml/Main.qml" line="1980"/>
         <source>Gruppe auflösen: %1</source>
         <translation>Gruppe auflösen: %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2118"/>
+        <location filename="../qml/Main.qml" line="2136"/>
         <source>&amp;Datei</source>
         <translation>&amp;Datei</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2179"/>
+        <location filename="../qml/Main.qml" line="2197"/>
         <source>&amp;Bearbeiten</source>
         <translation>&amp;Bearbeiten</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2213"/>
+        <location filename="../qml/Main.qml" line="2231"/>
         <source>&amp;Ansicht</source>
         <translation>&amp;Ansicht</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2266"/>
+        <location filename="../qml/Main.qml" line="2287"/>
         <source>&amp;Sprache</source>
         <translation>&amp;Sprache</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2280"/>
+        <location filename="../qml/Main.qml" line="2301"/>
         <source>A&amp;gent</source>
         <translation>A&amp;gent</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2312"/>
+        <location filename="../qml/Main.qml" line="2333"/>
         <source>Agent-S&amp;teuerung</source>
         <translation>Agent-S&amp;teuerung</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2323"/>
+        <location filename="../qml/Main.qml" line="2344"/>
         <source>&amp;Hilfe</source>
         <translation>&amp;Hilfe</translation>
     </message>
@@ -1291,172 +1303,172 @@ source .venv/bin/activate</translation>
         <translation type="vanished">Sperren</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3230"/>
+        <location filename="../qml/Main.qml" line="3251"/>
         <source>Geheimnis</source>
         <translation>Geheimnis</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3243"/>
+        <location filename="../qml/Main.qml" line="3264"/>
         <source>z. B. ssh/prod</source>
         <translation>z. B. ssh/prod</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3244"/>
+        <location filename="../qml/Main.qml" line="3265"/>
         <source>Wert</source>
         <translation>Wert</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3245"/>
+        <location filename="../qml/Main.qml" line="3266"/>
         <source>Passwort / Token / Passphrase</source>
         <translation>Passwort / Token / Passphrase</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3247"/>
+        <location filename="../qml/Main.qml" line="3268"/>
         <source>Wert anzeigen</source>
         <translation>Wert anzeigen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3255"/>
+        <location filename="../qml/Main.qml" line="3276"/>
         <source>Master-Passwort ändern</source>
         <translation>Master-Passwort ändern</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3262"/>
+        <location filename="../qml/Main.qml" line="3283"/>
         <source>Aktuelles Master-Passwort</source>
         <translation>Aktuelles Master-Passwort</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3263"/>
+        <location filename="../qml/Main.qml" line="3284"/>
         <source>Neues Master-Passwort</source>
         <translation>Neues Master-Passwort</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3264"/>
+        <location filename="../qml/Main.qml" line="3285"/>
         <source>Neues Passwort bestätigen</source>
         <translation>Neues Passwort bestätigen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3267"/>
+        <location filename="../qml/Main.qml" line="3288"/>
         <source>Ändern</source>
         <translation>Ändern</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3270"/>
+        <location filename="../qml/Main.qml" line="3291"/>
         <source>Bitte ein neues Passwort eingeben.</source>
         <translation>Bitte ein neues Passwort eingeben.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3271"/>
+        <location filename="../qml/Main.qml" line="3292"/>
         <source>Die neuen Passwörter stimmen nicht überein.</source>
         <translation>Die neuen Passwörter stimmen nicht überein.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3272"/>
+        <location filename="../qml/Main.qml" line="3293"/>
         <source>Das aktuelle Master-Passwort ist falsch.</source>
         <translation>Das aktuelle Master-Passwort ist falsch.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3291"/>
+        <location filename="../qml/Main.qml" line="3312"/>
         <source>QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.
 Version %1</source>
         <translation>QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.
 Version %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3298"/>
+        <location filename="../qml/Main.qml" line="3319"/>
         <source>Farbschema importieren</source>
         <translation>Farbschema importieren</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3299"/>
+        <location filename="../qml/Main.qml" line="3320"/>
         <source>Farbschemata (*.itermcolors *.Xresources *.conf *.txt)</source>
         <translation>Farbschemata (*.itermcolors *.Xresources *.conf *.txt)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3300"/>
+        <location filename="../qml/Main.qml" line="3321"/>
         <source>Alle Dateien (*)</source>
         <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3309"/>
+        <location filename="../qml/Main.qml" line="3330"/>
         <source>Import fehlgeschlagen</source>
         <translation>Import fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3315"/>
+        <location filename="../qml/Main.qml" line="3336"/>
         <source>Die Datei konnte nicht als Farbschema gelesen werden (unterstützt: iTerm .itermcolors, Xresources, Ghostty).</source>
         <translation>Die Datei konnte nicht als Farbschema gelesen werden (unterstützt: iTerm .itermcolors, Xresources, Ghostty).</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3324"/>
+        <location filename="../qml/Main.qml" line="3345"/>
         <source>Mehrzeilig einfügen?</source>
         <translation>Mehrzeilig einfügen?</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3332"/>
+        <location filename="../qml/Main.qml" line="3353"/>
         <source>Der Inhalt der Zwischenablage hat %1 Zeilen und könnte mehrere Befehle ausführen. Trotzdem einfügen?</source>
         <translation>Der Inhalt der Zwischenablage hat %1 Zeilen und könnte mehrere Befehle ausführen. Trotzdem einfügen?</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1959"/>
-        <location filename="../qml/Main.qml" line="1962"/>
-        <location filename="../qml/Main.qml" line="1965"/>
-        <location filename="../qml/Main.qml" line="1968"/>
-        <location filename="../qml/Main.qml" line="3376"/>
-        <location filename="../qml/Main.qml" line="3553"/>
+        <location filename="../qml/Main.qml" line="1977"/>
+        <location filename="../qml/Main.qml" line="1980"/>
+        <location filename="../qml/Main.qml" line="1983"/>
+        <location filename="../qml/Main.qml" line="1986"/>
+        <location filename="../qml/Main.qml" line="3397"/>
+        <location filename="../qml/Main.qml" line="3574"/>
         <source>Gruppe</source>
         <translation>Gruppe</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2487"/>
+        <location filename="../qml/Main.qml" line="2508"/>
         <source>%1 Panes</source>
         <translation>%1 Panes</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3415"/>
-        <location filename="../qml/Main.qml" line="3575"/>
+        <location filename="../qml/Main.qml" line="3436"/>
+        <location filename="../qml/Main.qml" line="3596"/>
         <source>Neue Gruppe …</source>
         <translation>Neue Gruppe …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3423"/>
-        <location filename="../qml/Main.qml" line="3580"/>
+        <location filename="../qml/Main.qml" line="3444"/>
+        <location filename="../qml/Main.qml" line="3601"/>
         <source>Aus Gruppe entfernen</source>
         <translation>Aus Gruppe entfernen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3433"/>
-        <location filename="../qml/Main.qml" line="3595"/>
+        <location filename="../qml/Main.qml" line="3454"/>
+        <location filename="../qml/Main.qml" line="3616"/>
         <source>Controller-Markierung entfernen</source>
         <translation>Controller-Markierung entfernen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3446"/>
+        <location filename="../qml/Main.qml" line="3467"/>
         <source>Gruppe nach oben</source>
         <translation>Gruppe nach oben</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3450"/>
+        <location filename="../qml/Main.qml" line="3471"/>
         <source>Gruppe nach unten</source>
         <translation>Gruppe nach unten</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3455"/>
+        <location filename="../qml/Main.qml" line="3476"/>
         <source>Gruppe umbenennen …</source>
         <translation>Gruppe umbenennen …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3459"/>
+        <location filename="../qml/Main.qml" line="3480"/>
         <source>Gruppe auflösen</source>
         <translation>Gruppe auflösen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3472"/>
+        <location filename="../qml/Main.qml" line="3493"/>
         <source>Gruppe umbenennen</source>
         <translation>Gruppe umbenennen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3472"/>
+        <location filename="../qml/Main.qml" line="3493"/>
         <source>Neue Gruppe</source>
         <translation>Neue Gruppe</translation>
     </message>
@@ -1465,12 +1477,12 @@ Version %1</translation>
         <translation type="vanished">Sitzungen einer Gruppe stehen in der Seitenleiste zusammen und lassen sich gemeinsam ein- und ausklappen.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3497"/>
+        <location filename="../qml/Main.qml" line="3518"/>
         <source>z. B. Release 1.5</source>
         <translation>z. B. Release 1.5</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3648"/>
+        <location filename="../qml/Main.qml" line="3669"/>
         <source>QTmux beenden?</source>
         <translation>QTmux beenden?</translation>
     </message>
@@ -1495,7 +1507,7 @@ Version %1</translation>
         <translation type="vanished">%1 Sitzungen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3688"/>
+        <location filename="../qml/Main.qml" line="3709"/>
         <source>… und %1 weitere</source>
         <translation>… und %1 weitere</translation>
     </message>
@@ -1508,8 +1520,8 @@ Version %1</translation>
         <translation type="vanished">GPU-Glyph-Atlas (schneller; aus = QPainter-Fallback)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1893"/>
-        <location filename="../qml/Main.qml" line="2154"/>
+        <location filename="../qml/Main.qml" line="1911"/>
+        <location filename="../qml/Main.qml" line="2172"/>
         <source>Vor dem Beenden nachfragen</source>
         <translation>Vor dem Beenden nachfragen</translation>
     </message>
@@ -1586,70 +1598,70 @@ Version %1</translation>
         <translation type="vanished">Alle Kürzel zurücksetzen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="625"/>
+        <location filename="../qml/Main.qml" line="634"/>
         <source>Einstellungen</source>
         <translation>Einstellungen</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="357"/>
-        <location filename="../qml/Main.qml" line="1923"/>
+        <location filename="../qml/Main.qml" line="1941"/>
         <source>%1 (Plugin)</source>
         <translation>%1 (Plugin)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="615"/>
+        <location filename="../qml/Main.qml" line="623"/>
         <source>Befehlspalette</source>
         <translation>Befehlspalette</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1646"/>
-        <location filename="../qml/Main.qml" line="1729"/>
-        <location filename="../qml/Main.qml" line="1868"/>
+        <location filename="../qml/Main.qml" line="1663"/>
+        <location filename="../qml/Main.qml" line="1746"/>
+        <location filename="../qml/Main.qml" line="1885"/>
         <source>Secrets-Vault …</source>
         <translation>Secrets-Vault …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3492"/>
+        <location filename="../qml/Main.qml" line="3513"/>
         <source>Fenster einer Gruppe stehen in der Seitenleiste zusammen und lassen sich gemeinsam ein- und ausklappen.</source>
         <translation>Fenster einer Gruppe stehen in der Seitenleiste zusammen und lassen sich gemeinsam ein- und ausklappen.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3517"/>
+        <location filename="../qml/Main.qml" line="3538"/>
         <source>Umbenennen …</source>
         <translation>Umbenennen …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3522"/>
+        <location filename="../qml/Main.qml" line="3543"/>
         <source>Automatischer Name</source>
         <translation>Automatischer Name</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3587"/>
+        <location filename="../qml/Main.qml" line="3608"/>
         <source>Fenster schließen</source>
         <translation>Fenster schließen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3615"/>
+        <location filename="../qml/Main.qml" line="3636"/>
         <source>Fenster umbenennen</source>
         <translation>Fenster umbenennen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3630"/>
+        <location filename="../qml/Main.qml" line="3651"/>
         <source>Leer lassen = automatischer Name (Titel des aktiven Panes).</source>
         <translation>Leer lassen = automatischer Name (Titel des aktiven Panes).</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3635"/>
+        <location filename="../qml/Main.qml" line="3656"/>
         <source>z. B. Build, Server, Logs</source>
         <translation>z. B. Build, Server, Logs</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3660"/>
+        <location filename="../qml/Main.qml" line="3681"/>
         <source>Beim Beenden werden alle offenen Sitzungen samt ihrer laufenden Prozesse und Verbindungen geschlossen.</source>
         <translation>Beim Beenden werden alle offenen Sitzungen samt ihrer laufenden Prozesse und Verbindungen geschlossen.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="3663"/>
+        <location filename="../qml/Main.qml" line="3684"/>
         <source>Offene Sitzungen:</source>
         <translation>Offene Sitzungen:</translation>
     </message>
@@ -1714,8 +1726,8 @@ Version %1</translation>
         <translation type="vanished">Farbschema (Dunkel)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="773"/>
-        <location filename="../qml/Main.qml" line="1976"/>
+        <location filename="../qml/Main.qml" line="782"/>
+        <location filename="../qml/Main.qml" line="1994"/>
         <source>Fenster</source>
         <translation>Fenster</translation>
     </message>
@@ -1768,15 +1780,15 @@ Version %1</translation>
         <translation type="vanished">Eingabe &amp; Zwischenablage</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="624"/>
-        <location filename="../qml/Main.qml" line="1877"/>
+        <location filename="../qml/Main.qml" line="633"/>
+        <location filename="../qml/Main.qml" line="1895"/>
         <source>Design umschalten</source>
         <translation>Design umschalten</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="622"/>
-        <location filename="../qml/Main.qml" line="1653"/>
-        <location filename="../qml/Main.qml" line="1879"/>
+        <location filename="../qml/Main.qml" line="630"/>
+        <location filename="../qml/Main.qml" line="1670"/>
+        <location filename="../qml/Main.qml" line="1897"/>
         <source>MCP-Server umschalten</source>
         <translation>MCP-Server umschalten</translation>
     </message>
@@ -1785,7 +1797,7 @@ Version %1</translation>
         <translation type="vanished">Session %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1976"/>
+        <location filename="../qml/Main.qml" line="1994"/>
         <source>Wechseln zu: %1</source>
         <translation>Wechseln zu: %1</translation>
     </message>
@@ -1794,61 +1806,61 @@ Version %1</translation>
         <translation type="vanished">Session</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1811"/>
+        <location filename="../qml/Main.qml" line="1828"/>
         <source>Befehl suchen …</source>
         <translation>Befehl suchen …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2080"/>
+        <location filename="../qml/Main.qml" line="2098"/>
         <source>Keine Treffer</source>
         <translation>Keine Treffer</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1632"/>
-        <location filename="../qml/Main.qml" line="1718"/>
-        <location filename="../qml/Main.qml" line="1866"/>
+        <location filename="../qml/Main.qml" line="1649"/>
+        <location filename="../qml/Main.qml" line="1735"/>
+        <location filename="../qml/Main.qml" line="1883"/>
         <source>Neue serielle Verbindung …</source>
         <translation>Neue serielle Verbindung …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2839"/>
+        <location filename="../qml/Main.qml" line="2860"/>
         <source>Serielle Verbindung</source>
         <translation>Serielle Verbindung</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2820"/>
-        <location filename="../qml/Main.qml" line="2856"/>
-        <location filename="../qml/Main.qml" line="2965"/>
-        <location filename="../qml/Main.qml" line="3020"/>
+        <location filename="../qml/Main.qml" line="2841"/>
+        <location filename="../qml/Main.qml" line="2877"/>
+        <location filename="../qml/Main.qml" line="2986"/>
+        <location filename="../qml/Main.qml" line="3041"/>
         <source>Port</source>
         <translation>Port</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2862"/>
-        <location filename="../qml/Main.qml" line="3022"/>
+        <location filename="../qml/Main.qml" line="2883"/>
+        <location filename="../qml/Main.qml" line="3043"/>
         <source>Baudrate</source>
         <translation>Baudrate</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2872"/>
+        <location filename="../qml/Main.qml" line="2893"/>
         <source>Keine seriellen Ports gefunden.</source>
         <translation>Keine seriellen Ports gefunden.</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="536"/>
-        <location filename="../qml/Main.qml" line="2950"/>
+        <location filename="../qml/Main.qml" line="544"/>
+        <location filename="../qml/Main.qml" line="2971"/>
         <source>Shell</source>
         <translation>Shell</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="536"/>
-        <location filename="../qml/Main.qml" line="2950"/>
+        <location filename="../qml/Main.qml" line="544"/>
+        <location filename="../qml/Main.qml" line="2971"/>
         <source>SSH</source>
         <translation>SSH</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="536"/>
-        <location filename="../qml/Main.qml" line="2950"/>
+        <location filename="../qml/Main.qml" line="544"/>
+        <location filename="../qml/Main.qml" line="2971"/>
         <source>Seriell</source>
         <translation>Seriell</translation>
     </message>
@@ -1863,146 +1875,146 @@ Version %1</translation>
         <translation>Seriell …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1625"/>
-        <location filename="../qml/Main.qml" line="1713"/>
-        <location filename="../qml/Main.qml" line="1865"/>
+        <location filename="../qml/Main.qml" line="1642"/>
+        <location filename="../qml/Main.qml" line="1730"/>
+        <location filename="../qml/Main.qml" line="1882"/>
         <source>Neue SSH-Verbindung …</source>
         <translation>Neue SSH-Verbindung …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1639"/>
-        <location filename="../qml/Main.qml" line="1723"/>
-        <location filename="../qml/Main.qml" line="1867"/>
+        <location filename="../qml/Main.qml" line="1656"/>
+        <location filename="../qml/Main.qml" line="1740"/>
+        <location filename="../qml/Main.qml" line="1884"/>
         <source>Verbindungen verwalten …</source>
         <translation>Verbindungen verwalten …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1904"/>
+        <location filename="../qml/Main.qml" line="1922"/>
         <source>Unterhaltung fortsetzen: gar nicht</source>
         <translation>Unterhaltung fortsetzen: gar nicht</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1905"/>
+        <location filename="../qml/Main.qml" line="1923"/>
         <source>Unterhaltung fortsetzen: jüngste im Verzeichnis</source>
         <translation>Unterhaltung fortsetzen: jüngste im Verzeichnis</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1906"/>
+        <location filename="../qml/Main.qml" line="1924"/>
         <source>Unterhaltung fortsetzen: Auswahl beim Start</source>
         <translation>Unterhaltung fortsetzen: Auswahl beim Start</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1907"/>
+        <location filename="../qml/Main.qml" line="1925"/>
         <source>Unterhaltung fortsetzen: gemeldete Sitzung</source>
         <translation>Unterhaltung fortsetzen: gemeldete Sitzung</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1937"/>
+        <location filename="../qml/Main.qml" line="1955"/>
         <source>SFTP: %1</source>
         <translation>SFTP: %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1947"/>
+        <location filename="../qml/Main.qml" line="1965"/>
         <source>Aktives Fenster</source>
         <translation>Aktives Fenster</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1948"/>
+        <location filename="../qml/Main.qml" line="1966"/>
         <source>Fenster gruppieren …</source>
         <translation>Fenster gruppieren …</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1952"/>
+        <location filename="../qml/Main.qml" line="1970"/>
         <source>Fenster zu Gruppe: %1</source>
         <translation>Fenster zu Gruppe: %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1956"/>
+        <location filename="../qml/Main.qml" line="1974"/>
         <source>Fenster aus Gruppe nehmen</source>
         <translation>Fenster aus Gruppe nehmen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1965"/>
+        <location filename="../qml/Main.qml" line="1983"/>
         <source>Gruppe nach oben: %1</source>
         <translation>Gruppe nach oben: %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1968"/>
+        <location filename="../qml/Main.qml" line="1986"/>
         <source>Gruppe nach unten: %1</source>
         <translation>Gruppe nach unten: %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2163"/>
+        <location filename="../qml/Main.qml" line="2181"/>
         <source>Sessions beim Start wiederherstellen</source>
         <translation>Sessions beim Start wiederherstellen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2165"/>
+        <location filename="../qml/Main.qml" line="2183"/>
         <source>Ohne Verlauf</source>
         <translation>Ohne Verlauf</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2165"/>
+        <location filename="../qml/Main.qml" line="2183"/>
         <source>Alles</source>
         <translation>Alles</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2295"/>
+        <location filename="../qml/Main.qml" line="2316"/>
         <source>Unterhaltung fortsetzen</source>
         <translation>Unterhaltung fortsetzen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2165"/>
-        <location filename="../qml/Main.qml" line="2298"/>
+        <location filename="../qml/Main.qml" line="2183"/>
+        <location filename="../qml/Main.qml" line="2319"/>
         <source>Gar nicht</source>
         <translation>Gar nicht</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2298"/>
+        <location filename="../qml/Main.qml" line="2319"/>
         <source>Jüngste im Verzeichnis</source>
         <translation>Jüngste im Verzeichnis</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2299"/>
+        <location filename="../qml/Main.qml" line="2320"/>
         <source>Auswahl beim Start</source>
         <translation>Auswahl beim Start</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2299"/>
+        <location filename="../qml/Main.qml" line="2320"/>
         <source>Gemeldete Sitzung</source>
         <translation>Gemeldete Sitzung</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2764"/>
+        <location filename="../qml/Main.qml" line="2785"/>
         <source>⟫ Eingabe geht an ALLE Sessions — Strg/Cmd+Umschalt+B zum Beenden</source>
         <translation>⟫ Eingabe geht an ALLE Sessions — Strg/Cmd+Umschalt+B zum Beenden</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2791"/>
+        <location filename="../qml/Main.qml" line="2812"/>
         <source>SSH-Verbindung</source>
         <translation>SSH-Verbindung</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2816"/>
-        <location filename="../qml/Main.qml" line="2961"/>
+        <location filename="../qml/Main.qml" line="2837"/>
+        <location filename="../qml/Main.qml" line="2982"/>
         <source>Host</source>
         <translation>Host</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2818"/>
-        <location filename="../qml/Main.qml" line="2963"/>
+        <location filename="../qml/Main.qml" line="2839"/>
+        <location filename="../qml/Main.qml" line="2984"/>
         <source>Benutzer</source>
         <translation>Benutzer</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2822"/>
-        <location filename="../qml/Main.qml" line="2967"/>
+        <location filename="../qml/Main.qml" line="2843"/>
+        <location filename="../qml/Main.qml" line="2988"/>
         <source>Identity-Datei</source>
         <translation>Identity-Datei</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2826"/>
-        <location filename="../qml/Main.qml" line="3033"/>
+        <location filename="../qml/Main.qml" line="2847"/>
+        <location filename="../qml/Main.qml" line="3054"/>
         <source>Passwort/Schlüssel werden im Terminal abgefragt (System-ssh).</source>
         <translation>Passwort/Schlüssel werden im Terminal abgefragt (System-ssh).</translation>
     </message>
@@ -2011,24 +2023,24 @@ Version %1</translation>
         <translation type="vanished">Agent-Steuerung</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1698"/>
+        <location filename="../qml/Main.qml" line="1715"/>
         <source>Neue Session: %1</source>
         <translation>Neue Session: %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1705"/>
+        <location filename="../qml/Main.qml" line="1722"/>
         <source>Session-Typ wählen</source>
         <translation>Session-Typ wählen</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2098"/>
-        <location filename="../qml/Main.qml" line="2314"/>
+        <location filename="../qml/Main.qml" line="2116"/>
+        <location filename="../qml/Main.qml" line="2335"/>
         <source>MCP-Server: an (127.0.0.1:%1)</source>
         <translation>MCP-Server: an (127.0.0.1:%1)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2099"/>
-        <location filename="../qml/Main.qml" line="2315"/>
+        <location filename="../qml/Main.qml" line="2117"/>
+        <location filename="../qml/Main.qml" line="2336"/>
         <source>MCP-Server: aus</source>
         <translation>MCP-Server: aus</translation>
     </message>
@@ -2041,14 +2053,14 @@ Version %1</translation>
         <translation type="vanished">Bearbeiten</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1532"/>
-        <location filename="../qml/Main.qml" line="1880"/>
+        <location filename="../qml/Main.qml" line="1549"/>
+        <location filename="../qml/Main.qml" line="1898"/>
         <source>Kopieren</source>
         <translation>Kopieren</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="1539"/>
-        <location filename="../qml/Main.qml" line="1881"/>
+        <location filename="../qml/Main.qml" line="1556"/>
+        <location filename="../qml/Main.qml" line="1899"/>
         <source>Einfügen</source>
         <translation>Einfügen</translation>
     </message>
@@ -2065,7 +2077,7 @@ Version %1</translation>
         <translation type="vanished">Agent</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="2282"/>
+        <location filename="../qml/Main.qml" line="2303"/>
         <source>Neue Agent-Session …</source>
         <translation>Neue Agent-Session …</translation>
     </message>
@@ -2074,11 +2086,11 @@ Version %1</translation>
         <translation type="vanished">Hilfe</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="626"/>
-        <location filename="../qml/Main.qml" line="1660"/>
-        <location filename="../qml/Main.qml" line="1913"/>
-        <location filename="../qml/Main.qml" line="2109"/>
-        <location filename="../qml/Main.qml" line="3283"/>
+        <location filename="../qml/Main.qml" line="635"/>
+        <location filename="../qml/Main.qml" line="1677"/>
+        <location filename="../qml/Main.qml" line="1931"/>
+        <location filename="../qml/Main.qml" line="2127"/>
+        <location filename="../qml/Main.qml" line="3304"/>
         <source>Über QTmux</source>
         <translation>Über QTmux</translation>
     </message>
@@ -2097,8 +2109,8 @@ Qt %1</source>
 Qt %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="593"/>
-        <location filename="../qml/Main.qml" line="2134"/>
+        <location filename="../qml/Main.qml" line="601"/>
+        <location filename="../qml/Main.qml" line="2152"/>
         <source>Standard-Shell</source>
         <translation>Standard-Shell</translation>
     </message>

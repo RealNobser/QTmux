@@ -402,6 +402,14 @@ ApplicationWindow {
         terminalFontSize = Math.max(6, Math.min(40, terminalFontSize + delta))
     }
     function resetTerminalZoom() { terminalFontSize = 13 }
+    // Sichtbaren Bildschirm der aktiven Session in den Scrollback schieben (QTMUX-61).
+    // Bewusst NICHT `clear` in die Shell tippen: das verwirft je nach Agent/TUI den Verlauf
+    // und landete bei einem laufenden Agenten in dessen Eingabefeld.
+    function clearActiveScreen() {
+        if (window.currentRow < 0) return
+        if (!sessions.clearViewport(window.currentRow))
+            window.notifyToast(qsTr("Der Bildschirm ist bereits leer."))
+    }
 
     // Broadcast-/Sync-Input: getippte Eingabe geht an ALLE Sessions (Multi-Agent).
     // Bewusst NICHT persistiert (Footgun) — startet je Sitzung aus.
@@ -621,6 +629,7 @@ ApplicationWindow {
         case "actVault":          return qsTr("Secrets-Vault")
         case "actMcpToggle":      return qsTr("MCP-Server umschalten")
         case "actZoomReset":      return qsTr("Schriftgröße zurücksetzen")
+        case "actClearScreen":    return qsTr("Bildschirm leeren")
         case "actToggleTheme":    return qsTr("Design umschalten")
         case "actSettings":       return qsTr("Einstellungen")
         case "actAbout":          return qsTr("Über QTmux")
@@ -1514,6 +1523,14 @@ ApplicationWindow {
         enabled: !prefs.capturing
         onTriggered: window.resetTerminalZoom()
     }
+    // Bildschirm leeren, Verlauf behalten (QTMUX-61).
+    Action {
+        id: actClearScreen
+        text: qsTr("Bildschirm leeren")
+        shortcut: Hotkeys.bindings["actClearScreen"]
+        enabled: window.currentRow >= 0 && !prefs.capturing
+        onTriggered: window.clearActiveScreen()
+    }
     // Broadcast-Input umschalten: Eingabe an alle Sessions.
     Action {
         id: actBroadcast
@@ -1873,6 +1890,7 @@ ApplicationWindow {
                             { title: qsTr("Schrift vergrößern"),         sub: "",             icon: "plus",            run: function(){ window.zoomTerminal(1) } },
                             { title: qsTr("Schrift verkleinern"),        sub: "",             icon: "x",               run: function(){ window.zoomTerminal(-1) } },
                             { title: qsTr("Schriftgröße zurücksetzen"),  sub: hk("actZoomReset"), icon: "gear",            run: function(){ window.resetTerminalZoom() } },
+                            { title: qsTr("Bildschirm leeren"),          sub: hk("actClearScreen"), icon: "x",             run: function(){ window.clearActiveScreen() } },
                             { title: qsTr("Eingabe an alle Sessions"),   sub: hk("actBroadcast"), icon: "broadcast-input", run: function(){ window.broadcastInput = !window.broadcastInput } },
                             { title: qsTr("Design umschalten"),          sub: hk("actToggleTheme"), icon: "moon",            run: function(){ Theme.toggle() } },
                             { title: qsTr("Einstellungen …"),            sub: hk("actSettings"), icon: "gear",            run: function(){ prefs.open() } },
@@ -2229,6 +2247,9 @@ ApplicationWindow {
             ShortcutMenuItem { action: actZoomIn }
             ShortcutMenuItem { action: actZoomOut }
             ShortcutMenuItem { action: actZoomReset }
+            MenuSeparator {}
+            // QTMUX-61: leert nur die Ansicht, der Verlauf bleibt im Scrollback.
+            ShortcutMenuItem { action: actClearScreen; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
             ShortcutMenuItem {
                 action: actBroadcast

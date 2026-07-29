@@ -556,6 +556,17 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   sonst lokaler Scrollback/Selektion; **Shift+Drag** selektiert immer lokal. macOS:
   Cmd=ControlModifier, physisches Ctrl=Meta. libvterm **entprellt** (Tests brauchen
   press→release-Paare). Hover-only-Tracking (1003 ohne Taste) nicht gemeldet.
+- **Bildschirm leeren, Verlauf behalten (QTMUX-61):** `VtScreen::clearViewportKeepScrollback()`
+  schiebt alles **oberhalb der Cursorzeile** in den Scrollback; die Prompt-Zeile rückt nach
+  oben. Umgesetzt als **CSI `<n>` S** (Scroll Up) in den **eigenen** Parser (`inputWrite`) —
+  nicht ans PTY: Ein getipptes `clear` verwirft je nach Agent/TUI den Verlauf und landete im
+  Eingabefeld eines laufenden Agenten. Danach muss der Cursor per CSI H **selbst** gesetzt
+  werden, CSI S bewegt ihn nicht mit (Gegenprobe ohne diese Zeile: Test FAIL).
+  Bei Cursor in Zeile 0 passiert nichts — CSI **0** S würde als „rolle um 1" gelesen und die
+  Prompt-Zeile schlucken. Kürzel `Ctrl/Cmd+Shift+K` (nicht Ctrl+K — das gehört der Shell),
+  Ansicht-Menü, Palette. Test `tst_vtscreen::clearViewportKeepsScrollback`.
+  🔑 `screenText()` schneidet **rechte Leerzeichen** ab — ein `startsWith("$ ")` im Test
+  scheitert also, obwohl die Zeile korrekt steht; direkt an `cell(0,0)` prüfen.
 - **Tasten:** Übersetzungslogik Gui-frei in `src/core/KeyEncoding.cpp` (`encodeKeyBytes`,
   Test `test_keyencoding`); `TerminalItem::encodeKey` delegiert nur. F1–F12 als
   xterm/VT220-Sequenzen (F-Tasten gehören der Shell — keine globalen F-Tasten-Shortcuts);
@@ -1007,6 +1018,15 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   -sTCP:LISTEN`): Läuft dort schon eine fremde Testinstanz (paralleler Worker!), bindet die
   eigene still **nicht** — jede Antwort kommt dann von der fremden Instanz und sieht völlig
   plausibel aus. Genau so ging 2026-07-28 ein kompletter Messdurchlauf an die falsche App.
+  🔑 **Am 2026-07-29 erneut hineingelaufen — der häufigste Fall ist die eigene Leiche.**
+  Nicht ein fremder Worker, sondern eine **vergessene Instanz aus einem früheren Lauf
+  derselben Sitzung** hielt den Port; `kill -TERM` hatte sie zuvor nicht erwischt. Symptom:
+  MCP meldete 12 Zeilen mit den erwarteten Marken, während dieselbe Session in C++ nur den
+  Prompt hatte. **Regel:** Die Prüfung als PID-**Vergleich** in das Testskript einbauen
+  (`lsof`-PID gegen `$!`) und bei Ungleichheit abbrechen — die bloße „ist der Port belegt?"-
+  Frage genügt nicht, denn belegt ist er ja, nur vom Falschen. Und der Widerspruch zweier
+  Messwege ist das Alarmsignal: Zwei Quellen für dieselbe Session dürfen nie verschiedene
+  Inhalte melden.
   ⚠️ **Persistenz nach dem Beenden mit `defaults read <domain>` lesen, NICHT mit `plutil` auf
   der `.plist`** — cfprefsd hält die Datei zurück; die Datei zeigte „gar keine `windows`-
   Schlüssel", während `defaults read` den korrekt geschriebenen Stand lieferte.
