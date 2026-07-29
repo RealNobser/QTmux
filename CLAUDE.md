@@ -316,20 +316,25 @@ als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-29** · Branch `main`, letzter Commit **`21d622d`** (QTMUX-100), **gepusht**,
-Working Tree sauber · Version **1.7.1** (Tag `v1.7.1` ausgeliefert).
-**Teststände:** macOS `macos-test` (Debug) und `macos-release` **18/18 grün**;
-Windows `windows` (Debug) und `windows-release` frisch, `ctest -E "^test_pty$"` beidseitig
-**17/17 grün** (test_pty fällt hier umgebungsbedingt auch auf unverändertem Stand —
-nicht-interaktive Shell, ConPTY). Instrumentierungen aus den QTMUX-86-/QTMUX-100-Unter-
-suchungen sind **zurückgenommen**.
+Stand **2026-07-29** · Branch `main` = `origin/main`, Working Tree sauber · Version **1.7.1**
+(Tag `v1.7.1` ausgeliefert). Jüngster inhaltlicher Commit **`2e9eeec`** (QTMUX-89, aus der
+Mac-Session), darüber der Merge und die Doku-Konsolidierung dieser Windows-Session.
+**Teststände:** macOS `macos-test` (Debug) und `macos-release` **18/18 grün** (Stand `2e9eeec`);
+Windows `windows` (Debug) und `windows-release` **17/17 grün** — aber nur auf `21d622d`
+gemessen, also **ohne** die über den Merge hereingekommenen QTMUX-61/89/101/102/103.
+⚠️ **Offen auf Windows:** `SleepInhibitor` hat einen eigenen Windows-Zweig
+(`SetThreadExecutionState`), der hier **noch nicht gebaut** wurde — die Abnahme der Mac-Session
+lief über `pmset`. Erste Windows-Aufgabe: bauen + `ctest -E "^test_pty$"`
+(test_pty fällt hier umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell,
+ConPTY). Instrumentierungen aus den QTMUX-86-/QTMUX-100-Untersuchungen sind **zurückgenommen**.
 🔑 Auf der **Windows**-Maschine zeigt `"cmake.cmakePath"` in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd`; ohne diesen Eintrag scheitert der Build-Knopf der CMake-Tools an
 fehlendem `INCLUDE`/`LIB` (Begründung im QTMUX-79-Kasten oben).
 
 **Nächster Punkt:** **`build/macos` neu bauen** und die Produktivinstanz darauf umstellen —
-erst damit sind QTMUX-85/97/98/99/100 überhaupt bedienbar und abnehmbar (Bedingungen im
-Arbeitsstand). Danach die Owner-Abnahmen, dann offene Jira nach Priorität: 88/40/38/2/13.
+erst damit sind QTMUX-61/85/89/97/98/99/100/101/102/103 überhaupt bedienbar und abnehmbar
+(Bedingungen im Arbeitsstand). Danach die Owner-Abnahmen, dann offene Jira nach Priorität:
+88/40/38/2/13.
 
 **Seit v1.7.1 auf `main`, jeweils umgesetzt + selbst verifiziert — Owner-Abnahme offen.**
 Mechanik und Fallen stehen je Ticket in der Feature-Referenz, hier nur der Zeiger:
@@ -342,6 +347,9 @@ Mechanik und Fallen stehen je Ticket in der Feature-Referenz, hier nur der Zeige
 | **98** | Unterhaltung fortsetzen, 4 Modi (Vorgabe: gar nicht) | „Unterhaltung fortsetzen ist eine WAHL" | die vier Modi durchspielen; Modus 3 braucht vorher `set_agent_session` |
 | **99** | Umfang der Wiederherstellung, 3 Modi (Vorgabe: alles) | „Umfang der Wiederherstellung ist eine WAHL" | Modus 0 setzen, beenden, neu starten — gespeicherter Stand muss **unberührt** bleiben |
 | **100** | Sidebar-Drag ließ die übrigen Kacheln weglaufen | „Niemals ein ListView-Delegat als `DragHandler.target`" | Kachel ziehen (auch die letzte), Reihenfolge muss stimmen |
+| **101/102/103** | ToolTip auf der Kachel · Drag auf die Liste geklemmt · „Arbeitsverzeichnis öffnen"/„Pfad kopieren" | „ToolTips", „Arbeitsverzeichnis", QTMUX-100-Punkt | ToolTip in beiden Designs; Kachel darf das Bild nicht verlassen; Menüpunkte an serieller Session ausgegraut |
+| **61** | Bildschirm leeren, Verlauf behalten (`Ctrl/Cmd+Shift+K`) | „Bildschirm leeren, Verlauf behalten" | in einem laufenden Agenten leeren — Prompt bleibt oben, Verlauf im Scrollback |
+| **89** | Ruhezustand verhindern, solange Agenten arbeiten | „Ruhezustand", Commit `2e9eeec` | Schalter an, Agent arbeiten lassen, Sperre prüfen (macOS `pmset -g assertions`, Windows `powercfg /requests`) |
 
 ⚠️ **Alle Abnahmen brauchen eine frisch gebaute Instanz** — die laufende kennt die Schalter
 nicht (Begründung im Arbeitsstand). QTMUX-86 heilt bereits beschädigte Sessions **nicht**
@@ -364,9 +372,11 @@ Anderer Pfad als der behobene, in der App nicht gegengeprüft, im Ticket notiert
   ist „steht im Repo" **nie** gleichbedeutend mit „ist in der App". Jede Owner-Abnahme braucht
   darum entweder eine frische Testinstanz (`QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`) oder einen
   Neubau von `build/macos` mit Freigabe.
-- **Jira-Stand (2026-07-29):** beide Systeme laufen synchron bis **QTMUX-99**; 97 Done, 85 und
+- **Jira-Stand (2026-07-29):** bis **QTMUX-99** beidseitig geprüft synchron; 97 Done, 85 und
   98 „In Progress"/„In Arbeit" (umgesetzt + verifiziert, Owner-Abnahme offen), 99 neu im
-  Backlog. 🔑 **Lektion:** Vor dem Anlegen eines Tickets die höchste Nummer in **beiden**
+  Backlog. **Ab QTMUX-100 von dieser (Windows-)Maschine aus nicht prüfbar** — Doku und Commits
+  führen 100–103 sowie 61/89, den Jira-Stand dazu **auf dem Mac gegenprüfen** (`CLAUDE.local.md`
+  existiert nur dort). 🔑 **Lektion:** Vor dem Anlegen eines Tickets die höchste Nummer in **beiden**
   Systemen holen (`ORDER BY key DESC`, maxResults 1) — nur solange beide gleich stehen, bleiben
   die Keys deckungsgleich. Und prüfen, ob die Doku bereits höhere Nummern *vergeben* hat.
   Die alte Notiz „QTMUX-46/-79 nicht angelegt" war schlicht falsch, beide existieren und sind
@@ -397,8 +407,8 @@ Windows ohne stdout) · **QTMUX-2** (Windows-`currentWorkingDirectory`-Funktions
 **QTMUX-13** (native macOS-Menü-Icons — Qt reicht `icon.source`/`icon.name` in nativen Menüs
 nicht durch; einziger Weg wäre ein QMenuBar-Umbau, deferred; [[qtmux-native-menu-icons]]).
 
-**Aus der Air-Evaluation (2026-07-28, air.dev):** QTMUX-**89** (Ruhezustand verhindern,
-solange Agenten arbeiten) · **90** (Prompt-Queue je Session) · **91** (Agenten-Startprofile —
+**Aus der Air-Evaluation (2026-07-28, air.dev)** — **89 ist umgesetzt** (s. Tabelle oben), offen
+sind: **90** (Prompt-Queue je Session) · **91** (Agenten-Startprofile —
 gehört mit QTMUX-85 zusammen) · **92** (Container-Backend Docker/Podman) · **93** (Spike ACP —
 der strukturierte Gegenentwurf zur dokumentierten Schwäche „Worker meldet von sich aus
 nichts", berührt 55/73/75/90) · **94** (Terminal-Ausgabe als Agenten-Kontext — Air holt sie
