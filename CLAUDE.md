@@ -330,10 +330,13 @@ als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 Stand **2026-07-29** · Branch `main`, letzter **Code**-Commit `0dd1cc5` (QTMUX-98), gefolgt von
 der Doku-Konsolidierung `a16d8ac`; beides **gepusht**, Working Tree sauber.
 macOS: `macos-test` und `macos-release` tragen den
-Endstand (18/18 grün, Debug und Release). Windows-Maschine: `windows` (Debug) **und**
-`windows-release` auf dem Stand von QTMUX-84, `ctest -E "^test_pty$"` beidseitig **16/16 grün**
-(test_pty fällt hier umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell,
-ConPTY). Die Instrumentierung aus der QTMUX-86-Untersuchung ist **zurückgenommen**.
+Endstand (18/18 grün, Debug und Release). Windows-Maschine (Stand 2026-07-29): `windows`
+(Debug) **und** `windows-release` frisch auf diesem Stand, `ctest -E "^test_pty$"` beidseitig
+**17/17 grün** (test_pty fällt hier umgebungsbedingt auch auf unverändertem Stand —
+nicht-interaktive Shell, ConPTY). Die Instrumentierung aus der QTMUX-86-Untersuchung ist
+**zurückgenommen**. 🔑 Auf dieser Maschine zeigt `"cmake.cmakePath"` in den **Benutzer**-
+Einstellungen auf `tools/cmake-vsdev.cmd` — ohne diesen Eintrag scheitert der Build-Knopf der
+CMake-Tools an fehlendem `INCLUDE`/`LIB` (Begründung im QTMUX-79-Kasten oben).
 
 ⚠️ **Einstellungs-Audit 2026-07-29 — „die Schalter fehlen im Dialog" war die falsche Fährte.**
 Anlass: Die Agenten-Optionen aus QTMUX-85/98 waren in der laufenden App nicht auffindbar.
