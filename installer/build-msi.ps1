@@ -19,12 +19,55 @@
 #>
 param(
     [string]$Version = "1.2.0",
-    [string]$QtDir   = "C:\Qt\6.11.1\msvc2022_64",
-    [string]$VcVars  = "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat",
-    [string]$VcRedistRoot = "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Redist\MSVC"
+    # Leer lassen = automatisch bestimmen (s. u.). Ein explizit uebergebener Wert
+    # gewinnt immer — so bleibt das Skript auf Sondermaschinen ueberschreibbar.
+    [string]$QtDir        = "",
+    [string]$VcVars       = "",
+    [string]$VcRedistRoot = ""
 )
 $ErrorActionPreference = "Stop"
 $repo = Split-Path $PSScriptRoot -Parent
+
+# --- Werkzeug-Pfade automatisch bestimmen -------------------------------------
+# Damit laeuft das Skript OHNE Parameter auf jeder korrekt eingerichteten Maschine;
+# frueher waren carhack-Pfade fest verdrahtet und jeder Build-Server-Wechsel brach es
+# (carhack -> RTZBLD01, 2026-07-30). Explizit uebergebene Werte haben Vorrang.
+if (-not $QtDir) {
+    if ($env:QTMUX_QT_PREFIX) {
+        # Dieselbe Env-Var wie das windows-Preset (CMAKE_PREFIX_PATH); erster Eintrag,
+        # Forward Slashes -> Backslashes fuer windeployqt.
+        $QtDir = (($env:QTMUX_QT_PREFIX -split ';')[0]).Trim() -replace '/','\'
+    } else {
+        # Neueste C:\Qt\6.*\msvc2022_64. Versionssortierung als [version], NICHT als
+        # String — sonst gilt "6.8.3" > "6.10.3", weil "8" > "1".
+        $qv = Get-ChildItem "C:\Qt" -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match '^\d+\.\d+' -and
+                             (Test-Path (Join-Path $_.FullName 'msvc2022_64\bin\windeployqt.exe')) } |
+              Sort-Object { [version]$_.Name } | Select-Object -Last 1
+        if ($qv) { $QtDir = Join-Path $qv.FullName 'msvc2022_64' }
+    }
+}
+if (-not $QtDir -or -not (Test-Path (Join-Path $QtDir 'bin\windeployqt.exe'))) {
+    throw "Qt nicht gefunden. QTMUX_QT_PREFIX setzen oder -QtDir uebergeben (ermittelt: '$QtDir')."
+}
+# VS ueber vswhere lokalisieren. Die Begrenzung [17.0,18.0) ist PFLICHT: liegt ein
+# neueres VS (z. B. "18"/2026) daneben, ergaebe dessen STL mit dem 2022-cl den Fehler
+# STL1001 (QTMUX-79). `-requires` stellt sicher, dass das C++-Toolset auch da ist.
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+$vsBase  = $null
+if (Test-Path $vswhere) {
+    $vsBase = & $vswhere -products * -version '[17.0,18.0)' -latest `
+                 -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+                 -property installationPath 2>$null | Select-Object -First 1
+}
+if (-not $VcVars -and $vsBase)       { $VcVars       = Join-Path $vsBase 'VC\Auxiliary\Build\vcvars64.bat' }
+if (-not $VcRedistRoot -and $vsBase) { $VcRedistRoot = Join-Path $vsBase 'VC\Redist\MSVC' }
+if (-not $VcVars -or -not (Test-Path $VcVars)) {
+    throw "vcvars64.bat nicht gefunden (VS 2022 mit C++-Toolset?). -VcVars uebergeben (ermittelt: '$VcVars')."
+}
+Write-Host ("    Qt:      {0}" -f $QtDir)        -ForegroundColor DarkGray
+Write-Host ("    VcVars:  {0}" -f $VcVars)       -ForegroundColor DarkGray
+Write-Host ("    Redist:  {0}" -f $VcRedistRoot) -ForegroundColor DarkGray
 # Gemeinsames Release-Verzeichnis mit dem windows-release-Preset (kein separates
 # build\release-win mehr — das war doppelt zum Preset). So gibt es nur zwei
 # Windows-Build-Verzeichnisse: build\windows (Debug) und build\windows-release (Release).
