@@ -952,6 +952,11 @@ ApplicationWindow {
 
     // --- Window-Umschaltung & -Sync (QTMUX-83) -------------------------------
     function activeWindowObj() { return windows.windowById(window.activeWindowId) }
+    // Gruppe des aktiven Windows („" = keine). Für das Session-Menü und die Palette.
+    function activeWindowGroup() {
+        const w = window.activeWindowObj()
+        return w ? w.group : ""
+    }
 
     // Live-SplitView-Größen als Proportionen in den Baum (node.sizes) übernehmen, damit
     // sie über Window-Wechsel und Serialisierung erhalten bleiben (Mechanik aus QTMUX-82).
@@ -1707,7 +1712,7 @@ ApplicationWindow {
     // (SplitNode.qml) und fokussiert sich selbst, sobald searchActive wird.
     Action {
         id: actFind
-        text: qsTr("Suchen …")
+        text: qsTr("Im Terminal suchen …")
         shortcut: Hotkeys.bindings["actFind"]
         enabled: window.activeTerminal && !prefs.capturing
         onTriggered: if (window.activeTerminal) window.activeTerminal.beginSearch()
@@ -1812,7 +1817,9 @@ ApplicationWindow {
     }
     Action {
         id: actMcpToggle
-        text: qsTr("MCP-Server umschalten")
+        // Befehl, kein Zustand (Regel aus Teil A): der Text sagt, was der Klick TUT.
+        text: mcp.listening ? qsTr("MCP-Server stoppen (127.0.0.1:%1)").arg(mcp.port)
+                            : qsTr("MCP-Server starten")
         shortcut: Hotkeys.bindings["actMcpToggle"]
         enabled: !prefs.capturing
         onTriggered: mcp.listening ? mcp.stop() : mcp.start()
@@ -1823,6 +1830,69 @@ ApplicationWindow {
         shortcut: Hotkeys.bindings["actAbout"]
         enabled: !prefs.capturing
         onTriggered: aboutDialog.open()
+    }
+    // Gesamten Inhalt selektieren (Design 1a, Bearbeiten-Menü). Kürzel NUR auf macOS:
+    // Ctrl+A gehört unter Windows/Linux der Shell (readline `beginning-of-line`) —
+    // dieselbe Abwägung wie bei Kopieren/Einfügen.
+    Action {
+        id: actSelectAll
+        text: qsTr("Alles auswählen")
+        shortcut: Qt.platform.os === "osx" ? StandardKey.SelectAll : ""
+        enabled: window.activeTerminal && !prefs.capturing
+        onTriggered: if (window.activeTerminal) window.activeTerminal.selectAll()
+    }
+    // Aktives Fenster (Sidebar-Kachel) umbenennen — bisher nur im Rechtsklick-Menü.
+    Action {
+        id: actRenameWindow
+        text: qsTr("Umbenennen …")
+        enabled: windows.count > 0 && !prefs.capturing
+        onTriggered: {
+            const w = window.activeWindowObj()
+            if (w) windowRenameDialog.start(w.windowId, w.name)
+        }
+    }
+    // Agent-Menü: Ereignis-Abos bzw. die Agenten-Seite der Einstellungen.
+    Action {
+        id: actAgentEvents
+        text: qsTr("Agent-Ereignisse …")
+        enabled: !prefs.capturing
+        onTriggered: prefs.open("agenten", "agenten.notifications")
+    }
+    Action {
+        id: actAgentPrefs
+        text: qsTr("Agenten-Einstellungen …")
+        enabled: !prefs.capturing
+        onTriggered: prefs.open("agenten")
+    }
+    // Hilfe-Menü. Die Dokumentation liegt im öffentlichen Repository — im installierten
+    // Programm ist das der einzige verlässlich erreichbare Ort (die Shell-Helfer und
+    // docs/ liegen NICHT in den Paketen, s. QTMUX-38).
+    Action {
+        id: actDocs
+        text: qsTr("Dokumentation")
+        enabled: !prefs.capturing
+        onTriggered: Qt.openUrlExternally("https://github.com/RealNobser/QTmux#readme")
+    }
+    Action {
+        id: actHotkeyList
+        text: qsTr("Tastenkürzel-Übersicht")
+        enabled: !prefs.capturing
+        onTriggered: prefs.open("hotkeys")
+    }
+    // Nur macOS: Standard-Einträge des Fenster-Menüs (s. Menüleiste unten).
+    Action {
+        id: actMinimizeWindow
+        text: qsTr("Minimieren")
+        shortcut: Qt.platform.os === "osx" ? "Ctrl+M" : ""
+        enabled: !prefs.capturing
+        onTriggered: window.showMinimized()
+    }
+    Action {
+        id: actZoomWindow
+        text: qsTr("Zoomen")
+        enabled: !prefs.capturing
+        onTriggered: window.visibility = (window.visibility === Window.Maximized
+                                          ? Window.Windowed : Window.Maximized)
     }
     // Direktsprung zu Session 1..9 (feste, nicht konfigurierbare Kürzel — sonst
     // würden 9 Einträge die Kürzel-Liste überladen). Ctrl+<N> lädt Session N.
@@ -2239,6 +2309,15 @@ ApplicationWindow {
                             { title: qsTr("Design: Dunkel"),             sub: "",             icon: "moon",            run: function(){ Theme.mode = Theme.Dark } },
                             { title: qsTr("Sprache: Deutsch"),           sub: "",             icon: "translate",       run: function(){ App.language = "de" } },
                             { title: qsTr("Sprache: English"),           sub: "",             icon: "translate",       run: function(){ App.language = "en" } },
+                            // Neu bzw. verschoben mit der Menü-Neuordnung (Design 1a, Teil A4):
+                            // was ein Menü zeigt, muss die Palette finden — und was die Menüs
+                            // verlassen hat, erst recht (Regel aus QTMUX-46).
+                            { title: qsTr("Alles auswählen"),            sub: Qt.platform.os === "osx" ? App.shortcutText("Ctrl+A") : "",
+                              icon: "copy",            run: function(){ if (window.activeTerminal) window.activeTerminal.selectAll() } },
+                            { title: qsTr("Fenster umbenennen …"),       sub: "",             icon: "terminal-window", run: function(){ actRenameWindow.trigger() } },
+                            { title: qsTr("Agent-Ereignisse …"),         sub: "",             icon: "broadcast",       run: function(){ prefs.open("agenten", "agenten.notifications") } },
+                            { title: qsTr("Dokumentation"),              sub: "",             icon: "info",            run: function(){ actDocs.trigger() } },
+                            { title: qsTr("Tastenkürzel-Übersicht"),     sub: "",             icon: "command",         run: function(){ prefs.open("hotkeys") } },
                             { title: qsTr("Über QTmux"),                 sub: hk("actAbout"), icon: "info",            run: function(){ aboutDialog.open() } },
                             { title: qsTr("Beenden"),                    sub: hk("actQuit"), icon: "x",               run: function(){ window.requestQuit() } },
                         ]
@@ -2252,6 +2331,25 @@ ApplicationWindow {
                             c.push({ title: qsTr("%1 (Plugin)").arg(pts[k].name), sub: qsTr("Neue Plugin-Session"),
                                      icon: "robot",
                                      run: (function(pt){ return function(){ window.newPluginSession(pt.pluginId, pt.typeId) } })(pts[k]) })
+                        }
+                        // Standard-Shell: hat mit der Menü-Neuordnung das Datei-Menü verlassen
+                        // (jetzt Einstellungen › Terminal) — je Shell ein Eintrag, damit die
+                        // Wahl ohne Umweg über den Dialog erreichbar bleibt.
+                        if (window.hasShellChoice) {
+                            var shs = sessions.availableShells()
+                            for (var s = 0; s < shs.length; ++s) {
+                                c.push({ title: qsTr("Standard-Shell: %1").arg(shs[s].name),
+                                         sub: qsTr("Einstellungen"), icon: "terminal-window",
+                                         run: (function(p){ return function(){ window.defaultShellProgram = p } })(shs[s].program) })
+                            }
+                        }
+                        // Je Einstellungs-Kategorie ein Direktsprung (Teil A4) — die Menüs
+                        // führen jetzt nur noch auf zwei Seiten (Agenten, Tastenkürzel).
+                        var cats = prefs.categories
+                        for (var ci = 0; ci < cats.length; ++ci) {
+                            c.push({ title: qsTr("Einstellungen: %1 …").arg(cats[ci].label),
+                                     sub: "", icon: cats[ci].icon,
+                                     run: (function(id){ return function(){ prefs.open(id) } })(cats[ci].id) })
                         }
                         // Je gespeichertem Profil ein Schnellverbinden.
                         var profs = Profiles.profiles
@@ -2441,67 +2539,51 @@ ApplicationWindow {
         }
     }
 
-    // --- Menüleiste: bietet alle Oberflächen-Befehle ------------------------
+    // --- Menüleiste: sechs Menüs (Design 1a, Teil A) -------------------------
+    // Leitregel: **ein Menü enthält Befehle, keine Zustände.** Checkbar bleiben genau die
+    // drei Ansichtsumschalter dieses Fensters (Seitenleiste, Statusleiste, Broadcast);
+    // alle früheren Einstellungs-Einträge (Standard-Shell, Beenden-Rückfrage, Restore-
+    // Modi, Clipboard-Schalter, Design, Sprache, Agenten-Wiederherstellung) leben jetzt
+    // in den Einstellungen UND in der Befehlspalette — nichts wurde unerreichbar
+    // (Regel aus QTMUX-46, Abnahmekriterium der Arbeitsanweisung).
     menuBar: MenuBar {
+        id: appMenuBar
+        // ⚠️ `visible: false` an einem Menü blendet dessen Eintrag in der MenuBar NICHT aus
+        // (am Bild belegt: „Fenster" stand auf Windows trotzdem da). Der MenuBar-Eintrag
+        // verschwindet nur, wenn das Menü gar nicht mehr enthalten ist → auf Nicht-macOS
+        // einmalig entfernen.
+        Component.onCompleted: if (Qt.platform.os !== "osx") appMenuBar.removeMenu(macWindowMenu)
         ThemedMenu {
             title: qsTr("&Datei")
             ShortcutMenuItem { action: actNewInstance; icon.source: window.icon("terminal-window"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuSeparator {}
             ShortcutMenuItem { action: actNewSession; icon.source: window.icon("plus"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            ShortcutMenuItem { action: actNewSsh;     icon.source: window.icon("plugs");    icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            ShortcutMenuItem { action: actNewSerial;  icon.source: window.icon("usb");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            ShortcutMenuItem { action: actConnections; icon.source: window.icon("bookmark"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            ShortcutMenuItem { action: actVault;      icon.source: window.icon("key");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            ShortcutMenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuSeparator {}
-            ShortcutMenuItem { action: actNextSession }
-            ShortcutMenuItem { action: actPrevSession }
-            MenuSeparator { visible: window.hasShellChoice }
-            // Globale Standard-Shell (nur Windows, wo es mehrere gibt). Setzt dieselbe
-            // Property wie die Schnellwahl im „+"-Menü → beide bleiben synchron.
+            // „Neu ▸“ bündelt die Session-Arten, die einen Dialog bzw. ein Plugin brauchen.
             ThemedMenu {
-                title: qsTr("Standard-Shell")
-                visible: window.hasShellChoice
+                title: qsTr("Neu")
+                ShortcutMenuItem { action: actNewSsh;    icon.source: window.icon("plugs"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+                ShortcutMenuItem { action: actNewSerial; icon.source: window.icon("usb");   icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+                // Plugin-Backends (QTMUX-8): je geladenem Typ ein Eintrag, wie im „+"-Menü.
                 Repeater {
-                    model: sessions.availableShells()
+                    model: Plugins.backendTypes
                     delegate: ShortcutMenuItem {
                         required property var modelData
-                        text: modelData.name
-                        icon.source: window.icon("terminal-window")
+                        text: qsTr("%1 (Plugin)").arg(modelData.name)
+                        icon.source: window.icon("robot")
                         icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                        checkable: true
-                        checked: window.currentShellProgram() === modelData.program
-                        onTriggered: window.defaultShellProgram = modelData.program
+                        onTriggered: window.newPluginSession(modelData.pluginId, modelData.typeId)
                     }
                 }
             }
             MenuSeparator {}
-            // Direkt über „Beenden“, weil die Option genau dessen Verhalten steuert
-            // (QTMUX-46: stand vorher NUR im Einstellungsdialog, während die anderen
-            // Komfort-Schalter überall erreichbar sind).
-            ShortcutMenuItem {
-                text: qsTr("Vor dem Beenden nachfragen")
-                icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                checkable: true
-                checked: window.confirmQuit
-                onTriggered: window.confirmQuit = !window.confirmQuit
-            }
-            // Gegenstück dazu: was beim NÄCHSTEN Start zurückkommt (QTMUX-99).
-            // Auch in den Einstellungen und in der Palette erreichbar (QTMUX-46).
-            ThemedMenu {
-                title: qsTr("Sessions beim Start wiederherstellen")
-                Repeater {
-                    model: [qsTr("Gar nicht"), qsTr("Ohne Verlauf"), qsTr("Alles")]
-                    ShortcutMenuItem {
-                        required property int index
-                        required property string modelData
-                        text: modelData
-                        checkable: true
-                        checked: window.restoreSessionMode === index
-                        onTriggered: window.restoreSessionMode = index
-                    }
-                }
-            }
+            ShortcutMenuItem { action: actConnections; icon.source: window.icon("bookmark"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actVault;      icon.source: window.icon("key");      icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuSeparator {}
+            // ⚠️ Bleibt auf ALLEN Plattformen sichtbar — auch auf macOS. Die Arbeits-
+            // anweisung wollte den Eintrag dort per `MenuItem.role: PreferencesRole` ins
+            // App-Menü schieben; QtQuick.Controls kennt aber keine Menü-Rollen (nur das
+            // veraltete Qt.labs.platform), und QQuickNativeMenuItem ruft `setRole` nie
+            // auf. Ausblenden würde ihn auf macOS also NUR entfernen, nicht verschieben.
+            ShortcutMenuItem { action: actSettings; icon.source: window.icon("gear"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actQuit }
         }
         ThemedMenu {
@@ -2513,106 +2595,90 @@ ApplicationWindow {
                                shortcutOverride: Qt.platform.os === "osx" ? "" : "Ctrl+C" }
             ShortcutMenuItem { action: actPaste; icon.source: window.icon("clipboard"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                                shortcutOverride: Qt.platform.os === "osx" ? "" : "Ctrl+V" }
+            ShortcutMenuItem { action: actSelectAll }
             MenuSeparator {}
             ShortcutMenuItem { action: actFind; icon.source: window.icon("eye"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuSeparator {}
-            ShortcutMenuItem {
-                text: qsTr("Auswahl automatisch kopieren")
-                icon.source: window.icon("copy"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                checkable: true
-                checked: window.copyOnSelect
-                onTriggered: window.copyOnSelect = !window.copyOnSelect
-            }
-            ShortcutMenuItem {
-                text: qsTr("Rechtsklick fügt ein")
-                icon.source: window.icon("clipboard"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                checkable: true
-                checked: window.rightClickPaste
-                onTriggered: window.rightClickPaste = !window.rightClickPaste
-            }
-            ShortcutMenuItem {
-                text: qsTr("Vor mehrzeiligem Einfügen warnen")
-                icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                checkable: true
-                checked: window.pasteWarnMultiline
-                onTriggered: window.pasteWarnMultiline = !window.pasteWarnMultiline
-            }
+            ShortcutMenuItem { action: actCommandPalette; icon.source: window.icon("command"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
         }
         ThemedMenu {
             title: qsTr("&Ansicht")
-            ShortcutMenuItem { action: actCommandPalette; icon.source: window.icon("command"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuSeparator {}
-            ShortcutMenuItem {
-                action: actSplitH
-                icon.source: window.icon("split-h"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+            ThemedMenu {
+                title: qsTr("Teilen")
+                ShortcutMenuItem {
+                    action: actSplitH
+                    icon.source: window.icon("split-h"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                }
+                ShortcutMenuItem {
+                    action: actSplitV
+                    icon.source: window.icon("split-v"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                }
             }
-            ShortcutMenuItem {
-                action: actSplitV
-                icon.source: window.icon("split-v"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-            }
+            ShortcutMenuItem { action: actZoomPane; icon.source: window.icon("eye"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actClosePane; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actNextPane; enabled: window.paneCount > 1 }
             ShortcutMenuItem { action: actPrevPane; enabled: window.paneCount > 1 }
-            ShortcutMenuItem { action: actZoomPane; icon.source: window.icon("eye"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
-            ShortcutMenuItem { action: actZoomIn }
-            ShortcutMenuItem { action: actZoomOut }
-            ShortcutMenuItem { action: actZoomReset }
+            ThemedMenu {
+                title: qsTr("Zoom")
+                ShortcutMenuItem { action: actZoomIn }
+                ShortcutMenuItem { action: actZoomOut }
+                ShortcutMenuItem { action: actZoomReset }
+            }
             MenuSeparator {}
             // QTMUX-61: leert nur die Ansicht, der Verlauf bleibt im Scrollback.
             ShortcutMenuItem { action: actClearScreen; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actResetInput }
+            MenuSeparator {}
+            // Ansichtsumschalter (Design 1a): dürfen als checkbare Einträge bleiben, weil sie
+            // Eigenschaften DIESES Fensters umschalten und keine Einstellungen.
+            ShortcutMenuItem { action: actToggleSidebar }
+            ShortcutMenuItem { action: actToggleStatusBar }
+        }
+        ThemedMenu {
+            title: qsTr("&Session")
+            ShortcutMenuItem { action: actNextSession }
+            ShortcutMenuItem { action: actPrevSession }
+            MenuSeparator {}
+            // ⚠️ Umbenennen und Gruppe wirken auf das **Window** (die Sidebar-Kachel), nicht
+            // auf die einzelne Session — seit QTMUX-83 ist die Kachel ein Window mit eigenem
+            // Split-Layout. Die Arbeitsanweisung sprach noch vom Split-Modell.
+            ShortcutMenuItem { action: actRenameWindow; icon.source: window.icon("terminal-window"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ThemedMenu {
+                title: qsTr("Gruppe")
+                enabled: windows.count > 0
+                // `windows.groups()` ist eine Funktion, keine Property → ohne den
+                // groupsRevision-Anker friert die Liste auf ihrem ersten Stand ein.
+                Repeater {
+                    model: (window.groupsRevision, windows.groups())
+                    delegate: ShortcutMenuItem {
+                        required property string modelData
+                        text: modelData
+                        icon.source: window.icon("bookmark"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                        checkable: true
+                        checked: (window.groupsRevision, window.activeWindowGroup() === modelData)
+                        onTriggered: windows.setWindowGroup(windows.activeRow,
+                                         window.activeWindowGroup() === modelData ? "" : modelData)
+                    }
+                }
+                ShortcutMenuItem {
+                    text: qsTr("Neue Gruppe …")
+                    icon.source: window.icon("plus"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                    onTriggered: groupNameDialog.start(windows.activeRow)
+                }
+                ShortcutMenuItem {
+                    text: qsTr("Aus Gruppe entfernen")
+                    icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
+                    enabled: (window.groupsRevision, window.activeWindowGroup().length > 0)
+                    onTriggered: windows.setWindowGroup(windows.activeRow, "")
+                }
+            }
             MenuSeparator {}
             ShortcutMenuItem {
                 action: actBroadcast
                 icon.source: window.icon("broadcast-input"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
             }
             MenuSeparator {}
-            ShortcutMenuItem { action: actSettings; icon.source: window.icon("gear"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
-            MenuSeparator {}
-            // (Der frühere Umschalt-Eintrag „Helles/Dunkles Design" war redundant zu den
-            //  drei expliziten Modus-Einträgen darunter — entfernt. Toggle bleibt per
-            //  Toolbar-Knopf und Strg+D erhalten.)
-            ShortcutMenuItem {
-                text: qsTr("Design: Wie System")
-                icon.source: window.icon("gear"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                checkable: true
-                checked: Theme.mode === Theme.System
-                onTriggered: Theme.mode = Theme.System
-            }
-            ShortcutMenuItem {
-                text: qsTr("Design: Hell")
-                icon.source: window.icon("sun"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                checkable: true
-                checked: Theme.mode === Theme.Light
-                onTriggered: Theme.mode = Theme.Light
-            }
-            ShortcutMenuItem {
-                text: qsTr("Design: Dunkel")
-                icon.source: window.icon("moon"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                checkable: true
-                checked: Theme.mode === Theme.Dark
-                onTriggered: Theme.mode = Theme.Dark
-            }
-            MenuSeparator {}
-            // Ansichtsumschalter (Design 1a): darf als checkbarer Eintrag bleiben, weil er
-            // eine Eigenschaft DIESES Fensters umschaltet und keine Einstellung.
-            ShortcutMenuItem { action: actToggleSidebar }
-            ShortcutMenuItem { action: actToggleStatusBar }
-        }
-        ThemedMenu {
-            title: qsTr("&Sprache")
-            Repeater {
-                model: App.languageCodes()
-                ShortcutMenuItem {
-                    required property string modelData
-                    text: App.languageName(modelData)
-                    icon.source: window.icon("translate"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                    checkable: true
-                    checked: App.language === modelData
-                    onTriggered: App.language = modelData
-                }
-            }
+            ShortcutMenuItem { action: actCloseSession; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
         }
         ThemedMenu {
             title: qsTr("A&gent")
@@ -2621,44 +2687,27 @@ ApplicationWindow {
                 icon.source: window.icon("robot"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
                 onTriggered: window.newSession()
             }
+            ShortcutMenuItem { action: actAgentEvents; icon.source: window.icon("broadcast"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
-            // Auch in den Einstellungen und in der Palette erreichbar (QTMUX-46).
-            ShortcutMenuItem {
-                text: qsTr("Agenten beim Start wiederherstellen")
-                checkable: true
-                checked: window.restoreAgents
-                onTriggered: window.restoreAgents = !window.restoreAgents
-            }
-            ThemedMenu {
-                title: qsTr("Unterhaltung fortsetzen")
-                enabled: window.restoreAgents
-                Repeater {
-                    model: [qsTr("Gar nicht"), qsTr("Jüngste im Verzeichnis"),
-                            qsTr("Auswahl beim Start"), qsTr("Gemeldete Sitzung")]
-                    ShortcutMenuItem {
-                        required property int index
-                        required property string modelData
-                        text: modelData
-                        checkable: true
-                        checked: window.resumeAgentMode === index
-                        onTriggered: window.resumeAgentMode = index
-                    }
-                }
-            }
+            // Befehl, kein Zustand: der Text benennt, was der Klick TUT.
+            ShortcutMenuItem { action: actMcpToggle; icon.source: window.icon("broadcast"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuSeparator {}
+            ShortcutMenuItem { action: actAgentPrefs; icon.source: window.icon("gear"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
         }
+        // Nur macOS: dort erwartet man ein Fenster-Menü. „Alle nach vorne" fehlt bewusst —
+        // QTmux fährt ein Fenster je Prozess (actNewInstance startet einen neuen), und Qt
+        // Quick bietet dafür keine Aktion.
         ThemedMenu {
-            title: qsTr("Agent-S&teuerung")
-            ShortcutMenuItem {
-                text: mcp.listening ? qsTr("MCP-Server: an (127.0.0.1:%1)").arg(mcp.port)
-                                    : qsTr("MCP-Server: aus")
-                icon.source: window.icon("broadcast"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16
-                checkable: true
-                checked: mcp.listening
-                onTriggered: mcp.listening ? mcp.stop() : mcp.start()
-            }
+            id: macWindowMenu
+            title: qsTr("&Fenster")
+            ShortcutMenuItem { action: actMinimizeWindow }
+            ShortcutMenuItem { action: actZoomWindow }
         }
         ThemedMenu {
             title: qsTr("&Hilfe")
+            ShortcutMenuItem { action: actDocs; icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actHotkeyList; icon.source: window.icon("command"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            MenuSeparator {}
             ShortcutMenuItem { action: actAbout; icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
         }
     }
@@ -2703,22 +2752,41 @@ ApplicationWindow {
                         horizontalAlignment: window.sidebarCollapsed ? Text.AlignHCenter
                                                                      : Text.AlignLeft
                     }
-                    // Chevron: klappt ein/aus. Im eingeklappten Zustand ausgeblendet —
-                    // dort ist kein Platz, und Splitter, Ctrl+B und das Ansicht-Menü
-                    // bleiben als Wege übrig.
+                    // Chevron: klappt ein. Im eingeklappten Zustand ausgeblendet — dort ist
+                    // kein Platz, und Splitter, Kürzel und das Ansicht-Menü bleiben als Wege
+                    // übrig. Die Spitze zeigt, was der Klick TUT: nach links = einklappen.
+                    // 🔑 Zwei Fehler steckten hier, beide erst am Bild aufgefallen:
+                    //   (1) `rotation: -90` dreht die Spitze nach RECHTS. Positive Rotation
+                    //       ist im Bildschirm-Koordinatensystem (y nach unten) im
+                    //       Uhrzeigersinn — „unten" wird also erst bei +90 zu „links".
+                    //   (2) Das Tinting lief über `layer.effect` OHNE `brightness: 1.0` und
+                    //       ließ das schwarze SVG im Dunkel-Design dunkel: colorize wichtet
+                    //       mit der Quell-Luminanz (bei Schwarz ≈ 0). Deshalb die explizite
+                    //       Form mit versteckter Quelle — dieselbe wie in der Befehlspalette.
                     Rectangle {
                         visible: !window.sidebarCollapsed
                         Layout.preferredWidth: 22
                         Layout.preferredHeight: 22
-                        radius: 4
+                        radius: 11
                         color: chevHover.hovered ? Theme.sidebarHover : "transparent"
-                        Image {
+                        Item {
                             anchors.centerIn: parent
                             width: 14; height: 14
-                            source: window.icon("caret-down")
-                            rotation: -90          // nach links = einklappen
-                            layer.enabled: true
-                            layer.effect: MultiEffect { colorization: 1.0; colorizationColor: Theme.textDim }
+                            rotation: 90
+                            Image {
+                                id: chevIcon
+                                anchors.fill: parent
+                                source: window.icon("caret-down")
+                                sourceSize.width: 14; sourceSize.height: 14
+                                visible: false
+                            }
+                            MultiEffect {
+                                anchors.fill: parent
+                                source: chevIcon
+                                brightness: 1.0
+                                colorization: 1.0
+                                colorizationColor: chevHover.hovered ? Theme.textBright : Theme.textDim
+                            }
                         }
                         HoverHandler { id: chevHover }
                         TapHandler { onTapped: actToggleSidebar.trigger() }

@@ -24,7 +24,12 @@
 #>
 param(
     [string]$Exe = "build\windows-release\qtmux.exe",
-    [int]$McpPort = 7345
+    # Vorgabe bewusst NICHT 7345/Standardprofil: Der Check startet und BEENDET eine
+    # Instanz und schaltet ihr Theme um — gegen die Arbeitsinstanz des Anwenders wäre das
+    # ein Eingriff (und würde deren Session-Liste überschreiben). Darum eine isolierte
+    # Testinstanz (eigene QSettings-Domain + eigener Port), wie in der CLAUDE.md gefordert.
+    [int]$McpPort = 7346,
+    [string]$QtmuxProfile = "visualcheck"
 )
 $ErrorActionPreference = "Stop"
 $repo = Split-Path $PSScriptRoot -Parent
@@ -51,9 +56,15 @@ function Mcp($name,$argsJson) {
 function SetTheme($m) { Mcp "set_theme" "{`"mode`":`"$m`"}" | Out-Null }
 
 # --- App starten -----------------------------------------------------------
-Get-Process qtmux -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# NUR eine frühere Instanz DIESER EXE beenden — ein pauschales `Get-Process qtmux |
+# Stop-Process` würde die Arbeitsinstanz des Anwenders mitreißen (samt aller Terminals).
+Get-Process qtmux -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -eq $exePath } |
+    Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
-Start-Process $exePath
+$env:QTMUX_PROFILE = $QtmuxProfile
+$env:QTMUX_MCP_PORT = "$McpPort"
+$started = Start-Process $exePath -PassThru
 Start-Sleep -Seconds 3
 
 # --- MCP-Smoke-Test --------------------------------------------------------
@@ -66,33 +77,45 @@ else {
 }
 
 # --- Fenster/Automation finden --------------------------------------------
-$proc = Get-Process qtmux | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+# Gezielt die SELBST gestartete Instanz (nicht „irgendeine qtmux"): läuft daneben die
+# Arbeitsinstanz, würde der Check sonst deren Fenster fotografieren und deren Theme
+# umschalten.
+$proc = Get-Process -Id $started.Id
+if ($proc.MainWindowHandle -eq 0) { $proc.Refresh(); Start-Sleep -Seconds 2 }
+if ($proc.MainWindowHandle -eq 0) { throw "Testinstanz hat kein Fenster (Start fehlgeschlagen?)" }
 $hwnd = $proc.MainWindowHandle
 $root = [System.Windows.Automation.AutomationElement]::RootElement
 $win  = $root.FindFirst([System.Windows.Automation.TreeScope]::Children,
         (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $proc.Id)))
 
-function CaptureWindow($file) {
+# Fokus holen (Alt-Stoß löst den Foreground-Lock) und Bild ziehen sind BEWUSST getrennt:
+# Der Alt-Stoß schaltet den Qt-Menümodus um und schließt damit ein gerade geöffnetes
+# Popup — genau das ließ die Menü-Screenshots leer aussehen (das Fenster war korrekt
+# fotografiert, nur ohne Menü). Also nach dem Öffnen NUR noch greifen, nicht fokussieren.
+function FocusWindow() {
   [QtmuxWin]::keybd_event(0x12,0,0,[IntPtr]::Zero); [QtmuxWin]::keybd_event(0x12,0,2,[IntPtr]::Zero)
   [QtmuxWin]::ShowWindow($hwnd,9) | Out-Null; [QtmuxWin]::SetForegroundWindow($hwnd) | Out-Null
   Start-Sleep -Milliseconds 300
+}
+function GrabWindow($file) {
   $r = New-Object QtmuxWin+RECT; [QtmuxWin]::GetWindowRect($hwnd,[ref]$r) | Out-Null
   $bmp = New-Object System.Drawing.Bitmap(($r.R-$r.L),($r.B-$r.T)); $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.CopyFromScreen($r.L,$r.T,0,0,$bmp.Size); $bmp.Save($file,[System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $bmp.Dispose()
 }
+function CaptureWindow($file) { FocusWindow; GrabWindow $file }
 function CaptureMenu($menuName,$file) {
-  [QtmuxWin]::keybd_event(0x12,0,0,[IntPtr]::Zero); [QtmuxWin]::keybd_event(0x12,0,2,[IntPtr]::Zero)
-  [QtmuxWin]::ShowWindow($hwnd,9) | Out-Null; [QtmuxWin]::SetForegroundWindow($hwnd) | Out-Null
-  Start-Sleep -Milliseconds 300
+  FocusWindow
   $m = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $menuName)))
   if (-not $m) { Write-Warning "Menü '$menuName' nicht gefunden (MenuBar leer?)"; return }
   $m.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
   Start-Sleep -Milliseconds 650
-  CaptureWindow $file
+  GrabWindow $file
 }
 
-$menus = @("Datei","Bearbeiten","Ansicht","Sprache","Agent","Agent-Steuerung","Hilfe")
+# Sechs Menüs seit der Neuordnung (Design 1a, Teil A). „Sprache" und „Agent-Steuerung"
+# sind entfallen; „Fenster" gibt es nur auf macOS und ist hier folglich nicht zu erfassen.
+$menus = @("Datei","Bearbeiten","Ansicht","Session","Agent","Hilfe")
 foreach ($theme in @("dark","light")) {
   SetTheme $theme; Start-Sleep -Milliseconds 400
   CaptureWindow (Join-Path $outDir "main-$theme.png")
@@ -102,6 +125,9 @@ foreach ($theme in @("dark","light")) {
   }
   Write-Host "Theme '$theme' erfasst." -ForegroundColor Green
 }
+
+# Testinstanz wieder beenden — sie belegt sonst den Port und ihr Fenster steht im Weg.
+Stop-Process -Id $started.Id -Force -ErrorAction SilentlyContinue
 
 Write-Host "`nFertig. Screenshots zum manuellen Sichten unter:`n  $outDir" -ForegroundColor Green
 Write-Host "Prüfen: Icon-Farbe folgt Theme, kein abgeschnittener Text/Kürzel, helle Menüfläche im Hell-Modus."

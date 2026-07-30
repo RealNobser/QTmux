@@ -110,6 +110,11 @@ public:
     Q_INVOKABLE void cancelPaste();
     /// Ob aktuell etwas selektiert ist (für Menü-Aktivierung).
     Q_INVOKABLE bool hasSelection() const { return m_hasSelection; }
+    /// Selektiert den GESAMTEN Inhalt: Scrollback + Live-Screen (Design 1a, Teil A).
+    /// Bewusst inklusive Historie — die Selektion rechnet ohnehin in absoluten
+    /// Inhaltszeilen, und „alles" heißt beim Terminal die ganze Sitzung, nicht nur
+    /// das Sichtfenster.
+    Q_INVOKABLE void selectAll();
 
     // --- Scrollback-Suche (QTMUX-71) -------------------------------------------------
     bool searchActive() const { return m_searchActive; }

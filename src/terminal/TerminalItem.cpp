@@ -1048,6 +1048,24 @@ void TerminalItem::clearSelection() {
     update();
 }
 
+void TerminalItem::selectAll() {
+    VtScreen *sc = screen();
+    if (!sc || m_cols <= 0 || m_rows <= 0) return;
+    // Absolute Inhaltszeilen: 0 … scrollbackCount()-1 = Historie, dahinter der
+    // Live-Screen. Anker auf den Anfang, Caret auf die letzte Zelle der letzten
+    // Live-Zeile — damit liefert selectedText() genau das, was auch ein Drag über
+    // alles liefern würde (inkl. Soft-Wrap-Behandlung).
+    const int lastRow = sc->scrollbackCount() + m_rows - 1;
+    if (lastRow < 0) return;
+    m_selAnchor = QPoint(0, 0);
+    m_selCaret = QPoint(m_cols - 1, lastRow);
+    m_hasSelection = true;
+    m_selecting = false;
+    emit selectionChanged();
+    if (m_copyOnSelect) copy();
+    update();
+}
+
 QString TerminalItem::selectedText() const {
     VtScreen *sc = screen();
     if (!sc || !m_hasSelection) return {};

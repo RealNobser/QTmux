@@ -355,27 +355,40 @@ in `qsTr` + `i18n/qtmux_{de,en}.ts` nachziehen, alle Tests grün.
 | 1 | `actToggleSidebar`, Persistenz `ui/*`, Splitter mit Einrasten | **fertig** `1a644c3` |
 | 2 | eingeklappte Leiste (52 px) + Hover-Flyout | **fertig** `1a644c3` |
 | 3 | Statusleiste (Footer 26 px, 7 Felder) | **fertig** `dd7df2f` |
-| 4 | **Menü-Neuordnung auf 6 Menüs** + macOS-Rollen + Palette | **als Nächstes** |
-| 5 | Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl` | offen |
+| 4 | Menü-Neuordnung auf 6 Menüs + Palette-Ergänzungen | **fertig** (s. u.) |
+| 5 | **Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl`** | **als Nächstes** |
 | 6 | `SettingsIo` (Reset/Import/Export) + `tst_settingsio` | offen |
 | 7 | Übersetzungen finalisieren, README-Screenshots | offen |
 
-**Nächster Punkt — Stufe 4 (Teil A der Anweisung):** sechs Menüs (Datei · Bearbeiten ·
-Ansicht · Session · Agent · Hilfe); die Menüs **Sprache** und **Agent-Steuerung** fallen weg,
-alle Zustands-Einträge wandern in die Einstellungen. Regel: **ein Menü enthält Befehle, keine
-Zustände** — checkbar bleiben nur Seitenleiste, Statusleiste, Broadcast.
-- Einstieg: `menuBar` in [qml/Main.qml](qml/Main.qml) (ab „`&Datei`"), `buildCommands()` für die
-  Palette-Ergänzungen.
-- macOS: `actSettings` → `MenuItem.PreferencesRole` (+ im Datei-Menü ausblenden),
-  `actAbout` → `AboutRole`, `actQuit` → `QuitRole`, zusätzlich ein „Fenster"-Menü nur dort.
+**Nächster Punkt — Stufe 5 (Teil C1–C3/C5 der Anweisung):** Einstellungsfenster aufräumen —
+Kopfzeile 60 → 56 px und Suchfeld auf Radius 6/Höhe 30/Breite 320, Rail mit drei
+**Gruppen-Überschriften** (Arbeitsplatz · Terminal · Agenten & Geräte; Kachelhöhe 40 → 36,
+Rail 232 → 236 px, `selectDelta` muss die Überschriften überspringen), einheitliche Zeile
+`qml/Ui/PrefRow.qml` (Titel + Beschreibung links, Control rechts, Gruppen in einem
+1-px-Rahmen) und neu `qml/Ui/SegmentedControl.qml` für Auswahlen mit ≤ 3 Optionen
+(Design-Modus, Restore-Modus); Booleans als `Switch` statt `CheckBox`.
+- Einstieg: [qml/PrefsWindow.qml](qml/PrefsWindow.qml) (`categories`, Rail-Delegate,
+  `selectDelta`) und die neun [qml/prefs/](qml/prefs/)-Seiten auf `PrefRow` umstellen.
 - Bauen/Testen: `.\tools\vsdev-build.cmd "windows-release" all` und
   `ctest --test-dir build\windows-release -E "^test_pty$"` (Qt-`bin` in den PATH).
-- Beachten: Jeder verschobene Eintrag muss über **Einstellungen UND Palette** erreichbar
-  bleiben (Regel aus QTMUX-46) — sonst entsteht genau die Schieflage, die QTMUX-46 behoben hat.
+- Beachten: **Abo-Matrix in `CatAgenten` bleibt bei Toggle-Kacheln** (KEINE CheckBox/Switch —
+  Begründung in der Feature-Referenz, QTMUX-47) · Suchindex `entries` mitpflegen, wenn
+  Sektionen wandern · `MultiEffect` braucht `import QtQuick.Effects` je Datei.
 
-**Offen aus 1–3, bewusst nicht behauptet:** Rastergröße (80×24) fehlt im Statusleisten-Feld
+**Stufe 4 — was umgesetzt ist und wo abgewichen wurde:** sechs Menüs (Datei · Bearbeiten ·
+Ansicht · Session · Agent · Hilfe), „Sprache" und „Agent-Steuerung" entfallen, alle
+Zustands-Einträge sitzen in den Einstellungen und der Palette. Drei bewusste Abweichungen von
+der Anweisung: (1) **keine macOS-Menü-Rollen** — QtQuick.Controls kennt sie nicht, deshalb
+bleibt „Einstellungen …" auch dort im Datei-Menü (Details in der Feature-Referenz);
+(2) Umbenennen/Gruppe im Session-Menü wirken auf das **Window** (QTMUX-83), die Anweisung
+sprach noch vom Split-Modell; (3) „Alle nach vorne" fehlt im macOS-Fenster-Menü (ein Fenster
+je Prozess, keine Qt-Quick-Aktion dafür). Neu in C++: `TerminalItem::selectAll()`.
+
+**Offen aus 1–4, bewusst nicht behauptet:** Rastergröße (80×24) fehlt im Statusleisten-Feld
 (sie lebt im `TerminalItem`, dafür müssten Spalten/Zeilen erst an der Session veröffentlicht
-werden) · macOS/Linux ungeprüft · Owner-Durchklick von Leiste und Statusleiste offen.
+werden) · macOS/Linux ungeprüft — insbesondere ist das **Fenster-Menü dort nie gelaufen**
+(auf Windows ist es per `removeMenu` entfernt) · Owner-Durchklick von Leiste, Statusleiste
+und der neuen Menüstruktur offen.
 
 ### Owner-Abnahmen offen (seit v1.7.1, je umgesetzt + selbst verifiziert)
 
@@ -922,6 +935,22 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `RowLayout`-`fillHeight`-Kinder brauchen `maximumHeight`/`fillHeight:false`.
 - Icon-Tinting in Delegates: explizite `MultiEffect`-Form (`layer.effect` greift dort
   nicht zuverlässig). Icons: Phosphor-SVGs `qrc:/icons/`, via `icon.source`+`icon.color`.
+  🔑 **`brightness: 1.0` VOR `colorization: 1.0` ist Pflicht** — colorize wichtet mit der
+  Quell-Luminanz, und die Phosphor-SVGs sind schwarz (≈ 0), also bleibt das Icon sonst dunkel.
+  Genau daran hing der Sidebar-Chevron im Dunkel-Design (er benutzte `layer.effect` **ohne**
+  brightness). Und: **positive `rotation` dreht im Uhrzeigersinn** (y zeigt nach unten) — aus
+  `caret-down` wird „links" bei **+90**, nicht bei −90.
+- **Menüs (Design 1a, Stufe 4):** ein Menü enthält **Befehle, keine Zustände**; checkbar sind
+  nur die drei Ansichtsumschalter (Seitenleiste, Statusleiste, Broadcast). Was ein Menü
+  verlässt, muss in **Einstellungen UND Palette** landen (QTMUX-46) — die Palette bekommt
+  dafür je Einstellungs-Kategorie und je Shell einen Eintrag.
+  🔑 **`visible: false` an einem `Menu` blendet dessen MenuBar-Eintrag NICHT aus** (am Bild
+  belegt: „Fenster" stand auf Windows trotzdem da). Nur ein nicht enthaltenes Menü
+  verschwindet → `appMenuBar.removeMenu(macWindowMenu)` in `Component.onCompleted`.
+  🔑 **QtQuick.Controls kennt keine Menü-Rollen.** `MenuItem.PreferencesRole` gibt es nur im
+  veralteten `Qt.labs.platform`; `QQuickNativeMenuItem` ruft `setRole` nie auf (im Qt-Header
+  geprüft). Auf macOS wandert „Einstellungen …" also **nicht** ins App-Menü — Ausblenden im
+  Datei-Menü würde es dort schlicht entfernen. Deshalb überall sichtbar.
 - App-Icon: `resources/appicon/` (SVG → icns/ico/png via `generate.sh` + Qt-`svgrender`-
   Mini-Tool, da kein rsvg/inkscape auf den Maschinen).
 
@@ -1050,6 +1079,25 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   sonst schlägt `SetForegroundWindow` still fehl und die Tasten landen in der IDE.
   Vordergrund **prüfen** (`GetForegroundWindow()`), nicht annehmen — und den PID des
   Vordergrundfensters mitloggen, das benennt den Dieb sofort.
+  🔑 **Fokus holen und Bild ziehen trennen.** Der Alt-Stoß schaltet den Qt-Menümodus und
+  schließt damit ein gerade geöffnetes Popup: `tests/release-visual-check.ps1` fotografierte
+  deshalb korrekte Fenster **ohne Menü** — sah wie „Menü öffnet nicht" aus, war die eigene
+  Fokus-Routine. Seit 2026-07-30 hat das Skript `FocusWindow` + `GrabWindow` getrennt, läuft
+  gegen eine **isolierte** Instanz (`-QtmuxProfile visualcheck`, Port 7346), beendet sie am
+  Ende und killt nur Prozesse **des eigenen EXE-Pfads** (vorher `Get-Process qtmux |
+  Stop-Process` — das hätte die Arbeitsinstanz mitgerissen).
+  🔑 **Der Virenschutz kann das Testskript beenden, nicht die App:** ein Skript mit
+  `keybd_event` + `SendKeys` + Clipboard-Zugriff wurde von Defender als „Virus oder
+  möglicherweise unerwünschte Software" abgelehnt (`CommandNotFoundException`, nichts lief).
+  Nicht umgehen — den Weg über **UIA-`InvokePattern`** nehmen (Menüeintrag per Name aufrufen)
+  und `Set-Clipboard`/`Get-Clipboard` statt `System.Windows.Forms.Clipboard`.
+  🔑 **PowerShell 5.1 liest UTF-8-Skripte als CP1252**: ein literales „ä" im UIA-Namen kommt
+  als „Ã¤" an und der Eintrag wird nie gefunden. Umlaute im Skript aus dem Zeichencode bauen
+  (`"Alles ausw" + [char]0xE4 + "hlen"`) — oder das Skript ASCII halten.
+- ⚠️ **`--screenshot` NICHT aus dem Bash-Werkzeug starten.** Von dort entsteht kein PNG und
+  der Exit-Code führt in die Irre (die GUI-App hängt nicht am Pipeline-Status). Richtig ist
+  PowerShell mit `Start-Process … -PassThru -Wait` und danach `$pr.ExitCode` +
+  `Test-Path` — so belegt: 46 kB PNG, Exit 0 (2026-07-30, vier Fehlversuche vorher).
 - ⚠️ **Detektor-Blindheit (QTMUX-86, teuerste Fehldiagnose):** Um „geht Inhalt verloren?" zu
   messen, lief `read_screen` mit **`scrollback: true`** — der Inhalt war aber genau *dorthin*
   verschoben worden. Der Detektor fand die Marken also wieder und meldete „nur ein
