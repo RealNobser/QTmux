@@ -331,12 +331,13 @@ als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-30** · Branch `main` = `origin/main` (letzter Commit **`dd7df2f`**, gepusht),
+Stand **2026-07-30** · Branch `main` = `origin/main` (letzter Commit **`b45172a`**, gepusht),
 Working Tree sauber · Version **1.7.1**.
 **Teststände:** Windows `windows` (Debug) und `windows-release` je **17/17** (`-E "^test_pty$"`;
 `test_pty` fällt hier umgebungsbedingt auch unverändert — nicht-interaktive Shell/ConPTY,
 und `ctest` braucht Qt-`bin` im PATH, sonst `0xc0000135`). macOS **18/18** auf Stand `2e9eeec`
-— alles danach (inkl. der GUI-Arbeit unten) ist auf **macOS/Linux ungeprüft**.
+— alles danach (inkl. der GUI-Arbeit unten) ist auf **macOS/Linux ungeprüft**; der Auftrag
+dafür steht unten unter „ÜBERGABE".
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
@@ -376,26 +377,14 @@ Schlüssel). Test `tests/tst_settingsio.cpp` (Round-Trip Export → Reset → Im
 - Beachten: Nach dem Reset müssen die Registries **neu laden**; Kategorien/Seiten lesen ihre
   Werte über `host.app.*`, das folgt automatisch.
 
-**Stufe 5 — was umgesetzt ist und wo abgewichen wurde:** Kopfzeile 56 px + Suchfeld
-(Radius 6/Höhe 30/Breite 320), Rail 236 px mit drei Gruppen-Überschriften, Kacheln 36 px /
-Radius 8, neue Bausteine `qml/Ui/{PrefRow,PrefGroup,SegmentedControl,AppSwitch}.qml`; die
-Seiten **Allgemein · Erscheinungsbild · Darstellung & Shell · Eingabe & Zwischenablage ·
-Agenten & MCP** sind auf das Zeilenformat umgestellt (C5-Gliederung inklusive).
-Abweichungen: (1) **`PrefGroup` und `AppSwitch` sind zusätzliche Dateien** — der Rahmen aus
-C3 und der akzentfarbene Schalter brauchen einen Ort, sonst stünde beides in jeder Seite neu;
-(2) die **listenartigen** Seiten (Tastenkürzel, Verbindungen, Vault, Erweiterungen) bleiben
-strukturell wie sie sind — sie zeigen Listen, keine Einstellungszeilen; (3) die Abo-Matrix in
-`CatAgenten` bleibt bei Toggle-Kacheln (Begründung QTMUX-47); (4) die beiden Kopfzeilen-Knöpfe
-folgen mit Stufe 6.
-
-**Stufe 4 — was umgesetzt ist und wo abgewichen wurde:** sechs Menüs (Datei · Bearbeiten ·
-Ansicht · Session · Agent · Hilfe), „Sprache" und „Agent-Steuerung" entfallen, alle
-Zustands-Einträge sitzen in den Einstellungen und der Palette. Drei bewusste Abweichungen von
-der Anweisung: (1) **keine macOS-Menü-Rollen** — QtQuick.Controls kennt sie nicht, deshalb
-bleibt „Einstellungen …" auch dort im Datei-Menü (Details in der Feature-Referenz);
-(2) Umbenennen/Gruppe im Session-Menü wirken auf das **Window** (QTMUX-83), die Anweisung
-sprach noch vom Split-Modell; (3) „Alle nach vorne" fehlt im macOS-Fenster-Menü (ein Fenster
-je Prozess, keine Qt-Quick-Aktion dafür). Neu in C++: `TerminalItem::selectAll()`.
+**Bewusste Abweichungen von der Anweisung** (Mechanik jeweils in der Feature-Referenz):
+Stufe 4 — keine **macOS-Menü-Rollen** (QtQuick.Controls kennt sie nicht → „Einstellungen …"
+bleibt überall im Datei-Menü) · Umbenennen/Gruppe wirken aufs **Window** (QTMUX-83, die
+Anweisung beschrieb das Split-Modell) · „Alle nach vorne" fehlt (ein Fenster je Prozess).
+Stufe 5 — `PrefGroup` und `AppSwitch` sind **zusätzliche** Dateien (Rahmen und Schalter
+brauchen einen Ort) · listenartige Seiten (Tastenkürzel, Verbindungen, Vault, Erweiterungen)
+bleiben strukturell wie sie sind · Abo-Matrix behält Toggle-Kacheln (QTMUX-47) · die zwei
+Kopfzeilen-Knöpfe folgen mit Stufe 6.
 
 **Offen aus 1–5, bewusst nicht behauptet:** Rastergröße (80×24) fehlt im Statusleisten-Feld
 (sie lebt im `TerminalItem`, dafür müssten Spalten/Zeilen erst an der Session veröffentlicht
@@ -403,7 +392,7 @@ werden) · macOS/Linux ungeprüft — insbesondere ist das **Fenster-Menü dort 
 (auf Windows ist es per `removeMenu` entfernt) · Owner-Durchklick von Leiste, Statusleiste,
 Menüstruktur und Einstellungsfenster offen.
 
-### ÜBERGABE an die macOS-Session (Stand 2026-07-30, `91fecfd`)
+### ÜBERGABE an die macOS-Session (Stand 2026-07-30, `b45172a`)
 
 Die Stufen 1–5 sind **ausschließlich auf Windows** gebaut und geprüft. Auf dem Mac ist der
 letzte belegte Teststand `2e9eeec` (18/18) — alles danach ist dort **ungesehen**. Diese Liste
@@ -477,7 +466,9 @@ Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme
 | **101/102/103** | ToolTip · geklemmter Drag · „Arbeitsverzeichnis öffnen"/„Pfad kopieren" | ToolTip in beiden Designs; Kachel bleibt im Bild; Menüpunkte an serieller Session ausgegraut |
 | **61** | Bildschirm leeren, Verlauf behalten (`Ctrl/Cmd+Shift+K`) | in einem laufenden Agenten leeren — Prompt oben, Verlauf im Scrollback |
 | **89** | Ruhezustand verhindern, solange Agenten arbeiten | Schalter an, Agent arbeiten lassen (macOS `pmset -g assertions`, Windows `powercfg /requests`) |
-| — | Verzeichnis als zweite Kachelzeile, Seitenleiste 1a/2a, Statusleiste | durchklicken; **Jira-Nummern fehlen** (s. Arbeitsstand) |
+| — | Verzeichnis als zweite Kachelzeile, Seitenleiste + Flyout, Statusleiste (Design 1a/2a, Stufen 1–3) | durchklicken; **Jira-Nummern fehlen** (s. ÜBERGABE) |
+| — | **sechs Menüs** (Stufe 4) | jedes Menü öffnen; kein Eintrag schaltet mehr eine Einstellung außer Seitenleiste/Statusleiste/Broadcast; alles Verschobene über Einstellungen UND Palette erreichbar |
+| — | **Einstellungsfenster** (Stufe 5) | Rail-Gruppen, Zeilen mit Beschreibung, Segment-Umschalter, Schalter in Akzentfarbe — in **beiden** Designs |
 
 ⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
 Sessions **nicht** (Inhalt liegt im Scrollback) — betroffene Sessions neu starten.
@@ -487,18 +478,15 @@ behobene, in der App nicht gegengeprüft, im Ticket notiert.
 
 ### Arbeitsstand (compact-fest — hier pflegen, nicht im Gespräch lassen)
 
-- ⚠️ **`build/macos` ist der Nachzügler — und die Produktivinstanz läuft daraus.** Stand des
-  Binaries: **28.07. 22:30**, also ohne QTMUX-85, -97 und -98. Die laufende Instanz (zuletzt
-  PID 9561, gestartet 29.07. 01:55) hat deren Funktionen deshalb **nicht** — genau daraus
-  entstand die Fehlannahme, die Einstellungen seien nicht im Dialog gelandet. Verifizierte
-  Endstände: `build/macos-test` (Debug) und `build/macos-release`.
-  **Vor dem nächsten Prod-Neustart** `build/macos` neu bauen (`cmake --build build/macos`,
-  NICHT `--preset` mit `-B`) — erst wenn die laufende Instanz beendet werden darf, denn der
-  Neubau überschreibt das Binary und reißt alle Terminal-Sessions mit.
+- ⚠️ **`build/macos` ist der Nachzügler — und die Produktivinstanz läuft daraus** (Binary vom
+  **28.07. 22:30**, also ohne QTMUX-85/-97/-98 und ohne die Stufen 1–5). Vorgehen dazu steht in
+  der ÜBERGABE oben; verifizierte Endstände sind `build/macos-test` und `build/macos-release`.
+  Neubau von `build/macos` nur mit Freigabe: er überschreibt das Binary und reißt alle
+  Terminal-Sessions mit (`cmake --build build/macos`, NICHT `--preset` mit `-B`).
   🔑 **Dauerhafte Konsequenz:** Solange die Produktivinstanz aus einem Build-Verzeichnis läuft,
-  ist „steht im Repo" **nie** gleichbedeutend mit „ist in der App". Jede Owner-Abnahme braucht
-  darum entweder eine frische Testinstanz (`QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`) oder einen
-  Neubau von `build/macos` mit Freigabe.
+  ist „steht im Repo" **nie** gleichbedeutend mit „ist in der App" — genau daraus entstand die
+  Fehlannahme, die Agenten-Schalter seien nicht im Dialog gelandet. Jede Owner-Abnahme braucht
+  darum eine frische Testinstanz (`QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`) oder den Neubau.
 - **Jira-Stand (2026-07-29, vom Mac aus beidseitig geprüft):** synchron bis **QTMUX-103**;
   97 Done, und **61/85/89/98/99/100/101/102/103** stehen dual auf „In Progress"/„In Arbeit"
   (umgesetzt + selbst verifiziert, Owner-Abnahme offen). Damit ist der von der Windows-Session
@@ -511,13 +499,10 @@ behobene, in der App nicht gegengeprüft, im Ticket notiert.
   🔑 **Werkzeug-Falle:** Für die **Cloud** schlägt Python-`urllib` hier mit
   `CERTIFICATE_VERIFY_FAILED` fehl (kein Issuer im Store) — ADF-Rumpf mit Python **bauen**,
   aber mit `curl --data @datei` **senden**. On-prem braucht ohnehin `curl -k`.
-- **Auf dem Mac in Jira nachzutragen** (von Windows aus nicht möglich, `CLAUDE.local.md` fehlt
-  dort): **QTMUX-2 auf Done** (Funktionstest bestanden; die PowerShell-Einschränkung ist keine
-  Bringschuld von QTmux) · **neu:** Verzeichniszeile auf der Kachel · **OSC 7** (einziger Weg
-  zum CWD bei PowerShell/`ssh`/Containern — Parser kennt es nicht, `shell-integration/` sendet
-  es nicht) · **`--screenshot` auf Windows** (behoben, nur nachzutragen) · **Design 1a/2a**
-  (ein Ticket je Stufe wäre sinnvoll; Stufen 1–3 sind umgesetzt und gepusht). Alle umgesetzt +
-  selbst verifiziert; höchste Nummer vorher in **beiden** Systemen holen.
+- **Jira-Nachträge, die nur vom Mac gehen:** Liste in der ÜBERGABE oben (Punkt 3) — nicht
+  doppelt pflegen. Fachlicher Hintergrund zu **OSC 7** (dem einzigen Weg zum CWD bei
+  PowerShell/`ssh`/Containern; Parser kennt es nicht, `shell-integration/` sendet es nicht)
+  steht im ConPTY-Abschnitt.
 - **Zwei Sessions arbeiten parallel in DERSELBEN Arbeitskopie** (Mac und Windows-Maschine,
   je eine Claude-Session). Daraus folgen drei Regeln, alle schon einmal gebraucht:
   gezielt stagen (`git add <datei>`, **nie** `-A`, sonst wandert halbfertige Arbeit der
@@ -1083,16 +1068,10 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   hochzählen); Plugin linkt `qtmux_core` statisch. `PluginHost`-Suchpfade:
   `QTMUX_PLUGIN_DIR` → `<App>/plugins` → macOS `Contents/PlugIns` → `<AppData>/plugins`.
   Restore überspringt fehlende Plugins still. `qt_add_plugin` ohne Namespace-`CLASS_NAME`.
-- **MacPCAN** (`plugins/macpcan/`, nur APPLE): CAN-Bus als Terminal-Backend; Typen `pcan`
-  (Hardware) + `pcan-mock` (Demo, ohne Hardware vorführbar — bewusst getrennt, kein
-  stiller Fallback). Vendorte Qt-freie Schicht `vendor/` (Namespace `mac_pcan`);
-  **PCBUSB nicht im Repo** — CMake findet es über `QTMUX_PCBUSB_DIR`, sonst wird das
-  Plugin still übersprungen; dylib + Lizenz werden ins Bundle kopiert (rpath
-  `@loader_path/../Frameworks`). Terminal-UX: candump-Zeilen, `<hexid> b0 b1 …` sendet,
-  Befehle `baud <rate>`/`help`/`clear`/`quit`.
-  - ⚠️ Nur **ein** Handle pro PCAN-Kanal (eine restaurierte Session blockiert den Kanal);
-    PCBUSB meldet einen Kanal **ohne** Hardware optimistisch als „verbunden" (RX leer).
-  - v1-offen: CAN-FD, ID-Filter, Konfig-Dialog, DBC.
+- **MacPCAN** (`plugins/macpcan/`, nur APPLE): CAN-Bus als Terminal-Backend, zwei Typen
+  (`pcan` = Hardware, `pcan-mock` = Demo, bewusst ohne stillen Fallback). Aufbau, PCBUSB-
+  Einbindung über `QTMUX_PCBUSB_DIR`, Terminal-UX, Fallen und v1-Backlog stehen in
+  [plugins/macpcan/README.md](plugins/macpcan/README.md) — dort pflegen, nicht hier.
 
 ### Shells (Windows)
 - `ShellRegistry`: cmd/PowerShell/pwsh + **„Eingabeaufforderung (Clink)"** wenn Clink
