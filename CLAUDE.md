@@ -639,6 +639,18 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   oder Alt-Screen anzutasten. In der GUI „Terminal-Eingabe zurücksetzen" (Ctrl/Cmd+Shift+I,
   Menü, Palette). Für die Fälle, in denen auch der Alt-Screen hängt. Tests
   `altScreenTracked`, `resetInputModesClearsMouse`.
+- **Kopieren nimmt die Auswahl, nicht den Fokus (QTMUX-105):** Cmd+C/Kopieren läuft über
+  `window.copyActiveSelection()` — bevorzugt das aktive Pane, fällt aber auf das erste Pane
+  mit `hasSelection` zurück. `activeHasSelection` (treibt `actCopy.enabled` und damit den
+  Cmd+C-Shortcut) berücksichtigt **jedes** Pane, nicht nur das aktive; dazu meldet jedes Pane
+  in [SplitNode.qml](qml/SplitNode.qml) sein `selectionChanged` ans Fenster. 🔑 **Warum:**
+  Der sporadische „Cmd+C kopiert nichts"-Bug entstand, weil der Fokus nach dem Selektieren
+  wegwandern kann (anderes Pane, Statusleiste, Flyout, Suchfeld — mit Design 1a/2a mehr
+  Fokus-Fänger); `activeTerminal.copy()` fand dann keine Auswahl. `TerminalItem::copy()`
+  protokolliert den **Problemfall** (leerer `selectedText()`) leise nach Console.app —
+  fängt eine etwaige andere Ursache (reine Whitespace-Auswahl wird zu `""` getrimmt), ohne
+  Rauschen im Normalbetrieb. Ohne Bedienungshilfen-Recht nicht per synthetischem Cmd+C
+  reproduzierbar → Code-Review + Diagnose.
 - **Bildschirm leeren, Verlauf behalten (QTMUX-61):** `VtScreen::clearViewportKeepScrollback()`
   schiebt alles **oberhalb der Cursorzeile** in den Scrollback; die Prompt-Zeile rückt nach
   oben. Umgesetzt als **CSI `<n>` S** (Scroll Up) in den **eigenen** Parser (`inputWrite`) —

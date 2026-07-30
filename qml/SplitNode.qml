@@ -110,6 +110,13 @@ Item {
             border.width: win.paneCount > 1 && paneId === win.activePaneId ? 2 : 0
             border.color: Theme.accent
 
+            // Auswahl JEDES Panes an das Fenster melden, damit Cmd+C sie findet, auch wenn
+            // der Fokus inzwischen woanders liegt (Copy-Bug). Ohne das wüsste `window` nur
+            // von der Auswahl des aktiven Panes.
+            Connections {
+                target: paneTerm
+                function onSelectionChanged() { win.refreshActiveSelection() }
+            }
             // Registrierung (Fokus nach Baum-Rebuild) + aktives Pane fokussieren.
             Component.onCompleted: {
                 win.registerPane(paneId, paneTerm)

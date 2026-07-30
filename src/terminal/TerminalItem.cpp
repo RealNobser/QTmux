@@ -1114,7 +1114,14 @@ QString TerminalItem::selectedText() const {
 
 void TerminalItem::copy() {
     const QString t = selectedText();
-    if (!t.isEmpty()) QGuiApplication::clipboard()->setText(t);
+    if (!t.isEmpty()) { QGuiApplication::clipboard()->setText(t); return; }
+    // Diagnose (Copy-Bug): Kopieren angefordert, aber selectedText() ist leer. Verrät beim
+    // nächsten Auftreten die Ursache im Log (Console.app) — reine Whitespace-Auswahl (wird
+    // zu "" getrimmt), verlorene Auswahl, oder falsches/leeres Pane. Sichtbar nur im
+    // Problemfall, kein Rauschen im Normalbetrieb.
+    qWarning("QTmux copy(): nichts kopiert (hasSelection=%d, cols=%d, anchor=%d,%d caret=%d,%d)",
+             m_hasSelection ? 1 : 0, m_cols,
+             m_selAnchor.x(), m_selAnchor.y(), m_selCaret.x(), m_selCaret.y());
 }
 
 void TerminalItem::paste() {

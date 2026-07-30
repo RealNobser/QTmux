@@ -68,8 +68,26 @@ ApplicationWindow {
     // fokussierte Terminal die Taste selbst behandelt). Hier wird der Wert bei jedem
     // Terminal-Wechsel UND bei jedem selectionChanged des aktiven Terminals nachgeführt.
     property bool activeHasSelection: false
+    // „Gibt es etwas zu kopieren?" — true, sobald IRGENDEIN Pane eine Auswahl hat, NICHT nur
+    // das fokussierte (QTMUX-104-Nachbar/Copy-Bug). Ursache des sporadischen „Cmd+C kopiert
+    // nichts": Nach dem Selektieren wandert der Fokus weg (anderes Pane, Statusleiste,
+    // Suchfeld) → das aktive Pane hat keine Auswahl mehr, die sichtbare liegt woanders.
+    // War die Bedingung nur `activeTerminal.hasSelection`, war Cmd+C dann tot.
     function refreshActiveSelection() {
-        activeHasSelection = activeTerminal ? activeTerminal.hasSelection : false
+        let any = (activeTerminal && activeTerminal.hasSelection) ? true : false
+        if (!any)
+            for (const k in paneItems) { const p = paneItems[k]; if (p && p.hasSelection) { any = true; break } }
+        activeHasSelection = any
+    }
+    // Das Pane, aus dem kopiert werden soll: bevorzugt das aktive, sonst das erste mit Auswahl.
+    function paneToCopyFrom() {
+        if (activeTerminal && activeTerminal.hasSelection) return activeTerminal
+        for (const k in paneItems) { const p = paneItems[k]; if (p && p.hasSelection) return p }
+        return null
+    }
+    function copyActiveSelection() {
+        const t = paneToCopyFrom()
+        if (t) t.copy()
     }
     onActiveTerminalChanged: refreshActiveSelection()
     Connections {
@@ -1699,7 +1717,8 @@ ApplicationWindow {
         text: qsTr("Kopieren")
         enabled: window.activeHasSelection && !prefs.capturing
         shortcut: Qt.platform.os === "osx" ? StandardKey.Copy : ""
-        onTriggered: if (window.activeTerminal) window.activeTerminal.copy()
+        // Aus dem Pane mit Auswahl kopieren, nicht nur dem fokussierten (Copy-Bug):
+        onTriggered: window.copyActiveSelection()
     }
     Action {
         id: actPaste
