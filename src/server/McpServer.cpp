@@ -79,6 +79,16 @@ void McpServer::setPort(int p) {
     emit portChanged();
 }
 
+void McpServer::reloadPort() {
+    const int p = defaultPort();
+    if (p == m_port) return;
+    const bool wasListening = listening();
+    if (wasListening) stop();
+    m_port = p;
+    emit portChanged();
+    if (wasListening) start();
+}
+
 bool McpServer::start() {
     if (listening()) return true;
     if (!m_server) {

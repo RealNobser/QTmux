@@ -70,6 +70,16 @@ void AppController::setLanguage(const QString &lang) {
     emit languageChanged(lang);
 }
 
+void AppController::reloadLanguage() {
+    QSettings s;
+    const QString sys = QLocale::system().name().left(2);
+    const QString fallback = (sys == QLatin1String("de")) ? QStringLiteral("de") : QStringLiteral("en");
+    const QString lang = s.value(QStringLiteral("ui/language"), fallback).toString();
+    if (lang == m_language || !languageCodes().contains(lang)) return;
+    m_language = lang;
+    emit languageChanged(lang);
+}
+
 QString AppController::languageName(const QString &code) const {
     if (code == QLatin1String("de")) return QStringLiteral("Deutsch");
     if (code == QLatin1String("en")) return QStringLiteral("English");

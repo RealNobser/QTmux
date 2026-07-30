@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Effects
 import QtCore
@@ -376,6 +377,49 @@ Window {
                         }
                     }
                 }
+
+                // Stufe 6 (Teil C4): Zurücksetzen + Import/Export. Bewusst schlichte
+                // Buttons wie auf den Seiten — die Kopfzeile bekommt keine Sonderoptik.
+                Button {
+                    id: resetBtn
+                    text: qsTr("Zurücksetzen")
+                    font.pixelSize: 12
+                    implicitHeight: 28
+                    onClicked: resetMenu.popup(0, resetBtn.height + 4)
+                    ThemedMenu {
+                        id: resetMenu
+                        AppMenuItem {
+                            text: qsTr("Diese Seite zurücksetzen")
+                            // ioRev als Anker: keysForCategory ist eine Funktion, keine
+                            // Property — ohne ihn bliebe „ausgegraut" nach einem Reset stehen.
+                            enabled: root.ioRev >= 0
+                                     && SettingsIo.keysForCategory(root.category).length > 0
+                            onTriggered: root.resetPage()
+                        }
+                        AppMenuItem {
+                            text: qsTr("Alle Einstellungen zurücksetzen …")
+                            onTriggered: resetAllDialog.open()
+                        }
+                    }
+                }
+                Button {
+                    id: ioBtn
+                    text: qsTr("Import / Export")
+                    font.pixelSize: 12
+                    implicitHeight: 28
+                    onClicked: ioMenu.popup(0, ioBtn.height + 4)
+                    ThemedMenu {
+                        id: ioMenu
+                        AppMenuItem {
+                            text: qsTr("Exportieren …")
+                            onTriggered: exportFileDialog.open()
+                        }
+                        AppMenuItem {
+                            text: qsTr("Importieren …")
+                            onTriggered: importFileDialog.open()
+                        }
+                    }
+                }
             }
         }
         Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
@@ -514,12 +558,15 @@ Window {
 
                     Item { Layout.fillHeight: true }
 
+                    // Doppelrolle: normalerweise der Hinweis „Alles wirkt sofort.",
+                    // nach Reset/Import für vier Sekunden die Rückmeldung dazu (Stufe 6).
+                    // Bewusst kein weiterer Dialog — bestätigen musste der Anwender schon.
                     Text {
                         Layout.fillWidth: true
                         Layout.leftMargin: 4
                         Layout.bottomMargin: 4
-                        text: qsTr("Alles wirkt sofort.")
-                        color: Theme.textDim
+                        text: root.ioStatus.length > 0 ? root.ioStatus : qsTr("Alles wirkt sofort.")
+                        color: root.ioStatus.length > 0 ? Theme.accent : Theme.textDim
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
                     }
@@ -570,4 +617,154 @@ Window {
     Component { id: cVerbindungen;     CatVerbindungen     { host: root } }
     Component { id: cVault;            CatVault            { host: root } }
     Component { id: cErweiterungen;    CatErweiterungen    { host: root } }
+
+    // --- Zurücksetzen / Import / Export (Stufe 6, Teil C4) ------------------
+    // Zähler als Bindungs-Anker für die Menüpunkte: `SettingsIo.keysForCategory()` ist
+    // eine Funktion — ohne eine beobachtbare Abhängigkeit bliebe „ausgegraut" stehen.
+    property int ioRev: 0
+    Connections {
+        target: SettingsIo
+        function onChanged(keys) { root.ioRev++ }
+    }
+
+    function resetPage() {
+        const keys = SettingsIo.resetCategory(root.category)
+        root.ioStatus = keys.length > 0
+            ? qsTr("%1 zurückgesetzt: %2 Einstellungen").arg(root.categoryLabel(root.category)).arg(keys.length)
+            : qsTr("Nichts zurückzusetzen — diese Seite steht auf den Standardwerten.")
+    }
+
+    // Kurze Rückmeldung in der Kopfzeile der Rail (statt eines weiteren Dialogs).
+    property string ioStatus: ""
+    onIoStatusChanged: if (ioStatus.length > 0) ioStatusTimer.restart()
+    Timer { id: ioStatusTimer; interval: 4000; onTriggered: root.ioStatus = "" }
+
+    AppDialog {
+        id: resetAllDialog
+        title: qsTr("Alle Einstellungen zurücksetzen?")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        width: 460
+        onAccepted: {
+            const keys = SettingsIo.resetAll()
+            root.ioStatus = qsTr("%1 Einstellungen zurückgesetzt.").arg(keys.length)
+        }
+        contentItem: Text {
+            text: qsTr("Alle Einstellungen gehen auf die Werkseinstellung zurück — Design, "
+                     + "Sprache, Terminal, Kürzel, Farbschemata und Verbindungsprofile.\n\n"
+                     + "Nicht angetastet werden: die offenen Fenster und Sessions sowie der "
+                     + "Secrets-Vault (der liegt verschlüsselt außerhalb der Einstellungen).")
+            color: Theme.textBright
+            font.pixelSize: 13
+            wrapMode: Text.WordWrap
+        }
+    }
+
+    // Import: erst die Vorschau der zu ändernden Schlüssel, dann schreiben.
+    property url pendingImport: ""
+    property var importEntries: []
+    AppDialog {
+        id: importDialog
+        title: qsTr("Einstellungen importieren")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        width: 560
+        onAccepted: {
+            const keys = SettingsIo.importFile(root.pendingImport)
+            root.ioStatus = keys.length > 0
+                ? qsTr("%1 Einstellungen übernommen.").arg(keys.length)
+                : qsTr("Keine Einstellung geändert.")
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("Diese Schlüssel würden geändert (%1):").arg(root.importEntries.length)
+                color: Theme.textBright
+                font.pixelSize: 13
+                wrapMode: Text.WordWrap
+            }
+            ListView {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(300, Math.max(60, root.importEntries.length * 34))
+                clip: true
+                model: root.importEntries
+                ScrollBar.vertical: ScrollBar {}
+                delegate: Item {
+                    id: impRow
+                    required property var modelData
+                    width: ListView.view.width
+                    implicitHeight: 34
+                    RowLayout {
+                        anchors.fill: parent
+                        spacing: 10
+                        Text {
+                            Layout.preferredWidth: 230
+                            text: impRow.modelData.key
+                            color: impRow.modelData.skipped ? Theme.textDim : Theme.textBright
+                            font.family: root.app ? root.app.terminalFontFamily : "monospace"
+                            font.pixelSize: 12
+                            elide: Text.ElideMiddle
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: impRow.modelData.skipped
+                                  ? qsTr("wird übersprungen (unbekannter Schlüssel)")
+                                  : qsTr("%1 → %2").arg(impRow.modelData.from.length > 0
+                                                        ? impRow.modelData.from : qsTr("(nicht gesetzt)"))
+                                                   .arg(impRow.modelData.to)
+                            color: Theme.textDim
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    AppDialog {
+        id: ioErrorDialog
+        title: qsTr("Fehler")
+        standardButtons: Dialog.Ok
+        width: 440
+        contentItem: Text {
+            text: SettingsIo.lastError
+            color: Theme.textBright
+            font.pixelSize: 13
+            wrapMode: Text.WordWrap
+        }
+    }
+
+    FileDialog {
+        id: exportFileDialog
+        title: qsTr("Einstellungen exportieren")
+        fileMode: FileDialog.SaveFile
+        // `defaultSuffix` hängt .json an, wenn der Anwender keine Endung tippt.
+        // KEIN `selectedFile` als Namensvorschlag: das erwartet eine EXISTIERENDE Datei
+        // und warnt sonst („Cannot set … because it doesn't exist") — am Log aufgefallen.
+        defaultSuffix: "json"
+        currentFolder: StandardPaths.writableLocation(StandardPaths.DocumentsLocation)
+        nameFilters: [ qsTr("QTmux-Einstellungen (*.json)"), qsTr("Alle Dateien (*)") ]
+        onAccepted: {
+            if (SettingsIo.exportToFile(selectedFile))
+                root.ioStatus = qsTr("Exportiert nach %1").arg(selectedFile.toString().split("/").pop())
+            else
+                ioErrorDialog.open()
+        }
+    }
+    FileDialog {
+        id: importFileDialog
+        title: qsTr("Einstellungen importieren")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [ qsTr("QTmux-Einstellungen (*.json)"), qsTr("Alle Dateien (*)") ]
+        onAccepted: {
+            root.pendingImport = selectedFile
+            root.importEntries = SettingsIo.importPreview(selectedFile)
+            if (SettingsIo.lastError.length > 0) { ioErrorDialog.open(); return }
+            if (root.importEntries.length === 0) {
+                root.ioStatus = qsTr("Die Datei enthält keine abweichenden Einstellungen.")
+                return
+            }
+            importDialog.open()
+        }
+    }
 }

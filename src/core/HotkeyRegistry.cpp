@@ -141,6 +141,12 @@ void HotkeyRegistry::resetAll() {
     emit changed();
 }
 
+void HotkeyRegistry::reload() {
+    m_overrides.clear();
+    loadOverrides();
+    emit changed();   // bedingungslos: der Aufrufer hat die Schlüssel schon geändert
+}
+
 QString HotkeyRegistry::conflict(const QString &seq, const QString &exceptId) const {
     const QString s = seq.trimmed();
     if (s.isEmpty()) return QString();

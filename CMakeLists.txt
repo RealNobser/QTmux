@@ -167,6 +167,8 @@ qt_add_qml_module(qtmux
         src/viewmodels/Theme.cpp
         src/viewmodels/AppController.h
         src/viewmodels/AppController.cpp
+        src/viewmodels/SettingsIo.h
+        src/viewmodels/SettingsIo.cpp
         src/server/McpServer.h
         src/server/McpServer.cpp
 )

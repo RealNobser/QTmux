@@ -43,6 +43,14 @@ void Theme::setMode(Mode mode) {
     emit changed();
 }
 
+void Theme::reload() {
+    QSettings s;
+    m_mode = static_cast<Mode>(
+        s.value(QStringLiteral("ui/themeMode"), static_cast<int>(System)).toInt());
+    ColorSchemeRegistry::instance()->setDark(dark());
+    emit changed();
+}
+
 bool Theme::dark() const {
     switch (m_mode) {
     case Dark:  return true;

@@ -76,6 +76,18 @@ void ColorSchemeRegistry::loadBuiltins() {
         0x5c6370, 0xe06c75, 0x98c379, 0xe5c07b, 0x61afef, 0xc678dd, 0x56b6c2, 0xffffff });
 }
 
+void ColorSchemeRegistry::reload() {
+    // Vollständiger Neuaufbau: `loadPersisted` hängt importierte Schemata nur AN
+    // (dedupliziert über den Namen) — nach einem Reset müssen die alten Importe
+    // verschwinden, nicht bloß unbenutzt bleiben.
+    m_schemes.clear();
+    loadBuiltins();
+    loadPersisted();
+    emit listChanged();
+    emit selectionChanged();
+    emit changed();
+}
+
 // --- Persistenz -------------------------------------------------------------
 void ColorSchemeRegistry::loadPersisted() {
     QSettings st;

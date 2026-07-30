@@ -47,6 +47,10 @@ public:
     bool systemDark() const;           // reines OS-Schema (für native Menüs)
     QColor menuIcon() const;           // Icon-Tönung für native Menüs (folgt System)
     Q_INVOKABLE void toggle();         // schaltet explizit Hell<->Dunkel (Ctrl+D)
+    /// Liest `ui/themeMode` erneut (nach Reset/Import, Stufe 6) — bewusst OHNE zu
+    /// persistieren, sonst schriebe ein Zurücksetzen den Standardwert gleich wieder in
+    /// die Einstellungen und der Schlüssel wäre nach dem Reset sofort wieder da.
+    Q_INVOKABLE void reload();
 
     QColor bgSidebar() const;
     QColor bgMain() const;

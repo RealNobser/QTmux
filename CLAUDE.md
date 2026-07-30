@@ -145,9 +145,13 @@ ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein
 > braucht keinen Compiler). Und baut die Erweiterung noch selbst, steht im Log
 > `[proc] Executing command: … cmake.EXE --build …` statt eines Task-Terminals.
 > 🔑 **Qt-Pfad:** Das `windows`-Preset nimmt `$env{QTMUX_QT_PREFIX}` und fällt sonst auf
-> `C:/Qt/6.11.1/msvc2022_64` zurück (stand bis 2026-07-29 auf dem hier nicht installierten
-> 6.10.3 — bestehende Build-Dirs merkten das nicht, weil Qt im Cache lag, ein **frisches**
-> hätte Qt nicht gefunden). Die CI ist unabhängig davon (eigener `cmake`-Aufruf mit `QT_ROOT_DIR`).
+> **beide** bekannten Installationen zurück — `C:/Qt/6.11.1/msvc2022_64;C:/Qt/6.10.3/msvc2022_64`.
+> Grund: die zwei Windows-Maschinen haben **verschiedene** Qt-Versionen (Entwicklungsrechner
+> `30516935D11` nur 6.11.1, Build-Rechner RTZBLD01 6.10.3, `QTMUX_QT_PREFIX` nirgends gesetzt) —
+> ein einzelner Wert war darum zweimal falsch und wurde hin- und hergedreht. CMake nimmt aus
+> der Liste den ersten Treffer und überspringt nicht existierende Pfade, damit stimmt sie
+> überall. Ein **bestehendes** Build-Dir merkt einen falschen Wert nie (Qt liegt im Cache),
+> nur ein frisches. Die CI ist unabhängig (eigener `cmake`-Aufruf mit `QT_ROOT_DIR`).
 > 🔑 Batch-Fallen in dieser Datei: **CRLF** Pflicht (bei LF führt cmd.exe Kommentarzeilen
 > aus), **rein ASCII**, und `%ProgramFiles(x86)%` **nie in einer `for`-/`if`-Klammer**
 > expandieren — das `)` aus „(x86)" schließt sie vorzeitig („Der Befehl `C:\Program` ist
@@ -333,7 +337,8 @@ als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 Stand **2026-07-30** · Branch `main` = `origin/main` (letzter Commit **`b45172a`**, gepusht),
 Working Tree sauber · Version **1.7.1**.
-**Teststände:** Windows `windows` (Debug) und `windows-release` je **17/17** (`-E "^test_pty$"`;
+**Teststände:** Windows `windows` (Debug) und `windows-release` je **18/18** (`-E "^test_pty$"`;
+seit Stufe 6 gibt es `test_settingsio`, also 19 Tests insgesamt;
 `test_pty` fällt hier umgebungsbedingt auch unverändert — nicht-interaktive Shell/ConPTY,
 und `ctest` braucht Qt-`bin` im PATH, sonst `0xc0000135`). macOS **18/18** auf Stand `2e9eeec`
 — alles danach (inkl. der GUI-Arbeit unten) ist auf **macOS/Linux ungeprüft**; der Auftrag
@@ -358,24 +363,23 @@ in `qsTr` + `i18n/qtmux_{de,en}.ts` nachziehen, alle Tests grün.
 | 3 | Statusleiste (Footer 26 px, 7 Felder) | **fertig** `dd7df2f` |
 | 4 | Menü-Neuordnung auf 6 Menüs + Palette-Ergänzungen | **fertig** `d421e1e` |
 | 5 | Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl` | **fertig** `aa269a1` |
-| 6 | **`SettingsIo` (Reset/Import/Export) + `tst_settingsio`** | **als Nächstes** |
-| 7 | Übersetzungen finalisieren, README-Screenshots | offen |
+| 6 | `SettingsIo` (Reset/Import/Export) + `tst_settingsio` | **fertig** (s. u.) |
+| 7 | **Übersetzungen finalisieren, README-Screenshots** | **als Nächstes** |
 
-**Nächster Punkt — Stufe 6 (Teil C4 der Anweisung):** `SettingsIo` unter
-`src/viewmodels/` (als Context-Property in QML), dazu die beiden Textknöpfe in der
-Kopfzeile des Einstellungsfensters, die aus Stufe 5 bewusst **zurückgestellt** sind:
-„Zurücksetzen" (Menü: *diese Seite* / *alle Einstellungen*, Letzteres mit `AppDialog`-
-Rückfrage) und „Import / Export" (`FileDialog`, JSON; Import zeigt vorab die zu ändernden
-Schlüssel). Test `tests/tst_settingsio.cpp` (Round-Trip Export → Reset → Import).
-- Einstieg: Kopfzeile in [qml/PrefsWindow.qml](qml/PrefsWindow.qml) (Kommentar „kommen mit
-  Stufe 6"), neue Klasse neben [Theme.cpp](src/viewmodels/Theme.cpp); Registrierung in
-  `main.cpp` als Context-Property (KEIN `qmlRegisterSingletonInstance` in die URI).
-- Bauen/Testen: `.\tools\vsdev-build.cmd "windows-release" all` und
+**Nächster Punkt — Stufe 7:** Die **Übersetzungen** sind nach jeder Stufe mitgezogen worden
+(EN steht auf **0 unfinished**, DE nur beim bekannten `%n Einträge`-Plural) — bleibt also der
+**Screenshot-Teil**: [README.md](README.md) zeigt bis heute keinen Screenshot (Backlog-Punkt
+„Screenshot im README"), die Anweisung verlangt aktuelle Bilder von Leiste, Statusleiste und
+Einstellungsfenster in beiden Designs.
+- Einstieg: `tests/release-visual-check.ps1` erzeugt die Menü-/Fenster-Bilder schon
+  automatisiert (isolierte Instanz, `-QtmuxProfile visualcheck`); für das
+  **Einstellungsfenster** den Weg aus den E2E-Fallen nehmen (UIA + `PrintWindow`).
+- ⚠️ Auf **dieser** Maschine sind die Bilder derzeit nur eingeschränkt brauchbar: der
+  Bildschirm ist gesperrt/getrennt, `CopyFromScreen` scheitert und synthetische Tasten kommen
+  nicht an (s. E2E-Fallen). Für README-Bilder ist die **macOS**-Session der bessere Ort —
+  entsprechend abstimmen, statt hier Bilder zu erzwingen.
+- Bauen/Testen wie gehabt: `.\tools\vsdev-build.cmd "windows-release" all` und
   `ctest --test-dir build\windows-release -E "^test_pty$"` (Qt-`bin` in den PATH).
-- ⚠️ **Vault-Schlüssel dürfen im Export NICHT vorkommen** (Abnahmekriterium der Anweisung;
-  Profile nur mit `passwordSecret`-Namen, nie aufgelöst) — das gehört in den Test.
-- Beachten: Nach dem Reset müssen die Registries **neu laden**; Kategorien/Seiten lesen ihre
-  Werte über `host.app.*`, das folgt automatisch.
 
 **Bewusste Abweichungen von der Anweisung** (Mechanik jeweils in der Feature-Referenz):
 Stufe 4 — keine **macOS-Menü-Rollen** (QtQuick.Controls kennt sie nicht → „Einstellungen …"
@@ -385,34 +389,57 @@ Stufe 5 — `PrefGroup` und `AppSwitch` sind **zusätzliche** Dateien (Rahmen un
 brauchen einen Ort) · listenartige Seiten (Tastenkürzel, Verbindungen, Vault, Erweiterungen)
 bleiben strukturell wie sie sind · Abo-Matrix behält Toggle-Kacheln (QTMUX-47) · die zwei
 Kopfzeilen-Knöpfe folgen mit Stufe 6.
+Stufe 6 — **Export ist eine Allowlist, nicht „alles außer dem Vault"** (Begründung in der
+Feature-Referenz: kein Leck durch Wachstum, und ein Reset darf das Fenster-/Session-Layout
+nicht mitnehmen) · Rückmeldung nach Reset/Import erscheint als Zeile am Fuß der Rail, nicht
+als weiterer Dialog · beim Import werden unbekannte Schlüssel **angezeigt und übersprungen**
+(die Anweisung sagt dazu nichts).
 
-**Offen aus 1–5, bewusst nicht behauptet:** Rastergröße (80×24) fehlt im Statusleisten-Feld
+**Offen aus 1–6, bewusst nicht behauptet:** Rastergröße (80×24) fehlt im Statusleisten-Feld
 (sie lebt im `TerminalItem`, dafür müssten Spalten/Zeilen erst an der Session veröffentlicht
 werden) · macOS/Linux ungeprüft — insbesondere ist das **Fenster-Menü dort nie gelaufen**
-(auf Windows ist es per `removeMenu` entfernt) · Owner-Durchklick von Leiste, Statusleiste,
-Menüstruktur und Einstellungsfenster offen.
+(auf Windows ist es per `removeMenu` entfernt) · **Export/Import durch die echten
+Dateidialoge** ist hier nicht automatisierbar gewesen (Logik im Unit-Test bewiesen, das Öffnen
+der Dialoge per Screenshot — der Rest steht in der Abnahmeliste) · Owner-Durchklick von Leiste,
+Statusleiste, Menüstruktur und Einstellungsfenster offen.
 
-### ÜBERGABE an die macOS-Session (Stand 2026-07-30, `b45172a`)
+### Arbeitsteilung Windows ↔ macOS (vereinbart 2026-07-30)
 
-Die Stufen 1–5 sind **ausschließlich auf Windows** gebaut und geprüft. Auf dem Mac ist der
+**Windows-Session** schreibt den Code der Stufen (jetzt: 6 fertig, 7 offen) und committet auf
+`main`. **macOS-Session** verifiziert jede fertige Stufe auf den zwei Plattformen, die Windows
+nicht sieht — **macOS und Linux** (`rtzsvr02`) bauen + testen — macht die GUI-Abnahmen, die auf
+Windows prinzipiell nicht prüfbar sind, und pflegt **Jira/Confluence** (geht nur dort, s. u.).
+Koordination auf der geteilten Arbeitskopie: die drei Regeln aus
+[[zwei-sessions-eine-arbeitskopie]] — gezielt stagen (**nie** `git add -A`), vor dem Push
+`git fetch` und bei Divergenz erst committen, dann mergen, und nach jedem Merge, der die
+CLAUDE.md anfasst, `test_doc_duplicates` laufen lassen.
+
+### ÜBERGABE an die macOS-Session (Stand 2026-07-30, Stufe 6)
+
+Die Stufen 1–6 sind **ausschließlich auf Windows** gebaut und geprüft. Auf dem Mac ist der
 letzte belegte Teststand `2e9eeec` (18/18) — alles danach ist dort **ungesehen**. Diese Liste
 ist der Auftrag für die Mac-Session; Anweisung selbst: `Arbeitsanweisung-1a-2a.md` im
 Design-Projekt (über `DesignSync`, s. oben).
 
 **0. Lage prüfen, bevor irgendetwas gebaut wird.**
-`git fetch && git log --oneline -3` → erwartet `91fecfd`. Teilen Mac und Windows dieselbe
+`git fetch && git log --oneline -5` → der Kopf von `main` ist der Stufe-6-Commit („Design 1a,
+Stufe 6"). Teilen Mac und Windows dieselbe
 Arbeitskopie ([[zwei-sessions-eine-arbeitskopie]]), ist der Stand schon da; sonst pullen.
 ⚠️ **Die Produktivinstanz läuft aus `build/macos`** und deren Binary ist vom **28.07.**, also
 ohne QTMUX-85/-97/-98 **und ohne die Stufen 1–5**. Nicht dorthin bauen, solange sie läuft —
 das Überschreiben reißt alle Terminal-Sessions mit. Erst `lsof -nP -iTCP:7345 -sTCP:LISTEN`,
 dann in `build/macos-test` (Debug) bzw. `build/macos-release` bauen.
 
-**1. Bauen und Tests.**
+**1. Bauen und Tests — auf BEIDEN Plattformen** (macOS und Linux `rtzsvr02`).
 ```bash
 cmake --preset macos -B build/macos-test && cmake --build build/macos-test
-ctest --test-dir build/macos-test --output-on-failure          # erwartet 18/18
+ctest --test-dir build/macos-test --output-on-failure          # erwartet 19/19 (test_settingsio ist neu)
 cmake --preset macos-release && cmake --build --preset macos-release
 ```
+🔑 `test_settingsio` läuft mit `QSettings::IniFormat` im Temp-Verzeichnis und
+`QStandardPaths`-Testmodus — er fasst also weder echte Einstellungen noch den echten Vault an.
+Auf Windows grün in Debug und Release; INI ist der pessimistische Fall (dort kommt jeder Wert
+als Text zurück), macOS/Linux sollten also nicht überraschen.
 
 **2. Die macOS-spezifischen Punkte — das ist der eigentliche Grund der Übergabe.**
 Jeder Punkt ist auf Windows **prinzipiell nicht** prüfbar:
@@ -433,6 +460,14 @@ Jeder Punkt ist auf Windows **prinzipiell nicht** prüfbar:
   `AppSwitch` und die Lesbarkeit von `Theme.accentText` in **beiden** Designs.
 - **Seitenleiste eingeklappt + Flyout + Statusleiste** (Stufen 1–3) sind auf dem Mac ebenfalls
   ungesehen; dazu `App.reduceMotion` (dort echte Systemeinstellung).
+- **Stufe 6 — genau die zwei Punkte, die hier nicht automatisierbar waren:**
+  (a) **Export in eine Datei und Import daraus** (native Dateidialoge; auf dieser Maschine
+  scheiterte jede Automatisierung, s. E2E-Fallen). Erwartung: Export-JSON enthält die
+  Einstellungen, **kein** `windows/*`/`sessions/*` und kein Geheimnis; nach dem Import steht der
+  geänderte Wert **sofort** im Dialog, ohne Neustart.
+  (b) **Optik der Kopfzeile** in beiden Designs: zwei Textknöpfe, deren Menüs, und ein
+  deaktiviertes „Diese Seite zurücksetzen" (neu gedimmt über `opacity`, s. Feature-Referenz —
+  das betrifft **alle** Menüs, also beim Durchklicken der nativen macOS-Menüs mit ansehen).
 - Screenshots: `--screenshot` greift nur das **Root**-Fenster; für das Einstellungsfenster
   `screencapture -l <windowid>` o. Ä. nehmen (der Windows-Weg über `EnumWindows`/`PrintWindow`
   gilt dort nicht).
@@ -442,15 +477,16 @@ Vorher in **beiden** Systemen die höchste Nummer holen (`ORDER BY key DESC`, ma
 - **QTMUX-2 → Done** (Funktionstest bestanden; die PowerShell-Einschränkung ist keine
   Bringschuld von QTmux).
 - Neu anlegen: **Verzeichniszeile auf der Kachel** · **OSC 7** · **`--screenshot` auf Windows**
-  (behoben, nur nachzutragen) · **Design 1a/2a** — sinnvoll ein Ticket je Stufe, 1–5 sofort
-  als umgesetzt (Commits `1a644c3`, `dd7df2f`, `d421e1e`, `aa269a1`), 6–7 offen.
+  (behoben, nur nachzutragen) · **Design 1a/2a** — sinnvoll ein Ticket je Stufe, 1–6 sofort
+  als umgesetzt (Commits `1a644c3`, `dd7df2f`, `d421e1e`, `aa269a1` und der Stufe-6-Commit),
+  7 offen · **Qt-Standardknöpfe unübersetzt** („OK"/„Cancel" in jedem `AppDialog` mit
+  `standardButtons`, weil kein `qtbase_<lang>`-Translator installiert wird — Befund aus Stufe 6,
+  betrifft die ganze App).
 - Kanban dual weiterschieben, Kurzkommentar je Ticket.
 
-**4. Danach.** Standard: **Stufe 6** (`SettingsIo`) macht weiterhin die **Windows**-Session,
-der Mac übernimmt Verifikation + Jira/Confluence. Wird auf dem Mac doch Code angefasst,
-gelten die drei Regeln aus [[zwei-sessions-eine-arbeitskopie]]: gezielt stagen (**nie**
-`git add -A`), vor dem Push `git fetch` und bei Divergenz erst committen, dann mergen, und
-nach jedem Merge, der die CLAUDE.md anfasst, `test_doc_duplicates` laufen lassen.
+**4. Danach.** **Stufe 7** (README-Screenshots) macht sinnvoll der **Mac** — auf der
+Windows-Maschine sind Bildschirm-Grabs derzeit nicht möglich (s. E2E-Fallen). Die
+Arbeitsteilung im Übrigen steht im Abschnitt darüber.
 
 ### Owner-Abnahmen offen (seit v1.7.1, je umgesetzt + selbst verifiziert)
 
@@ -469,6 +505,7 @@ Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme
 | — | Verzeichnis als zweite Kachelzeile, Seitenleiste + Flyout, Statusleiste (Design 1a/2a, Stufen 1–3) | durchklicken; **Jira-Nummern fehlen** (s. ÜBERGABE) |
 | — | **sechs Menüs** (Stufe 4) | jedes Menü öffnen; kein Eintrag schaltet mehr eine Einstellung außer Seitenleiste/Statusleiste/Broadcast; alles Verschobene über Einstellungen UND Palette erreichbar |
 | — | **Einstellungsfenster** (Stufe 5) | Rail-Gruppen, Zeilen mit Beschreibung, Segment-Umschalter, Schalter in Akzentfarbe — in **beiden** Designs |
+| — | **Zurücksetzen / Import / Export** (Stufe 6) | „Diese Seite zurücksetzen" auf einer geänderten Seite (Werte springen sofort auf Standard, danach ist der Punkt ausgegraut) · „Alle Einstellungen zurücksetzen …" **abbrechen** und bestätigen · **Export in eine Datei und Import daraus** — das ist der Teil, den hier **kein Automat** prüfen konnte (native Dateidialoge, s. E2E-Fallen): danach muss der geänderte Wert live stehen, und die offenen Fenster/Sessions müssen unberührt sein |
 
 ⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
 Sessions **nicht** (Inhalt liegt im Scrollback) — betroffene Sessions neu starten.
@@ -825,6 +862,36 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   🔑 **Rail-Badges dürfen den Kategorienamen nicht verdrängen:** „QTmux Dunkel" ließ in der
   236-px-Rail nur „Erscheinu…" übrig. Das Badge zeigt darum den Schemanamen **ohne den
   eigenen Präfix** („Dunkel") und ist zusätzlich auf 84 px gedeckelt.
+- **Zurücksetzen / Export / Import (Design 1a, Stufe 6):** `SettingsIo`
+  ([src/viewmodels/SettingsIo.h](src/viewmodels/SettingsIo.h), Context-Property `SettingsIo`)
+  plus die zwei Textknöpfe in der Kopfzeile. Export als JSON mit Kopf
+  (`format: "qtmux-settings"`), Import erst als **Vorschau** der zu ändernden Schlüssel.
+  🔑 **Zentraler Entwurf: eine ALLOWLIST, und Export und Reset arbeiten auf derselben Menge**
+  (`patternsFor(<kategorie>)`, Präfix wenn das Muster auf `/` endet). Die Anweisung sagt „alle
+  Schlüssel der Domain außer dem Vault" — dagegen sprechen zwei Dinge: (1) eine Blocklist
+  müsste bei **jedem** neuen Schlüssel gepflegt werden, und ein vergessener landet in einer
+  Datei, die der Anwender weitergibt; (2) unter `windows/*` und `sessions/*` liegt das
+  Fenster-/Pane-Layout samt Session-Liste — ein „alles zurücksetzen" darf die Arbeit des
+  Anwenders nicht mitnehmen. Der Vault ist doppelt außen vor: er steht ohnehin nicht in
+  QSettings, sondern verschlüsselt in `vault.json`. Wächter dagegen: `tst_settingsio`
+  (8 Fälle; Gegentest mit `windows/` in der Allowlist → **4 Fehlschläge**, u. a.
+  `resetAllKeepsWindowLayout`).
+  🔑 **Ein QML-`Settings`-Alias liest seinen Schlüssel NUR beim Aufbau.** Entfernt oder
+  überschreibt `SettingsIo` einen Schlüssel, zeigt die laufende App weiter den alten Wert.
+  Deshalb `window.applySettingValue(key)` in [qml/Main.qml](qml/Main.qml), von
+  `SettingsIo.changed` je Schlüssel gerufen; die **Standardwerte stehen dort, wo die Property
+  deklariert ist** (nicht doppelt in C++). Drei Schlüssel kennen ihren Standard nur in C++
+  (System-Sprache, System-Design, `QTMUX_MCP_PORT`) → `App.reloadLanguage()`, `Theme.reload()`,
+  `mcp.reloadPort()`, alle drei **ohne** erneutes Persistieren (sonst schriebe ein Reset den
+  Standard sofort wieder in die Einstellungen). `colorSchemes/*`, `hotkeys/*`, `profiles/*`
+  halten C++-Registries → dort neues `reload()` (bei den Schemata mit vollständigem Neuaufbau,
+  weil `loadPersisted` importierte Schemata nur **anhängt**).
+  ⚠️ **Bewusst nicht bekämpft:** Setzt `applySettingValue` eine Property auf ihren Standard,
+  merkt QML-`Settings` die Änderung und schreibt den Standardwert zurück — der Wert ist danach
+  korrekt der Standard, der Schlüssel kann aber wieder auftauchen. Das zu verhindern hieße, die
+  Settings-Bindung zu umgehen.
+  🔑 `FileDialog.selectedFile` ist **kein Namensvorschlag**: ein nicht existierender Pfad
+  erzeugt „Cannot set … because it doesn't exist". Stattdessen `defaultSuffix` + `currentFolder`.
 - **Agent-Awareness:** OSC 133 (Prompt-Marker → Activity-Ring), OSC 9/777 (Notify),
   OSC 9;4 (Progress-Balken), Bell → Attention-Pulse (blau); MCP-Controller-Tab rot.
   🔑 **Reduzierte Bewegung (QTMUX-47):** `App.reduceMotion` (AppController, beim Start
@@ -1044,6 +1111,19 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   veralteten `Qt.labs.platform`; `QQuickNativeMenuItem` ruft `setRole` nie auf (im Qt-Header
   geprüft). Auf macOS wandert „Einstellungen …" also **nicht** ins App-Menü — Ausblenden im
   Datei-Menü würde es dort schlicht entfernen. Deshalb überall sichtbar.
+  🔑 **Ein deaktivierter Menüeintrag sah aus wie ein aktiver** (aufgefallen an „Diese Seite
+  zurücksetzen", Stufe 6, gilt aber für JEDEN `enabled: false`-Eintrag der App): das
+  contentItem des Basic-Styles färbt den Text **unbedingt** mit `palette.windowText`
+  (Qt-Quelltext `Basic/MenuItem.qml`, Z. 48/59) — es gibt keinen Disabled-Zustand zu themen,
+  und `palette.disabled.*` an `ThemedMenu` bleibt darum wirkungslos (ausprobiert, am Bild
+  widerlegt, wieder entfernt). Lösung: `opacity: enabled ? 1.0 : 0.45` in
+  [qml/Ui/ShortcutMenuItem.qml](qml/Ui/ShortcutMenuItem.qml) — dimmt die ganze Zeile inklusive
+  Kürzel-Label. A/B am Screenshot belegt.
+  ⚠️ **Die Knöpfe eines `AppDialog` mit `standardButtons` heißen „OK"/„Cancel" — auch auf
+  Deutsch.** Nur der App-Translator wird installiert, **kein** `qtbase_<lang>`; die
+  Standardbeschriftungen kommen aber aus Qts eigener Übersetzung. Betrifft alle Dialoge mit
+  Standardknöpfen, nicht nur die aus Stufe 6 (per UIA belegt: `Buttons: … | OK | Cancel`).
+  Noch kein Ticket — Kandidat für den Backlog.
 - App-Icon: `resources/appicon/` (SVG → icns/ico/png via `generate.sh` + Qt-`svgrender`-
   Mini-Tool, da kein rsvg/inkscape auf den Maschinen).
 
@@ -1190,6 +1270,31 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   nach Titel suchen; und `CopyFromScreen` scheitert daran („Das Handle ist ungültig") →
   **`PrintWindow` mit `PW_RENDERFULLCONTENT`**. Tastatur-Navigation als Steuerweg ist
   untauglich: die Rail hat nach dem Öffnen keinen Fokus, alle Bilder wurden identisch.
+  🔑 **Menü-Popups sind mit demselben Weg erfassbar** (Stufe 6): Ein Qt-Menü ist hier **kein**
+  eigenes Fenster, sondern ein Item **im** Prefs-Fenster → `PrintWindow` auf das Prefs-Fenster
+  zeigt das offene Menü mit. Zur Sicherheit alle sichtbaren Fenster des PID durchgehen und
+  jedes einzeln greifen (dann ist es egal, ob Qt daraus ein Popup-Fenster macht).
+  🔑 **`GetWindowTextW` braucht `CharSet=CharSet.Unicode` im `DllImport`.** Sonst marshallt
+  .NET den `StringBuilder` als ANSI, die W-Funktion schreibt aber UTF-16 → der Titel kommt als
+  **ein Buchstabe** zurück („Einstellungen" → „E") und jeder Titelvergleich scheitert stumm.
+  Genau daran sah es aus, als hätte sich das Fenster nie geöffnet.
+- ⚠️ **Auf dieser Maschine (Stand 2026-07-30) gibt es KEINE synthetische Eingabe und keinen
+  Bildschirm-Grab** — die Sitzung läuft ohne bedienten Desktop: `keybd_event` verpufft
+  spurlos (auch `Ctrl+,` öffnete nichts), `CopyFromScreen` scheitert mit „Das Handle ist
+  ungültig". Was **trotzdem** trägt: **UIA-`InvokePattern`** (braucht keinen Eingabefokus) und
+  **`PrintWindow`**. Konsequenz: **native Dateidialoge sind nicht automatisierbar** — das
+  Fenster öffnet und ist per Titel auffindbar („Einstellungen exportieren"), aber
+  UIA-`ValuePattern.SetValue` auf das Dateinamenfeld läuft in einen Timeout (0x80131505) und
+  blockiert bei Wiederholung minutenlang, und Einfügen per Zwischenablage + Enter kommt nicht
+  an. Solche Pfade also **nicht** erzwingen: Logik im Unit-Test beweisen, Dialog-Öffnen per
+  Screenshot, Rest auf die Owner-Abnahme.
+- ⚠️ **Umleiten von stdout/stderr beendet die App** (nicht nur die Sessions, Stufe-6-Erfahrung):
+  `-RedirectStandardError/-Output` reißt die ConPTY-Anbindung → die einzige Session stirbt →
+  das letzte Pane/Window schließt → QTmux beendet sich (QTMUX-87, gewolltes Verhalten). Für
+  QML-Warnungen darum ein **eigener, kurzer Lauf** mit Umleitung: alle Bindungen von `Main.qml`
+  **und** `PrefsWindow.qml` werden beim Start ausgewertet (das Einstellungsfenster ist eine
+  Instanz in `Main.qml`, nur unsichtbar) — die Warnungen stehen also im Log, bevor die App
+  sich beendet. Der eigentliche Interaktionslauf dann **ohne** Umleitung.
 - ⚠️ **`--screenshot` NICHT aus dem Bash-Werkzeug starten.** Von dort entsteht kein PNG und
   der Exit-Code führt in die Irre (die GUI-App hängt nicht am Pipeline-Status). Richtig ist
   PowerShell mit `Start-Process … -PassThru -Wait` und danach `$pr.ExitCode` +

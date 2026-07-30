@@ -50,6 +50,12 @@ public:
     Q_INVOKABLE bool start();
     Q_INVOKABLE void stop();
 
+    /// Liest den Port erneut aus Umgebung/Einstellung (nach Reset/Import, Stufe 6) —
+    /// wie Theme::reload() ohne erneutes Persistieren. Lief der Server, wird er auf
+    /// dem neuen Port neu gebunden; sonst bliebe die Anzeige stehen und der Server
+    /// hörte weiter auf dem alten Port.
+    Q_INVOKABLE void reloadPort();
+
     /// Ergebnis-Brücke für die Layout-/Profil-Signale (QTMUX-29): Der QML-Handler
     /// eines *Requested-Signals läuft SYNCHRON (gleicher Thread, Direct-Connection)
     /// und meldet sein Ergebnis hierüber zurück — nach dem `emit` liest callTool es

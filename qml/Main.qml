@@ -1584,6 +1584,56 @@ ApplicationWindow {
         property alias statusBarVisible: window.statusBarVisible
     }
 
+    // --- Einstellungen nach Reset/Import nachziehen (Stufe 6) ----------------
+    // Ein `Settings`-Alias liest seinen Schlüssel nur beim Aufbau der Komponente. Wenn
+    // `SettingsIo` die Schlüssel direkt entfernt oder überschreibt, zeigt die laufende
+    // App also weiter den alten Stand — bis zum Neustart. Deshalb bekommt jeder Schlüssel
+    // hier den Weg zurück in seine LIVE-Property; die Standardwerte stehen dabei genau
+    // dort, wo die Property deklariert ist (nicht doppelt in C++).
+    // Nicht behandelt (bewusst): `colorSchemes/*`, `hotkeys/*`, `profiles/*` — die halten
+    // C++-Registries, die `SettingsIo` selbst neu einlesen lässt.
+    // 🔑 Nebeneffekt, den wir NICHT bekämpfen: setzt eine Zeile hier eine Property auf
+    // ihren Standard, merkt QML-`Settings` die Änderung und schreibt den Standardwert
+    // wieder in die Einstellungen. Der Wert ist dann korrekt der Standard — der Schlüssel
+    // kann aber wieder auftauchen. Das zu verhindern hieße, die Settings-Bindung zu
+    // umgehen, und wäre teurer als der Nutzen.
+    function applySettingValue(key) {
+        const v = SettingsIo.valueFor(key)
+        const missing = (v === undefined || v === null || v === "")
+        const b = (def) => (v === undefined || v === null)
+                           ? def : (v === true || v === 1 || v === "true" || v === "1")
+        const i = (def) => missing ? def : parseInt(v)
+        const s = (def) => (v === undefined || v === null) ? def : String(v)
+        switch (key) {
+        // Diese drei kennen ihren Standard in C++ (System-Sprache, System-Design,
+        // QTMUX_MCP_PORT) — dort neu einlesen statt hier zu raten.
+        case "ui/language":  App.reloadLanguage(); break
+        case "ui/themeMode": Theme.reload(); break
+        case "mcp/port":     mcp.reloadPort(); break
+
+        case "window/confirmQuit":          window.confirmQuit = b(true); break
+        case "window/restoreSessionMode":   window.restoreSessionMode = i(2); break
+        case "window/quakeMode":            window.quakeMode = b(false); break
+        case "window/preventSleep":         window.preventSleep = b(false); break
+        case "window/terminalFontFamily":   window.terminalFontFamily = s(""); break
+        case "window/terminalFontSize":     window.terminalFontSize = i(13); break
+        case "window/terminalLigatures":    window.terminalLigatures = b(false); break
+        case "window/terminalGpuRendering": window.terminalGpuRendering = b(true); break
+        case "window/defaultShellProgram":  window.defaultShellProgram = s(""); break
+        case "window/copyOnSelect":         window.copyOnSelect = b(false); break
+        case "window/rightClickPaste":      window.rightClickPaste = b(false); break
+        case "window/pasteWarnMultiline":   window.pasteWarnMultiline = b(true); break
+        case "window/restoreAgents":        window.restoreAgents = b(false); break
+        case "window/resumeAgentMode":      window.resumeAgentMode = i(0); break
+        }
+    }
+    Connections {
+        target: SettingsIo
+        function onChanged(keys) {
+            for (let i = 0; i < keys.length; ++i) window.applySettingValue(keys[i])
+        }
+    }
+
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
     Action {
         id: actNewSession

@@ -61,6 +61,11 @@ public:
     /// Fehler), selektiert es und persistiert.
     Q_INVOKABLE QString importFile(const QString &path);
 
+    /// Baut die Liste aus Eingebauten + Persistierten neu auf (nach Reset/Import,
+    /// Stufe 6). Ohne das bliebe ein zurückgesetztes/importiertes Schema unsichtbar,
+    /// und importierte Schemata blieben nach einem Reset im Speicher stehen.
+    Q_INVOKABLE void reload();
+
 signals:
     void changed();          // aktives Schema gewechselt (Modus oder Auswahl) → neu zeichnen
     void selectionChanged(); // Hell-/Dunkel-Auswahl geändert (für Combo-Bindings)

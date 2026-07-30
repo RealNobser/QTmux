@@ -16,6 +16,14 @@ import QTmux
 MenuItem {
     id: smi
     implicitHeight: 32
+    // Ein deaktivierter Eintrag sah aus wie ein aktiver: das contentItem des
+    // Basic-Styles färbt den Text UNBEDINGT mit `palette.windowText` (im Qt-Quelltext
+    // geprüft, MenuItem.qml Z. 48/59) — es gibt also keinen Disabled-Zustand zu
+    // theming. Auch `palette.disabled.*` bleibt darum wirkungslos (ausprobiert und am
+    // Bild widerlegt). Deshalb hier die ganze Zeile dimmen; das nimmt das Kürzel-Label
+    // mit. Aufgefallen an „Diese Seite zurücksetzen" (Stufe 6), gilt für JEDEN
+    // deaktivierten Menüeintrag der App.
+    opacity: enabled ? 1.0 : 0.45
     // Explizit gesetztes Kürzel (für Aktionen, deren Shortcut NICHT an der Action hängt,
     // z. B. das im TerminalItem fest verdrahtete Strg+C/Strg+V). Sonst aus der Action.
     property string shortcutOverride: ""

@@ -46,6 +46,11 @@ public:
     /// Setzt alle Aktionen zurück.
     Q_INVOKABLE void resetAll();
 
+    /// Liest die Overrides erneut aus QSettings (nach Reset/Import, Stufe 6). Nötig,
+    /// weil `SettingsIo` die Schlüssel direkt schreibt/entfernt — die Registry hält
+    /// ihren Stand sonst im Speicher weiter.
+    Q_INVOKABLE void reload();
+
     /// Liefert die Aktions-ID, die `seq` bereits belegt (außer `exceptId`), sonst "".
     /// Vergleich case-insensitiv über das kanonische Portable-Format.
     Q_INVOKABLE QString conflict(const QString &seq, const QString &exceptId) const;

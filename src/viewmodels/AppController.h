@@ -38,6 +38,11 @@ public:
     Q_INVOKABLE QStringList languageCodes() const { return {QStringLiteral("de"), QStringLiteral("en")}; }
     Q_INVOKABLE QString languageName(const QString &code) const;
 
+    /// Liest `ui/language` erneut (nach Reset/Import, Stufe 6). Wie Theme::reload()
+    /// bewusst ohne erneutes Persistieren; fehlt der Schlüssel, gilt wieder die
+    /// System-Sprache. Löst `languageChanged` aus → main.cpp tauscht den Translator.
+    Q_INVOKABLE void reloadLanguage();
+
     /// Wandelt ein QML-Tasten-Event (Qt::Key + Qt::KeyboardModifiers als int) in einen
     /// kanonischen Akkord-String im Portable-Format um (z. B. "Ctrl+Shift+E"). Reine
     /// Modifier-Tasten liefern "" (für die Hotkey-Aufnahme, QTMUX-15). Nutzt QKeySequence

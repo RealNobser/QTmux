@@ -54,6 +54,10 @@ public:
     /// Entfernt das Profil mit diesem Namen.
     Q_INVOKABLE void removeProfile(const QString &name);
 
+    /// Liest die Profile erneut aus QSettings (nach Reset/Import, Stufe 6) — siehe
+    /// HotkeyRegistry::reload().
+    Q_INVOKABLE void reload();
+
 signals:
     void changed();
 

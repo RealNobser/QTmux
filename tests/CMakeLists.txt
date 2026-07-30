@@ -76,6 +76,16 @@ target_include_directories(test_windowmodel PRIVATE
 target_link_libraries(test_windowmodel PRIVATE qtmux_core Qt6::Test Qt6::Qml)
 add_test(NAME test_windowmodel COMMAND test_windowmodel)
 
+# Einstellungs-Export/Import/Reset (Design 1a, Stufe 6): SettingsIo liegt wie
+# SftpClient im QML-Modul → .cpp direkt mitkompilieren. Reine QSettings-/JSON-Logik,
+# läuft ohne GUI und ohne Prozesse.
+qt_add_executable(test_settingsio tst_settingsio.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/SettingsIo.cpp)
+target_include_directories(test_settingsio PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels)
+target_link_libraries(test_settingsio PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_settingsio COMMAND test_settingsio)
+
 # --- PTY-/ConPTY-E2E-Tests (starten echte Shells) ---------------------------
 qt_add_executable(test_pty tst_pty.cpp)
 target_link_libraries(test_pty PRIVATE qtmux_core Qt6::Test)

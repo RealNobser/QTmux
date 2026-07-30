@@ -32,6 +32,7 @@
 #include "HotkeyRegistry.h"
 #include "PluginHost.h"
 #include "SecretsVault.h"
+#include "SettingsIo.h"
 #include "GlobalHotkey.h"
 
 namespace {
@@ -230,6 +231,11 @@ int main(int argc, char *argv[])
     // Abos; Session speist OSC-Ereignisse ein, der McpServer liefert sie per Long-Poll.
     engine.rootContext()->setContextProperty(
         QStringLiteral("AgentEvents"), qtmux::AgentEventHub::instance());
+
+    // Einstellungen zurücksetzen / exportieren / importieren (Design 1a, Stufe 6).
+    // Gleiche Brücke wie oben; die Kopfzeile des Einstellungsfensters treibt es.
+    static qtmux::SettingsIo settingsIo;
+    engine.rootContext()->setContextProperty(QStringLiteral("SettingsIo"), &settingsIo);
 
     // Globaler Quake-Hotkey (Ctrl+`) als Context-Property; QML schaltet ihn je nach
     // Einstellung und reagiert auf `activated` (Fenster ein-/ausblenden).

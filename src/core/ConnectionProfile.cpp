@@ -82,6 +82,11 @@ void ConnectionProfileRegistry::removeProfile(const QString &name) {
     emit changed();
 }
 
+void ConnectionProfileRegistry::reload() {
+    load();
+    emit changed();
+}
+
 void ConnectionProfileRegistry::load() {
     QSettings s;
     const int n = s.beginReadArray(QStringLiteral("profiles"));
