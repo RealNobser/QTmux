@@ -67,6 +67,10 @@ int cbSetTermProp(VTermProp prop, VTermValue *val, void *user) {
         // setzt ihn per DECSET 1000/1002/1003. Ist er aktiv, leitet TerminalItem
         // Maus-/Scrollrad-Events an die App weiter, statt lokal zu scrollen.
         self->cbSetMouse(val->number);
+    } else if (prop == VTERM_PROP_ALTSCREEN) {
+        // Alternate Screen (DECSET 1049): Vollbild-TUI aktiv. Das Maus-Reporting wird
+        // nur hier weitergeleitet — s. VtScreen::altScreen().
+        self->cbSetAltScreen(val->boolean != 0);
     }
     return 1;
 }
@@ -142,6 +146,11 @@ VtScreen::VtScreen(int rows, int cols, QObject *parent)
     // sb_pushline4 (mit continuation-Flag) statt des 3-arg sb_pushline aktivieren.
     vterm_screen_callbacks_has_pushline4(m_screen);
     vterm_screen_set_unrecognised_fallbacks(m_screen, &kStateFallbacks, this);
+    // Alternate Screen (DECSET 1049) wirklich führen — sonst ignoriert libvterm die
+    // Sequenz und meldet nie VTERM_PROP_ALTSCREEN. Zwei Gründe (QTMUX-104): (1) das
+    // Maus-Reporting wird nur im Alt-Screen weitergeleitet; (2) nach einem TUI kehrt
+    // der vorherige Shell-Inhalt zurück (korrektes Terminal-Verhalten).
+    vterm_screen_enable_altscreen(m_screen, 1);
     vterm_screen_reset(m_screen, 1);
 }
 
@@ -331,6 +340,20 @@ bool VtScreen::lineContinuation(int row) const {
 void VtScreen::cbOutput(const QByteArray &data) { emit outputToPty(data); }
 
 void VtScreen::cbSetMouse(int mode) { m_mouseTracking = mode; }
+
+void VtScreen::cbSetAltScreen(bool on) { m_altScreen = on; }
+
+void VtScreen::resetInputModes() {
+    // Hängende Reporting-Modi lösen, ohne Bildschirm/Alt-Screen anzutasten. In den
+    // EIGENEN Parser gespeist: libvterm setzt m_mouseTracking dabei über cbSetMouse
+    // selbst zurück (konsistent mit dem regulären Weg). Enthalten:
+    //   1000/1002/1003  Maus-Klick/Drag/Move aus
+    //   1006            SGR-Maus-Erweiterung aus
+    //   2004            Bracketed Paste aus
+    //   \033[m          Attribute (SGR) zurücksetzen ; \033[?25h  Cursor sichtbar
+    // Bewusst NICHT 1049 (Alt-Screen) — der Reset soll den Inhalt nicht wegschalten.
+    inputWrite("\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?2004l\033[m\033[?25h");
+}
 
 // Qt-Tastaturmodifier → VTermModifier (nur die, die libvterm für die Maus kennt).
 static VTermModifier vtModifiers(Qt::KeyboardModifiers mods) {

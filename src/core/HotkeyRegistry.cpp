@@ -51,6 +51,8 @@ HotkeyRegistry::HotkeyRegistry(QObject *parent) : QObject(parent) {
         // QTMUX-61: Ctrl/Cmd+Shift+K wie in iTerm2/VS Code. Nicht Ctrl+K allein —
         // das ist in Shells „bis Zeilenende löschen" und gehört der Shell.
         {QStringLiteral("actClearScreen"),    QStringLiteral("Ctrl+Shift+K")},
+        // QTMUX-104: hängende Eingabe-Modi (Maus-Tracking/Paste) lösen. I = Input.
+        {QStringLiteral("actResetInput"),     QStringLiteral("Ctrl+Shift+I")},
         {QStringLiteral("actToggleTheme"),    QStringLiteral("Ctrl+D")},
         {QStringLiteral("actSettings"),       QStringLiteral("Ctrl+,")},
         // Bewusst OHNE Standard-Kürzel: F1 (und alle F-Tasten) gehören im Terminal der

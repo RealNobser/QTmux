@@ -28,7 +28,36 @@ private slots:
     void linkDetectionOnScreenLine();
     void serializeAnsiRoundTrip();
     void clearViewportKeepsScrollback();
+    void altScreenTracked();
+    void resetInputModesClearsMouse();
 };
+
+// Alternate Screen (DECSET/DECRST 1049) wird verfolgt (QTMUX-104): daran hängt, ob
+// TerminalItem Maus-Events an die App weiterleitet — im Primary Screen (Shell am Prompt)
+// nicht, damit ein hängen gebliebenes Tracking-Flag den Prompt nicht mit Codes flutet.
+void TestVtScreen::altScreenTracked() {
+    VtScreen vt(24, 80);
+    QVERIFY(!vt.altScreen());                 // Start: Primary Screen
+    vt.inputWrite("\x1b[?1049h");             // TUI betritt Alternate Screen
+    QVERIFY(vt.altScreen());
+    vt.inputWrite("\x1b[?1049l");             // TUI verlässt ihn wieder
+    QVERIFY(!vt.altScreen());
+}
+
+// resetInputModes() löst hängendes Maus-Tracking (der manuelle Notausgang), ohne den
+// Bildschirm zu leeren. Gegenprobe zum Bug: Tracking bleibt sonst != 0.
+void TestVtScreen::resetInputModesClearsMouse() {
+    VtScreen vt(24, 80);
+    vt.inputWrite("eins\r\nzwei");            // etwas Inhalt
+    vt.inputWrite("\x1b[?1000h\x1b[?1006h");  // ein TUI aktiviert Maus-Tracking …
+    QVERIFY(vt.mouseTracking() != 0);
+    // … und endet unsauber (kein DECRST). Der manuelle Reset räumt auf:
+    vt.resetInputModes();
+    QCOMPARE(vt.mouseTracking(), 0);
+    // Inhalt bleibt erhalten (kein Clear).
+    QVERIFY(vt.screenText().contains(QStringLiteral("eins")));
+    QVERIFY(vt.screenText().contains(QStringLiteral("zwei")));
+}
 
 // „Bildschirm leeren" darf NICHTS verlieren (QTMUX-61): Alles oberhalb der Cursorzeile
 // wandert in den Scrollback, die Cursorzeile rückt nach oben. Der Test misst genau das,

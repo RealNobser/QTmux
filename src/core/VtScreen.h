@@ -100,6 +100,19 @@ public:
     /// DECSET 1000/1002/1003). Ist er ungleich 0, sollen Maus-/Scrollrad-Events an
     /// die Anwendung gemeldet werden (statt lokal zu scrollen/selektieren).
     int mouseTracking() const { return m_mouseTracking; }
+    /// Ist der **Alternate Screen** aktiv (DECSET 1049)? Vollbild-TUIs — Agenten,
+    /// vim, htop, less — laufen dort; eine Shell am Prompt ist im Primary Screen.
+    /// Das Maus-Reporting wird nur im Alt-Screen weitergeleitet (QTMUX-102-Nachbar):
+    /// So schickt ein nach einem TUI-Abbruch **hängen gebliebenes** Tracking-Flag keine
+    /// SGR-Codes mehr in die zurückkehrende Shell, ohne die TUI-Maus zu brechen.
+    bool altScreen() const { return m_altScreen; }
+    /// Hängende Eingabe-Reporting-Modi lösen (Maus-Tracking, SGR-Maus, Bracketed Paste)
+    /// und Attribute/Cursor normalisieren — **ohne** den Bildschirm zu leeren oder den
+    /// Alt-Screen umzuschalten. Der manuelle Notausgang, wenn ein TUI unsauber endete
+    /// (Crash, `kill`, SSH-Abbruch) und Modi zurückließ. Die Sequenzen gehen in den
+    /// EIGENEN Parser (nicht ans PTY) → `m_mouseTracking` wird über den normalen
+    /// cbSetMouse-Pfad sauber auf 0 gesetzt.
+    void resetInputModes();
     /// Mausbewegung an die Anwendung melden (0-basierte Zelle). No-op ohne Tracking;
     /// libvterm sendet nur, wenn der aktive Modus die Bewegung verlangt.
     void mouseMove(int row, int col, Qt::KeyboardModifiers mods);
@@ -144,6 +157,7 @@ public:
     void cbPushScrollback(std::vector<Cell> &&line, bool continuation);
     void cbOutput(const QByteArray &data);
     void cbSetMouse(int mode);
+    void cbSetAltScreen(bool on);
     /// Sammelt OSC-Fragmente (libvterm liefert sie ggf. stückweise) und parst sie.
     void cbOsc(int command, const char *str, int len, bool initial, bool final);
 
@@ -157,6 +171,7 @@ private:
     bool m_cursorVisible = true;
     QString m_title;
     int m_mouseTracking = 0;   // VTERM_PROP_MOUSE: 0=aus,1=Klick,2=Drag,3=Move
+    bool m_altScreen = false;  // VTERM_PROP_ALTSCREEN: Vollbild-TUI aktiv (DECSET 1049)
 
     // Scrollback-Zeile + ob sie ein weicher Umbruch der vorigen ist (für Copy).
     struct SbLine {

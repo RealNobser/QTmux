@@ -774,6 +774,14 @@ bool SessionModel::clearViewport(int row) const {
     return screen && screen->clearViewportKeepScrollback();
 }
 
+bool SessionModel::resetInputModes(int row) const {
+    if (row < 0 || row >= m_sessions.size()) return false;
+    VtScreen *screen = m_sessions.at(row)->screen();
+    if (!screen) return false;
+    screen->resetInputModes();
+    return true;
+}
+
 void SessionModel::pruneHistoryExcept(const QList<int> &keys) const {
     QDir d(historyDir());
     if (!d.exists()) return;

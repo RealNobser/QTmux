@@ -495,10 +495,31 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   (scroll-fest); **Soft-Wrap-Copy** via `sb_pushline4`-Continuation-Flags (eine logische
   Zeile ohne `\n` am weichen Umbruch).
 - **Maus-Reporting:** `VtScreen` trackt `VTERM_PROP_MOUSE` (DECSET 1000/1002/1003);
-  `TerminalItem` leitet Rad/Klick/Drag bei aktivem Tracking an libvterm (X10/SGR-Sequenzen),
-  sonst lokaler Scrollback/Selektion; **Shift+Drag** selektiert immer lokal. macOS:
-  Cmd=ControlModifier, physisches Ctrl=Meta. libvterm **entprellt** (Tests brauchen
-  press→release-Paare). Hover-only-Tracking (1003 ohne Taste) nicht gemeldet.
+  `TerminalItem` leitet Rad/Klick/Drag an libvterm (X10/SGR-Sequenzen), sonst lokaler
+  Scrollback/Selektion; **Shift+Drag** selektiert immer lokal. macOS: Cmd=ControlModifier,
+  physisches Ctrl=Meta. libvterm **entprellt** (Tests brauchen press→release-Paare).
+  Hover-only-Tracking (1003 ohne Taste) nicht gemeldet.
+  🔑 **Nur im Alternate Screen weiterleiten (QTMUX-104).** Bedingung ist
+  `appMouseActive() = mouseTracking() != 0 && altScreen()`. Grund: Endet ein Maus-TUI
+  **unsauber** (Crash, `kill`, SSH-Abbruch), kommt kein `DECRST` und das Tracking-Flag bleibt
+  hängen — die zurückkehrende Shell füllte sich sonst bei jeder Mausbewegung mit SGR-Codes
+  (`35;63;49M…`). Vollbild-TUIs (Agenten, vim, htop, less) laufen im Alt-Screen, ihre Maus
+  bleibt also intakt; die Shell am Prompt ist im Primary Screen → dort nie weiterleiten.
+  🔑 **Voraussetzung: `vterm_screen_enable_altscreen(m_screen, 1)`** im Konstruktor (VOR
+  `reset`). Ohne das meldet libvterm **kein** `VTERM_PROP_ALTSCREEN`, und `altScreen()` bliebe
+  immer false (Gegenprobe: Test `altScreenTracked` FAIL). Nebeneffekt ist zugleich korrektes
+  Terminal-Verhalten: Nach einem TUI kehrt der vorherige Shell-Inhalt zurück (Alt-Screen-Puffer);
+  am Scrollback-Dump (QTMUX-81, `serializeAnsiRoundTrip`) ändert sich nichts.
+  ⚠️ **Falle beim Testen des Alt-Screen-Inhalts über MCP:** `1049h` blendet um, ein echtes TUI
+  **löscht** den Alt-Screen selbst — ein Testskript ohne `\033[2J` zeigt darum Reste des
+  Primary, was wie ein fehlender Wechsel aussieht. Mit `clear`/sleep im Alt-Screen sauber
+  messbar (dann nur der Alt-Inhalt sichtbar).
+  🔑 **Manueller Notausgang (QTMUX-104):** `VtScreen::resetInputModes()` speist DECRST-Sequenzen
+  (1000/1002/1003/1006 Maus, 2004 Bracketed Paste, SGR-Reset, Cursor sichtbar) in den EIGENEN
+  Parser — `m_mouseTracking` geht über den regulären `cbSetMouse`-Pfad auf 0, **ohne** Bildschirm
+  oder Alt-Screen anzutasten. In der GUI „Terminal-Eingabe zurücksetzen" (Ctrl/Cmd+Shift+I,
+  Menü, Palette). Für die Fälle, in denen auch der Alt-Screen hängt. Tests
+  `altScreenTracked`, `resetInputModesClearsMouse`.
 - **Bildschirm leeren, Verlauf behalten (QTMUX-61):** `VtScreen::clearViewportKeepScrollback()`
   schiebt alles **oberhalb der Cursorzeile** in den Scrollback; die Prompt-Zeile rückt nach
   oben. Umgesetzt als **CSI `<n>` S** (Scroll Up) in den **eigenen** Parser (`inputWrite`) —

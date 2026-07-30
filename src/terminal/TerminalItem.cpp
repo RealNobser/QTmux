@@ -1162,6 +1162,15 @@ static int vtMouseButton(Qt::MouseButton b) {
     }
 }
 
+// Maus-/Rad-Events an die App melden nur, wenn Tracking aktiv **und** ein Vollbild-TUI
+// (Alternate Screen) läuft (QTMUX-104). Die Alt-Screen-Bedingung schützt die Shell: Endet
+// ein TUI unsauber (Crash, `kill`, SSH-Abbruch), bleibt das Tracking-Flag hängen und
+// schickte sonst SGR-Codes in den zurückkehrenden Prompt — die zsh füllt sich mit
+// „35;63;49M…". vim/htop/less/Agenten laufen im Alt-Screen, ihre Maus bleibt also intakt.
+static bool appMouseActive(const VtScreen *sc) {
+    return sc && sc->mouseTracking() != 0 && sc->altScreen();
+}
+
 void TerminalItem::mousePressEvent(QMouseEvent *event) {
     forceActiveFocus();
     // Cmd/Ctrl+Linksklick auf einen erkannten Link öffnet ihn im verknüpften Viewer —
@@ -1177,7 +1186,7 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
     // App mit Maus-Tracking: Klicks an die App melden (vim/htop/tmux/…). Shift
     // erzwingt weiterhin die lokale Text-Selektion (übliche Terminal-Konvention).
     const int btn = vtMouseButton(event->button());
-    if (sc && sc->mouseTracking() != 0 && btn > 0
+    if (appMouseActive(sc) && btn > 0
             && !(event->modifiers() & Qt::ShiftModifier)) {
         const QPoint c = cellAt(event->position());
         m_lastMouseCell = c;
@@ -1285,7 +1294,7 @@ void TerminalItem::wheelEvent(QWheelEvent *event) {
     // scrollt. Ohne das täte das Rad hier nur den (im Alt-Screen leeren) lokalen
     // Scrollback bewegen → Rad scheint „tot".
     VtScreen *sc = screen();
-    if (sc && sc->mouseTracking() != 0) {
+    if (appMouseActive(sc)) {
         const QPoint c = cellAt(event->position());
         sc->mouseButton(dy > 0 ? 4 : 5, true, c.y(), c.x(), event->modifiers());
         event->accept();

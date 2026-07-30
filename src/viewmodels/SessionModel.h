@@ -143,6 +143,11 @@ public:
     /// verwirft je nach Agent/TUI den Verlauf und würde außerdem in der Eingabezeile eines
     /// laufenden Agenten landen. Liefert false, wenn es nichts zu tun gab.
     Q_INVOKABLE bool clearViewport(int row) const;
+
+    /// Hängende Eingabe-Modi der Session lösen (Maus-Tracking, Bracketed Paste) — der
+    /// manuelle Notausgang, wenn ein TUI unsauber endete (QTMUX-104). Leert den Bildschirm
+    /// NICHT. Liefert false ohne gültige Session/Screen.
+    Q_INVOKABLE bool resetInputModes(int row) const;
     /// Entfernt alle <historyDir>/<n>.ans, deren n NICHT in `keys` (den aktuellen
     /// paneIds) liegt — räumt Dumps geschlossener Panes weg.
     Q_INVOKABLE void pruneHistoryExcept(const QList<int> &keys) const;

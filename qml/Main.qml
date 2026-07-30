@@ -410,6 +410,13 @@ ApplicationWindow {
         if (!sessions.clearViewport(window.currentRow))
             window.notifyToast(qsTr("Der Bildschirm ist bereits leer."))
     }
+    // Hängende Eingabe-Modi der aktiven Session lösen (QTMUX-104): der Notausgang, wenn ein
+    // Agent/TUI unsauber endete und Maus-Tracking zurückließ (SGR-Codes im Prompt).
+    function resetActiveInput() {
+        if (window.currentRow < 0) return
+        if (sessions.resetInputModes(window.currentRow))
+            window.notifyToast(qsTr("Terminal-Eingabe zurückgesetzt (Maus/Einfügen)."))
+    }
 
     // Broadcast-/Sync-Input: getippte Eingabe geht an ALLE Sessions (Multi-Agent).
     // Bewusst NICHT persistiert (Footgun) — startet je Sitzung aus.
@@ -636,6 +643,7 @@ ApplicationWindow {
         case "actMcpToggle":      return qsTr("MCP-Server umschalten")
         case "actZoomReset":      return qsTr("Schriftgröße zurücksetzen")
         case "actClearScreen":    return qsTr("Bildschirm leeren")
+        case "actResetInput":     return qsTr("Terminal-Eingabe zurücksetzen")
         case "actToggleTheme":    return qsTr("Design umschalten")
         case "actSettings":       return qsTr("Einstellungen")
         case "actAbout":          return qsTr("Über QTmux")
@@ -1542,6 +1550,14 @@ ApplicationWindow {
         enabled: window.currentRow >= 0 && !prefs.capturing
         onTriggered: window.clearActiveScreen()
     }
+    // Terminal-Eingabe zurücksetzen: hängende Maus-/Paste-Modi lösen (QTMUX-104).
+    Action {
+        id: actResetInput
+        text: qsTr("Terminal-Eingabe zurücksetzen")
+        shortcut: Hotkeys.bindings["actResetInput"]
+        enabled: window.currentRow >= 0 && !prefs.capturing
+        onTriggered: window.resetActiveInput()
+    }
     // Broadcast-Input umschalten: Eingabe an alle Sessions.
     Action {
         id: actBroadcast
@@ -1902,6 +1918,7 @@ ApplicationWindow {
                             { title: qsTr("Schrift verkleinern"),        sub: "",             icon: "x",               run: function(){ window.zoomTerminal(-1) } },
                             { title: qsTr("Schriftgröße zurücksetzen"),  sub: hk("actZoomReset"), icon: "gear",            run: function(){ window.resetTerminalZoom() } },
                             { title: qsTr("Bildschirm leeren"),          sub: hk("actClearScreen"), icon: "x",             run: function(){ window.clearActiveScreen() } },
+                            { title: qsTr("Terminal-Eingabe zurücksetzen"), sub: hk("actResetInput"), icon: "terminal-window", run: function(){ window.resetActiveInput() } },
                             { title: qsTr("Eingabe an alle Sessions"),   sub: hk("actBroadcast"), icon: "broadcast-input", run: function(){ window.broadcastInput = !window.broadcastInput } },
                             { title: qsTr("Design umschalten"),          sub: hk("actToggleTheme"), icon: "moon",            run: function(){ Theme.toggle() } },
                             { title: qsTr("Einstellungen …"),            sub: hk("actSettings"), icon: "gear",            run: function(){ prefs.open() } },
@@ -2263,6 +2280,7 @@ ApplicationWindow {
             MenuSeparator {}
             // QTMUX-61: leert nur die Ansicht, der Verlauf bleibt im Scrollback.
             ShortcutMenuItem { action: actClearScreen; icon.source: window.icon("x"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
+            ShortcutMenuItem { action: actResetInput }
             MenuSeparator {}
             ShortcutMenuItem {
                 action: actBroadcast
