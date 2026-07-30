@@ -456,6 +456,8 @@ ApplicationWindow {
     readonly property int sidebarIconWidth: 52
     property int sidebarWidth: 240
     property bool sidebarCollapsed: false
+    // Statusleiste (Design 1a, Teil B) — Vorgabe an, Umschalter in „Ansicht".
+    property bool statusBarVisible: true
     // Effektive Breite: EINE Quelle für Layout, Splitter und Animation.
     readonly property int sidebarEffectiveWidth:
         sidebarCollapsed ? sidebarIconWidth
@@ -1556,6 +1558,7 @@ ApplicationWindow {
         category: "ui"
         property alias sidebarWidth: window.sidebarWidth
         property alias sidebarCollapsed: window.sidebarCollapsed
+        property alias statusBarVisible: window.statusBarVisible
     }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
@@ -1643,6 +1646,18 @@ ApplicationWindow {
         checked: !window.sidebarCollapsed
         enabled: !prefs.capturing
         onTriggered: window.sidebarCollapsed = !window.sidebarCollapsed
+    }
+
+    // Statusleiste ein-/ausblenden (Design 1a, Teil B). Wie die Seitenleiste ein
+    // Ansichtsumschalter, darf also checkbar im Menü stehen. Bewusst ohne Standard-
+    // Kürzel: Tasten sind im Terminal knapp, und die Leiste blendet man selten um.
+    Action {
+        id: actToggleStatusBar
+        text: qsTr("Statusleiste anzeigen")
+        checkable: true
+        checked: window.statusBarVisible
+        enabled: !prefs.capturing
+        onTriggered: window.statusBarVisible = !window.statusBarVisible
     }
 
     // Bildschirm leeren, Verlauf behalten (QTMUX-61).
@@ -1820,6 +1835,159 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+7"; enabled: !prefs.capturing; onActivated: if (windows.count > 6) window.loadWindowRow(6) }
     Shortcut { sequence: "Ctrl+8"; enabled: !prefs.capturing; onActivated: if (windows.count > 7) window.loadWindowRow(7) }
     Shortcut { sequence: "Ctrl+9"; enabled: !prefs.capturing; onActivated: if (windows.count > 8) window.loadWindowRow(8) }
+
+    // Ein Feld der Statusleiste (Design 1a, Teil B): klickbar, mit Hover-Fläche und
+    // ToolTip, der die Aktion benennt. Als Inline-Komponente, damit die sieben Felder
+    // nicht siebenmal dasselbe Gerüst wiederholen.
+    component StatusField: Item {
+        id: sf
+        property string label
+        property color labelColor: Theme.textDim
+        property color dotColor: "transparent"
+        property string tip
+        property bool clickable: true
+        signal clicked()
+        signal rightClicked()
+
+        implicitWidth: sfRow.implicitWidth + 14
+        implicitHeight: 20
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 3
+            anchors.bottomMargin: 3
+            radius: 4
+            color: (sfHover.hovered && sf.clickable) ? Theme.sidebarHover : "transparent"
+        }
+        Row {
+            id: sfRow
+            anchors.centerIn: parent
+            spacing: 5
+            Rectangle {
+                visible: sf.dotColor !== "transparent"
+                width: 7; height: 7; radius: 3.5
+                color: sf.dotColor
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            Text {
+                text: sf.label
+                color: sf.labelColor
+                font.pixelSize: 11
+                font.family: window.terminalFontFamily
+                anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+        HoverHandler { id: sfHover; cursorShape: sf.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor }
+        TapHandler { onTapped: if (sf.clickable) sf.clicked() }
+        TapHandler { acceptedButtons: Qt.RightButton; onTapped: sf.rightClicked() }
+        AppToolTip { visible: sfHover.hovered && sf.tip.length > 0; text: sf.tip }
+    }
+
+    // --- Statusleiste unten (Design 1a, Teil B) -----------------------------
+    // Zweck: Zustände, die vorher nur in Menüs standen, dauerhaft ablesbar machen —
+    // und per Klick umschaltbar. Damit können die entsprechenden Menü-Umschalter in
+    // Stufe 4 verschwinden, ohne dass Funktion verloren geht.
+    footer: Rectangle {
+        visible: window.statusBarVisible
+        height: visible ? 26 : 0
+        color: Theme.bgSidebar
+
+        Rectangle {   // Oberkante
+            anchors.top: parent.top
+            width: parent.width; height: 1
+            color: Theme.border
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 6
+            anchors.rightMargin: 6
+            spacing: 2
+
+            // 1) Aktive Session: Statuspunkt, #id, Titel, Arbeitsverzeichnis.
+            StatusField {
+                readonly property var actWin: (window.windowsRevision,
+                                               windows.windowById(window.activeWindowId))
+                readonly property int actSid: (window.sessionsRevision,
+                                               window.windowActiveSessionId(actWin))
+                dotColor: {
+                    const st = window.windowRunState(actWin)
+                    return window.windowAttention(actWin) ? Theme.accent
+                         : st === 1 ? "#46d369" : st === 2 ? "#f5c451"
+                         : st === 3 ? "#e5534b" : st === 4 ? "#5a5d6a" : Theme.textDim
+                }
+                label: {
+                    if (actSid < 0) return qsTr("keine Session")
+                    const dir = window.prettyDir(window.windowWorkingDir(actWin))
+                    let t = "#" + actSid + "  " + window.windowTitle(actWin)
+                    return dir.length > 0 ? t + "  " + dir : t
+                }
+                labelColor: Theme.textBright
+                tip: qsTr("Klick: Fokus ins aktive Pane")
+                Layout.maximumWidth: 460
+                onClicked: window.focusActivePane()
+            }
+
+            // 2) Zusammenfassung — Zähler nur, wenn sie etwas zu sagen haben.
+            StatusField {
+                clickable: false
+                label: {
+                    let t = qsTr("%1 Sessions").arg(sessions.count)
+                    if (sessions.waitingCount > 0) t += " · " + qsTr("%1 wartet").arg(sessions.waitingCount)
+                    if (sessions.errorCount > 0)   t += " · " + qsTr("%1 Fehler").arg(sessions.errorCount)
+                    return t
+                }
+                tip: qsTr("Sessions insgesamt, wartend, mit Fehler")
+            }
+
+            // 3) Kodierung. Die Rastergröße (80×24) fehlt hier bewusst noch: sie lebt im
+            //    TerminalItem des aktiven Panes und ist von hier nicht erreichbar, ohne
+            //    Spalten/Zeilen erst an der Session zu veröffentlichen — kommt separat,
+            //    lieber leer als geraten.
+            StatusField {
+                clickable: false
+                label: "UTF-8"
+                tip: qsTr("Kodierung des Terminals")
+            }
+
+            Item { Layout.fillWidth: true }   // ab hier rechtsbündig
+
+            // 4) MCP-Server
+            StatusField {
+                label: mcp.listening ? qsTr("MCP :%1").arg(mcp.port) : qsTr("MCP aus")
+                labelColor: mcp.listening ? Theme.accent : Theme.textDim
+                tip: mcp.listening ? qsTr("Klick: MCP-Server stoppen · Rechtsklick: Einstellungen")
+                                   : qsTr("Klick: MCP-Server starten · Rechtsklick: Einstellungen")
+                onClicked: mcp.listening ? mcp.stop() : mcp.start()
+                onRightClicked: prefs.open("agenten")
+            }
+
+            // 5) Vault
+            StatusField {
+                label: Vault.unlocked ? qsTr("Vault offen") : qsTr("Vault zu")
+                labelColor: Vault.unlocked ? Theme.accent : Theme.textDim
+                tip: qsTr("Klick: Vault verwalten")
+                onClicked: prefs.open("vault")
+                onRightClicked: prefs.open("vault")
+            }
+
+            // 6) Broadcast-Eingabe
+            StatusField {
+                label: qsTr("Broadcast")
+                labelColor: window.broadcastInput ? Theme.accent : Theme.textDim
+                tip: qsTr("Klick: Eingabe an alle Sessions umschalten")
+                onClicked: window.broadcastInput = !window.broadcastInput
+            }
+
+            // 7) Design + Farbschema
+            StatusField {
+                label: (Theme.dark ? qsTr("Dunkel") : qsTr("Hell")) + " · " + ColorSchemes.current
+                tip: qsTr("Klick: Design umschalten · Rechtsklick: Erscheinungsbild")
+                onClicked: Theme.toggle()
+                onRightClicked: prefs.open("erscheinungsbild")
+            }
+        }
+    }
 
     // --- Toolbar oben: Schnellzugriff mit Phosphor-Icons --------------------
     header: ToolBar {
@@ -2030,6 +2198,10 @@ ApplicationWindow {
                                                              : qsTr("Seitenleiste einklappen"),
                               sub: hk("actToggleSidebar"), icon: "split-h",
                               run: function(){ window.sidebarCollapsed = !window.sidebarCollapsed } },
+                            { title: window.statusBarVisible ? qsTr("Statusleiste ausblenden")
+                                                             : qsTr("Statusleiste anzeigen"),
+                              sub: "", icon: "split-v",
+                              run: function(){ window.statusBarVisible = !window.statusBarVisible } },
                             { title: qsTr("Einstellungen …"),            sub: hk("actSettings"), icon: "gear",            run: function(){ prefs.open() } },
                             { title: qsTr("MCP-Server umschalten"),      sub: hk("actMcpToggle"), icon: "broadcast",       run: function(){ mcp.listening ? mcp.stop() : mcp.start() } },
                             { title: qsTr("Kopieren"),                   sub: App.shortcutText("Ctrl+C"), icon: "copy",            run: function(){ if (window.activeTerminal) window.activeTerminal.copy() } },
@@ -2426,6 +2598,7 @@ ApplicationWindow {
             // Ansichtsumschalter (Design 1a): darf als checkbarer Eintrag bleiben, weil er
             // eine Eigenschaft DIESES Fensters umschaltet und keine Einstellung.
             ShortcutMenuItem { action: actToggleSidebar }
+            ShortcutMenuItem { action: actToggleStatusBar }
         }
         ThemedMenu {
             title: qsTr("&Sprache")
@@ -2990,6 +3163,18 @@ ApplicationWindow {
                             padding: 10
                             closePolicy: Popup.NoAutoClose
                             background: AppPopupBg {}
+                            // 🔑 Der Popup-INHALT entsteht mit der Kachel, nicht beim
+                            // Öffnen — und `Date.now()` ist keine reaktive Größe. Ohne
+                            // diesen Takt wurde die Dauer EINMAL beim App-Start gerechnet
+                            // und stand danach für immer auf „seit 0 s" (am Bild gesehen).
+                            property int tick: 0
+                            onOpened: tick++
+                            Timer {
+                                running: flyout.opened
+                                interval: 1000
+                                repeat: true
+                                onTriggered: flyout.tick++
+                            }
                             contentItem: ColumnLayout {
                                 spacing: 4
                                 RowLayout {
@@ -3030,7 +3215,8 @@ ApplicationWindow {
                                     visible: text.length > 0
                                     // Zustand steht als TEXT da, nicht nur als Punktfarbe
                                     // (D4: kein Informationsverlust allein über Farbe).
-                                    text: window.sidebarStateText(tile.activeSid)
+                                    // `flyout.tick` ist der Anker, der die Dauer weiterzählt.
+                                    text: (flyout.tick, window.sidebarStateText(tile.activeSid))
                                     color: Theme.textDim
                                     font.pixelSize: 11
                                     Layout.fillWidth: true

@@ -689,8 +689,8 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Nutzer-Einstellungen ist der `Settings`-Block **`window/*`** in
   [qml/Main.qml](qml/Main.qml) (plus `ui/language`, `ui/themeMode`, `mcp/port` aus C++).
   Seit 2026-07-30 gibt es dort einen **zweiten** Block **`ui/*`** — der hält bewusst nur
-  **Ansichtszustand** (Seitenleiste ein-/ausgeklappt und ihre Breite) und gehört wie
-  `windows/*` **nicht** in den Dialog. Wer auditiert, liest beide Blöcke und sortiert
+  **Ansichtszustand** (Seitenleiste ein-/ausgeklappt, ihre Breite, Statusleiste sichtbar)
+  und gehört wie `windows/*` **nicht** in den Dialog. Wer auditiert, liest beide Blöcke und sortiert
   Zustand aus. Jeden Alias von dort gegen
   [qml/prefs/](qml/prefs/) greppen — was fehlt, ist entweder eine Lücke oder bewusst
   **Laufzeitzustand** (`newSessionType`, `collapsedGroups`; die gehören NICHT in den Dialog).

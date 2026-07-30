@@ -105,6 +105,11 @@ void SessionModel::wireSession(Session *s, int row) {
     connect(s, &Session::activityChanged, this, &SessionModel::updateSleepInhibit);
     connect(s, &Session::stateChanged,    this, &SessionModel::updateSleepInhibit);
 
+    // Statusleisten-Zähler (Design 1a, Teil B): eigene Verbindung, aus demselben Grund
+    // wie oben — die Zähler sollen auch dann stimmen, wenn an `refresh` etwas geändert
+    // wird. `countersChanged` ist der Bindungsanker für die Statusleiste.
+    connect(s, &Session::activityChanged, this, &SessionModel::countersChanged);
+
     // Steigt die Aufmerksamkeit, das Fenster informieren (Dock-/Taskbar-Alert).
     connect(s, &Session::attentionChanged, this, [this, s]() {
         if (s->needsAttention()) {
@@ -173,6 +178,7 @@ int SessionModel::createShellSession(const QString &workingDir, const QString &p
     wireSession(s, row);
     s->start(80, 24);
     emit countChanged();
+    emit countersChanged();   // Statusleisten-Zaehler haengen an der Session-Menge
     saveState();
     return row;
 }
@@ -207,6 +213,7 @@ int SessionModel::createSerialSession(const QString &portName, int baud,
     wireSession(s, row);
     s->start(80, 24);
     emit countChanged();
+    emit countersChanged();   // Statusleisten-Zaehler haengen an der Session-Menge
     saveState();
     return row;
 }
@@ -240,6 +247,7 @@ int SessionModel::createSshSession(const QString &host, int port,
     wireSession(s, row);
     s->start(80, 24);
     emit countChanged();
+    emit countersChanged();   // Statusleisten-Zaehler haengen an der Session-Menge
     saveState();
     return row;
 }
@@ -268,6 +276,7 @@ int SessionModel::createPluginSession(const QString &pluginId, const QString &ty
     wireSession(s, row);
     s->start(80, 24);
     emit countChanged();
+    emit countersChanged();   // Statusleisten-Zaehler haengen an der Session-Menge
     saveState();
     return row;
 }
@@ -282,6 +291,20 @@ QStringList SessionModel::availableSerialPorts() const {
 QObject *SessionModel::sessionAt(int row) const {
     if (row < 0 || row >= count()) return nullptr;
     return m_sessions.at(row);
+}
+
+int SessionModel::waitingCount() const {
+    int n = 0;
+    for (Session *s : m_sessions)
+        if (s && s->activity() == Session::Activity::Waiting) ++n;
+    return n;
+}
+
+int SessionModel::errorCount() const {
+    int n = 0;
+    for (Session *s : m_sessions)
+        if (s && s->activity() == Session::Activity::Error) ++n;
+    return n;
 }
 
 int SessionModel::rowForId(int id) const {
@@ -313,6 +336,7 @@ void SessionModel::closeSession(int row) {
     endRemoveRows();
     s->deleteLater();
     emit countChanged();
+    emit countersChanged();   // Statusleisten-Zaehler haengen an der Session-Menge
     emit groupsChanged();
     // Die geschlossene Session kann die letzte gewesen sein, die „busy" meldete. Ihre
     // Signalverbindung stirbt mit ihr, also hier ausdrücklich nachführen — sonst bliebe

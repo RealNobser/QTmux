@@ -14,6 +14,7 @@ class TestSessionGroups : public QObject {
 private slots:
     void initTestCase();
     void init();
+    void statusBarCounters();
     void groupsFormContiguousBlocks();
     void firstMemberStaysInPlace();
     void newGroupLeavesForeignBlockIntact();
@@ -48,6 +49,41 @@ void TestSessionGroups::initTestCase() {
 
 void TestSessionGroups::init() {
     QSettings().clear();
+}
+
+// Aggregat-Zähler der Statusleiste (Design 1a, Teil B): wie viele Sessions warten auf
+// Eingabe bzw. melden einen Fehler. Gezählt wird die selbst gemeldete Activity — der
+// Startwert Running darf NICHT als „wartet" durchgehen (Gegenprobe unten).
+void TestSessionGroups::statusBarCounters() {
+    SessionModel m;
+    for (int i = 0; i < 3; ++i) QVERIFY(m.createShellSession() >= 0);
+    QCOMPARE(m.count(), 3);
+    // Frisch angelegt: niemand wartet, niemand meldet Fehler.
+    QCOMPARE(m.waitingCount(), 0);
+    QCOMPARE(m.errorCount(), 0);
+
+    auto *s0 = qobject_cast<Session *>(m.sessionAt(0));
+    auto *s1 = qobject_cast<Session *>(m.sessionAt(1));
+    auto *s2 = qobject_cast<Session *>(m.sessionAt(2));
+    QVERIFY(s0 && s1 && s2);
+
+    QSignalSpy spy(&m, &SessionModel::countersChanged);
+    s0->requestActivity(QStringLiteral("waiting"));
+    s1->requestActivity(QStringLiteral("waiting"));
+    s2->requestActivity(QStringLiteral("error"));
+    QCOMPARE(m.waitingCount(), 2);
+    QCOMPARE(m.errorCount(), 1);
+    QVERIFY(spy.count() >= 3);      // die Anzeige wird über countersChanged angestoßen
+
+    // Zurück auf „arbeitet": beide Zähler müssen wieder fallen — sonst bliebe in der
+    // Statusleiste für immer „1 Fehler" stehen.
+    s2->requestActivity(QStringLiteral("busy"));
+    QCOMPARE(m.errorCount(), 0);
+    QCOMPARE(m.waitingCount(), 2);
+
+    // Gegenprobe: Schließen einer wartenden Session senkt den Zähler.
+    m.closeSession(0);
+    QCOMPARE(m.waitingCount(), 1);
 }
 
 // Vier Sessions, zwei davon in dieselbe Gruppe: die Gruppe muss danach ein

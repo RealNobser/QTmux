@@ -24,6 +24,13 @@ class SessionModel : public QAbstractListModel {
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(bool preventSleep READ preventSleep WRITE setPreventSleep NOTIFY preventSleepChanged)
     Q_PROPERTY(bool sleepInhibited READ sleepInhibited NOTIFY sleepInhibitedChanged)
+    // Aggregat für die Statusleiste (Design 1a, Teil B): wie viele Sessions warten auf
+    // Eingabe bzw. melden einen Fehler. Bewusst HIER und nicht in WindowModel — die
+    // Sessions liegen in diesem Model, und so bleiben die Zähler ohne Umweg testbar.
+    // Gezählt wird die selbst gemeldete Activity (OSC 133 / MCP `set_activity`), also
+    // dieselbe Quelle wie der Zustandstext des Flyouts.
+    Q_PROPERTY(int waitingCount READ waitingCount NOTIFY countersChanged)
+    Q_PROPERTY(int errorCount READ errorCount NOTIFY countersChanged)
 public:
     enum Roles {
         TitleRole = Qt::UserRole + 1,
@@ -50,6 +57,9 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     int count() const { return static_cast<int>(m_sessions.size()); }
+
+    int waitingCount() const;
+    int errorCount() const;
 
     /// Erzeugt eine lokale Shell-Session und gibt die Zeile zurück.
     /// `workingDir` leer = Home; `program` leer = plattformübliche Standard-Shell.
@@ -205,6 +215,8 @@ signals:
     /// Die Sperre wurde gesetzt oder freigegeben.
     void sleepInhibitedChanged();
     void countChanged();
+    /// Die Statusleisten-Zähler (waitingCount/errorCount) können sich geändert haben.
+    void countersChanged();
     /// Eine Gruppenzuordnung hat sich geändert (QTMUX-42). groups()/groupSize()
     /// sind Funktionen, keine Properties — QML-Bindungen darauf brauchen diesen
     /// Anker, sonst zeigen Kopfzeilen und Menüs veraltete Stände.
