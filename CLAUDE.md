@@ -397,11 +397,71 @@ bleibt „Einstellungen …" auch dort im Datei-Menü (Details in der Feature-Re
 sprach noch vom Split-Modell; (3) „Alle nach vorne" fehlt im macOS-Fenster-Menü (ein Fenster
 je Prozess, keine Qt-Quick-Aktion dafür). Neu in C++: `TerminalItem::selectAll()`.
 
-**Offen aus 1–4, bewusst nicht behauptet:** Rastergröße (80×24) fehlt im Statusleisten-Feld
+**Offen aus 1–5, bewusst nicht behauptet:** Rastergröße (80×24) fehlt im Statusleisten-Feld
 (sie lebt im `TerminalItem`, dafür müssten Spalten/Zeilen erst an der Session veröffentlicht
 werden) · macOS/Linux ungeprüft — insbesondere ist das **Fenster-Menü dort nie gelaufen**
-(auf Windows ist es per `removeMenu` entfernt) · Owner-Durchklick von Leiste, Statusleiste
-und der neuen Menüstruktur offen.
+(auf Windows ist es per `removeMenu` entfernt) · Owner-Durchklick von Leiste, Statusleiste,
+Menüstruktur und Einstellungsfenster offen.
+
+### ÜBERGABE an die macOS-Session (Stand 2026-07-30, `91fecfd`)
+
+Die Stufen 1–5 sind **ausschließlich auf Windows** gebaut und geprüft. Auf dem Mac ist der
+letzte belegte Teststand `2e9eeec` (18/18) — alles danach ist dort **ungesehen**. Diese Liste
+ist der Auftrag für die Mac-Session; Anweisung selbst: `Arbeitsanweisung-1a-2a.md` im
+Design-Projekt (über `DesignSync`, s. oben).
+
+**0. Lage prüfen, bevor irgendetwas gebaut wird.**
+`git fetch && git log --oneline -3` → erwartet `91fecfd`. Teilen Mac und Windows dieselbe
+Arbeitskopie ([[zwei-sessions-eine-arbeitskopie]]), ist der Stand schon da; sonst pullen.
+⚠️ **Die Produktivinstanz läuft aus `build/macos`** und deren Binary ist vom **28.07.**, also
+ohne QTMUX-85/-97/-98 **und ohne die Stufen 1–5**. Nicht dorthin bauen, solange sie läuft —
+das Überschreiben reißt alle Terminal-Sessions mit. Erst `lsof -nP -iTCP:7345 -sTCP:LISTEN`,
+dann in `build/macos-test` (Debug) bzw. `build/macos-release` bauen.
+
+**1. Bauen und Tests.**
+```bash
+cmake --preset macos -B build/macos-test && cmake --build build/macos-test
+ctest --test-dir build/macos-test --output-on-failure          # erwartet 18/18
+cmake --preset macos-release && cmake --build --preset macos-release
+```
+
+**2. Die macOS-spezifischen Punkte — das ist der eigentliche Grund der Übergabe.**
+Jeder Punkt ist auf Windows **prinzipiell nicht** prüfbar:
+- **Fenster-Menü** (Minimieren · Zoomen): existiert nur hier. Auf Windows wird es per
+  `appMenuBar.removeMenu(macWindowMenu)` entfernt — also ist der `visible`-freie Pfad dort nie
+  gelaufen. Prüfen: Menü vorhanden, beide Einträge wirken, **kein** doppeltes Fenster-Menü
+  neben dem von Cocoa.
+- **Natives Menü mit sechs Menüs**: „Einstellungen …" bleibt bewusst im **Datei**-Menü
+  (QtQuick.Controls kennt keine Menü-Rollen — Begründung in der Feature-Referenz). Prüfen, ob
+  Cocoa daneben eigene App-Menü-Einträge zeigt und ob das verwirrt; **nicht** „reparieren",
+  sondern Befund notieren.
+- ⚠️ **Menü-Icons fehlen im nativen Menü** — das ist QTMUX-13 (deferred), **kein** neuer
+  Fehler der Stufe 4.
+- **Kürzel**: Seitenleiste = **Cmd+B** (auf Windows/Linux Ctrl+Shift+L), `Cmd+A` = Alles
+  auswählen (auf Windows bewusst ohne Kürzel, dort gehört Ctrl+A der Shell). Prüfen, dass
+  Cmd+A das Terminal nicht kapert und `tst_hotkeys::defaultsAreConflictFree` grün bleibt.
+- **Einstellungsfenster** (Stufe 5): Rail-Gruppen, `PrefRow`-Zeilen, `SegmentedControl`,
+  `AppSwitch` und die Lesbarkeit von `Theme.accentText` in **beiden** Designs.
+- **Seitenleiste eingeklappt + Flyout + Statusleiste** (Stufen 1–3) sind auf dem Mac ebenfalls
+  ungesehen; dazu `App.reduceMotion` (dort echte Systemeinstellung).
+- Screenshots: `--screenshot` greift nur das **Root**-Fenster; für das Einstellungsfenster
+  `screencapture -l <windowid>` o. Ä. nehmen (der Windows-Weg über `EnumWindows`/`PrintWindow`
+  gilt dort nicht).
+
+**3. Jira/Confluence nachtragen — geht NUR vom Mac** (`CLAUDE.local.md` existiert nur dort).
+Vorher in **beiden** Systemen die höchste Nummer holen (`ORDER BY key DESC`, maxResults 1):
+- **QTMUX-2 → Done** (Funktionstest bestanden; die PowerShell-Einschränkung ist keine
+  Bringschuld von QTmux).
+- Neu anlegen: **Verzeichniszeile auf der Kachel** · **OSC 7** · **`--screenshot` auf Windows**
+  (behoben, nur nachzutragen) · **Design 1a/2a** — sinnvoll ein Ticket je Stufe, 1–5 sofort
+  als umgesetzt (Commits `1a644c3`, `dd7df2f`, `d421e1e`, `aa269a1`), 6–7 offen.
+- Kanban dual weiterschieben, Kurzkommentar je Ticket.
+
+**4. Danach.** Standard: **Stufe 6** (`SettingsIo`) macht weiterhin die **Windows**-Session,
+der Mac übernimmt Verifikation + Jira/Confluence. Wird auf dem Mac doch Code angefasst,
+gelten die drei Regeln aus [[zwei-sessions-eine-arbeitskopie]]: gezielt stagen (**nie**
+`git add -A`), vor dem Push `git fetch` und bei Divergenz erst committen, dann mergen, und
+nach jedem Merge, der die CLAUDE.md anfasst, `test_doc_duplicates` laufen lassen.
 
 ### Owner-Abnahmen offen (seit v1.7.1, je umgesetzt + selbst verifiziert)
 
