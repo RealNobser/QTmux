@@ -352,6 +352,10 @@ dafür steht unten unter „ÜBERGABE".
 `ab66e9b5-053b-4e81-9e4a-c45752fd42d1`, Datei **`Arbeitsanweisung-1a-2a.md`** — über das
 **`DesignSync`**-Werkzeug lesbar (`get_file`), nicht über einen MCP-Server namens
 `claude_design`. Sieben Stufen; die Anweisung schreibt Stufe für Stufe lauffähig vor.
+⚠️ **Temporär liegt eine Kopie im Repo**:
+[docs/design/menue-1a-2a/Arbeitsanweisung-1a-2a.md](docs/design/menue-1a-2a/Arbeitsanweisung-1a-2a.md)
+— damit die macOS-Session sie ohne Zugriff auf das Design-Projekt hat. **Nach Stufe 7 wieder
+löschen**; bei Divergenz gilt das Original im Design-Projekt.
 **Randbedingungen der Anweisung:** Qt Quick Controls **Basic**, keine neuen Effekte, Chrome-
 Farben **nur** über `Theme.*` (Ausnahme: die vorhandenen Statusfarben), jede neue Zeichenkette
 in `qsTr` + `i18n/qtmux_{de,en}.ts` nachziehen, alle Tests grün.
