@@ -10,6 +10,14 @@
 A cross-platform multi-AI-agent terminal manager built on Qt · Ein plattformübergreifender
 Multi-KI-Agenten-Terminal-Manager auf Qt-Basis.
 
+<p align="center">
+  <img src="docs/images/screenshot-dark.png"  width="49%" alt="QTmux — dunkles Design / dark theme">
+  <img src="docs/images/screenshot-light.png" width="49%" alt="QTmux — helles Design / light theme">
+</p>
+<p align="center">
+  <img src="docs/images/settings-dark.png" width="72%" alt="Einstellungsfenster / settings window">
+</p>
+
 ---
 
 <a id="-deutsch"></a>

@@ -3019,9 +3019,9 @@ Nicht angetastet werden: die offenen Fenster und Sessions sowie der Secrets-Vaul
         <location filename="../src/viewmodels/SftpClient.cpp" line="131"/>
         <location filename="../src/viewmodels/SftpClient.cpp" line="131"/>
         <source>%n Einträge</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n Eintrag</numerusform>
+            <numerusform>%n Einträge</numerusform>
         </translation>
     </message>
     <message>
