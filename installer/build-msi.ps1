@@ -84,6 +84,22 @@ if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item (Join-Path $build "qtmux.exe") $stage
 & cmd /c "`"$VcVars`" >nul 2>&1 && `"$QtDir\bin\windeployqt.exe`" --release --no-translations --no-system-d3d-compiler --no-opengl-sw --qmldir `"$repo\qml`" `"$stage\qtmux.exe`""
+# Offscreen-Plattform-Plugin mitliefern. windeployqt legt nur qwindows.dll ins Paket;
+# setzt jemand QT_QPA_PLATFORM=offscreen (Skripte, CI, Fernwartung), beendet Qt den Prozess
+# mit qFatal - in einer GUI-App also ein Absturz ohne sichtbare Meldung (Release 0xC0000409).
+# Die CMake-Regel deckt nur das Build-Verzeichnis ab; das Paket staged separat, darum hier
+# nochmal. (Der --screenshot-Weg von QTmux setzt die Variable unter Windows bewusst NICHT,
+# s. src/app/main.cpp - das hier ist die zweite Sicherung fuer alle anderen Aufrufer.)
+$offscreen = Join-Path $QtDir "plugins\platforms\qoffscreen.dll"
+if (Test-Path $offscreen) {
+    $platformsDst = Join-Path $stage "platforms"
+    New-Item -ItemType Directory -Force -Path $platformsDst | Out-Null
+    Copy-Item $offscreen $platformsDst -Force
+    Write-Host "    qoffscreen.dll eingebunden (kein qFatal bei QT_QPA_PLATFORM=offscreen)"
+} else {
+    Write-Warning "qoffscreen.dll nicht in $QtDir gefunden - Paket ohne Offscreen-Plattform"
+}
+
 # Eigene QTmux-Plugins (Phase 5, QTMUX-8) mitliefern, falls gebaut. windeployqt
 # kennt nur Qt-eigene Plugins; unsere Backend-Provider-Plugins liegen in
 # <build>\plugins und müssen separat nach <stage>\plugins (Suchpfad 2 des

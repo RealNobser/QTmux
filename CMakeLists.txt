@@ -285,6 +285,25 @@ if(WIN32)
             COMMENT "windeployqt: Qt-Laufzeit neben qtmux.exe legen"
             VERBATIM)
     endif()
+    # Offscreen-Plattform-Plugin zusätzlich mitnehmen: windeployqt liefert nur
+    # qwindows.dll aus, aber `--screenshot` setzt QT_QPA_PLATFORM=offscreen. Fehlt das
+    # Plugin, beendet Qt den Prozess mit qFatal — unter Windows als Absturz
+    # (Release 0xC0000409, Debug 0x80000003). Über das Plugin-Target statt über einen
+    # festen Pfad, damit Debug (qoffscreend.dll) und Release automatisch stimmen.
+    # main.cpp hat zusätzlich einen Wächter, damit eine Installation OHNE das Plugin
+    # ausweicht statt abzustürzen — beides zusammen, nicht eines davon.
+    if(TARGET Qt6::QOffscreenIntegrationPlugin)
+        add_custom_command(TARGET qtmux POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:qtmux>/platforms"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "$<TARGET_FILE:Qt6::QOffscreenIntegrationPlugin>"
+                    "$<TARGET_FILE_DIR:qtmux>/platforms/"
+            COMMENT "Offscreen-Plattform-Plugin fuer --screenshot mitliefern"
+            VERBATIM)
+    else()
+        message(WARNING "Qt6::QOffscreenIntegrationPlugin nicht gefunden — "
+                        "--screenshot weicht auf das sichtbare Fenster aus.")
+    endif()
 endif()
 
 # Plugins (QTMUX-8) -----------------------------------------------------------

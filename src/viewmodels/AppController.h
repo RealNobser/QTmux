@@ -20,6 +20,10 @@ class AppController : public QObject {
     // universalaccess reduceMotion, Windows SPI_GETCLIENTAREAANIMATION), sonst false;
     // Umgebungsvariable QTMUX_REDUCE_MOTION erzwingt den Wert (für Tests). Read-only.
     Q_PROPERTY(bool reduceMotion READ reduceMotion NOTIFY reduceMotionChanged)
+    // Home-Verzeichnis des Benutzers, damit die Sidebar Pfade als `~/…` kürzen kann
+    // (Anzeige-Logik bleibt in QML, wie bei QTMUX-103). Konstant: ein Wechsel des
+    // Home-Verzeichnisses zur Laufzeit ist kein Fall, den QTmux behandeln muss.
+    Q_PROPERTY(QString homeDir READ homeDir CONSTANT)
 public:
     explicit AppController(QObject *parent = nullptr);
 
@@ -27,6 +31,8 @@ public:
     void setLanguage(const QString &lang);
 
     bool reduceMotion() const { return m_reduceMotion; }
+
+    QString homeDir() const;
 
     /// Unterstützte Sprachen (Code -> Anzeigename) für das Sprachmenü.
     Q_INVOKABLE QStringList languageCodes() const { return {QStringLiteral("de"), QStringLiteral("en")}; }

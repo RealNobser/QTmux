@@ -7,6 +7,7 @@
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QUrl>
 #include <QProcess>
 #include <QTcpServer>
@@ -77,6 +78,12 @@ QString AppController::languageName(const QString &code) const {
 
 void AppController::copyToClipboard(const QString &text) const {
     if (auto *cb = QGuiApplication::clipboard()) cb->setText(text);
+}
+
+QString AppController::homeDir() const {
+    // QDir::homePath() liefert Trennzeichen bereits als '/', auch unter Windows —
+    // die Sidebar vergleicht deshalb gegen ein normalisiertes Verzeichnis.
+    return QDir::homePath();
 }
 
 bool AppController::openLocalPath(const QString &path) const {

@@ -192,7 +192,20 @@ beiden Themes + MCP-Smoke — Theming-Regressionen sind unit-test-unsichtbar).
   Shell-Einstellung hilft (chcp/OutputEncoding alles getestet); Abhilfe nur PowerShell 7 oder
   die System-Option „UTF-8 weltweit". Kein QTmux-Bug → bewusst **kein** Dekodier-Hack.
 - `Pty::currentWorkingDirectory()` Windows via PEB (`NtQueryInformationProcess` +
-  `ReadProcessMemory`) implementiert — **Funktionstest offen = QTMUX-2** (braucht Windows).
+  `ReadProcessMemory`) — **Funktionstest bestanden** (2026-07-30, QTMUX-2): in `cmd.exe`
+  folgt der Wert dem `cd /d` über Laufwerksgrenzen (`…\src\core` → `H:\…\OfficeCompagnion`
+  → `C:\Windows\System32`, zweimal mit dem Prompt gegengeprüft).
+  🔑 **Aber: PowerShell lässt sich so prinzipiell nicht verfolgen.** `Set-Location` ist ein
+  PowerShell-*Provider*-Begriff und ruft **kein** `SetCurrentDirectory` — das Win32-Arbeits-
+  verzeichnis des Prozesses bleibt, wo die Shell gestartet ist. Bewiesen in einer Zeile:
+  `(Get-Location).Path` = `C:\Windows\System32`, gleichzeitig
+  `[System.IO.Directory]::GetCurrentDirectory()` = `D:\…\src\core`. QTmux liest also richtig;
+  jedes Werkzeug, das das Prozess-CWD liest, sieht dasselbe. Der einzige saubere Ausweg wäre
+  **OSC 7** (Shell meldet ihr Verzeichnis selbst) — im Parser **nicht** implementiert und in
+  `shell-integration/` nicht gesendet; als Ticket vorgemerkt (s. Arbeitsstand).
+  🔑 Testfalle dabei: `cd H:\…` **ohne `/d`** wechselt in `cmd` das Laufwerk nicht — der
+  Prompt bleibt stehen, und QTmux meldet korrekt *keine* Änderung. Sah zunächst wie ein
+  Fehler aus; der Bildschirminhalt hat es aufgeklärt.
 - Debug-Qt asserted „QSGGeometryNode is missing geometry": jedem GeometryNode beim Anlegen
   sofort eine (leere) `QSGGeometry` setzen (Release-Qt prüft das nicht).
 
@@ -310,23 +323,24 @@ die App bewusst **nicht** (ein aufräumender Agent würde sich sonst selbst absc
 Vorarbeit QTMUX-80/81/82, dabei **stiller Selbst-Screenshot** `--screenshot <png>`
 (offscreen `grabWindow`, kein TCC) — der Standardweg für visuelle Abnahmen.
 ⚠️ **Aber: `--screenshot` setzt `QTMUX_NO_GPU=1`** ([src/app/main.cpp](src/app/main.cpp)) und
-fotografiert damit den **QPainter-Fallback**, nicht den GPU-Pfad. Fehler, die im Glyph-Atlas
+fotografiert damit den **QPainter-Fallback**, nicht den GPU-Pfad. Die **Plattform** wählt der
+Flag seit 2026-07-30 plattformabhängig: macOS/Linux offscreen (falls das Plugin da ist),
+**Windows am sichtbaren Fenster** — Begründung in den E2E-Fallen. Fehler, die im Glyph-Atlas
 sitzen (QTMUX-97), sind darauf **prinzipiell unsichtbar** — dafür braucht es den Atlas selbst
 als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-29** · Branch `main` = `origin/main`, Working Tree sauber · Version **1.7.1**
+Stand **2026-07-30** · Branch `main` = `origin/main`, Working Tree sauber · Version **1.7.1**
 (Tag `v1.7.1` ausgeliefert). Jüngster inhaltlicher Commit **`2e9eeec`** (QTMUX-89, aus der
 Mac-Session), darüber der Merge und die Doku-Konsolidierung dieser Windows-Session.
 **Teststände:** macOS `macos-test` (Debug) und `macos-release` **18/18 grün** (Stand `2e9eeec`);
-Windows `windows` (Debug) und `windows-release` **17/17 grün** — aber nur auf `21d622d`
-gemessen, also **ohne** die über den Merge hereingekommenen QTMUX-61/89/101/102/103.
-⚠️ **Offen auf Windows:** `SleepInhibitor` hat einen eigenen Windows-Zweig
-(`SetThreadExecutionState`), der hier **noch nicht gebaut** wurde — die Abnahme der Mac-Session
-lief über `pmset`. Erste Windows-Aufgabe: bauen + `ctest -E "^test_pty$"`
-(test_pty fällt hier umgebungsbedingt auch auf unverändertem Stand — nicht-interaktive Shell,
-ConPTY). Instrumentierungen aus den QTMUX-86-/QTMUX-100-Untersuchungen sind **zurückgenommen**.
+Windows `windows` (Debug) **und** `windows-release` **je 17/17 grün** auf dem gemergten Stand
+**inklusive** QTMUX-61/89/101/102/103 — der `SleepInhibitor`-Windows-Zweig
+(`SetThreadExecutionState`) ist damit übersetzt (Laufzeit-Abnahme dort weiter offen:
+`powercfg /requests`). `ctest` braucht auf Windows Qt-`bin` im PATH (sonst `0xc0000135`);
+`test_pty` fällt hier umgebungsbedingt auch auf unverändertem Stand (nicht-interaktive
+Shell, ConPTY), daher `-E "^test_pty$"`.
 🔑 Auf der **Windows**-Maschine zeigt `"cmake.cmakePath"` in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd`; ohne diesen Eintrag scheitert der Build-Knopf der CMake-Tools an
 fehlendem `INCLUDE`/`LIB` (Begründung im QTMUX-79-Kasten oben).
@@ -350,6 +364,9 @@ Mechanik und Fallen stehen je Ticket in der Feature-Referenz, hier nur der Zeige
 | **101/102/103** | ToolTip auf der Kachel · Drag auf die Liste geklemmt · „Arbeitsverzeichnis öffnen"/„Pfad kopieren" | „ToolTips", „Arbeitsverzeichnis", QTMUX-100-Punkt | ToolTip in beiden Designs; Kachel darf das Bild nicht verlassen; Menüpunkte an serieller Session ausgegraut |
 | **61** | Bildschirm leeren, Verlauf behalten (`Ctrl/Cmd+Shift+K`) | „Bildschirm leeren, Verlauf behalten" | in einem laufenden Agenten leeren — Prompt bleibt oben, Verlauf im Scrollback |
 | **89** | Ruhezustand verhindern, solange Agenten arbeiten | „Ruhezustand", Commit `2e9eeec` | Schalter an, Agent arbeiten lassen, Sperre prüfen (macOS `pmset -g assertions`, Windows `powercfg /requests`) |
+| **2** | Windows-CWD über PEB — Funktionstest | ConPTY-Abschnitt | **bestanden** 2026-07-30 (cmd folgt `cd /d`); Jira auf dem Mac auf Done setzen |
+| — | Verzeichnis als zweite Kachelzeile | „Verzeichnis auf der Kachel" | Kachel muss den Ort zeigen, auch wenn der Agent das Thema in den Titel schreibt; **Jira-Nummer fehlt noch** |
+| — | `--screenshot` auf Windows (Absturz + Kästchen-Bild) | E2E-Fallen | `qtmux --screenshot x.png` muss ein **lesbares** PNG liefern; `QT_QPA_PLATFORM=offscreen` darf nicht abstürzen (auch aus dem Installationspaket); **Jira-Nummer fehlt noch** |
 
 ⚠️ **Alle Abnahmen brauchen eine frisch gebaute Instanz** — die laufende kennt die Schalter
 nicht (Begründung im Arbeitsstand). QTMUX-86 heilt bereits beschädigte Sessions **nicht**
@@ -384,6 +401,14 @@ Anderer Pfad als der behobene, in der App nicht gegengeprüft, im Ticket notiert
   🔑 **Werkzeug-Falle:** Für die **Cloud** schlägt Python-`urllib` hier mit
   `CERTIFICATE_VERIFY_FAILED` fehl (kein Issuer im Store) — ADF-Rumpf mit Python **bauen**,
   aber mit `curl --data @datei` **senden**. On-prem braucht ohnehin `curl -k`.
+- **Auf dem Mac in Jira nachzutragen** (von Windows aus nicht möglich): (1) **QTMUX-2 auf Done**
+  — Funktionstest bestanden, PowerShell-Einschränkung ist keine Bringschuld von QTmux;
+  (2) **neues Ticket** für die Verzeichniszeile auf der Kachel (umgesetzt + verifiziert, Nummer
+  fehlt — Doku führt sie als „—"); (3) **neues Ticket OSC 7** (Shell meldet ihr Verzeichnis
+  selbst; einziger Weg, das CWD bei **PowerShell**, `ssh` und in Containern zu erfahren —
+  Parser kennt OSC 7 nicht, `shell-integration/` sendet es nicht); (4) **neues Ticket
+  `--screenshot` auf Windows — bereits BEHOBEN** (Absturz durch fehlendes Plattform-Plugin,
+  danach Kästchen-Bild; Ticket nur zum Nachtragen, s. E2E-Fallen).
 - **Zwei Sessions arbeiten parallel in DERSELBEN Arbeitskopie** (Mac und Windows-Maschine,
   je eine Claude-Session). Daraus folgen drei Regeln, alle schon einmal gebraucht:
   gezielt stagen (`git add <datei>`, **nie** `-A`, sonst wandert halbfertige Arbeit der
@@ -403,7 +428,7 @@ sind bewusst leer, s. a. QTMUX-**91**) ·
 decken den Agenten-Fall ab, OSC-8 bräuchte Cursor-Span-Tracking + neues `Cell`-Feld, teuer da
 `VtScreen` den Sichtbereich lazy aus libvterm bildet) · **QTMUX-38** (Shell-Helfer für
 Installationsnutzer unerreichbar — nur im Repo, in keinem Paket; AppImage-Mount-Pfad wechselt,
-Windows ohne stdout) · **QTMUX-2** (Windows-`currentWorkingDirectory`-Funktionstest via PEB) ·
+Windows ohne stdout) ·
 **QTMUX-13** (native macOS-Menü-Icons — Qt reicht `icon.source`/`icon.name` in nativen Menüs
 nicht durch; einziger Weg wäre ein QMenuBar-Umbau, deferred; [[qtmux-native-menu-icons]]).
 
@@ -802,6 +827,18 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `numerusform` der **Quellsprache** leer lässt (bestehendes `%n Einträge` steht deshalb bis
   heute auf `unfinished`). Entweder die Zahl erst ab 2 anzeigen und eine feste Form nehmen,
   oder die deutschen Pluralformen von Hand pflegen.
+- **Verzeichnis auf der Kachel (2026-07-30):** Zweite, gedimmte Zeile unter dem Titel
+  (`tile.dispDir` → `window.prettyDir`, `ElideLeft`, ausgeblendet wenn leer). 🔑 **Warum
+  nötig:** Der Kacheltitel kommt **ausschließlich** aus dem OSC-0/2-Titel der Shell — Claude
+  Code schreibt dort inzwischen das **Gesprächsthema** (`✳ …`), `cmd.exe` setzt **gar nichts**
+  (bleibt ewig „Eingabeaufforderung"). Der Ort war damit nirgends direkt ablesbar; der ToolTip
+  aus QTMUX-101 zeigt ihn nur beim Hover und bleibt der Fallback für den **vollen** Pfad.
+  `prettyDir` kürzt Home zu `~` und **vergleicht** auf einer normalisierten Kopie
+  (`QDir::homePath()` liefert `/`, die Shell unter Windows `\`), **zeigt** aber den
+  Originalpfad — sonst stünde dort `C:/Windows/System32`. Der Home-Vergleich geht gegen
+  Gleichheit bzw. `home + "/"`, sonst würde `/Users/nrx` als Home `/Users/nr` gelesen.
+  ⚠️ Bei **PowerShell**-Sessions steht hier dauerhaft das Startverzeichnis — nicht die
+  Anzeige ist schuld, sondern `Set-Location` (Begründung im ConPTY-Abschnitt).
 - **Arbeitsverzeichnis (QTMUX-103):** `windowWorkingDir(w)` liefert das CWD des **aktiven**
   Panes, leer bei seriellen/Plugin-Sessions — daran hängen „Arbeitsverzeichnis öffnen" und
   „Pfad kopieren" ihr `enabled`. Geöffnet wird über `App.openLocalPath` (C++,
@@ -1003,6 +1040,34 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   ⚠️ Synthetische **Mausrad**-Ereignisse (`mouse_event WHEEL`) nimmt Qt erst nach einer
   **echten Cursorbewegung** an (Hover-Enter) und nur im Vordergrund — sonst verpuffen sie
   spurlos und man hält ein nicht scrollendes Flickable für ein Layout-Problem.
+- ⚠️ **`--screenshot` auf Windows: erst Absturz, dann Kästchen — beides behoben (2026-07-30).**
+  Der Flag erzwang `QT_QPA_PLATFORM=offscreen`; `windeployqt` liefert aber **nur `qwindows.dll`**
+  aus → Qt beendet den Prozess mit `qFatal`, in einer GUI-App also ein **Absturz ohne sichtbare
+  Meldung** (Release `0xC0000409`, Debug `0x80000003`). Eingegrenzt durch A/B über beide
+  Schalter: **`QTMUX_NO_GPU=1` allein läuft stabil** — der Anwenderfall `gpuRendering=false`
+  war nie betroffen, es lag allein an `offscreen`. Die Meldung selbst kommt nur mit
+  **`QT_FORCE_STDERR_LOGGING=1`** heraus (GUI-App ohne Konsole schreibt sonst nirgends hin) —
+  ohne diese Variable diagnostiziert man einen stummen Absturz.
+  🔑 **Und die Reparatur wäre fast schlimmer geworden als der Fehler:** Mit ausgeliefertem
+  Plugin lief offscreen, aber die Offscreen-Plattform bringt unter Windows **keine Fonts** mit
+  („QFontDatabase: Cannot find font directory …; Qt no longer ships fonts") und zeichnet **jede
+  Glyphe als leeres Kästchen** — Exit 0, PNG da, Textprüfung wertlos. Nur der **Blick ins Bild**
+  hat das gezeigt, der Exit-Code sah gut aus. Deshalb setzt `main.cpp` unter **Windows bewusst
+  kein** `offscreen`, sondern greift das **sichtbare** Fenster (TCC ist ein macOS-Grund);
+  auf macOS/Linux bleibt offscreen, dort aber nur, wenn das Plugin auch **vorhanden** ist
+  (`offscreenPluginAvailable`), sonst derselbe Ausweichweg statt `qFatal`.
+  Das Plugin wird trotzdem mitgeliefert (CMake-Post-Build **und** `build-msi.ps1` — das Paket
+  staged separat, eine Stelle allein genügt nicht), damit auch ein fremd gesetztes
+  `QT_QPA_PLATFORM=offscreen` nicht abstürzt. Am **paketierten** Binary gegengeprüft.
+- **Laufende Instanz fotografieren (Windows):** `--screenshot` startet immer einen **neuen**
+  Prozess. Wer eine **laufende** Instanz abbilden will, nimmt `PrintWindow` mit
+  **`PW_RENDERFULLCONTENT` (2)** auf `MainWindowHandle` — braucht **keinen Vordergrund** und
+  stört damit die Arbeit des Owners nicht (dem `keybd_event`-Weg vorzuziehen).
+- ⚠️ **PowerShell-Testskripte: `$args` ist eine automatische Variable.** Ein Parameter dieses
+  Namens (`function Mcp($name, $args)`) wird verschluckt — die MCP-Aufrufe gingen **ohne
+  Argumente** hinaus. Symptom: `cwd` schien ignoriert, `send_text` tat nichts, `read_screen`
+  antwortete „Parameter 'id' fehlt". Sah wie drei Fehler in der App aus, war einer im Skript.
+  Dieselbe Klasse wie `$pid`/`$Profile` — Parameternamen in PowerShell-Harnessen präfixen.
 - MCP-E2E ist der Standard-Verifikationsweg gegen die echte GUI (create_session/send_text/
   read_screen, `scrollback:true` für Historie) — gegen eine **isolierte Testinstanz**
   (s. Build-Abschnitt macOS), nie gegen eine, in der jemand arbeitet. Ergebnisse möglichst

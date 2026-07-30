@@ -823,6 +823,20 @@ ApplicationWindow {
         const s = window.sessionById(sid)
         return s ? (s.workingDirectory || "") : ""
     }
+    // Verzeichnis für die Anzeige kürzen: Home wird zu `~`. VERGLICHEN wird auf einer
+    // normalisierten Kopie (QDir::homePath liefert `/`, die Shell meldet unter Windows `\`),
+    // ANGEZEIGT wird der Originalpfad — sonst stünde dort `C:/Windows/System32`.
+    // Der Vergleich geht gegen Gleichheit bzw. `home + "/"`, sonst würde `/Users/nrx`
+    // als Home `/Users/nr` gelesen und der Pfad falsch gekürzt.
+    function prettyDir(dir) {
+        if (!dir || dir.length === 0) return ""
+        const norm = dir.replace(/\\/g, "/")
+        const home = (App.homeDir || "").replace(/\\/g, "/")
+        // Gleiche Länge nach dem Ersetzen → der Index passt auch auf den Originalpfad.
+        if (home.length > 0 && (norm === home || norm.startsWith(home + "/")))
+            return "~" + dir.substring(home.length)
+        return dir
+    }
     // Aggregierter Laufzustand (wie Session.state: 0 Start,1 Run,2 Warte,3 Fehler,4 Zu),
     // höchste Dringlichkeit gewinnt: Fehler > WartetEingabe > Läuft > Start > Zu.
     function windowRunState(w) {
@@ -2496,6 +2510,10 @@ ApplicationWindow {
                         // die Revision-Anker (sessionsRevision/windowsRevision) halten die
                         // Bindungen live (analog groupsRevision).
                         readonly property string dispTitle: (window.sessionsRevision, window.windowsRevision, window.windowTitle(wobj))
+                        // Arbeitsverzeichnis des aktiven Panes. `sessionsRevision` genügt als
+                        // Anker: SessionModel meldet die CWD-Änderung als dataChanged auf
+                        // WorkingDirRole (Poll alle 1500 ms), und der Handler erhöht die Revision.
+                        readonly property string dispDir: (window.sessionsRevision, window.windowsRevision, window.windowWorkingDir(wobj))
                         readonly property int paneN: (window.windowsRevision, wobj ? wobj.sessionIds().length : 0)
                         readonly property int aggState: (window.sessionsRevision, window.windowRunState(wobj))
                         readonly property bool attention: (window.sessionsRevision, window.windowAttention(wobj))
@@ -2685,6 +2703,21 @@ ApplicationWindow {
                                         font.family: window.terminalFontFamily
                                         Layout.alignment: Qt.AlignVCenter
                                     }
+                                }
+                                // Arbeitsverzeichnis als zweite Zeile: Der Titel kommt
+                                // ausschließlich aus dem OSC-Titel der Shell und sagt nichts
+                                // über den Ort — Claude Code schreibt dort das Gesprächsthema,
+                                // `cmd.exe` gar nichts. Für den direkten Blick braucht die
+                                // Kachel das Verzeichnis darum selbst.
+                                // ElideLeft, weil bei Pfaden das ENDE die Information trägt;
+                                // den vollen Pfad zeigt weiter der ToolTip (QTMUX-101).
+                                Text {
+                                    visible: tile.dispDir.length > 0
+                                    text: window.prettyDir(tile.dispDir)
+                                    color: Theme.textDim
+                                    font.pixelSize: 10
+                                    elide: Text.ElideLeft
+                                    Layout.fillWidth: true
                                 }
                             }
 

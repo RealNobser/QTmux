@@ -7,6 +7,9 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QImage>
+#include <QDir>
+#include <QFileInfo>
+#include <QLibraryInfo>
 
 #if defined(Q_OS_WIN)
 #  include <windows.h>
@@ -51,6 +54,38 @@ void applyLanguage(QGuiApplication &app, QQmlApplicationEngine &engine,
     }
 }
 
+#if !defined(Q_OS_WIN)
+// Ist das Offscreen-Plattform-Plugin vorhanden? Die Prüfung MUSS vor der QGuiApplication
+// laufen: Steht QT_QPA_PLATFORM auf „offscreen" und fehlt das Plugin, beendet Qt den Prozess
+// mit qFatal — unter Windows als **Absturz** (Release 0xC0000409, Debug 0x80000003), ohne
+// dass ein GUI-Prozess die Meldung irgendwo zeigen könnte. Und das ist auf Windows der
+// Normalfall: `windeployqt` legt nur `qwindows.dll` neben die .exe (siehe die Kopier-Regel
+// in CMakeLists.txt, die das Plugin seither mitnimmt). Ein `qtmux --screenshot` aus einer
+// älteren Installation darf trotzdem nicht abstürzen, darum dieser Wächter.
+bool offscreenPluginAvailable(const QString &exePath) {
+    const QStringList names {
+#if defined(Q_OS_WIN)
+        QStringLiteral("qoffscreen.dll"), QStringLiteral("qoffscreend.dll")
+#elif defined(Q_OS_MACOS)
+        QStringLiteral("libqoffscreen.dylib")
+#else
+        QStringLiteral("libqoffscreen.so")
+#endif
+    };
+    const QDir exeDir = QFileInfo(exePath).absoluteDir();
+    const QStringList dirs {
+        exeDir.filePath(QStringLiteral("platforms")),                 // Windows/Linux-Deploy
+        exeDir.filePath(QStringLiteral("../PlugIns/platforms")),      // macOS-App-Bundle
+        QDir(QLibraryInfo::path(QLibraryInfo::PluginsPath))           // Qt-Installation
+            .filePath(QStringLiteral("platforms")),
+    };
+    for (const QString &d : dirs)
+        for (const QString &n : names)
+            if (QFileInfo::exists(QDir(d).filePath(n))) return true;
+    return false;
+}
+#endif   // !Q_OS_WIN — Windows greift immer am sichtbaren Fenster (s. main)
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -94,8 +129,30 @@ int main(int argc, char *argv[])
     // OS-Compositor und ohne Bildschirmaufnahme-Berechtigung (TCC). Erzwingt zusätzlich den
     // QPainter-Renderpfad (QTMUX_NO_GPU), damit der Grab auch das benutzerdefinierte
     // Glyph-Material zuverlässig enthält.
+    // Grund, falls NICHT offscreen gegriffen wird (leer = offscreen). Wird nach dem Start
+    // als Warnung ausgegeben, damit im Log steht, welcher Weg gelaufen ist.
+    QString shotOnVisibleWindow;
     if (!shotPath.isEmpty()) {
-        if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "offscreen");
+        if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
+#if defined(Q_OS_WIN)
+            // Windows: BEWUSST nicht offscreen. Die Offscreen-Plattform bringt dort keine
+            // Fonts mit („QFontDatabase: Cannot find font directory …; Qt no longer ships
+            // fonts") und zeichnet JEDE Glyphe als leeres Kästchen — ein Bild, das genau
+            // die Textprüfung unmöglich macht, für die der Screenshot gemacht wird
+            // (am Bild verglichen: offscreen 11 kB Kästchen, sichtbares Fenster 40 kB
+            // lesbar). Der TCC-Grund für offscreen ist ein macOS-Begriff und gilt hier nicht.
+            shotOnVisibleWindow = QStringLiteral(
+                "Windows: Screenshot am sichtbaren Fenster (die Offscreen-Plattform hat dort "
+                "keine Fonts und zeichnet jede Glyphe als Kaestchen).");
+#else
+            if (offscreenPluginAvailable(QString::fromLocal8Bit(argv[0])))
+                qputenv("QT_QPA_PLATFORM", "offscreen");
+            else
+                shotOnVisibleWindow = QStringLiteral(
+                    "Offscreen-Plattform-Plugin nicht gefunden: Screenshot am sichtbaren "
+                    "Fenster (kein Absturz, nur Ausweichweg).");
+#endif
+        }
         qputenv("QTMUX_NO_GPU", "1");
     }
 
@@ -214,6 +271,8 @@ int main(int argc, char *argv[])
     // als PNG speichern und mit dem Ergebnis-Code beenden. Der Timer läuft auf dem
     // GUI-Thread; grabWindow() rendert die (offscreen) Szene und liest sie zurück.
     if (!shotPath.isEmpty()) {
+        if (!shotOnVisibleWindow.isEmpty())
+            qWarning("QTmux: %s", qPrintable(shotOnVisibleWindow));
         QTimer::singleShot(shotSettleMs, &app, [&engine, shotPath]() {
             const QList<QObject *> roots = engine.rootObjects();
             auto *win = roots.isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(roots.first());
