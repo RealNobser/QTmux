@@ -331,49 +331,73 @@ als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-30** · Branch `main` = `origin/main`, Working Tree sauber · Version **1.7.1**
-(Tag `v1.7.1` ausgeliefert). Jüngster inhaltlicher Commit **`2e9eeec`** (QTMUX-89, aus der
-Mac-Session), darüber der Merge und die Doku-Konsolidierung dieser Windows-Session.
-**Teststände:** macOS `macos-test` (Debug) und `macos-release` **18/18 grün** (Stand `2e9eeec`);
-Windows `windows` (Debug) **und** `windows-release` **je 17/17 grün** auf dem gemergten Stand
-**inklusive** QTMUX-61/89/101/102/103 — der `SleepInhibitor`-Windows-Zweig
-(`SetThreadExecutionState`) ist damit übersetzt (Laufzeit-Abnahme dort weiter offen:
-`powercfg /requests`). `ctest` braucht auf Windows Qt-`bin` im PATH (sonst `0xc0000135`);
-`test_pty` fällt hier umgebungsbedingt auch auf unverändertem Stand (nicht-interaktive
-Shell, ConPTY), daher `-E "^test_pty$"`.
-🔑 Auf der **Windows**-Maschine zeigt `"cmake.cmakePath"` in den **Benutzer**-Einstellungen auf
-`tools/cmake-vsdev.cmd`; ohne diesen Eintrag scheitert der Build-Knopf der CMake-Tools an
-fehlendem `INCLUDE`/`LIB` (Begründung im QTMUX-79-Kasten oben).
+Stand **2026-07-30** · Branch `main` = `origin/main` (letzter Commit **`dd7df2f`**, gepusht),
+Working Tree sauber · Version **1.7.1**.
+**Teststände:** Windows `windows` (Debug) und `windows-release` je **17/17** (`-E "^test_pty$"`;
+`test_pty` fällt hier umgebungsbedingt auch unverändert — nicht-interaktive Shell/ConPTY,
+und `ctest` braucht Qt-`bin` im PATH, sonst `0xc0000135`). macOS **18/18** auf Stand `2e9eeec`
+— alles danach (inkl. der GUI-Arbeit unten) ist auf **macOS/Linux ungeprüft**.
+🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
+`tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
-**Nächster Punkt:** **`build/macos` neu bauen** und die Produktivinstanz darauf umstellen —
-erst damit sind QTMUX-61/85/89/97/98/99/100/101/102/103 überhaupt bedienbar und abnehmbar
-(Bedingungen im Arbeitsstand). Danach die Owner-Abnahmen, dann offene Jira nach Priorität:
-88/40/38/2/13.
+### Laufender Auftrag: GUI-Umbau nach Design 1a/2a
 
-**Seit v1.7.1 auf `main`, jeweils umgesetzt + selbst verifiziert — Owner-Abnahme offen.**
-Mechanik und Fallen stehen je Ticket in der Feature-Referenz, hier nur der Zeiger:
+**Quelle:** Claude-Design-Projekt „Menü-Struktur und Design-Auffrischung",
+`ab66e9b5-053b-4e81-9e4a-c45752fd42d1`, Datei **`Arbeitsanweisung-1a-2a.md`** — über das
+**`DesignSync`**-Werkzeug lesbar (`get_file`), nicht über einen MCP-Server namens
+`claude_design`. Sieben Stufen; die Anweisung schreibt Stufe für Stufe lauffähig vor.
+**Randbedingungen der Anweisung:** Qt Quick Controls **Basic**, keine neuen Effekte, Chrome-
+Farben **nur** über `Theme.*` (Ausnahme: die vorhandenen Statusfarben), jede neue Zeichenkette
+in `qsTr` + `i18n/qtmux_{de,en}.ts` nachziehen, alle Tests grün.
 
-| Ticket | Was | Wo nachlesen | Abnahme |
-|---|---|---|---|
-| **97** | Emoji-Artefakte (VS-16-Breite + Atlas-Überlauf) | „Rendering", libvterm-Abschnitt | **abgenommen** 2026-07-28 |
-| **86** | leeres Pane beim Window-Wechsel | „Session-Größe wird entprellt" | mehrfach zwischen Splitscreen- und Einzel-Window wechseln, Prompt muss stehen bleiben |
-| **85** | Agenten beim Start wiederherstellen (Vorgabe AUS) | „Agenten überleben den Neustart" | Schalter an, mit echtem `claude` arbeiten, beenden, neu starten |
-| **98** | Unterhaltung fortsetzen, 4 Modi (Vorgabe: gar nicht) | „Unterhaltung fortsetzen ist eine WAHL" | die vier Modi durchspielen; Modus 3 braucht vorher `set_agent_session` |
-| **99** | Umfang der Wiederherstellung, 3 Modi (Vorgabe: alles) | „Umfang der Wiederherstellung ist eine WAHL" | Modus 0 setzen, beenden, neu starten — gespeicherter Stand muss **unberührt** bleiben |
-| **100** | Sidebar-Drag ließ die übrigen Kacheln weglaufen | „Niemals ein ListView-Delegat als `DragHandler.target`" | Kachel ziehen (auch die letzte), Reihenfolge muss stimmen |
-| **101/102/103** | ToolTip auf der Kachel · Drag auf die Liste geklemmt · „Arbeitsverzeichnis öffnen"/„Pfad kopieren" | „ToolTips", „Arbeitsverzeichnis", QTMUX-100-Punkt | ToolTip in beiden Designs; Kachel darf das Bild nicht verlassen; Menüpunkte an serieller Session ausgegraut |
-| **61** | Bildschirm leeren, Verlauf behalten (`Ctrl/Cmd+Shift+K`) | „Bildschirm leeren, Verlauf behalten" | in einem laufenden Agenten leeren — Prompt bleibt oben, Verlauf im Scrollback |
-| **89** | Ruhezustand verhindern, solange Agenten arbeiten | „Ruhezustand", Commit `2e9eeec` | Schalter an, Agent arbeiten lassen, Sperre prüfen (macOS `pmset -g assertions`, Windows `powercfg /requests`) |
-| **2** | Windows-CWD über PEB — Funktionstest | ConPTY-Abschnitt | **bestanden** 2026-07-30 (cmd folgt `cd /d`); Jira auf dem Mac auf Done setzen |
-| — | Verzeichnis als zweite Kachelzeile | „Verzeichnis auf der Kachel" | Kachel muss den Ort zeigen, auch wenn der Agent das Thema in den Titel schreibt; **Jira-Nummer fehlt noch** |
-| — | `--screenshot` auf Windows (Absturz + Kästchen-Bild) | E2E-Fallen | `qtmux --screenshot x.png` muss ein **lesbares** PNG liefern; `QT_QPA_PLATFORM=offscreen` darf nicht abstürzen (auch aus dem Installationspaket); **Jira-Nummer fehlt noch** |
+| Stufe | Inhalt | Stand |
+|---|---|---|
+| 1 | `actToggleSidebar`, Persistenz `ui/*`, Splitter mit Einrasten | **fertig** `1a644c3` |
+| 2 | eingeklappte Leiste (52 px) + Hover-Flyout | **fertig** `1a644c3` |
+| 3 | Statusleiste (Footer 26 px, 7 Felder) | **fertig** `dd7df2f` |
+| 4 | **Menü-Neuordnung auf 6 Menüs** + macOS-Rollen + Palette | **als Nächstes** |
+| 5 | Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl` | offen |
+| 6 | `SettingsIo` (Reset/Import/Export) + `tst_settingsio` | offen |
+| 7 | Übersetzungen finalisieren, README-Screenshots | offen |
 
-⚠️ **Alle Abnahmen brauchen eine frisch gebaute Instanz** — die laufende kennt die Schalter
-nicht (Begründung im Arbeitsstand). QTMUX-86 heilt bereits beschädigte Sessions **nicht**
-(deren Inhalt liegt im Scrollback); die betroffenen Sessions neu starten.
+**Nächster Punkt — Stufe 4 (Teil A der Anweisung):** sechs Menüs (Datei · Bearbeiten ·
+Ansicht · Session · Agent · Hilfe); die Menüs **Sprache** und **Agent-Steuerung** fallen weg,
+alle Zustands-Einträge wandern in die Einstellungen. Regel: **ein Menü enthält Befehle, keine
+Zustände** — checkbar bleiben nur Seitenleiste, Statusleiste, Broadcast.
+- Einstieg: `menuBar` in [qml/Main.qml](qml/Main.qml) (ab „`&Datei`"), `buildCommands()` für die
+  Palette-Ergänzungen.
+- macOS: `actSettings` → `MenuItem.PreferencesRole` (+ im Datei-Menü ausblenden),
+  `actAbout` → `AboutRole`, `actQuit` → `QuitRole`, zusätzlich ein „Fenster"-Menü nur dort.
+- Bauen/Testen: `.\tools\vsdev-build.cmd "windows-release" all` und
+  `ctest --test-dir build\windows-release -E "^test_pty$"` (Qt-`bin` in den PATH).
+- Beachten: Jeder verschobene Eintrag muss über **Einstellungen UND Palette** erreichbar
+  bleiben (Regel aus QTMUX-46) — sonst entsteht genau die Schieflage, die QTMUX-46 behoben hat.
+
+**Offen aus 1–3, bewusst nicht behauptet:** Rastergröße (80×24) fehlt im Statusleisten-Feld
+(sie lebt im `TerminalItem`, dafür müssten Spalten/Zeilen erst an der Session veröffentlicht
+werden) · macOS/Linux ungeprüft · Owner-Durchklick von Leiste und Statusleiste offen.
+
+### Owner-Abnahmen offen (seit v1.7.1, je umgesetzt + selbst verifiziert)
+
+Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme-Rezept:
+
+| Ticket | Was | Abnahme |
+|---|---|---|
+| **86** | leeres Pane beim Window-Wechsel | mehrfach zwischen Splitscreen und Einzel-Window wechseln, Prompt bleibt stehen |
+| **85** | Agenten beim Start wiederherstellen (Vorgabe AUS) | Schalter an, mit echtem `claude` arbeiten, beenden, neu starten |
+| **98** | Unterhaltung fortsetzen, 4 Modi (Vorgabe: gar nicht) | vier Modi durchspielen; Modus 3 braucht vorher `set_agent_session` |
+| **99** | Umfang der Wiederherstellung, 3 Modi (Vorgabe: alles) | Modus 0 setzen, beenden, neu starten — gespeicherter Stand **unberührt** |
+| **100** | Sidebar-Drag ließ die Kacheln weglaufen | Kachel ziehen (auch die letzte), Reihenfolge muss stimmen |
+| **101/102/103** | ToolTip · geklemmter Drag · „Arbeitsverzeichnis öffnen"/„Pfad kopieren" | ToolTip in beiden Designs; Kachel bleibt im Bild; Menüpunkte an serieller Session ausgegraut |
+| **61** | Bildschirm leeren, Verlauf behalten (`Ctrl/Cmd+Shift+K`) | in einem laufenden Agenten leeren — Prompt oben, Verlauf im Scrollback |
+| **89** | Ruhezustand verhindern, solange Agenten arbeiten | Schalter an, Agent arbeiten lassen (macOS `pmset -g assertions`, Windows `powercfg /requests`) |
+| — | Verzeichnis als zweite Kachelzeile, Seitenleiste 1a/2a, Statusleiste | durchklicken; **Jira-Nummern fehlen** (s. Arbeitsstand) |
+
+⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
+Sessions **nicht** (Inhalt liegt im Scrollback) — betroffene Sessions neu starten.
 ⚠️ **Nebenbefund QTMUX-100, ungeprüft:** Kachel auf Zeile 0 schieben, während die Liste
-**gescrollt** ist → `contentY` driftet über mehrere Vorgänge (im Nachbau 160 → 144 → 84 → 24).
-Anderer Pfad als der behobene, in der App nicht gegengeprüft, im Ticket notiert.
+**gescrollt** ist → `contentY` driftet (im Nachbau 160 → 144 → 84 → 24). Anderer Pfad als der
+behobene, in der App nicht gegengeprüft, im Ticket notiert.
 
 ### Arbeitsstand (compact-fest — hier pflegen, nicht im Gespräch lassen)
 
@@ -401,14 +425,13 @@ Anderer Pfad als der behobene, in der App nicht gegengeprüft, im Ticket notiert
   🔑 **Werkzeug-Falle:** Für die **Cloud** schlägt Python-`urllib` hier mit
   `CERTIFICATE_VERIFY_FAILED` fehl (kein Issuer im Store) — ADF-Rumpf mit Python **bauen**,
   aber mit `curl --data @datei` **senden**. On-prem braucht ohnehin `curl -k`.
-- **Auf dem Mac in Jira nachzutragen** (von Windows aus nicht möglich): (1) **QTMUX-2 auf Done**
-  — Funktionstest bestanden, PowerShell-Einschränkung ist keine Bringschuld von QTmux;
-  (2) **neues Ticket** für die Verzeichniszeile auf der Kachel (umgesetzt + verifiziert, Nummer
-  fehlt — Doku führt sie als „—"); (3) **neues Ticket OSC 7** (Shell meldet ihr Verzeichnis
-  selbst; einziger Weg, das CWD bei **PowerShell**, `ssh` und in Containern zu erfahren —
-  Parser kennt OSC 7 nicht, `shell-integration/` sendet es nicht); (4) **neues Ticket
-  `--screenshot` auf Windows — bereits BEHOBEN** (Absturz durch fehlendes Plattform-Plugin,
-  danach Kästchen-Bild; Ticket nur zum Nachtragen, s. E2E-Fallen).
+- **Auf dem Mac in Jira nachzutragen** (von Windows aus nicht möglich, `CLAUDE.local.md` fehlt
+  dort): **QTMUX-2 auf Done** (Funktionstest bestanden; die PowerShell-Einschränkung ist keine
+  Bringschuld von QTmux) · **neu:** Verzeichniszeile auf der Kachel · **OSC 7** (einziger Weg
+  zum CWD bei PowerShell/`ssh`/Containern — Parser kennt es nicht, `shell-integration/` sendet
+  es nicht) · **`--screenshot` auf Windows** (behoben, nur nachzutragen) · **Design 1a/2a**
+  (ein Ticket je Stufe wäre sinnvoll; Stufen 1–3 sind umgesetzt und gepusht). Alle umgesetzt +
+  selbst verifiziert; höchste Nummer vorher in **beiden** Systemen holen.
 - **Zwei Sessions arbeiten parallel in DERSELBEN Arbeitskopie** (Mac und Windows-Maschine,
   je eine Claude-Session). Daraus folgen drei Regeln, alle schon einmal gebraucht:
   gezielt stagen (`git add <datei>`, **nie** `-A`, sonst wandert halbfertige Arbeit der
@@ -831,6 +854,32 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `numerusform` der **Quellsprache** leer lässt (bestehendes `%n Einträge` steht deshalb bis
   heute auf `unfinished`). Entweder die Zahl erst ab 2 anzeigen und eine feste Form nehmen,
   oder die deutschen Pluralformen von Hand pflegen.
+- **Einklappbare Seitenleiste + Statusleiste (Design 1a/2a, 2026-07-30):** Zustand in einem
+  **zweiten** `Settings`-Block `ui/*` (`sidebarWidth`, `sidebarCollapsed`, `statusBarVisible`).
+  Breite [180, 420]; **unter 140 px rastet sie ein** (52 px), Zwischenwerte werden nicht
+  gehalten — die gespeicherte Breite bleibt immer im Bereich, sonst endet ein Aufklappen in
+  einer unbrauchbar schmalen Liste. Der Splitter ist **neu** (die Leiste war ein festes
+  240-px-`Rectangle`; die `SplitView`s gehören den Panes), `DragHandler` mit `target: null`
+  wie bei QTMUX-100. Eingeklappt zeigt **dieselbe Kachel** einen zweiten Inhalt (Icon +
+  Nummer + Statuspunkt) statt eines zweiten Delegates — sonst müsste die
+  Rückkopplungsfalle aus QTMUX-100 zweimal richtig vermieden werden. Statusleiste als
+  `footer` mit Inline-Komponente `StatusField`; die Aggregat-Zähler liegen in
+  `SessionModel` (`waitingCount`/`errorCount` + `countersChanged`, Test
+  `tst_sessiongroups::statusBarCounters`) — **nicht** in `WindowModel`, das kennt keine
+  Sessions.
+  🔑 **Drei QML-Fallen, jede einzeln erlebt:** (1) `Behavior on Layout.preferredWidth` ist
+  **ungültig** — auf einer *attached property* erlaubt QML kein `Behavior`; es braucht eine
+  eigene Property (hier `animWidth`). (2) Der **Inhalt eines `Popup` entsteht mit dem
+  Delegate**, nicht beim Öffnen, und `Date.now()` ist nicht reaktiv → eine gerechnete Dauer
+  steht sonst für immer auf „seit 0 s" (am Bild aufgefallen); Abhilfe ist ein `tick`-Anker,
+  den ein Timer nur bei offenem Popup hochzählt. (3) Im eingeklappten Zustand muss der
+  `AppToolTip` **abgeschaltet** werden, sonst stehen ToolTip und Flyout übereinander.
+  🔑 **`Ctrl+B` gehört der Shell** (tmux-Präfix, readline `backward-char`): Der Umschalter
+  liegt auf **macOS `Ctrl+B`** (= Cmd+B) und **Windows/Linux `Ctrl+Shift+L`** — dieselbe Linie
+  wie `actFind`/`actClearScreen`. Und: `actVault` und `actClearScreen` lagen **beide** auf
+  `Ctrl+Shift+K` (in Qt „ambiguous", also feuerte keiner zuverlässig) — „Bildschirm leeren"
+  behält die Taste, der Vault hat keine Vorgabe mehr. Wächter dagegen:
+  `tst_hotkeys::defaultsAreConflictFree`.
 - **Verzeichnis auf der Kachel (2026-07-30):** Zweite, gedimmte Zeile unter dem Titel
   (`tile.dispDir` → `window.prettyDir`, `ElideLeft`, ausgeblendet wenn leer). 🔑 **Warum
   nötig:** Der Kacheltitel kommt **ausschließlich** aus dem OSC-0/2-Titel der Shell — Claude
