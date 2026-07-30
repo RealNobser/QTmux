@@ -356,7 +356,7 @@ in `qsTr` + `i18n/qtmux_{de,en}.ts` nachziehen, alle Tests grün.
 | 2 | eingeklappte Leiste (52 px) + Hover-Flyout | **fertig** `1a644c3` |
 | 3 | Statusleiste (Footer 26 px, 7 Felder) | **fertig** `dd7df2f` |
 | 4 | Menü-Neuordnung auf 6 Menüs + Palette-Ergänzungen | **fertig** `d421e1e` |
-| 5 | Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl` | **fertig** (s. u.) |
+| 5 | Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl` | **fertig** `aa269a1` |
 | 6 | **`SettingsIo` (Reset/Import/Export) + `tst_settingsio`** | **als Nächstes** |
 | 7 | Übersetzungen finalisieren, README-Screenshots | offen |
 
