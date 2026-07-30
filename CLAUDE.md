@@ -360,7 +360,10 @@ als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-31** · `main` = `origin/main` (**`36cb06a`**), Working Tree sauber · Version **1.7.1**.
+Stand **2026-07-31** · `main` = `origin/main` (**`2e151b9`**), Working Tree sauber · Version **1.7.1**.
+Zuletzt: Design-1a/2a-Umbau abgeschlossen (Stufen 1–7), Umbenennen erhält den Aktivitäts-Indikator
+der aktiven Session (`2e151b9`), Confluence-Entwicklerdoku-Seite „GUI-Auffrischung Design 1a/2a"
+dual angelegt, Jira bis **QTMUX-117** synchron.
 **Teststände (alle grün):** macOS **19/19** (`macos-release`), Windows **18/18** (rtzbld01,
 `windows`/`windows-release`), Linux **18/18** (rtzsvr02, **Container** — s. „Build & Test (Linux)").
 `test_pty` fällt auf Windows/Linux umgebungsbedingt (nicht-interaktive Shell/ConPTY); auf Windows
@@ -425,18 +428,17 @@ bauen + testen** ([[qtmux-build-alle-plattformen]]). Koordination: die drei Rege
 `git fetch` und bei Divergenz erst committen, dann mergen, und nach jedem Merge, der die
 CLAUDE.md anfasst, `test_doc_duplicates` laufen lassen.
 
-### Offen: Jira/Confluence-Nachträge (nur vom Mac)
+### Jira/Confluence-Stand (2026-07-31, dual synchron)
 
-Die Übergabe selbst (Build+Test auf macOS/Linux, README-Screenshots) ist **erledigt** — offen
-bleiben die Doku-Nachträge. Vorher in **beiden** Systemen die höchste Nummer holen
-(`ORDER BY key DESC`, maxResults 1):
-- **QTMUX-2 → Done** (Funktionstest bestanden; die PowerShell-CWD-Einschränkung ist keine
-  Bringschuld von QTmux).
-- **Neu anlegen:** Verzeichniszeile auf der Kachel · OSC 7 · `--screenshot` auf Windows
-  (behoben, nur nachzutragen) · **Design 1a/2a** je Stufe (1–7 umgesetzt: `1a644c3` `dd7df2f`
-  `d421e1e` `aa269a1` `144c318` `36cb06a`) · **Qt-Standardknöpfe** „OK"/„Cancel" unübersetzt
-  (kein `qtbase_<lang>`-Translator installiert, betrifft die ganze App).
-- Kanban dual weiterschieben, Kurzkommentar je Ticket.
+Beide Systeme synchron bis **QTMUX-117**. Design 1a/2a je Stufe angelegt (Stufen 1–6 =
+QTMUX-109…114, Stufe 7 = **115**), dazu **116** (Umbenennen-Indikator, In Progress) und **117**
+(Qt-Standardknöpfe „OK"/„Cancel" unübersetzt — kein `qtbase_<lang>`-Translator, Backlog);
+QTMUX-2 ist Done. Verzeichniszeile (106), OSC 7 (108) und der `--screenshot`-Windows-Fix (107)
+waren bereits von der Windows-Session angelegt. Confluence-Entwicklerdoku-Seite „GUI-Auffrischung
+Design 1a/2a" dual angelegt (on-prem **212598811**, Cloud **233177089**).
+🔑 Vor jedem neuen Ticket in **beiden** Systemen die höchste Nummer holen (`ORDER BY key DESC`) —
+die Windows-Session legt ebenfalls an (die alte „bis 103"-Notiz war prompt veraltet). Offen
+bleibt nur der **Owner-Durchklick** der GUI (nächster Abschnitt).
 
 ### Owner-Abnahmen offen (seit v1.7.1, je umgesetzt + selbst verifiziert)
 
@@ -474,11 +476,9 @@ behobene, in der App nicht gegengeprüft, im Ticket notiert.
   ist „steht im Repo" **nie** gleichbedeutend mit „ist in der App" — genau daraus entstand die
   Fehlannahme, die Agenten-Schalter seien nicht im Dialog gelandet. Jede Owner-Abnahme braucht
   darum eine frische Testinstanz (`QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`) oder den Neubau.
-- **Jira-Stand (2026-07-29, vom Mac aus beidseitig geprüft):** synchron bis **QTMUX-103**;
-  97 Done, und **61/85/89/98/99/100/101/102/103** stehen dual auf „In Progress"/„In Arbeit"
-  (umgesetzt + selbst verifiziert, Owner-Abnahme offen). Damit ist der von der Windows-Session
-  offen gelassene Punkt („ab QTMUX-100 hier nicht prüfbar", `CLAUDE.local.md` existiert nur auf
-  dem Mac) erledigt. 🔑 **Lektion:** Vor dem Anlegen eines Tickets die höchste Nummer in **beiden**
+- **Jira-Stand:** synchron bis **QTMUX-117** (Details im „Jira/Confluence-Stand"-Abschnitt oben).
+  Die Design-1a/2a-Stufen und ihre Fixes stehen dual auf „In Progress"/„In Arbeit" (umgesetzt +
+  selbst verifiziert, Owner-Abnahme offen). 🔑 **Lektion:** Vor dem Anlegen eines Tickets die höchste Nummer in **beiden**
   Systemen holen (`ORDER BY key DESC`, maxResults 1) — nur solange beide gleich stehen, bleiben
   die Keys deckungsgleich. Und prüfen, ob die Doku bereits höhere Nummern *vergeben* hat.
   Die alte Notiz „QTMUX-46/-79 nicht angelegt" war schlicht falsch, beide existieren und sind
@@ -1015,6 +1015,16 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Gleichheit bzw. `home + "/"`, sonst würde `/Users/nrx` als Home `/Users/nr` gelesen.
   ⚠️ Bei **PowerShell**-Sessions steht hier dauerhaft das Startverzeichnis — nicht die
   Anzeige ist schuld, sondern `Set-Location` (Begründung im ConPTY-Abschnitt).
+- **Umbenennen erhält den Aktivitäts-Indikator (QTMUX-116):** `windowTitle(w)` gab bei gesetztem
+  custom `w.name` bisher sofort den Namen zurück und verwarf damit den Session-Titel samt
+  führendem Aktivitäts-Indikator (Agenten wie Claude Code setzen `✳` U+2733 im Ruhezustand, einen
+  Braille-Spinner U+2800–28FF beim Arbeiten an den Anfang des OSC-Titels). Diese Zeichen kann der
+  Anwender im Umbenennen-Dialog nicht tippen. `windowTitle` stellt den Indikator jetzt dem Namen
+  **dynamisch** voran — aus dem aktuellen Session-Titel gelesen (`dispTitle` hängt an
+  `sessionsRevision`), NICHT statisch in `w.name` gespeichert, damit er dem Wechsel `✳↔Spinner`
+  folgt; Hilfsfunktion `activityIndicator()`, Doppelungs-Schutz, wenn der Name schon einen trägt.
+  🔑 **Der MCP-`rename_window`-Parameter heißt `name`, nicht `title`** — ein Aufruf mit `title`
+  setzt still den leeren Namen (also gar keinen) und sieht dann wie „Rename wirkt nicht" aus.
 - **Arbeitsverzeichnis (QTMUX-103):** `windowWorkingDir(w)` liefert das CWD des **aktiven**
   Panes, leer bei seriellen/Plugin-Sessions — daran hängen „Arbeitsverzeichnis öffnen" und
   „Pfad kopieren" ihr `enabled`. Geöffnet wird über `App.openLocalPath` (C++,
