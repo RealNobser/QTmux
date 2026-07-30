@@ -32,6 +32,7 @@ private:
     Q_PROPERTY(QColor sidebarSelected READ sidebarSelected NOTIFY changed)
     Q_PROPERTY(QColor border          READ border          NOTIFY changed)
     Q_PROPERTY(QColor accent          READ accent          NOTIFY changed)
+    Q_PROPERTY(QColor accentText      READ accentText      NOTIFY changed)
     Q_PROPERTY(QColor textBright      READ textBright      NOTIFY changed)
     Q_PROPERTY(QColor textDim         READ textDim         NOTIFY changed)
     Q_PROPERTY(QColor terminalBg      READ terminalBg      NOTIFY changed)
@@ -54,6 +55,7 @@ public:
     QColor sidebarSelected() const;
     QColor border() const;
     QColor accent() const;
+    QColor accentText() const;         // lesbare Schrift auf accent (hell/dunkel je Luminanz)
     QColor textBright() const;
     QColor textDim() const;
     QColor terminalBg() const;

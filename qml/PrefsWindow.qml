@@ -100,14 +100,38 @@ Window {
     readonly property var categories: [
         { id: "allgemein",       icon: "gear",            label: qsTr("Allgemein") },
         { id: "erscheinungsbild",icon: "moon",            label: qsTr("Erscheinungsbild") },
-        { id: "terminal",        icon: "terminal-window", label: qsTr("Terminal") },
-        { id: "eingabe",         icon: "clipboard",       label: qsTr("Eingabe") },
+        { id: "terminal",        icon: "terminal-window", label: qsTr("Darstellung & Shell") },
+        { id: "eingabe",         icon: "clipboard",       label: qsTr("Eingabe & Zwischenablage") },
         { id: "agenten",         icon: "robot",           label: qsTr("Agenten & MCP") },
         { id: "hotkeys",         icon: "command",         label: qsTr("Tastenkürzel") },
         { id: "verbindungen",    icon: "bookmark",        label: qsTr("Verbindungen") },
         { id: "vault",           icon: "key",             label: qsTr("Secrets-Vault") },
         { id: "erweiterungen",   icon: "plugs",           label: qsTr("Erweiterungen") }
     ]
+
+    // Rail-Gliederung (Design 1a, Teil C2): drei Gruppen über denselben neun Kategorien.
+    // `categories` bleibt bewusst die flache Liste der ECHTEN Kategorien — sie ist die
+    // Quelle für `selectDelta`, den Loader, die Suche und die Befehlspalette in Main.qml
+    // (`prefs.categories`). Die Überschriften leben nur in dieser Anzeige-Liste; damit
+    // überspringt die Tastatur-Navigation sie automatisch, ohne Sonderfall.
+    readonly property var railGroups: [
+        { heading: qsTr("Arbeitsplatz"), ids: ["allgemein", "erscheinungsbild"] },
+        { heading: qsTr("Terminal"),     ids: ["terminal", "eingabe", "hotkeys"] },
+        { heading: qsTr("Agenten & Geräte"), ids: ["agenten", "verbindungen", "vault", "erweiterungen"] }
+    ]
+    // Flache Zeichenliste für den Repeater: {heading} oder {cat}.
+    readonly property var railItems: {
+        const out = []
+        for (let g = 0; g < railGroups.length; ++g) {
+            out.push({ heading: railGroups[g].heading, cat: null })
+            for (let i = 0; i < railGroups[g].ids.length; ++i) {
+                const id = railGroups[g].ids[i]
+                for (let k = 0; k < categories.length; ++k)
+                    if (categories[k].id === id) out.push({ heading: "", cat: categories[k] })
+            }
+        }
+        return out
+    }
 
     // Badge je Kategorie (Statusanzeige, kein Selbstzweck — s. Design-Referenz A4):
     // zeigt nur, was man von außen wissen will (aktives Schema, Anzahl Abos/Profile/
@@ -121,7 +145,10 @@ Window {
         root.badgeRev   // Abhängigkeit erzwingen
         switch (id) {
         case "erscheinungsbild":
-            return ColorSchemes.current
+            // Ohne den eigenen Namen als Präfix: „QTmux Dunkel" ist in der 236 px breiten
+            // Rail so lang, dass die Kategorie zu „Erscheinu…" verkürzt wird — die Kategorie
+            // ist aber das Wichtigere. Der volle Schemaname steht auf der Seite selbst.
+            return ColorSchemes.current.replace(/^QTmux\s+/, "")
         case "agenten": {
             const n = AgentEvents.subscriptions().length
             return n > 0 ? qsTr("%1 Abos").arg(n) : ""
@@ -179,7 +206,7 @@ Window {
             { cat: "terminal",         key: "terminal.options",      label: qsTr("Schriftgröße"),                      keywords: "schriftgröße größe font size zoom" },
             { cat: "terminal",         key: "terminal.options",      label: qsTr("Ligaturen"),                         keywords: "ligaturen firacode glyph programmier calt liga" },
             { cat: "terminal",         key: "terminal.options",      label: qsTr("GPU-Glyph-Atlas"),                   keywords: "gpu rendering glyph atlas qpainter beschleunigung" },
-            { cat: "terminal",         key: "terminal.options",      label: qsTr("Standard-Shell"),                    keywords: "shell zsh bash powershell cmd standard" },
+            { cat: "terminal",         key: "terminal.shell",        label: qsTr("Standard-Shell"),                    keywords: "shell zsh bash powershell cmd standard" },
             { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Auswahl automatisch kopieren"),      keywords: "kopieren auswahl copy select zwischenablage" },
             { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Rechtsklick fügt ein"),              keywords: "rechtsklick einfügen paste zwischenablage" },
             { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Vor mehrzeiligem Einfügen warnen"),  keywords: "einfügen paste warnung mehrzeilig multiline" },
@@ -237,10 +264,12 @@ Window {
         anchors.fill: parent
         spacing: 0
 
-        // Fensterkopf (1c): Titel + Suchfeld.
+        // Fensterkopf (1c, Maße aus Design 1a C1): Titel + Suchfeld.
+        // Die beiden Textknöpfe „Zurücksetzen" und „Import / Export" aus C1 kommen mit
+        // Stufe 6 (`SettingsIo`) — ein Knopf ohne Funktion wäre schlechter als keiner.
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 60
+            Layout.preferredHeight: 56
             color: Theme.bgSidebar
             RowLayout {
                 anchors.fill: parent
@@ -255,9 +284,9 @@ Window {
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
-                    Layout.preferredWidth: 300
-                    Layout.preferredHeight: 34
-                    radius: 17
+                    Layout.preferredWidth: 320
+                    Layout.preferredHeight: 30
+                    radius: 6
                     color: Theme.bgMain
                     border.color: searchField.activeFocus ? Theme.accent : Theme.border
                     border.width: 1
@@ -359,7 +388,7 @@ Window {
 
             // --- Kategorie-Rail -------------------------------------------------
             Rectangle {
-                Layout.preferredWidth: 232
+                Layout.preferredWidth: 236
                 Layout.fillHeight: true
                 color: Theme.bgSidebar
                 focus: true
@@ -372,21 +401,51 @@ Window {
                     spacing: 3
 
                     Repeater {
-                        model: root.categories
-                        delegate: Rectangle {
-                            id: railTile
+                        model: root.railItems
+                        // Ein Delegate für BEIDE Zeilenarten (Überschrift oder Kachel): ein
+                        // Repeater kann keine zwei Typen liefern, und ein Loader je Zeile
+                        // wäre für neun Einträge Overhead. Die nicht benutzte Hälfte ist
+                        // unsichtbar und trägt keine Höhe.
+                        delegate: Item {
+                            id: railItem
                             required property var modelData
+                            readonly property bool isHeading: modelData.cat === null
+                            readonly property var cat: modelData.cat
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 40
-                            radius: 10
+                            Layout.preferredHeight: isHeading ? 26 : 36
+                            Layout.topMargin: isHeading ? 8 : 0
+
+                            // Gruppen-Überschrift: Versalien, gedimmt, nicht anklickbar.
+                            Text {
+                                visible: railItem.isHeading
+                                anchors.left: parent.left
+                                anchors.leftMargin: 12
+                                anchors.bottom: parent.bottom
+                                text: railItem.modelData.heading.toUpperCase()
+                                color: Theme.textDim
+                                font.pixelSize: 11
+                                font.bold: true
+                                font.letterSpacing: 0.6
+                            }
+
+                        Rectangle {
+                            id: railTile
+                            visible: !railItem.isHeading
+                            anchors.fill: parent
+                            radius: 8
+                            readonly property var modelData: railItem.cat ? railItem.cat
+                                                                          : ({ id: "", icon: "gear", label: "" })
                             readonly property bool current: root.category === modelData.id
                             color: current ? Theme.sidebarSelected
                                  : railHover.hovered ? Theme.sidebarHover : "transparent"
                             readonly property color ink: current ? Theme.textBright : Theme.textDim
                             readonly property string badge: root.badgeFor(modelData.id)
 
-                            HoverHandler { id: railHover }
-                            TapHandler { onTapped: root.selectCategory(railTile.modelData.id) }
+                            HoverHandler { id: railHover; enabled: !railItem.isHeading }
+                            TapHandler {
+                                enabled: !railItem.isHeading
+                                onTapped: root.selectCategory(railTile.modelData.id)
+                            }
 
                             RowLayout {
                                 anchors.fill: parent
@@ -431,17 +490,25 @@ Window {
                                     visible: railTile.badge.length > 0
                                     radius: 8
                                     color: Theme.bgElevated
-                                    implicitWidth: badgeText.implicitWidth + 14
+                                    // Deckel auf die Badge-Breite: der Name des aktiven
+                                    // Farbschemas kann lang sein („QTmux Dunkel") und
+                                    // verdrängte in der 236-px-Rail den Kategorie-Namen zu
+                                    // „Erscheinu…". Die Kategorie hat Vorrang, das Badge elidiert.
+                                    implicitWidth: Math.min(badgeText.implicitWidth + 14, 84)
                                     implicitHeight: badgeText.implicitHeight + 4
                                     Text {
                                         id: badgeText
                                         anchors.centerIn: parent
+                                        width: Math.min(implicitWidth, parent.width - 12)
                                         text: railTile.badge
                                         color: Theme.textDim
                                         font.pixelSize: 11
+                                        elide: Text.ElideRight
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                 }
                             }
+                        }
                         }
                     }
 

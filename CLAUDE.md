@@ -356,24 +356,37 @@ in `qsTr` + `i18n/qtmux_{de,en}.ts` nachziehen, alle Tests grün.
 | 2 | eingeklappte Leiste (52 px) + Hover-Flyout | **fertig** `1a644c3` |
 | 3 | Statusleiste (Footer 26 px, 7 Felder) | **fertig** `dd7df2f` |
 | 4 | Menü-Neuordnung auf 6 Menüs + Palette-Ergänzungen | **fertig** `d421e1e` |
-| 5 | **Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl`** | **als Nächstes** |
-| 6 | `SettingsIo` (Reset/Import/Export) + `tst_settingsio` | offen |
+| 5 | Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl` | **fertig** (s. u.) |
+| 6 | **`SettingsIo` (Reset/Import/Export) + `tst_settingsio`** | **als Nächstes** |
 | 7 | Übersetzungen finalisieren, README-Screenshots | offen |
 
-**Nächster Punkt — Stufe 5 (Teil C1–C3/C5 der Anweisung):** Einstellungsfenster aufräumen —
-Kopfzeile 60 → 56 px und Suchfeld auf Radius 6/Höhe 30/Breite 320, Rail mit drei
-**Gruppen-Überschriften** (Arbeitsplatz · Terminal · Agenten & Geräte; Kachelhöhe 40 → 36,
-Rail 232 → 236 px, `selectDelta` muss die Überschriften überspringen), einheitliche Zeile
-`qml/Ui/PrefRow.qml` (Titel + Beschreibung links, Control rechts, Gruppen in einem
-1-px-Rahmen) und neu `qml/Ui/SegmentedControl.qml` für Auswahlen mit ≤ 3 Optionen
-(Design-Modus, Restore-Modus); Booleans als `Switch` statt `CheckBox`.
-- Einstieg: [qml/PrefsWindow.qml](qml/PrefsWindow.qml) (`categories`, Rail-Delegate,
-  `selectDelta`) und die neun [qml/prefs/](qml/prefs/)-Seiten auf `PrefRow` umstellen.
+**Nächster Punkt — Stufe 6 (Teil C4 der Anweisung):** `SettingsIo` unter
+`src/viewmodels/` (als Context-Property in QML), dazu die beiden Textknöpfe in der
+Kopfzeile des Einstellungsfensters, die aus Stufe 5 bewusst **zurückgestellt** sind:
+„Zurücksetzen" (Menü: *diese Seite* / *alle Einstellungen*, Letzteres mit `AppDialog`-
+Rückfrage) und „Import / Export" (`FileDialog`, JSON; Import zeigt vorab die zu ändernden
+Schlüssel). Test `tests/tst_settingsio.cpp` (Round-Trip Export → Reset → Import).
+- Einstieg: Kopfzeile in [qml/PrefsWindow.qml](qml/PrefsWindow.qml) (Kommentar „kommen mit
+  Stufe 6"), neue Klasse neben [Theme.cpp](src/viewmodels/Theme.cpp); Registrierung in
+  `main.cpp` als Context-Property (KEIN `qmlRegisterSingletonInstance` in die URI).
 - Bauen/Testen: `.\tools\vsdev-build.cmd "windows-release" all` und
   `ctest --test-dir build\windows-release -E "^test_pty$"` (Qt-`bin` in den PATH).
-- Beachten: **Abo-Matrix in `CatAgenten` bleibt bei Toggle-Kacheln** (KEINE CheckBox/Switch —
-  Begründung in der Feature-Referenz, QTMUX-47) · Suchindex `entries` mitpflegen, wenn
-  Sektionen wandern · `MultiEffect` braucht `import QtQuick.Effects` je Datei.
+- ⚠️ **Vault-Schlüssel dürfen im Export NICHT vorkommen** (Abnahmekriterium der Anweisung;
+  Profile nur mit `passwordSecret`-Namen, nie aufgelöst) — das gehört in den Test.
+- Beachten: Nach dem Reset müssen die Registries **neu laden**; Kategorien/Seiten lesen ihre
+  Werte über `host.app.*`, das folgt automatisch.
+
+**Stufe 5 — was umgesetzt ist und wo abgewichen wurde:** Kopfzeile 56 px + Suchfeld
+(Radius 6/Höhe 30/Breite 320), Rail 236 px mit drei Gruppen-Überschriften, Kacheln 36 px /
+Radius 8, neue Bausteine `qml/Ui/{PrefRow,PrefGroup,SegmentedControl,AppSwitch}.qml`; die
+Seiten **Allgemein · Erscheinungsbild · Darstellung & Shell · Eingabe & Zwischenablage ·
+Agenten & MCP** sind auf das Zeilenformat umgestellt (C5-Gliederung inklusive).
+Abweichungen: (1) **`PrefGroup` und `AppSwitch` sind zusätzliche Dateien** — der Rahmen aus
+C3 und der akzentfarbene Schalter brauchen einen Ort, sonst stünde beides in jeder Seite neu;
+(2) die **listenartigen** Seiten (Tastenkürzel, Verbindungen, Vault, Erweiterungen) bleiben
+strukturell wie sie sind — sie zeigen Listen, keine Einstellungszeilen; (3) die Abo-Matrix in
+`CatAgenten` bleibt bei Toggle-Kacheln (Begründung QTMUX-47); (4) die beiden Kopfzeilen-Knöpfe
+folgen mit Stufe 6.
 
 **Stufe 4 — was umgesetzt ist und wo abgewichen wurde:** sechs Menüs (Datei · Bearbeiten ·
 Ansicht · Session · Agent · Hilfe), „Sprache" und „Agent-Steuerung" entfallen, alle
@@ -732,6 +745,29 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   **Laufzeitzustand** (`newSessionType`, `collapsedGroups`; die gehören NICHT in den Dialog).
   Alles unter `windows/*` in [WindowModel.cpp](src/viewmodels/WindowModel.cpp) ist ebenfalls
   Zustand, keine Einstellung.
+  🔑 **Zeilenformat seit Design 1a, Stufe 5:** eine Einstellung = eine `PrefRow` (Titel +
+  Beschreibung links, Control rechts) in einer gerahmten `PrefGroup`; ≤ 3 Optionen als
+  `SegmentedControl`, Booleans als `AppSwitch`. Alle vier liegen in [qml/Ui/](qml/Ui/) und
+  sind in `CMakeLists.txt` (`QML_FILES`) eingetragen — **eine neue QML-Datei ohne diesen
+  Eintrag existiert zur Laufzeit nicht**. Die freistehenden Erklärtexte unter den früheren
+  CheckBoxen sind damit weg; **listenartige** Seiten (Hotkeys/Verbindungen/Vault/
+  Erweiterungen) bleiben bewusst außen vor.
+  🔑 **`SegmentedControl` schreibt `currentIndex` NIE selbst** — es meldet nur
+  `activated(index)`, wie `AppComboBox.onActivated`. Ein internes Setzen zerrisse die Bindung
+  der Aufrufstelle (`currentIndex: Theme.mode`) beim ersten Klick; danach zeigte der
+  Umschalter seinen eigenen Zustand statt den der Einstellung — dieselbe Falle wie bei der
+  Abo-Matrix.
+  🔑 **`font.pixelSize` ist ein `int`.** Die Anweisung nennt 11,5 px; eine Gleitkommazahl
+  scheitert erst zur **Laufzeit** („Invalid property assignment: int expected") und reißt dann
+  den GANZEN App-Start mit, weil `PrefsWindow` alle neun Kategorien referenziert. Nach jeder
+  QML-Änderung darum einmal starten (`QT_FORCE_STDERR_LOGGING=1`), nicht nur bauen — der Build
+  ist dafür blind.
+  🔑 **Schrift auf Akzentflächen: `Theme.accentText`** (neu) statt eines weißen Literals — sie
+  entscheidet über die **Luminanz des Akzents**, weil ein Schema mit hellem ANSI-Blau sonst
+  weiß auf hell zeichnete. Chrome-Farben bleiben damit vollständig schema-abgeleitet.
+  🔑 **Rail-Badges dürfen den Kategorienamen nicht verdrängen:** „QTmux Dunkel" ließ in der
+  236-px-Rail nur „Erscheinu…" übrig. Das Badge zeigt darum den Schemanamen **ohne den
+  eigenen Präfix** („Dunkel") und ist zusätzlich auf 84 px gedeckelt.
 - **Agent-Awareness:** OSC 133 (Prompt-Marker → Activity-Ring), OSC 9/777 (Notify),
   OSC 9;4 (Progress-Balken), Bell → Attention-Pulse (blau); MCP-Controller-Tab rot.
   🔑 **Reduzierte Bewegung (QTMUX-47):** `App.reduceMotion` (AppController, beim Start
@@ -1094,6 +1130,15 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   🔑 **PowerShell 5.1 liest UTF-8-Skripte als CP1252**: ein literales „ä" im UIA-Namen kommt
   als „Ã¤" an und der Eintrag wird nie gefunden. Umlaute im Skript aus dem Zeichencode bauen
   (`"Alles ausw" + [char]0xE4 + "hlen"`) — oder das Skript ASCII halten.
+- **Das EINSTELLUNGSFENSTER fotografieren (Windows):** `--screenshot` greift nur das
+  **Root**-Fenster, das Prefs-Fenster ist ein eigenes `Window` und fehlt darin. Weg, der
+  trägt: Kategorie **vorher** in die QSettings-Domain schreiben
+  (`HKCU:\Software\QTmux\QTmux-<profil>\ui\prefsCategory`), Instanz starten, per UIA
+  „Datei" → „Einstellungen …" öffnen, dann das Fenster greifen. 🔑 Zwei Fallen: Das
+  Prefs-Fenster taucht in der **UIA-Kinderliste des Desktops nicht auf** → über `EnumWindows`
+  nach Titel suchen; und `CopyFromScreen` scheitert daran („Das Handle ist ungültig") →
+  **`PrintWindow` mit `PW_RENDERFULLCONTENT`**. Tastatur-Navigation als Steuerweg ist
+  untauglich: die Rail hat nach dem Öffnen keinen Fokus, alle Bilder wurden identisch.
 - ⚠️ **`--screenshot` NICHT aus dem Bash-Werkzeug starten.** Von dort entsteht kein PNG und
   der Exit-Code führt in die Irre (die GUI-App hängt nicht am Pipeline-Status). Richtig ist
   PowerShell mit `Start-Process … -PassThru -Wait` und danach `$pr.ExitCode` +

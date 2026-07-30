@@ -83,6 +83,16 @@ QColor Theme::sidebarHover() const    { const ColorScheme &s = ColorSchemeRegist
 QColor Theme::sidebarSelected() const { const ColorScheme &s = ColorSchemeRegistry::instance()->currentScheme(); return mix(QColor::fromRgb(s.bg), QColor::fromRgb(s.ansi[4]), 0.30); }
 QColor Theme::border() const          { const ColorScheme &s = ColorSchemeRegistry::instance()->currentScheme(); return mix(QColor::fromRgb(s.bg), QColor::fromRgb(s.fg), 0.24); }
 QColor Theme::accent() const          { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().ansi[4]); }
+// Schrift AUF der Akzentfläche (aktives Segment, Akzent-Knöpfe). Nicht hart weiß: ein
+// Schema mit hellem ANSI-Blau (z. B. Solarized Light) ergäbe weiß auf hell = unlesbar.
+// Entschieden wird über die Helligkeit des Akzents, nicht über den Hell/Dunkel-Modus.
+QColor Theme::accentText() const {
+    const QColor a = accent();
+    // Wahrnehmungsgewichtete Helligkeit (Rec. 601) — dieselbe Faustformel wie im
+    // Terminal-Kontrastausgleich.
+    const double lum = (0.299 * a.redF() + 0.587 * a.greenF() + 0.114 * a.blueF());
+    return lum > 0.6 ? QColor(0x11, 0x11, 0x11) : QColor(0xFF, 0xFF, 0xFF);
+}
 QColor Theme::textBright() const      { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().fg); }
 QColor Theme::textDim() const         { const ColorScheme &s = ColorSchemeRegistry::instance()->currentScheme(); return mix(QColor::fromRgb(s.fg), QColor::fromRgb(s.bg), 0.45); }
 // Terminal-Flächen + Cursor = Schema-Farben direkt.

@@ -3,65 +3,79 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QTmux
 
-// Kategorie „Terminal" (QTMUX-47, Tabelle A4): Schriftart/-größe, Ligaturen, GPU-Atlas,
-// Standard-Shell. Unverändert aus dem settingsDialog-Abschnitt „Terminal". Die Mini-
-// Terminal-Vorschau kommt in Schritt 4 unter diese Optionen.
+// Kategorie „Darstellung & Shell" (QTMUX-47, Tabelle A4; Zeilenformat aus Design 1a C3):
+// Schriftart/-größe, Ligaturen, GPU-Atlas, Standard-Shell — Letztere hat mit Stufe 4 das
+// Datei-Menü verlassen. Darunter die Live-Vorschau.
 CatPage {
     id: page
-    heading: qsTr("Terminal")
-    subtitle: qsTr("Schrift, Ligaturen und Rendering des Terminals.")
+    heading: qsTr("Darstellung & Shell")
+    subtitle: qsTr("Schrift, Ligaturen, Rendering und die Shell neuer Sessions.")
 
     // Aktives Schema (das die ganze App färbt) — reaktiv über ColorSchemes.current.
     readonly property var scheme: ColorSchemes.colors(ColorSchemes.current)
 
     PrefAnchor { settingKey: "terminal.options"; page: page
-    GridLayout {
-        columns: 2
-        columnSpacing: 12
-        rowSpacing: 8
-        Layout.fillWidth: true
-
-        Text { text: qsTr("Schriftart"); color: Theme.textBright }
-        AppComboBox {
-            Layout.fillWidth: true
-            model: App.monospaceFonts()
-            currentIndex: Math.max(0, App.monospaceFonts().indexOf(page.host.app.terminalFontFamily))
-            onActivated: (i) => page.host.app.terminalFontFamily = App.monospaceFonts()[i]
-        }
-        Text { text: qsTr("Schriftgröße"); color: Theme.textBright }
-        SpinBox {
-            from: 6; to: 40
-            value: page.host.app.terminalFontSize
-            onValueModified: page.host.app.terminalFontSize = value
-        }
-        Text { text: qsTr("Ligaturen"); color: Theme.textBright }
-        CheckBox {
-            text: qsTr("Programmier-Ligaturen (z. B. FiraCode)")
-            checked: page.host.app.terminalLigatures
-            onToggled: page.host.app.terminalLigatures = checked
-        }
-        Text { text: qsTr("Rendering"); color: Theme.textBright }
-        CheckBox {
-            text: qsTr("GPU-Glyph-Atlas (schneller; aus = QPainter-Fallback)")
-            checked: page.host.app.terminalGpuRendering
-            onToggled: page.host.app.terminalGpuRendering = checked
-        }
-        Text {
-            text: qsTr("Standard-Shell"); color: Theme.textBright
-            visible: page.host.app.hasShellChoice
-        }
-        AppComboBox {
-            visible: page.host.app.hasShellChoice
-            Layout.fillWidth: true
-            textRole: "name"
-            model: page.host.sessions.availableShells()
-            currentIndex: {
-                const l = page.host.sessions.availableShells()
-                for (let i = 0; i < l.length; ++i)
-                    if (l[i].program === page.host.app.currentShellProgram()) return i
-                return 0
+    PrefGroup {
+        title: qsTr("Schrift")
+        PrefRow {
+            title: qsTr("Schriftart")
+            description: qsTr("Nur Monospace-Schriften — Proportionalschrift zerlegt das Zellraster.")
+            controlWidth: 240
+            AppComboBox {
+                Layout.fillWidth: true
+                model: App.monospaceFonts()
+                currentIndex: Math.max(0, App.monospaceFonts().indexOf(page.host.app.terminalFontFamily))
+                onActivated: (i) => page.host.app.terminalFontFamily = App.monospaceFonts()[i]
             }
-            onActivated: (i) => page.host.app.defaultShellProgram = page.host.sessions.availableShells()[i].program
+        }
+        PrefRow {
+            title: qsTr("Schriftgröße")
+            description: qsTr("Wirkt auf alle Sessions; einzelne Fenster zoomst du mit Strg/Cmd +/−.")
+            SpinBox {
+                from: 6; to: 40
+                value: page.host.app.terminalFontSize
+                onValueModified: page.host.app.terminalFontSize = value
+            }
+        }
+        PrefRow {
+            title: qsTr("Programmier-Ligaturen")
+            description: qsTr("Verbindet Zeichenfolgen wie != oder => zu einem Glyph (z. B. FiraCode).")
+            AppSwitch {
+                checked: page.host.app.terminalLigatures
+                onToggled: page.host.app.terminalLigatures = checked
+            }
+        }
+        PrefRow {
+            title: qsTr("GPU-Glyph-Atlas")
+            description: qsTr("Schneller; aus = QPainter-Fallback. Bei Darstellungsfehlern hilft „aus“.")
+            AppSwitch {
+                checked: page.host.app.terminalGpuRendering
+                onToggled: page.host.app.terminalGpuRendering = checked
+            }
+        }
+    }
+    }
+
+    PrefAnchor { settingKey: "terminal.shell"; page: page
+    PrefGroup {
+        title: qsTr("Shell")
+        visible: page.host.app.hasShellChoice
+        PrefRow {
+            title: qsTr("Standard-Shell")
+            description: qsTr("Gilt für neue Sessions. Dieselbe Wahl steckt im „+“-Menü der Leiste.")
+            controlWidth: 240
+            AppComboBox {
+                Layout.fillWidth: true
+                textRole: "name"
+                model: page.host.sessions.availableShells()
+                currentIndex: {
+                    const l = page.host.sessions.availableShells()
+                    for (let i = 0; i < l.length; ++i)
+                        if (l[i].program === page.host.app.currentShellProgram()) return i
+                    return 0
+                }
+                onActivated: (i) => page.host.app.defaultShellProgram = page.host.sessions.availableShells()[i].program
+            }
         }
     }
     }

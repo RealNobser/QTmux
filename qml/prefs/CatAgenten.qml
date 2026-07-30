@@ -90,45 +90,24 @@ CatPage {
     PrefAnchor {
         settingKey: "agenten.restore"
         page: page
-        ColumnLayout {
-            spacing: 4
-            Layout.fillWidth: true
-            SectionLabel { text: qsTr("Wiederherstellung") }
-            CheckBox {
-                text: qsTr("Agenten beim Start wiederherstellen")
-                checked: page.host.app.restoreAgents
-                onToggled: page.host.app.restoreAgents = checked
-            }
-            Text {
-                text: qsTr("Setzt in jedem Pane den zuletzt erkannten Agenten erneut ab, "
-                         + "sobald die Shell bereit ist. Es wird ausschließlich ein bekannter "
-                         + "Agent gestartet — beliebige Befehle laufen nicht automatisch los.")
-                color: Theme.textDim
-                font.pixelSize: 12
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.bottomMargin: 4
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.topMargin: 4
-                spacing: 8
-                enabled: page.host.app.restoreAgents
-                Text { text: qsTr("Unterhaltung fortsetzen"); color: Theme.textBright }
-                AppComboBox {
-                    Layout.fillWidth: true
-                    model: [qsTr("Gar nicht"), qsTr("Jüngste im Verzeichnis"),
-                            qsTr("Auswahl beim Start"), qsTr("Gemeldete Sitzung")]
-                    currentIndex: page.host.app.resumeAgentMode
-                    onActivated: (i) => page.host.app.resumeAgentMode = i
+        PrefGroup {
+            title: qsTr("Wiederherstellung")
+            PrefRow {
+                title: qsTr("Agenten beim Start wiederherstellen")
+                description: qsTr("Setzt in jedem Pane den zuletzt erkannten Agenten erneut ab, sobald die "
+                                + "Shell bereit ist. Es wird ausschließlich ein bekannter Agent gestartet — "
+                                + "beliebige Befehle laufen nicht automatisch los.")
+                AppSwitch {
+                    checked: page.host.app.restoreAgents
+                    onToggled: page.host.app.restoreAgents = checked
                 }
             }
-            // Der richtige Weg haengt am Nutzungsverhalten - deshalb je Wahl der
-            // konkrete Preis, nicht nur die Funktion.
-            Text {
-                text: {
+            // Der richtige Weg hängt am Nutzungsverhalten — deshalb je Wahl der konkrete
+            // Preis, nicht nur die Funktion. Vier Optionen: bleibt eine ComboBox (der
+            // Segment-Umschalter ist für ≤ 3 gedacht, s. Design 1a C3).
+            PrefRow {
+                title: qsTr("Unterhaltung fortsetzen")
+                description: {
                     switch (page.host.app.resumeAgentMode) {
                     case 1: return qsTr("Der Agent nimmt die JÜNGSTE Unterhaltung seines Arbeitsverzeichnisses. "
                                       + "Richtig, solange dort nur ein Agent arbeitet — laufen mehrere im selben "
@@ -144,12 +123,15 @@ CatPage {
                     default: return qsTr("Der Agent startet mit einer frischen Unterhaltung.")
                     }
                 }
-                color: Theme.textDim
-                font.pixelSize: 12
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.bottomMargin: 4
+                rowEnabled: page.host.app.restoreAgents
+                controlWidth: 210
+                AppComboBox {
+                    Layout.fillWidth: true
+                    model: [qsTr("Gar nicht"), qsTr("Jüngste im Verzeichnis"),
+                            qsTr("Auswahl beim Start"), qsTr("Gemeldete Sitzung")]
+                    currentIndex: page.host.app.resumeAgentMode
+                    onActivated: (i) => page.host.app.resumeAgentMode = i
+                }
             }
         }
     }
@@ -327,20 +309,25 @@ CatPage {
 
     // --- MCP-Server (darunter) ---
     PrefAnchor { settingKey: "agenten.mcp"; page: page
-    ColumnLayout {
-        spacing: 6
-        Layout.fillWidth: true
-        SectionLabel { text: qsTr("Agenten-Steuerung (MCP)") }
-        CheckBox {
-            text: qsTr("MCP-Server aktiv (nur 127.0.0.1)")
-            checked: page.host.mcp.listening
-            onToggled: checked ? page.host.mcp.start() : page.host.mcp.stop()
+    PrefGroup {
+        title: qsTr("Agenten-Steuerung (MCP)")
+        PrefRow {
+            title: qsTr("MCP-Server aktiv")
+            description: qsTr("Hört ausschließlich auf 127.0.0.1; der Secrets-Vault ist über MCP "
+                            + "bewusst NICHT erreichbar.")
+            AppSwitch {
+                checked: page.host.mcp.listening
+                onToggled: checked ? page.host.mcp.start() : page.host.mcp.stop()
+            }
         }
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
-            Layout.leftMargin: 6
-            Text { text: qsTr("Port"); color: Theme.textBright }
+        PrefRow {
+            title: qsTr("Port")
+            // Fehlermeldung steht in derselben Zeile — sie gehört zu diesem Feld und war
+            // vorher ein freistehender Absatz weiter unten.
+            description: page.mcpPortError.length > 0
+                         ? page.mcpPortError
+                         : qsTr("Wird gespeichert und beim nächsten Start verwendet; die "
+                              + "Umgebungsvariable QTMUX_MCP_PORT hat Vorrang.")
             TextField {
                 id: mcpPortField
                 Layout.preferredWidth: 90
@@ -355,17 +342,6 @@ CatPage {
                 enabled: mcpPortField.text != page.host.mcp.port
                 onClicked: page.applyMcpPort(mcpPortField)
             }
-        }
-        Text {
-            text: page.mcpPortError.length > 0
-                  ? page.mcpPortError
-                  : qsTr("Nur 127.0.0.1 · Vault nicht über MCP erreichbar. Wird gespeichert "
-                       + "und beim nächsten Start verwendet; QTMUX_MCP_PORT hat Vorrang.")
-            color: page.mcpPortError.length > 0 ? "#e5534b" : Theme.textDim
-            font.pixelSize: 11
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
-            Layout.leftMargin: 6
         }
     }
     }

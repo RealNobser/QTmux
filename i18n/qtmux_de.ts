@@ -29,121 +29,134 @@
         <translation>Fehler</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="96"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="94"/>
         <source>Wiederherstellung</source>
         <translation>Wiederherstellung</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="98"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="96"/>
         <source>Agenten beim Start wiederherstellen</source>
         <translation>Agenten beim Start wiederherstellen</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="103"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="97"/>
         <source>Setzt in jedem Pane den zuletzt erkannten Agenten erneut ab, sobald die Shell bereit ist. Es wird ausschließlich ein bekannter Agent gestartet — beliebige Befehle laufen nicht automatisch los.</source>
         <translation>Setzt in jedem Pane den zuletzt erkannten Agenten erneut ab, sobald die Shell bereit ist. Es wird ausschließlich ein bekannter Agent gestartet — beliebige Befehle laufen nicht automatisch los.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="119"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="109"/>
         <source>Unterhaltung fortsetzen</source>
         <translation>Unterhaltung fortsetzen</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAgenten.qml" line="315"/>
+        <source>MCP-Server aktiv</source>
+        <translation>MCP-Server aktiv</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAgenten.qml" line="316"/>
+        <source>Hört ausschließlich auf 127.0.0.1; der Secrets-Vault ist über MCP bewusst NICHT erreichbar.</source>
+        <translation>Hört ausschließlich auf 127.0.0.1; der Secrets-Vault ist über MCP bewusst NICHT erreichbar.</translation>
     </message>
     <message>
         <source>Hängt das Fortsetzungs-Argument des Agenten an (z. B. --continue), sodass er die vorherige Unterhaltung weiterführt. Nur bei Agenten, die das können; ohne vorherige Unterhaltung meldet der Agent einen Fehler.</source>
         <translation type="vanished">Hängt das Fortsetzungs-Argument des Agenten an (z. B. --continue), sodass er die vorherige Unterhaltung weiterführt. Nur bei Agenten, die das können; ohne vorherige Unterhaltung meldet der Agent einen Fehler.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="122"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="130"/>
         <source>Gar nicht</source>
         <translation>Gar nicht</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="122"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="130"/>
         <source>Jüngste im Verzeichnis</source>
         <translation>Jüngste im Verzeichnis</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="123"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="131"/>
         <source>Auswahl beim Start</source>
         <translation>Auswahl beim Start</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="123"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="131"/>
         <source>Gemeldete Sitzung</source>
         <translation>Gemeldete Sitzung</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="133"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="112"/>
         <source>Der Agent nimmt die JÜNGSTE Unterhaltung seines Arbeitsverzeichnisses. Richtig, solange dort nur ein Agent arbeitet — laufen mehrere im selben Ordner, bekommen sie alle dieselbe.</source>
         <translation>Der Agent nimmt die JÜNGSTE Unterhaltung seines Arbeitsverzeichnisses. Richtig, solange dort nur ein Agent arbeitet — laufen mehrere im selben Ordner, bekommen sie alle dieselbe.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="136"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="115"/>
         <source>Der Agent öffnet beim Start seine eigene Auswahlliste; du entscheidest je Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur Claude Code eine solche Liste an.</source>
         <translation>Der Agent öffnet beim Start seine eigene Auswahlliste; du entscheidest je Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur Claude Code eine solche Liste an.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="139"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="118"/>
         <source>Genau die Unterhaltung, die der Agent zuletzt selbst gemeldet hat (MCP-Werkzeug set_agent_session) — auch bei mehreren Agenten im selben Ordner eindeutig. Meldet er nichts, startet er frisch. QTmux kann die Kennung nicht selbst ermitteln: sie entsteht im Agenten und ändert sich bei /resume oder /clear.</source>
         <translation>Genau die Unterhaltung, die der Agent zuletzt selbst gemeldet hat (MCP-Werkzeug set_agent_session) — auch bei mehreren Agenten im selben Ordner eindeutig. Meldet er nichts, startet er frisch. QTmux kann die Kennung nicht selbst ermitteln: sie entsteht im Agenten und ändert sich bei /resume oder /clear.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="144"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="123"/>
         <source>Der Agent startet mit einer frischen Unterhaltung.</source>
         <translation>Der Agent startet mit einer frischen Unterhaltung.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="162"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="144"/>
         <source>Benachrichtigungen</source>
         <translation>Benachrichtigungen</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="164"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="146"/>
         <source>Zeile = Empfänger, Spalte = Quelle. Ein Häkchen bedeutet: der Empfänger wird über Ereignisse der Quelle benachrichtigt. Agenten abonnieren sich meist selbst per MCP (subscribe_events).</source>
         <translation>Zeile = Empfänger, Spalte = Quelle. Ein Häkchen bedeutet: der Empfänger wird über Ereignisse der Quelle benachrichtigt. Agenten abonnieren sich meist selbst per MCP (subscribe_events).</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="214"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="196"/>
         <source>Arten</source>
         <translation>Arten</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="321"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="303"/>
         <source>Keine Sessions geöffnet.</source>
         <translation>Keine Sessions geöffnet.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="333"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="313"/>
         <source>Agenten-Steuerung (MCP)</source>
         <translation>Agenten-Steuerung (MCP)</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="335"/>
         <source>MCP-Server aktiv (nur 127.0.0.1)</source>
-        <translation>MCP-Server aktiv (nur 127.0.0.1)</translation>
+        <translation type="vanished">MCP-Server aktiv (nur 127.0.0.1)</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="343"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="324"/>
         <source>Port</source>
         <translation>Port</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="353"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="329"/>
+        <source>Wird gespeichert und beim nächsten Start verwendet; die Umgebungsvariable QTMUX_MCP_PORT hat Vorrang.</source>
+        <translation>Wird gespeichert und beim nächsten Start verwendet; die Umgebungsvariable QTMUX_MCP_PORT hat Vorrang.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAgenten.qml" line="340"/>
         <source>Übernehmen</source>
         <translation>Übernehmen</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="362"/>
         <source>Nur 127.0.0.1 · Vault nicht über MCP erreichbar. Wird gespeichert und beim nächsten Start verwendet; QTMUX_MCP_PORT hat Vorrang.</source>
-        <translation>Nur 127.0.0.1 · Vault nicht über MCP erreichbar. Wird gespeichert und beim nächsten Start verwendet; QTMUX_MCP_PORT hat Vorrang.</translation>
+        <translation type="vanished">Nur 127.0.0.1 · Vault nicht über MCP erreichbar. Wird gespeichert und beim nächsten Start verwendet; QTMUX_MCP_PORT hat Vorrang.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="377"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="353"/>
         <source>Bitte einen Port zwischen 1024 und 65535 angeben.</source>
         <translation>Bitte einen Port zwischen 1024 und 65535 angeben.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAgenten.qml" line="383"/>
+        <location filename="../qml/prefs/CatAgenten.qml" line="359"/>
         <source>Port %1 ließ sich nicht öffnen (belegt?). Server ist aus.</source>
         <translation>Port %1 ließ sich nicht öffnen (belegt?). Server ist aus.</translation>
     </message>
@@ -151,32 +164,31 @@
 <context>
     <name>CatAllgemein</name>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="11"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="12"/>
         <source>Allgemein</source>
         <translation>Allgemein</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="12"/>
         <source>Sprache, Erscheinungs-Modus und Verhalten beim Beenden.</source>
-        <translation>Sprache, Erscheinungs-Modus und Verhalten beim Beenden.</translation>
+        <translation type="vanished">Sprache, Erscheinungs-Modus und Verhalten beim Beenden.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="23"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="21"/>
         <source>Design</source>
         <translation>Design</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="26"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="24"/>
         <source>Wie System</source>
         <translation>Wie System</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="26"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="24"/>
         <source>Hell</source>
         <translation>Hell</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="26"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="24"/>
         <source>Dunkel</source>
         <translation>Dunkel</translation>
     </message>
@@ -186,102 +198,152 @@
         <translation>Sprache</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="48"/>
         <source>Fenster</source>
-        <translation>Fenster</translation>
+        <translation type="vanished">Fenster</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="50"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="87"/>
         <source>Vor dem Beenden nachfragen</source>
         <translation>Vor dem Beenden nachfragen</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="55"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="88"/>
         <source>Beenden schließt alle Sitzungen samt laufender Prozesse.</source>
         <translation>Beenden schließt alle Sitzungen samt laufender Prozesse.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="69"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="54"/>
         <source>Sessions beim Start wiederherstellen</source>
         <translation>Sessions beim Start wiederherstellen</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="72"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="13"/>
+        <source>Sprache, Erscheinungs-Modus und Verhalten beim Start und Beenden.</source>
+        <translation>Sprache, Erscheinungs-Modus und Verhalten beim Start und Beenden.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="19"/>
+        <source>Sprache &amp; Design</source>
+        <translation>Sprache &amp; Design</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="22"/>
+        <source>„Wie System“ folgt der Einstellung des Betriebssystems.</source>
+        <translation>„Wie System“ folgt der Einstellung des Betriebssystems.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="31"/>
+        <source>Wirkt sofort; das native macOS-App-Menü folgt erst nach einem Neustart.</source>
+        <translation>Wirkt sofort; das native macOS-App-Menü folgt erst nach einem Neustart.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="49"/>
+        <source>Start &amp; Beenden</source>
+        <translation>Start &amp; Beenden</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="57"/>
+        <source>QTmux startet mit einer einzelnen, leeren Session. Der zuletzt gespeicherte Stand bleibt erhalten — er wird beim Beenden nicht überschrieben und ist wieder da, sobald hier erneut wiederhergestellt wird.</source>
+        <translation>QTmux startet mit einer einzelnen, leeren Session. Der zuletzt gespeicherte Stand bleibt erhalten — er wird beim Beenden nicht überschrieben und ist wieder da, sobald hier erneut wiederhergestellt wird.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="69"/>
         <source>Gar nicht</source>
         <translation>Gar nicht</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="72"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="69"/>
         <source>Ohne Verlauf</source>
         <translation>Ohne Verlauf</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="72"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="69"/>
         <source>Alles</source>
         <translation>Alles</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="80"/>
-        <source>QTmux startet mit einer einzelnen, leeren Session. Der zuletzt gespeicherte Stand bleibt dabei erhalten — er wird beim Beenden nicht überschrieben und ist wieder da, sobald hier erneut wiederhergestellt wird.</source>
-        <translation>QTmux startet mit einer einzelnen, leeren Session. Der zuletzt gespeicherte Stand bleibt dabei erhalten — er wird beim Beenden nicht überschrieben und ist wieder da, sobald hier erneut wiederhergestellt wird.</translation>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="75"/>
+        <source>Agenten in den Panes</source>
+        <translation>Agenten in den Panes</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="84"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="76"/>
+        <source>Ob die Agenten dabei erneut starten und ihre Unterhaltung fortsetzen, steht unter „Agenten &amp; MCP“.</source>
+        <translation>Ob die Agenten dabei erneut starten und ihre Unterhaltung fortsetzen, steht unter „Agenten &amp; MCP“.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="95"/>
+        <source>Quake-Modus</source>
+        <translation>Quake-Modus</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="97"/>
+        <source>Globaler Hotkey Strg+^ blendet QTmux überall ein und aus.</source>
+        <translation>Globaler Hotkey Strg+^ blendet QTmux überall ein und aus.</translation>
+    </message>
+    <message>
+        <source>QTmux startet mit einer einzelnen, leeren Session. Der zuletzt gespeicherte Stand bleibt dabei erhalten — er wird beim Beenden nicht überschrieben und ist wieder da, sobald hier erneut wiederhergestellt wird.</source>
+        <translation type="vanished">QTmux startet mit einer einzelnen, leeren Session. Der zuletzt gespeicherte Stand bleibt dabei erhalten — er wird beim Beenden nicht überschrieben und ist wieder da, sobald hier erneut wiederhergestellt wird.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="61"/>
         <source>Fenster, Panes und deren Arbeitsverzeichnisse kommen zurück, die Terminals starten aber leer. Der gespeicherte Verlauf bleibt liegen und wird bei „Alles“ wieder angezeigt.</source>
         <translation>Fenster, Panes und deren Arbeitsverzeichnisse kommen zurück, die Terminals starten aber leer. Der gespeicherte Verlauf bleibt liegen und wird bei „Alles“ wieder angezeigt.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="87"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="64"/>
         <source>Fenster, Panes und Arbeitsverzeichnisse kommen zurück, dazu der farbige Verlauf jedes Panes.</source>
         <translation>Fenster, Panes und Arbeitsverzeichnisse kommen zurück, dazu der farbige Verlauf jedes Panes.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="99"/>
         <source>Ob die Agenten in den Panes dabei erneut starten, steht unter „Agenten &amp; MCP“.</source>
-        <translation>Ob die Agenten in den Panes dabei erneut starten, steht unter „Agenten &amp; MCP“.</translation>
+        <translation type="vanished">Ob die Agenten in den Panes dabei erneut starten, steht unter „Agenten &amp; MCP“.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="109"/>
         <source>Quake-Modus: per globalem Hotkey ein-/ausblenden</source>
-        <translation>Quake-Modus: per globalem Hotkey ein-/ausblenden</translation>
+        <translation type="vanished">Quake-Modus: per globalem Hotkey ein-/ausblenden</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="117"/>
         <source>Globaler Hotkey: Strg+^ (blendet QTmux überall ein/aus)</source>
-        <translation>Globaler Hotkey: Strg+^ (blendet QTmux überall ein/aus)</translation>
+        <translation type="vanished">Globaler Hotkey: Strg+^ (blendet QTmux überall ein/aus)</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="118"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="98"/>
         <source>Derzeit nur unter macOS verfügbar.</source>
         <translation>Derzeit nur unter macOS verfügbar.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="133"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="114"/>
         <source>Energie</source>
         <translation>Energie</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="135"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="116"/>
         <source>Ruhezustand verhindern, solange Agenten arbeiten</source>
         <translation>Ruhezustand verhindern, solange Agenten arbeiten</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="142"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="118"/>
         <source>Der Rechner bleibt wach, solange mindestens eine Session „beschäftigt“ meldet — und nur dann. Wartet ein Agent auf eine Antwort von dir, darf der Rechner schlafen. Der Bildschirm wird nicht wachgehalten.</source>
         <translation>Der Rechner bleibt wach, solange mindestens eine Session „beschäftigt“ meldet — und nur dann. Wartet ein Agent auf eine Antwort von dir, darf der Rechner schlafen. Der Bildschirm wird nicht wachgehalten.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="145"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="122"/>
         <source>Auf dieser Plattform noch nicht verfügbar.</source>
         <translation>Auf dieser Plattform noch nicht verfügbar.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="165"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="132"/>
+        <source>Zustand</source>
+        <translation>Zustand</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="134"/>
         <source>Aktiv — der Ruhezustand ist gerade gesperrt.</source>
         <translation>Aktiv — der Ruhezustand ist gerade gesperrt.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="166"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="135"/>
         <source>Zurzeit nicht gesperrt: keine Session arbeitet.</source>
         <translation>Zurzeit nicht gesperrt: keine Session arbeitet.</translation>
     </message>
@@ -289,14 +351,23 @@
 <context>
     <name>CatEingabe</name>
     <message>
-        <location filename="../qml/prefs/CatEingabe.qml" line="10"/>
         <source>Eingabe</source>
-        <translation>Eingabe</translation>
+        <translation type="vanished">Eingabe</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatEingabe.qml" line="11"/>
+        <source>Eingabe &amp; Zwischenablage</source>
+        <translation>Eingabe &amp; Zwischenablage</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatEingabe.qml" line="12"/>
         <source>Auswahl und Zwischenablage.</source>
         <translation>Auswahl und Zwischenablage.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatEingabe.qml" line="18"/>
+        <source>Zwischenablage</source>
+        <translation>Zwischenablage</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatEingabe.qml" line="20"/>
@@ -304,42 +375,88 @@
         <translation>Auswahl automatisch kopieren</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatEingabe.qml" line="25"/>
+        <location filename="../qml/prefs/CatEingabe.qml" line="21"/>
+        <source>PuTTY-Stil: markierter Text landet sofort in der Zwischenablage.</source>
+        <translation>PuTTY-Stil: markierter Text landet sofort in der Zwischenablage.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatEingabe.qml" line="28"/>
         <source>Rechtsklick fügt ein</source>
         <translation>Rechtsklick fügt ein</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatEingabe.qml" line="30"/>
+        <location filename="../qml/prefs/CatEingabe.qml" line="29"/>
+        <source>Statt des Kontextmenüs — dieses erreichst du dann über die Menüleiste.</source>
+        <translation>Statt des Kontextmenüs — dieses erreichst du dann über die Menüleiste.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatEingabe.qml" line="36"/>
         <source>Vor mehrzeiligem Einfügen warnen</source>
         <translation>Vor mehrzeiligem Einfügen warnen</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatEingabe.qml" line="37"/>
+        <source>Mehrere Zeilen wirken in einer Shell wie mehrere abgeschickte Befehle.</source>
+        <translation>Mehrere Zeilen wirken in einer Shell wie mehrere abgeschickte Befehle.</translation>
     </message>
 </context>
 <context>
     <name>CatErscheinungsbild</name>
     <message>
-        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="11"/>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="13"/>
         <source>Erscheinungsbild</source>
         <translation>Erscheinungsbild</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="12"/>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="14"/>
         <source>Farbschemata für Dunkel und Hell. Das aktive Schema färbt die gesamte App.</source>
         <translation>Farbschemata für Dunkel und Hell. Das aktive Schema färbt die gesamte App.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="25"/>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="39"/>
+        <source>Farbschemata</source>
+        <translation>Farbschemata</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="43"/>
         <source>Farbschema (Dunkel)</source>
         <translation>Farbschema (Dunkel)</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="36"/>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="44"/>
+        <source>Gilt im Dunkel-Modus — für Terminal UND App-Chrome.</source>
+        <translation>Gilt im Dunkel-Modus — für Terminal UND App-Chrome.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="53"/>
         <source>Importieren …</source>
         <translation>Importieren …</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="57"/>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="59"/>
+        <source>Farben (Dunkel)</source>
+        <translation>Farben (Dunkel)</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="60"/>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="76"/>
+        <source>Die 16 ANSI-Farben des gewählten Schemas.</source>
+        <translation>Die 16 ANSI-Farben des gewählten Schemas.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="64"/>
         <source>Farbschema (Hell)</source>
         <translation>Farbschema (Hell)</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="65"/>
+        <source>Gilt im Hell-Modus. Import landet immer im passenden Slot.</source>
+        <translation>Gilt im Hell-Modus. Import landet immer im passenden Slot.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatErscheinungsbild.qml" line="75"/>
+        <source>Farben (Hell)</source>
+        <translation>Farben (Hell)</translation>
     </message>
 </context>
 <context>
@@ -461,57 +578,106 @@
 <context>
     <name>CatTerminal</name>
     <message>
-        <location filename="../qml/prefs/CatTerminal.qml" line="11"/>
         <source>Terminal</source>
-        <translation>Terminal</translation>
+        <translation type="vanished">Terminal</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatTerminal.qml" line="12"/>
         <source>Schrift, Ligaturen und Rendering des Terminals.</source>
-        <translation>Schrift, Ligaturen und Rendering des Terminals.</translation>
+        <translation type="vanished">Schrift, Ligaturen und Rendering des Terminals.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatTerminal.qml" line="24"/>
+        <location filename="../qml/prefs/CatTerminal.qml" line="21"/>
         <source>Schriftart</source>
         <translation>Schriftart</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatTerminal.qml" line="31"/>
+        <location filename="../qml/prefs/CatTerminal.qml" line="32"/>
         <source>Schriftgröße</source>
         <translation>Schriftgröße</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatTerminal.qml" line="37"/>
         <source>Ligaturen</source>
-        <translation>Ligaturen</translation>
+        <translation type="vanished">Ligaturen</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatTerminal.qml" line="39"/>
         <source>Programmier-Ligaturen (z. B. FiraCode)</source>
-        <translation>Programmier-Ligaturen (z. B. FiraCode)</translation>
+        <translation type="vanished">Programmier-Ligaturen (z. B. FiraCode)</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatTerminal.qml" line="43"/>
         <source>Rendering</source>
-        <translation>Rendering</translation>
+        <translation type="vanished">Rendering</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatTerminal.qml" line="45"/>
         <source>GPU-Glyph-Atlas (schneller; aus = QPainter-Fallback)</source>
-        <translation>GPU-Glyph-Atlas (schneller; aus = QPainter-Fallback)</translation>
+        <translation type="vanished">GPU-Glyph-Atlas (schneller; aus = QPainter-Fallback)</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="11"/>
+        <source>Darstellung &amp; Shell</source>
+        <translation>Darstellung &amp; Shell</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="12"/>
+        <source>Schrift, Ligaturen, Rendering und die Shell neuer Sessions.</source>
+        <translation>Schrift, Ligaturen, Rendering und die Shell neuer Sessions.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="19"/>
+        <source>Schrift</source>
+        <translation>Schrift</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="22"/>
+        <source>Nur Monospace-Schriften — Proportionalschrift zerlegt das Zellraster.</source>
+        <translation>Nur Monospace-Schriften — Proportionalschrift zerlegt das Zellraster.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="33"/>
+        <source>Wirkt auf alle Sessions; einzelne Fenster zoomst du mit Strg/Cmd +/−.</source>
+        <translation>Wirkt auf alle Sessions; einzelne Fenster zoomst du mit Strg/Cmd +/−.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="41"/>
+        <source>Programmier-Ligaturen</source>
+        <translation>Programmier-Ligaturen</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="42"/>
+        <source>Verbindet Zeichenfolgen wie != oder =&gt; zu einem Glyph (z. B. FiraCode).</source>
+        <translation>Verbindet Zeichenfolgen wie != oder =&gt; zu einem Glyph (z. B. FiraCode).</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="49"/>
+        <source>GPU-Glyph-Atlas</source>
+        <translation>GPU-Glyph-Atlas</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatTerminal.qml" line="50"/>
+        <source>Schneller; aus = QPainter-Fallback. Bei Darstellungsfehlern hilft „aus“.</source>
+        <translation>Schneller; aus = QPainter-Fallback. Bei Darstellungsfehlern hilft „aus“.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="61"/>
+        <source>Shell</source>
+        <translation>Shell</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="64"/>
         <source>Standard-Shell</source>
         <translation>Standard-Shell</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatTerminal.qml" line="77"/>
+        <location filename="../qml/prefs/CatTerminal.qml" line="65"/>
+        <source>Gilt für neue Sessions. Dieselbe Wahl steckt im „+“-Menü der Leiste.</source>
+        <translation>Gilt für neue Sessions. Dieselbe Wahl steckt im „+“-Menü der Leiste.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatTerminal.qml" line="91"/>
         <source>Vorschau</source>
         <translation>Vorschau</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatTerminal.qml" line="107"/>
+        <location filename="../qml/prefs/CatTerminal.qml" line="121"/>
         <source>$ qtmux --version   # Beispieltext in der gewählten Schrift</source>
         <translation>$ qtmux --version   # Beispieltext in der gewählten Schrift</translation>
     </message>
@@ -2412,7 +2578,7 @@ Qt %1</translation>
     <name>PrefsWindow</name>
     <message>
         <location filename="../qml/PrefsWindow.qml" line="21"/>
-        <location filename="../qml/PrefsWindow.qml" line="251"/>
+        <location filename="../qml/PrefsWindow.qml" line="280"/>
         <source>Einstellungen</source>
         <translation>Einstellungen</translation>
     </message>
@@ -2428,13 +2594,22 @@ Qt %1</translation>
     </message>
     <message>
         <location filename="../qml/PrefsWindow.qml" line="103"/>
+        <source>Darstellung &amp; Shell</source>
+        <translation>Darstellung &amp; Shell</translation>
+    </message>
+    <message>
+        <location filename="../qml/PrefsWindow.qml" line="104"/>
+        <source>Eingabe &amp; Zwischenablage</source>
+        <translation>Eingabe &amp; Zwischenablage</translation>
+    </message>
+    <message>
+        <location filename="../qml/PrefsWindow.qml" line="119"/>
         <source>Terminal</source>
         <translation>Terminal</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="104"/>
         <source>Eingabe</source>
-        <translation>Eingabe</translation>
+        <translation type="vanished">Eingabe</translation>
     </message>
     <message>
         <location filename="../qml/PrefsWindow.qml" line="105"/>
@@ -2453,143 +2628,153 @@ Qt %1</translation>
     </message>
     <message>
         <location filename="../qml/PrefsWindow.qml" line="108"/>
-        <location filename="../qml/PrefsWindow.qml" line="191"/>
+        <location filename="../qml/PrefsWindow.qml" line="218"/>
         <source>Secrets-Vault</source>
         <translation>Secrets-Vault</translation>
     </message>
     <message>
         <location filename="../qml/PrefsWindow.qml" line="109"/>
-        <location filename="../qml/PrefsWindow.qml" line="192"/>
+        <location filename="../qml/PrefsWindow.qml" line="219"/>
         <source>Erweiterungen</source>
         <translation>Erweiterungen</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="127"/>
+        <location filename="../qml/PrefsWindow.qml" line="118"/>
+        <source>Arbeitsplatz</source>
+        <translation>Arbeitsplatz</translation>
+    </message>
+    <message>
+        <location filename="../qml/PrefsWindow.qml" line="120"/>
+        <source>Agenten &amp; Geräte</source>
+        <translation>Agenten &amp; Geräte</translation>
+    </message>
+    <message>
+        <location filename="../qml/PrefsWindow.qml" line="154"/>
         <source>%1 Abos</source>
         <translation>%1 Abos</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="134"/>
+        <location filename="../qml/PrefsWindow.qml" line="161"/>
         <source>%1 geändert</source>
         <translation>%1 geändert</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="141"/>
+        <location filename="../qml/PrefsWindow.qml" line="168"/>
         <source>gesperrt</source>
         <translation>gesperrt</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="170"/>
+        <location filename="../qml/PrefsWindow.qml" line="197"/>
         <source>Design</source>
         <translation>Design</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="171"/>
+        <location filename="../qml/PrefsWindow.qml" line="198"/>
         <source>Sprache</source>
         <translation>Sprache</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="172"/>
+        <location filename="../qml/PrefsWindow.qml" line="199"/>
         <source>Vor dem Beenden nachfragen</source>
         <translation>Vor dem Beenden nachfragen</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="173"/>
+        <location filename="../qml/PrefsWindow.qml" line="200"/>
         <source>Sessions beim Start wiederherstellen</source>
         <translation>Sessions beim Start wiederherstellen</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="174"/>
+        <location filename="../qml/PrefsWindow.qml" line="201"/>
         <source>Quake-Modus</source>
         <translation>Quake-Modus</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="175"/>
+        <location filename="../qml/PrefsWindow.qml" line="202"/>
         <source>Ruhezustand verhindern</source>
         <translation>Ruhezustand verhindern</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="176"/>
+        <location filename="../qml/PrefsWindow.qml" line="203"/>
         <source>Farbschema (Dunkel)</source>
         <translation>Farbschema (Dunkel)</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="177"/>
+        <location filename="../qml/PrefsWindow.qml" line="204"/>
         <source>Farbschema (Hell)</source>
         <translation>Farbschema (Hell)</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="178"/>
+        <location filename="../qml/PrefsWindow.qml" line="205"/>
         <source>Schriftart</source>
         <translation>Schriftart</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="179"/>
+        <location filename="../qml/PrefsWindow.qml" line="206"/>
         <source>Schriftgröße</source>
         <translation>Schriftgröße</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="180"/>
+        <location filename="../qml/PrefsWindow.qml" line="207"/>
         <source>Ligaturen</source>
         <translation>Ligaturen</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="181"/>
+        <location filename="../qml/PrefsWindow.qml" line="208"/>
         <source>GPU-Glyph-Atlas</source>
         <translation>GPU-Glyph-Atlas</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="182"/>
+        <location filename="../qml/PrefsWindow.qml" line="209"/>
         <source>Standard-Shell</source>
         <translation>Standard-Shell</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="183"/>
+        <location filename="../qml/PrefsWindow.qml" line="210"/>
         <source>Auswahl automatisch kopieren</source>
         <translation>Auswahl automatisch kopieren</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="184"/>
+        <location filename="../qml/PrefsWindow.qml" line="211"/>
         <source>Rechtsklick fügt ein</source>
         <translation>Rechtsklick fügt ein</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="185"/>
+        <location filename="../qml/PrefsWindow.qml" line="212"/>
         <source>Vor mehrzeiligem Einfügen warnen</source>
         <translation>Vor mehrzeiligem Einfügen warnen</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="186"/>
+        <location filename="../qml/PrefsWindow.qml" line="213"/>
         <source>Agenten beim Start wiederherstellen</source>
         <translation>Agenten beim Start wiederherstellen</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="187"/>
+        <location filename="../qml/PrefsWindow.qml" line="214"/>
         <source>Unterhaltung fortsetzen</source>
         <translation>Unterhaltung fortsetzen</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="188"/>
+        <location filename="../qml/PrefsWindow.qml" line="215"/>
         <source>Benachrichtigungen</source>
         <translation>Benachrichtigungen</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="189"/>
+        <location filename="../qml/PrefsWindow.qml" line="216"/>
         <source>MCP-Server</source>
         <translation>MCP-Server</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="190"/>
+        <location filename="../qml/PrefsWindow.qml" line="217"/>
         <source>Verbindungsprofile</source>
         <translation>Verbindungsprofile</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="274"/>
+        <location filename="../qml/PrefsWindow.qml" line="303"/>
         <source>Suchen — z. B. „Ligaturen“</source>
         <translation>Suchen — z. B. „Ligaturen“</translation>
     </message>
     <message>
-        <location filename="../qml/PrefsWindow.qml" line="454"/>
+        <location filename="../qml/PrefsWindow.qml" line="521"/>
         <source>Alles wirkt sofort.</source>
         <translation>Alles wirkt sofort.</translation>
     </message>

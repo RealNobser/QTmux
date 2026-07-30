@@ -135,6 +135,10 @@ qt_add_qml_module(qtmux
         qml/Ui/AppDialog.qml
         qml/Ui/AppToolTip.qml
         qml/Ui/SectionLabel.qml
+        qml/Ui/PrefRow.qml
+        qml/Ui/AppSwitch.qml
+        qml/Ui/PrefGroup.qml
+        qml/Ui/SegmentedControl.qml
         qml/prefs/CatPage.qml
         qml/prefs/PrefAnchor.qml
         qml/prefs/CatAllgemein.qml
