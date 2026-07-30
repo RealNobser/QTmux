@@ -363,7 +363,7 @@ in `qsTr` + `i18n/qtmux_{de,en}.ts` nachziehen, alle Tests grün.
 | 3 | Statusleiste (Footer 26 px, 7 Felder) | **fertig** `dd7df2f` |
 | 4 | Menü-Neuordnung auf 6 Menüs + Palette-Ergänzungen | **fertig** `d421e1e` |
 | 5 | Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl` | **fertig** `aa269a1` |
-| 6 | `SettingsIo` (Reset/Import/Export) + `tst_settingsio` | **fertig** (s. u.) |
+| 6 | `SettingsIo` (Reset/Import/Export) + `tst_settingsio` | **fertig** `144c318` |
 | 7 | **Übersetzungen finalisieren, README-Screenshots** | **als Nächstes** |
 
 **Nächster Punkt — Stufe 7:** Die **Übersetzungen** sind nach jeder Stufe mitgezogen worden
@@ -422,8 +422,8 @@ ist der Auftrag für die Mac-Session; Anweisung selbst: `Arbeitsanweisung-1a-2a.
 Design-Projekt (über `DesignSync`, s. oben).
 
 **0. Lage prüfen, bevor irgendetwas gebaut wird.**
-`git fetch && git log --oneline -5` → der Kopf von `main` ist der Stufe-6-Commit („Design 1a,
-Stufe 6"). Teilen Mac und Windows dieselbe
+`git fetch && git log --oneline -5` → erwartet **`144c318`** („Design 1a, Stufe 6", gepusht;
+davor `c0f8513` Qt-Fallback im Preset). Teilen Mac und Windows dieselbe
 Arbeitskopie ([[zwei-sessions-eine-arbeitskopie]]), ist der Stand schon da; sonst pullen.
 ⚠️ **Die Produktivinstanz läuft aus `build/macos`** und deren Binary ist vom **28.07.**, also
 ohne QTMUX-85/-97/-98 **und ohne die Stufen 1–5**. Nicht dorthin bauen, solange sie läuft —
@@ -478,8 +478,7 @@ Vorher in **beiden** Systemen die höchste Nummer holen (`ORDER BY key DESC`, ma
   Bringschuld von QTmux).
 - Neu anlegen: **Verzeichniszeile auf der Kachel** · **OSC 7** · **`--screenshot` auf Windows**
   (behoben, nur nachzutragen) · **Design 1a/2a** — sinnvoll ein Ticket je Stufe, 1–6 sofort
-  als umgesetzt (Commits `1a644c3`, `dd7df2f`, `d421e1e`, `aa269a1` und der Stufe-6-Commit),
-  7 offen · **Qt-Standardknöpfe unübersetzt** („OK"/„Cancel" in jedem `AppDialog` mit
+  als umgesetzt (Commits `1a644c3`, `dd7df2f`, `d421e1e`, `aa269a1`, `144c318`), 7 offen · **Qt-Standardknöpfe unübersetzt** („OK"/„Cancel" in jedem `AppDialog` mit
   `standardButtons`, weil kein `qtbase_<lang>`-Translator installiert wird — Befund aus Stufe 6,
   betrifft die ganze App).
 - Kanban dual weiterschieben, Kurzkommentar je Ticket.
