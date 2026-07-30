@@ -145,13 +145,30 @@ ctest --test-dir build\windows --output-on-failure   :: Qt-bin muss im PATH sein
 > braucht keinen Compiler). Und baut die Erweiterung noch selbst, steht im Log
 > `[proc] Executing command: … cmake.EXE --build …` statt eines Task-Terminals.
 > 🔑 **Qt-Pfad:** Das `windows`-Preset nimmt `$env{QTMUX_QT_PREFIX}` und fällt sonst auf
-> **beide** bekannten Installationen zurück — `C:/Qt/6.11.1/msvc2022_64;C:/Qt/6.10.3/msvc2022_64`.
-> Grund: die zwei Windows-Maschinen haben **verschiedene** Qt-Versionen (Entwicklungsrechner
-> `30516935D11` nur 6.11.1, Build-Rechner RTZBLD01 6.10.3, `QTMUX_QT_PREFIX` nirgends gesetzt) —
-> ein einzelner Wert war darum zweimal falsch und wurde hin- und hergedreht. CMake nimmt aus
-> der Liste den ersten Treffer und überspringt nicht existierende Pfade, damit stimmt sie
-> überall. Ein **bestehendes** Build-Dir merkt einen falschen Wert nie (Qt liegt im Cache),
-> nur ein frisches. Die CI ist unabhängig (eigener `cmake`-Aufruf mit `QT_ROOT_DIR`).
+> **beide** bekannten Installationen zurück — `C:/Qt/6.10.3/msvc2022_64;C:/Qt/6.11.1/msvc2022_64`.
+> `CMAKE_PREFIX_PATH` ist eine **Liste**: CMake nimmt den ersten Treffer und überspringt
+> nicht existierende Pfade. Damit stimmt derselbe Preset auf beiden Windows-Maschinen — ein
+> **einzelner** Wert war zweimal falsch und wurde hin- und hergedreht (Entwicklungsrechner
+> `30516935D11` hatte nur 6.11.1, Build-Rechner RTZBLD01 nur 6.10.3, `QTMUX_QT_PREFIX`
+> nirgends gesetzt). **6.10.3 steht bewusst vorn**: das ist die Version der CI
+> (`env.QT_VERSION`), von RTZBLD01 und damit der ausgelieferten Installer — lokal gegen ein
+> *neueres* Qt zu bauen ist die klassische Quelle für „geht hier, bricht in der CI".
+> Seit 2026-07-30 ist 6.10.3 auch auf dem Entwicklungsrechner installiert (per `aqtinstall`,
+> s. u.); wer gegen 6.11.1 bauen will, setzt `QTMUX_QT_PREFIX`.
+> ⚠️ Ein **bestehendes** Build-Dir merkt eine Preset-Änderung nie (Qt liegt im Cache) — die
+> Reihenfolge wirkt nur auf **frische** Verzeichnisse. `build/windows` und `build/windows-release`
+> stehen deshalb weiter auf 6.11.1, bis sie neu angelegt werden.
+> 🔑 **Qt nachinstallieren ohne Qt-Account:** `aqtinstall` (dasselbe Werkzeug, das die CI über
+> `jurplel/install-qt-action` benutzt) in einem venv mit **Python 3.12** (3.14 ist hier ohne
+> Pakete), dann
+> `python -m aqt install-qt -O C:\Qt windows desktop 6.10.3 win64_msvc2022_64 -m qtserialport qtshadertools`
+> — die beiden Module sind genau die aus der CI, alles andere (Core/Gui/Qml/Quick/
+> QuickControls2/Network/Svg/**LinguistTools**/Test, `windeployqt`, `qsb`, `lupdate`, das
+> Offscreen-Plugin) steckt im Arch-Paket. Der Konzern-Proxy trägt (`HTTP(S)_PROXY` sind
+> gesetzt, aqt nutzt sie), `C:\Qt` ist ohne Adminrechte beschreibbar, Ergebnis 2,1 GB.
+> Vorher **immer** `aqt list-qt windows desktop --arch <ver>` — schlägt das fehl, ist die
+> Version unbrauchbar (genau daran hängt der 6.11-Blocker der CI).
+> Die CI selbst ist von alldem unabhängig (eigener `cmake`-Aufruf mit `QT_ROOT_DIR`).
 > 🔑 Batch-Fallen in dieser Datei: **CRLF** Pflicht (bei LF führt cmd.exe Kommentarzeilen
 > aus), **rein ASCII**, und `%ProgramFiles(x86)%` **nie in einer `for`-/`if`-Klammer**
 > expandieren — das `)` aus „(x86)" schließt sie vorzeitig („Der Befehl `C:\Program` ist
