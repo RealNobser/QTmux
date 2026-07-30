@@ -826,15 +826,37 @@ ApplicationWindow {
         const ids = w.sessionIds()
         return ids.length ? ids[0] : -1
     }
+    // Führendes Aktivitäts-Indikator-Zeichen eines Session-Titels. Claude Code (und
+    // ähnliche Agenten) setzen es an den Anfang des OSC-Titels: ✳ (U+2733) im
+    // Ruhezustand, ein Braille-Spinner-Frame (U+2800–U+28FF) während der Arbeit. Leer,
+    // wenn der Titel mit keinem solchen Zeichen beginnt (z. B. reine Shell).
+    function activityIndicator(title) {
+        if (!title || title.length === 0) return ""
+        const c = title.charCodeAt(0)
+        return (c === 0x2733 || (c >= 0x2800 && c <= 0x28FF)) ? title.charAt(0) : ""
+    }
     function windowTitle(w) {
         if (!w) return qsTr("Fenster")
-        if (w.name && w.name.length > 0) return w.name
+        // Aktive Session bestimmen — sie liefert den Auto-Titel UND den Aktivitäts-Indikator.
         const ids = w.sessionIds()
-        if (ids.length === 0) return qsTr("Fenster %1").arg(w.windowId)
-        let sid = window.sessionIdForPane(w, w.activePaneId)
-        let s = (sid >= 0) ? window.sessionById(sid) : null
-        if (!s) s = window.sessionById(ids[0])
-        return s ? s.title : qsTr("Fenster %1").arg(w.windowId)
+        let s = null
+        if (ids.length) {
+            let sid = window.sessionIdForPane(w, w.activePaneId)
+            s = (sid >= 0) ? window.sessionById(sid) : null
+            if (!s) s = window.sessionById(ids[0])
+        }
+        if (w.name && w.name.length > 0) {
+            // Umbenanntes Fenster: den DYNAMISCHEN Aktivitäts-Indikator der aktiven Session
+            // voranstellen. Der Anwender kann ✳/Spinner nicht selbst tippen, soll das laufende
+            // Arbeiten des Agenten aber trotzdem sehen. Bewusst NICHT statisch in w.name
+            // gespeichert, damit der Indikator dem Wechsel ✳↔Spinner folgt. Enthält der Name
+            // (etwa über MCP gesetzt) bereits einen Indikator, nicht doppeln.
+            if (window.activityIndicator(w.name).length) return w.name
+            const ind = window.activityIndicator(s ? s.title : "")
+            return ind.length ? ind + " " + w.name : w.name
+        }
+        if (!s) return qsTr("Fenster %1").arg(w.windowId)
+        return s.title
     }
     // Arbeitsverzeichnis des gerade aktiven Panes — die Palette hat keine Kachel als
     // Bezug und muss es sich selbst holen (QTMUX-103).
