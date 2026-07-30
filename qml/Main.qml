@@ -447,6 +447,20 @@ ApplicationWindow {
     property bool pasteWarnMultiline: true  // Vor mehrzeiligem Einfügen warnen
     property bool confirmQuit: true         // Vor dem Beenden nachfragen (QTMUX-41)
 
+    // Einklappbare Seitenleiste (Design 2a): Breite frei ziehbar in [180, 420];
+    // rastet beim Ziehen unter 140 px in den eingeklappten Zustand (52 px) ein.
+    // Zwischenwerte werden bewusst nicht gehalten — entweder Icon-Breite oder Liste.
+    readonly property int sidebarMinWidth: 180
+    readonly property int sidebarMaxWidth: 420
+    readonly property int sidebarSnapWidth: 140   // darunter rastet es ein
+    readonly property int sidebarIconWidth: 52
+    property int sidebarWidth: 240
+    property bool sidebarCollapsed: false
+    // Effektive Breite: EINE Quelle für Layout, Splitter und Animation.
+    readonly property int sidebarEffectiveWidth:
+        sidebarCollapsed ? sidebarIconWidth
+                         : Math.max(sidebarMinWidth, Math.min(sidebarMaxWidth, sidebarWidth))
+
     // Ruhezustand verhindern, solange ein Agent arbeitet (QTMUX-89) — Vorgabe AUS.
     // Bewusste Anwender-Entscheidung: Eine App, die ungefragt den Ruhezustand des
     // Rechners aushebelt, ist ein Ärgernis; wer es will, schaltet es ein.
@@ -822,6 +836,56 @@ ApplicationWindow {
         if (sid < 0) return ""
         const s = window.sessionById(sid)
         return s ? (s.workingDirectory || "") : ""
+    }
+    // Icon der eingeklappten Seitenleiste (Design 2a). Der Agent hat Vorrang vor dem
+    // Verbindungstyp: „läuft hier ein Agent" ist die Information, die man auf 52 px sucht.
+    function sidebarIconFor(sid) {
+        const s = sid >= 0 ? window.sessionById(sid) : null
+        if (!s) return "terminal-window"
+        if (s.agentId && s.agentId.length > 0) return "robot"
+        switch (s.backendType) {          // Session::Type
+        case 1: return "plugs"            // SSH
+        case 2: return "usb"              // Seriell
+        case 3: return "plugs"            // Plugin-Backend
+        default: return "terminal-window" // lokale Shell
+        }
+    }
+    // Zustandstext fürs Flyout, z. B. „wartet auf Eingabe · seit 40 s".
+    // Gelesen wird die ACTIVITY der aktiven Session (Session::Activity) — das ist genau
+    // das, was ein Agent selbst meldet (OSC 133 bzw. MCP `set_activity`), und derselbe
+    // Wert, dessen Wechsel `activitySinceMs` datiert. Der Statuspunkt bleibt beim
+    // aggregierten Backend-Zustand wie die aufgeklappte Kachel.
+    function sidebarStateText(sid) {
+        const s = sid >= 0 ? window.sessionById(sid) : null
+        if (!s) return ""
+        const label = s.needsAttention ? qsTr("braucht Aufmerksamkeit")
+                    : s.activity === 0 ? qsTr("untätig")
+                    : s.activity === 1 ? qsTr("arbeitet")
+                    : s.activity === 2 ? qsTr("wartet auf Eingabe")
+                    : s.activity === 3 ? qsTr("Fehler")
+                    : qsTr("beendet")
+        const since = window.sinceText(s.activitySinceMs)
+        return since.length > 0 ? label + " · " + since : label
+    }
+    function sinceText(ms) {
+        if (!ms || ms <= 0) return ""
+        const sec = Math.max(0, Math.floor((Date.now() - ms) / 1000))
+        if (sec < 60)   return qsTr("seit %1 s").arg(sec)
+        if (sec < 3600) return qsTr("seit %1 min").arg(Math.floor(sec / 60))
+        return qsTr("seit %1 h").arg(Math.floor(sec / 3600))
+    }
+    // Ziehen am Splitter (Design 2a): Unter `sidebarSnapWidth` rastet die Leiste in die
+    // Icon-Breite ein, darüber klappt sie wieder auf. Zwischenwerte werden bewusst NICHT
+    // gehalten — die gespeicherte Breite bleibt immer in [min, max], damit ein
+    // Aufklappen nie in einer unbrauchbar schmalen Liste endet.
+    function applySidebarDrag(raw) {
+        if (raw < window.sidebarSnapWidth) {
+            window.sidebarCollapsed = true
+            return
+        }
+        window.sidebarCollapsed = false
+        window.sidebarWidth = Math.round(Math.max(window.sidebarMinWidth,
+                                        Math.min(window.sidebarMaxWidth, raw)))
     }
     // Verzeichnis für die Anzeige kürzen: Home wird zu `~`. VERGLICHEN wird auf einer
     // normalisierten Kopie (QDir::homePath liefert `/`, die Shell meldet unter Windows `\`),
@@ -1478,8 +1542,20 @@ ApplicationWindow {
         property alias restoreAgents: window.restoreAgents
         property alias resumeAgentMode: window.resumeAgentMode
         property alias collapsedGroups: window.collapsedGroupsJson
+
         // (paneLayout entfällt: das Split-Layout lebt jetzt je Window; die per-Window-
         //  Persistenz über Neustarts kommt in Stufe 3 als eigenes `windows`-Schema.)
+    }
+
+    // Ansichtszustand des Fensters. Bewusst ein ZWEITER Block mit eigener Kategorie
+    // (`ui/*`), weil das keine Einstellungen im Sinne des Einstellungsdialogs sind,
+    // sondern Zustand, den das Fenster über Neustarts mitnimmt — dieselbe Trennung, die
+    // `windows/*` in WindowModel.cpp schon macht. Wer den Dialog auf Vollständigkeit
+    // prüft, muss also BEIDE Blöcke lesen (Notiz in CLAUDE.md).
+    Settings {
+        category: "ui"
+        property alias sidebarWidth: window.sidebarWidth
+        property alias sidebarCollapsed: window.sidebarCollapsed
     }
 
     // --- Zentrale Aktionen: im Menü UND per Shortcut/Button nutzbar ----------
@@ -1556,6 +1632,19 @@ ApplicationWindow {
         enabled: !prefs.capturing
         onTriggered: window.resetTerminalZoom()
     }
+    // Seitenleiste ein-/ausklappen (Design 2a). Reine Ansichtseigenschaft des Fensters —
+    // deshalb darf sie als checkbarer Menüeintrag bleiben (Regel: Menüs enthalten
+    // Befehle, keine Einstellungen; Ausnahmen sind Ansichtsumschalter).
+    Action {
+        id: actToggleSidebar
+        text: qsTr("Seitenleiste")
+        shortcut: Hotkeys.bindings["actToggleSidebar"]
+        checkable: true
+        checked: !window.sidebarCollapsed
+        enabled: !prefs.capturing
+        onTriggered: window.sidebarCollapsed = !window.sidebarCollapsed
+    }
+
     // Bildschirm leeren, Verlauf behalten (QTMUX-61).
     Action {
         id: actClearScreen
@@ -1935,6 +2024,12 @@ ApplicationWindow {
                             { title: qsTr("Terminal-Eingabe zurücksetzen"), sub: hk("actResetInput"), icon: "terminal-window", run: function(){ window.resetActiveInput() } },
                             { title: qsTr("Eingabe an alle Sessions"),   sub: hk("actBroadcast"), icon: "broadcast-input", run: function(){ window.broadcastInput = !window.broadcastInput } },
                             { title: qsTr("Design umschalten"),          sub: hk("actToggleTheme"), icon: "moon",            run: function(){ Theme.toggle() } },
+                            // Ansichtsumschalter auch hier, sonst wäre er nur im Menü und
+                            // am Splitter erreichbar (Regel aus QTMUX-46).
+                            { title: window.sidebarCollapsed ? qsTr("Seitenleiste ausklappen")
+                                                             : qsTr("Seitenleiste einklappen"),
+                              sub: hk("actToggleSidebar"), icon: "split-h",
+                              run: function(){ window.sidebarCollapsed = !window.sidebarCollapsed } },
                             { title: qsTr("Einstellungen …"),            sub: hk("actSettings"), icon: "gear",            run: function(){ prefs.open() } },
                             { title: qsTr("MCP-Server umschalten"),      sub: hk("actMcpToggle"), icon: "broadcast",       run: function(){ mcp.listening ? mcp.stop() : mcp.start() } },
                             { title: qsTr("Kopieren"),                   sub: App.shortcutText("Ctrl+C"), icon: "copy",            run: function(){ if (window.activeTerminal) window.activeTerminal.copy() } },
@@ -2327,6 +2422,10 @@ ApplicationWindow {
                 checked: Theme.mode === Theme.Dark
                 onTriggered: Theme.mode = Theme.Dark
             }
+            MenuSeparator {}
+            // Ansichtsumschalter (Design 1a): darf als checkbarer Eintrag bleiben, weil er
+            // eine Eigenschaft DIESES Fensters umschaltet und keine Einstellung.
+            ShortcutMenuItem { action: actToggleSidebar }
         }
         ThemedMenu {
             title: qsTr("&Sprache")
@@ -2397,21 +2496,65 @@ ApplicationWindow {
 
         // --- Vertikale Sidebar ----------------------------------------------
         Rectangle {
-            Layout.preferredWidth: 240
+            id: sidebar
+            // Weicher Übergang zwischen Icon-Breite und Liste; bei „Bewegung reduzieren"
+            // sofort (dieselbe Linie wie die Sidebar-Pulse, QTMUX-47).
+            // 🔑 Das `Behavior` MUSS auf einer eigenen Property sitzen: auf einer
+            // *attached property* (`Layout.preferredWidth`) ist es nicht erlaubt und
+            // macht die Datei unparsebar (die Arbeitsanweisung schlug genau das vor).
+            property real animWidth: window.sidebarEffectiveWidth
+            Behavior on animWidth {
+                enabled: !App.reduceMotion
+                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+            }
+            Layout.preferredWidth: animWidth
             Layout.fillHeight: true
             color: Theme.bgSidebar
+            clip: true      // beim Einklappen darf nichts über die Kante hinausragen
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 12
+                anchors.margins: window.sidebarCollapsed ? 6 : 12
                 spacing: 8
 
-                Text {
-                    text: "QTmux"
-                    color: Theme.textBright
-                    font.pixelSize: 18
-                    font.bold: true
+                RowLayout {
+                    Layout.fillWidth: true
                     Layout.bottomMargin: 8
+                    spacing: 6
+                    Text {
+                        text: window.sidebarCollapsed ? "Q" : "QTmux"
+                        color: Theme.textBright
+                        font.pixelSize: window.sidebarCollapsed ? 15 : 18
+                        font.bold: true
+                        Layout.fillWidth: !window.sidebarCollapsed
+                        horizontalAlignment: window.sidebarCollapsed ? Text.AlignHCenter
+                                                                     : Text.AlignLeft
+                    }
+                    // Chevron: klappt ein/aus. Im eingeklappten Zustand ausgeblendet —
+                    // dort ist kein Platz, und Splitter, Ctrl+B und das Ansicht-Menü
+                    // bleiben als Wege übrig.
+                    Rectangle {
+                        visible: !window.sidebarCollapsed
+                        Layout.preferredWidth: 22
+                        Layout.preferredHeight: 22
+                        radius: 4
+                        color: chevHover.hovered ? Theme.sidebarHover : "transparent"
+                        Image {
+                            anchors.centerIn: parent
+                            width: 14; height: 14
+                            source: window.icon("caret-down")
+                            rotation: -90          // nach links = einklappen
+                            layer.enabled: true
+                            layer.effect: MultiEffect { colorization: 1.0; colorizationColor: Theme.textDim }
+                        }
+                        HoverHandler { id: chevHover }
+                        TapHandler { onTapped: actToggleSidebar.trigger() }
+                        AppToolTip {
+                            visible: chevHover.hovered
+                            text: qsTr("Seitenleiste einklappen (%1)")
+                                  .arg(App.shortcutText(actToggleSidebar.shortcut))
+                        }
+                    }
                 }
 
                 ListView {
@@ -2433,8 +2576,19 @@ ApplicationWindow {
                         id: groupHeader
                         required property string section
                         width: sessionList.width
-                        height: section.length > 0 ? 26 : 0
+                        // Eingeklappt (Design 2a) wird aus der Kopfzeile ein 1-px-Trenner:
+                        // Der Gruppenname hätte auf 52 px keinen Platz, die Zugehörigkeit
+                        // trägt dort die Farbmarke an der Kachel.
+                        height: section.length === 0 ? 0 : (window.sidebarCollapsed ? 9 : 26)
                         visible: section.length > 0
+
+                        Rectangle {
+                            visible: window.sidebarCollapsed
+                            width: 28; height: 1
+                            color: Theme.border
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
 
                         readonly property bool collapsed: window.isGroupCollapsed(section)
                         z: hdrDrag.active ? 3 : 0
@@ -2443,6 +2597,7 @@ ApplicationWindow {
                         transform: Translate { y: groupHeader.dragDy }
 
                         Rectangle {
+                            visible: !window.sidebarCollapsed
                             anchors.fill: parent
                             anchors.topMargin: 4
                             anchors.bottomMargin: 2
@@ -2528,7 +2683,8 @@ ApplicationWindow {
 
                         width: ListView.view.width
                         visible: !hidden
-                        height: hidden ? 0 : 52
+                        // Eingeklappt (Design 2a) eine kompaktere Zeile: 44 statt 52 px.
+                        height: hidden ? 0 : (window.sidebarCollapsed ? 44 : 52)
                         color: "transparent"      // Kachel-Optik liegt im `card`
 
                         z: dragH.active ? 2 : 0
@@ -2546,7 +2702,10 @@ ApplicationWindow {
                         // sind die Titel vorne identisch — ohne ToolTip ist nicht
                         // unterscheidbar, welche Kachel welche ist.
                         AppToolTip {
+                            // Eingeklappt übernimmt das Flyout (D3) — sonst stehen beide
+                            // übereinander (am Bild gesehen, 2026-07-30).
                             visible: hover.hovered && !dragH.active && text.length > 0
+                                     && !window.sidebarCollapsed
                             text: {
                                 const dir = window.windowWorkingDir(tile.wobj)
                                 let t = tile.dispTitle
@@ -2648,6 +2807,7 @@ ApplicationWindow {
                             anchors.leftMargin: 10 + tile.groupIndent
                             anchors.rightMargin: 10
                             spacing: 10
+                            visible: !window.sidebarCollapsed
 
                             // Aggregierter Status-Ring: Aufmerksamkeit (blau, pulsierend) hat
                             // Vorrang, sonst der dringlichste Pane-Zustand
@@ -2745,6 +2905,151 @@ ApplicationWindow {
                             }
                         }
 
+                        // --- Eingeklappte Darstellung (52 px, Design 2a) --------------
+                        // Bewusst KEIN zweites Delegate, sondern ein zweiter Inhalt in
+                        // DERSELBEN Kachel: Drag-Reorder, Gruppen-Sections und die
+                        // Aufmerksamkeits-Animation bleiben damit an EINER Stelle. Ein
+                        // eigenes Delegate müsste die Rückkopplungs-Falle aus QTMUX-100
+                        // (kein ListView-Delegat als DragHandler.target) ein zweites Mal
+                        // richtig vermeiden — genau die Art Doppelführung, die hier schon
+                        // einmal auseinandergelaufen ist.
+                        Item {
+                            anchors.fill: parent
+                            visible: window.sidebarCollapsed
+
+                            Image {
+                                anchors.centerIn: parent
+                                anchors.verticalCenterOffset: -5
+                                source: window.icon(window.sidebarIconFor(tile.activeSid))
+                                sourceSize.width: 18; sourceSize.height: 18
+                                layer.enabled: true
+                                layer.effect: MultiEffect {
+                                    brightness: 1.0
+                                    colorization: 1.0
+                                    colorizationColor: tile.selected ? Theme.textBright : Theme.textDim
+                                }
+                            }
+                            // Session-Nummer darunter — ohne „#", dafür ist kein Platz.
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 3
+                                text: tile.activeSid >= 0 ? tile.activeSid : ""
+                                font.pixelSize: 9
+                                font.family: window.terminalFontFamily
+                                color: tile.selected ? Theme.textBright : Theme.textDim
+                            }
+                            // Statuspunkt oben rechts; Rand in Kachelfarbe, damit er auch
+                            // auf der ausgewählten Kachel abgesetzt bleibt.
+                            Rectangle {
+                                width: 8; height: 8; radius: 4
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.rightMargin: 2
+                                anchors.topMargin: 2
+                                color: tile.attention ? Theme.accent
+                                     : tile.aggState === 1 ? "#46d369"
+                                     : tile.aggState === 2 ? "#f5c451"
+                                     : tile.aggState === 3 ? "#e5534b"
+                                     : tile.aggState === 4 ? "#5a5d6a"
+                                     : Theme.textDim
+                                border.width: 1.5
+                                border.color: tile.selected ? Theme.sidebarSelected : Theme.bgSidebar
+                                SequentialAnimation on opacity {
+                                    running: tile.attention && !App.reduceMotion
+                                    loops: Animation.Infinite
+                                    alwaysRunToEnd: true
+                                    NumberAnimation { to: 0.3; duration: 600 }
+                                    NumberAnimation { to: 1.0; duration: 600 }
+                                    onStopped: parent.opacity = 1.0
+                                }
+                            }
+                        }
+
+                        // Hover-Flyout (Design 2a, D3): ersetzt im eingeklappten Zustand
+                        // den ToolTip — auf 52 px ist sonst nicht erkennbar, welche Kachel
+                        // welche Session ist. 350 ms Verzögerung wie spezifiziert.
+                        Timer {
+                            id: flyTimer
+                            interval: 350
+                            onTriggered: if (hover.hovered && window.sidebarCollapsed) flyout.open()
+                        }
+                        Connections {
+                            target: hover
+                            function onHoveredChanged() {
+                                if (hover.hovered && window.sidebarCollapsed && !dragH.active)
+                                    flyTimer.restart()
+                                else { flyTimer.stop(); flyout.close() }
+                            }
+                        }
+                        Popup {
+                            id: flyout
+                            x: tile.width + 8
+                            y: -6
+                            width: 250
+                            padding: 10
+                            closePolicy: Popup.NoAutoClose
+                            background: AppPopupBg {}
+                            contentItem: ColumnLayout {
+                                spacing: 4
+                                RowLayout {
+                                    spacing: 6
+                                    Rectangle {
+                                        width: 8; height: 8; radius: 4
+                                        Layout.alignment: Qt.AlignVCenter
+                                        color: tile.attention ? Theme.accent
+                                             : tile.aggState === 1 ? "#46d369"
+                                             : tile.aggState === 2 ? "#f5c451"
+                                             : tile.aggState === 3 ? "#e5534b"
+                                             : tile.aggState === 4 ? "#5a5d6a"
+                                             : Theme.textDim
+                                    }
+                                    Text {
+                                        text: tile.dispTitle
+                                        color: Theme.textBright
+                                        font.pixelSize: 13
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        text: tile.activeSid >= 0 ? "#" + tile.activeSid : ""
+                                        color: Theme.textDim
+                                        font.pixelSize: 10
+                                        font.family: window.terminalFontFamily
+                                    }
+                                }
+                                Text {
+                                    visible: text.length > 0
+                                    text: window.prettyDir(tile.dispDir)
+                                    color: Theme.textDim
+                                    font.pixelSize: 11
+                                    elide: Text.ElideLeft
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    visible: text.length > 0
+                                    // Zustand steht als TEXT da, nicht nur als Punktfarbe
+                                    // (D4: kein Informationsverlust allein über Farbe).
+                                    text: window.sidebarStateText(tile.activeSid)
+                                    color: Theme.textDim
+                                    font.pixelSize: 11
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    visible: tile.paneN > 1
+                                    text: qsTr("%1 Panes").arg(tile.paneN)
+                                    color: Theme.textDim
+                                    font.pixelSize: 11
+                                }
+                                Text {
+                                    visible: tile.group.length > 0
+                                    text: qsTr("Gruppe: %1").arg(tile.group)
+                                    color: window.groupColor(tile.group)
+                                    font.pixelSize: 11
+                                }
+                            }
+                        }
+
                         // Aufmerksamkeit: der ganze Tab pulsiert mit blauem Rahmen.
                         Rectangle {
                             anchors.fill: parent
@@ -2777,11 +3082,15 @@ ApplicationWindow {
                         id: newBtn
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        text: window.typeLabel(window.newSessionType)
+                        // Eingeklappt bleibt nur das „+" (Design 2a): gleiche Aktion,
+                        // nur ohne Beschriftung — der Typ wird dann über die Toolbar
+                        // oder die Palette gewählt.
+                        text: window.sidebarCollapsed ? "" : window.typeLabel(window.newSessionType)
                         icon.source: window.icon("plus")
                         icon.color: Theme.textBright
                         icon.width: 15; icon.height: 15
-                        display: AbstractButton.TextBesideIcon
+                        display: window.sidebarCollapsed ? AbstractButton.IconOnly
+                                                         : AbstractButton.TextBesideIcon
                         spacing: 6
                         palette.buttonText: Theme.textBright
                         font.pixelSize: 13
@@ -2805,6 +3114,7 @@ ApplicationWindow {
 
                     Button {
                         id: caretBtn
+                        visible: !window.sidebarCollapsed   // kein Platz auf 52 px
                         Layout.preferredWidth: 32
                         Layout.fillHeight: true
                         display: AbstractButton.IconOnly
@@ -2830,6 +3140,36 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+
+        // --- Splitter: Breite ziehen, unter 140 px einrasten ------------------
+        // Die Seitenleiste war bisher fest 240 px breit; einen Splitter gab es hier
+        // NICHT (die SplitViews gehören den Terminal-Panes). Er entsteht daher neu.
+        Item {
+            id: sidebarSplitter
+            Layout.preferredWidth: 5
+            Layout.fillHeight: true
+            // Breite bei Drag-Beginn: `activeTranslation` ist relativ zum Start,
+            // gerechnet wird aber absolut.
+            property int startWidth: 0
+
+            Rectangle {
+                anchors.fill: parent
+                color: splitHover.hovered || splitDrag.active ? Theme.border : "transparent"
+            }
+            HoverHandler { id: splitHover; cursorShape: Qt.SplitHCursor }
+            DragHandler {
+                id: splitDrag
+                // `target: null` wie beim Kachel-Drag (QTMUX-100): die Position gehört
+                // dem RowLayout: wir ändern nur Werte, nicht die Geometrie des Items.
+                target: null
+                xAxis.enabled: true
+                yAxis.enabled: false
+                onActiveChanged: if (active) sidebarSplitter.startWidth = window.sidebarEffectiveWidth
+                onActiveTranslationChanged: if (active)
+                    window.applySidebarDrag(sidebarSplitter.startWidth + activeTranslation.x)
+            }
+            TapHandler { onDoubleTapped: actToggleSidebar.trigger() }
         }
 
         // --- Hauptbereich: Broadcast-Banner + Terminal-Panes (Split-View) ---

@@ -45,7 +45,13 @@ HotkeyRegistry::HotkeyRegistry(QObject *parent) : QObject(parent) {
         {QStringLiteral("actNewSsh"),         QStringLiteral("Ctrl+Shift+S")},
         {QStringLiteral("actNewSerial"),      QStringLiteral("Ctrl+Shift+R")},
         {QStringLiteral("actConnections"),    QStringLiteral("Ctrl+Shift+M")},
-        {QStringLiteral("actVault"),          QStringLiteral("Ctrl+Shift+K")},
+        // Bewusst OHNE Standard-Kürzel: Ctrl+Shift+K gehört „Bildschirm leeren"
+        // (iTerm2-/VS-Code-Konvention, QTMUX-61). Beide Aktionen hatten die Sequenz —
+        // in Qt ist das „ambiguous shortcut", also feuerte keine von beiden zuverlässig.
+        // Der Vault bleibt über Datei-Menü und Befehlspalette erreichbar und lässt sich
+        // in den Einstellungen frei belegen (wie actAbout). Der Test
+        // `defaultsAreConflictFree` hält fest, dass keine Sequenz doppelt vorkommt.
+        {QStringLiteral("actVault"),          QString()},
         {QStringLiteral("actMcpToggle"),      QStringLiteral("Ctrl+Shift+A")},
         {QStringLiteral("actZoomReset"),      QStringLiteral("Ctrl+0")},
         // QTMUX-61: Ctrl/Cmd+Shift+K wie in iTerm2/VS Code. Nicht Ctrl+K allein —
@@ -54,6 +60,16 @@ HotkeyRegistry::HotkeyRegistry(QObject *parent) : QObject(parent) {
         // QTMUX-104: hängende Eingabe-Modi (Maus-Tracking/Paste) lösen. I = Input.
         {QStringLiteral("actResetInput"),     QStringLiteral("Ctrl+Shift+I")},
         {QStringLiteral("actToggleTheme"),    QStringLiteral("Ctrl+D")},
+        // Seitenleiste ein-/ausklappen (Design 2a). macOS: Qt-"Ctrl" = Cmd, also Cmd+B
+        // wie in VS Code — harmlos. Windows/Linux: Ctrl+B NICHT nehmen, das ist der
+        // tmux-Präfix und readlines backward-char; dieselbe Linie wie bei actFind und
+        // actClearScreen (die Shell behält ihre Taste). Ctrl+Shift+B ist an actBroadcast
+        // vergeben, daher Ctrl+Shift+L (L wie Leiste).
+#if defined(Q_OS_MACOS)
+        {QStringLiteral("actToggleSidebar"),  QStringLiteral("Ctrl+B")},
+#else
+        {QStringLiteral("actToggleSidebar"),  QStringLiteral("Ctrl+Shift+L")},
+#endif
         {QStringLiteral("actSettings"),       QStringLiteral("Ctrl+,")},
         // Bewusst OHNE Standard-Kürzel: F1 (und alle F-Tasten) gehören im Terminal der
         // Shell/Clink. „Über" bleibt über Menü „Hilfe" + Befehlspalette erreichbar; ein

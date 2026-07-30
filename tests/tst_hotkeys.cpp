@@ -57,6 +57,49 @@ private slots:
         QCOMPARE(r->sequence(QStringLiteral("actQuit")), QStringLiteral("Ctrl+Q"));
     }
 
+    // Seitenleisten-Umschalter (Design 2a): Der Default muss plattformgerecht sein und
+    // darf mit keiner anderen Aktion kollidieren. Auf Windows/Linux ist Ctrl+B bewusst
+    // NICHT belegt (tmux-Präfix, readline backward-char) — die Gegenprobe hält das fest.
+    void toggleSidebarDefault() {
+        auto *r = HotkeyRegistry::instance();
+        r->resetAll();
+        const QString id = QStringLiteral("actToggleSidebar");
+        QVERIFY(r->actionIds().contains(id));
+
+        const QString seq = r->sequence(id);
+#if defined(Q_OS_MACOS)
+        QCOMPARE(seq, QStringLiteral("Ctrl+B"));     // Qt-"Ctrl" ist hier Cmd
+#else
+        QCOMPARE(seq, QStringLiteral("Ctrl+Shift+L"));
+        QVERIFY2(seq != QStringLiteral("Ctrl+B"),
+                 "Ctrl+B gehoert auf Windows/Linux der Shell (tmux-Praefix)");
+#endif
+        // Konfliktfrei: keine andere Aktion hat diese Sequenz.
+        QVERIFY(r->conflict(seq, id).isEmpty());
+    }
+
+    // Keine Sequenz darf zweimal als Vorgabe vorkommen. Qt meldet doppelte Shortcuts als
+    // „ambiguous" und feuert dann keinen von beiden — der Fehler ist also unsichtbar, bis
+    // ein Anwender die Taste drückt. Genau so lagen actVault und actClearScreen beide auf
+    // Ctrl+Shift+K (bis 2026-07-30). Gegenprobe: mit der alten Doppelbelegung fällt der
+    // Test (nachgestellt über setBinding).
+    void defaultsAreConflictFree() {
+        auto *r = HotkeyRegistry::instance();
+        r->resetAll();
+        for (const QString &id : r->actionIds()) {
+            const QString seq = r->sequence(id);
+            if (seq.isEmpty()) continue;    // ohne Kürzel = kein Konflikt
+            QVERIFY2(r->conflict(seq, id).isEmpty(),
+                     qPrintable(QStringLiteral("Doppelte Vorgabe %1 (%2 vs. %3)")
+                                    .arg(seq, id, r->conflict(seq, id))));
+        }
+        // Positivkontrolle: Der Detektor findet eine künstlich erzeugte Doppelbelegung.
+        r->setBinding(QStringLiteral("actVault"), r->sequence(QStringLiteral("actClearScreen")));
+        QCOMPARE(r->conflict(r->sequence(QStringLiteral("actVault")), QStringLiteral("actVault")),
+                 QStringLiteral("actClearScreen"));
+        r->resetAll();
+    }
+
     void conflictDetection() {
         auto *r = HotkeyRegistry::instance();
         r->resetAll();

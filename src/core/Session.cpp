@@ -88,6 +88,7 @@ QString Session::scrollbackText() const {
 }
 
 void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int rows) {
+    const bool typeChanged = (type != m_type);
     m_type = type;
     m_cols = cols;
     m_rows = rows;
@@ -111,6 +112,10 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
     connect(m_screen.get(), &VtScreen::progress, this, &Session::onProgress);
     connect(m_screen.get(), &VtScreen::promptMarker, this, &Session::onPromptMarker);
     connect(m_screen.get(), &VtScreen::agentEvent, this, &Session::onAgentEvent);
+
+    // Der Typ steht erst hier fest (nicht im Konstruktor) — die Oberfläche wählt daraus
+    // ihr Backend-Icon in der eingeklappten Seitenleiste.
+    if (typeChanged) emit backendTypeChanged();
 
     // Aktuelles Farbschema anwenden und bei Wechsel automatisch neu setzen.
     auto *schemes = ColorSchemeRegistry::instance();
@@ -175,6 +180,7 @@ void Session::raiseAttention() {
 void Session::setActivity(Activity a) {
     if (a == m_activity) return;
     m_activity = a;
+    m_activitySinceMs = QDateTime::currentMSecsSinceEpoch();
     emit activityChanged();
 }
 

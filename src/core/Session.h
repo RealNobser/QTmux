@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QDateTime>
 #include <memory>
 
 #include "ITerminalBackend.h"
@@ -22,6 +23,13 @@ class Session : public QObject {
     Q_PROPERTY(QString agentId READ agentId NOTIFY agentChanged)
     Q_PROPERTY(bool needsAttention READ needsAttention NOTIFY attentionChanged)
     Q_PROPERTY(int activity READ activityInt NOTIFY activityChanged)
+    // Backend-Typ als int (Shell 0, Ssh 1, Serial 2, App/Plugin 3) — die eingeklappte
+    // Seitenleiste wählt daraus ihr Icon. NOTIFY statt CONSTANT, weil `attachBackend`
+    // den Typ erst nach dem Konstruktor setzt.
+    Q_PROPERTY(int backendType READ typeInt NOTIFY backendTypeChanged)
+    // Zeitpunkt des letzten Aktivitätswechsels (ms seit Epoche), damit die Oberfläche
+    // „wartet seit 40 s" ausrechnen kann. Wechselt genau mit `activityChanged`.
+    Q_PROPERTY(qint64 activitySinceMs READ activitySinceMs NOTIFY activityChanged)
     Q_PROPERTY(QString lastNotification READ lastNotification NOTIFY notificationChanged)
     // Fortschritt (OSC 9;4): aktiv? + state (1=normal,2=Fehler,3=unbestimmt,4=pausiert) + 0..100.
     Q_PROPERTY(bool progressActive READ progressActive NOTIFY progressChanged)
@@ -102,6 +110,8 @@ public:
     bool needsAttention() const { return m_needsAttention; }
     Activity activity() const { return m_activity; }
     int activityInt() const { return static_cast<int>(m_activity); }
+    int typeInt() const { return static_cast<int>(m_type); }
+    qint64 activitySinceMs() const { return m_activitySinceMs; }
     /// Hat diese Session ihren Zustand jemals SELBST gemeldet — über OSC-133-Marker der
     /// Shell-Integration oder MCP `set_activity`?
     ///
@@ -191,6 +201,7 @@ signals:
     void agentChanged();
     void attentionChanged();
     void activityChanged();
+    void backendTypeChanged();
     void notificationChanged();
     void mcpControllerChanged();
     void progressChanged();
@@ -238,6 +249,8 @@ private:
     int m_progressState = 0;     // 1=normal,2=Fehler,3=unbestimmt,4=pausiert
     int m_progressValue = 0;     // 0..100
     Activity m_activity = Activity::Running;
+    // Seit wann gilt m_activity? Beim Anlegen „jetzt", danach bei jedem Wechsel gesetzt.
+    qint64 m_activitySinceMs = QDateTime::currentMSecsSinceEpoch();
     bool m_activityReported = false;   // s. activityReported()
     /// Merkt „ab jetzt meldet diese Session selbst" und stößt dabei EINMAL
     /// activityChanged an. Nötig, weil die erste Meldung oft `busy` ist und damit den
