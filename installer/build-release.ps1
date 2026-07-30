@@ -10,7 +10,7 @@
        (build-msi.ps1 baut selbst über das windows-release-Preset; die Version
         wird hier aus CMakeLists.txt geparst, damit nichts auseinanderläuft.)
 
-  Maschinen ohne Qt unter C:\Qt\6.11.1 (dem Preset-Default) werden über die
+  Maschinen ohne Qt unter C:\Qt\6.10.3 (dem Preset-Default) werden über die
   Umgebungsvariable QTMUX_QT_PREFIX bedient — das windows-Preset stellt sie
   dem CMAKE_PREFIX_PATH voran; dieses Script setzt sie auf das gefundene Kit.
 
