@@ -99,6 +99,11 @@ startet nur signiert), `hdiutil`-DMG → `dist/QTmux-<ver>-macos.dmg`. Nicht not
 
 ## Build & Test (Linux)
 
+Lokal wie macOS: `cmake --preset linux` + `--build` + `QT_QPA_PLATFORM=offscreen ctest`, sofern
+Qt im System liegt. Der Build-Server **rtzsvr02** baut seit 2026-07-31 **im Docker-Container**
+(#14s `buildenv.sh`, Qt im `qtcache`-Volume) statt auf dem Host — Aufruf, sudo-Bedarf und die
+qtserialport/qtshadertools-Ergänzung stehen in `CLAUDE.local.md`.
+
 **AppImage:** `installer/build-appimage.sh [version]` — `linux-release`-Preset (oder
 `QTMUX_BUILD_DIR` von der CI), AppDir (Binary + Plugins nach `usr/bin/plugins`),
 `linuxdeploy --plugin qt` (`QML_SOURCES_PATHS`) → `dist/QTmux-<ver>-x86_64.AppImage`.
@@ -325,12 +330,15 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
-## Status (2026-07-29)
+## Status (2026-07-31)
 
 **Ausgeliefert: v1.7.1** (Tag `v1.7.1`, alle 4 Installer: DMG/MSI+ZIP/AppImage). Phasen 0–6
 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Plugins +
 MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **37 MCP-Tools**
-(GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert.
+(GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert. **GUI-Auffrischung
+Design 1a/2a** (einklappbare Seitenleiste + Flyout, Statusleiste, sechs Menüs, neugestaltetes
+Einstellungsfenster, Reset/Import/Export) komplett, 3/3 Plattformen grün — Details im
+Abschnitt „Design 1a/2a" unten.
 
 **Window-Modell (QTMUX-83, seit v1.7.0):** Kein globales Split-Layout mehr, sondern das
 tmux-Modell — Sidebar = **Windows** (Tabs), jedes Window hat sein eigenes Split-Layout,
@@ -352,55 +360,32 @@ als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-30** · Branch `main` = `origin/main` (letzter Commit **`b45172a`**, gepusht),
-Working Tree sauber · Version **1.7.1**.
-**Teststände:** Windows `windows` (Debug) und `windows-release` je **18/18** (`-E "^test_pty$"`;
-seit Stufe 6 gibt es `test_settingsio`, also 19 Tests insgesamt;
-`test_pty` fällt hier umgebungsbedingt auch unverändert — nicht-interaktive Shell/ConPTY,
-und `ctest` braucht Qt-`bin` im PATH, sonst `0xc0000135`). macOS **18/18** auf Stand `2e9eeec`
-— alles danach (inkl. der GUI-Arbeit unten) ist auf **macOS/Linux ungeprüft**; der Auftrag
-dafür steht unten unter „ÜBERGABE".
+Stand **2026-07-31** · `main` = `origin/main` (**`36cb06a`**), Working Tree sauber · Version **1.7.1**.
+**Teststände (alle grün):** macOS **19/19** (`macos-release`), Windows **18/18** (rtzbld01,
+`windows`/`windows-release`), Linux **18/18** (rtzsvr02, **Container** — s. „Build & Test (Linux)").
+`test_pty` fällt auf Windows/Linux umgebungsbedingt (nicht-interaktive Shell/ConPTY); auf Windows
+braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
-### Laufender Auftrag: GUI-Umbau nach Design 1a/2a
+### Design 1a/2a (GUI-Umbau) — abgeschlossen
 
-**Quelle:** Claude-Design-Projekt „Menü-Struktur und Design-Auffrischung",
-`ab66e9b5-053b-4e81-9e4a-c45752fd42d1`, Datei **`Arbeitsanweisung-1a-2a.md`** — über das
-**`DesignSync`**-Werkzeug lesbar (`get_file`), nicht über einen MCP-Server namens
-`claude_design`. Sieben Stufen; die Anweisung schreibt Stufe für Stufe lauffähig vor.
-⚠️ **Temporär liegt eine Kopie im Repo**:
-[docs/design/menue-1a-2a/Arbeitsanweisung-1a-2a.md](docs/design/menue-1a-2a/Arbeitsanweisung-1a-2a.md)
-— damit die macOS-Session sie ohne Zugriff auf das Design-Projekt hat. **Nach Stufe 7 wieder
-löschen**; bei Divergenz gilt das Original im Design-Projekt.
-**Randbedingungen der Anweisung:** Qt Quick Controls **Basic**, keine neuen Effekte, Chrome-
-Farben **nur** über `Theme.*` (Ausnahme: die vorhandenen Statusfarben), jede neue Zeichenkette
-in `qsTr` + `i18n/qtmux_{de,en}.ts` nachziehen, alle Tests grün.
+Siebenstufiger Umbau nach der Design-Anweisung „Menü-Struktur und Design-Auffrischung"
+(Original im Claude-Design-Projekt `ab66e9b5-053b-4e81-9e4a-c45752fd42d1`, über `DesignSync`
+`get_file`). **Komplett und auf allen drei Plattformen grün** (Teststände oben).
+**Randbedingungen (dauerhaft):** Qt Quick Controls **Basic**, keine neuen Effekte, Chrome-
+Farben nur über `Theme.*` (Ausnahme: Statusfarben), jede neue Zeichenkette in `qsTr` + beiden
+`.ts`. Die temporär eingecheckte `Arbeitsanweisung-1a-2a.md` ist nach Stufe 7 wieder entfernt
+(`36cb06a`); bei Bedarf gilt das Original im Design-Projekt.
 
-| Stufe | Inhalt | Stand |
+| Stufe | Inhalt | Commit |
 |---|---|---|
-| 1 | `actToggleSidebar`, Persistenz `ui/*`, Splitter mit Einrasten | **fertig** `1a644c3` |
-| 2 | eingeklappte Leiste (52 px) + Hover-Flyout | **fertig** `1a644c3` |
-| 3 | Statusleiste (Footer 26 px, 7 Felder) | **fertig** `dd7df2f` |
-| 4 | Menü-Neuordnung auf 6 Menüs + Palette-Ergänzungen | **fertig** `d421e1e` |
-| 5 | Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl` | **fertig** `aa269a1` |
-| 6 | `SettingsIo` (Reset/Import/Export) + `tst_settingsio` | **fertig** `144c318` |
-| 7 | **Übersetzungen finalisieren, README-Screenshots** | **als Nächstes** |
-
-**Nächster Punkt — Stufe 7:** Die **Übersetzungen** sind nach jeder Stufe mitgezogen worden
-(EN steht auf **0 unfinished**, DE nur beim bekannten `%n Einträge`-Plural) — bleibt also der
-**Screenshot-Teil**: [README.md](README.md) zeigt bis heute keinen Screenshot (Backlog-Punkt
-„Screenshot im README"), die Anweisung verlangt aktuelle Bilder von Leiste, Statusleiste und
-Einstellungsfenster in beiden Designs.
-- Einstieg: `tests/release-visual-check.ps1` erzeugt die Menü-/Fenster-Bilder schon
-  automatisiert (isolierte Instanz, `-QtmuxProfile visualcheck`); für das
-  **Einstellungsfenster** den Weg aus den E2E-Fallen nehmen (UIA + `PrintWindow`).
-- ⚠️ Auf **dieser** Maschine sind die Bilder derzeit nur eingeschränkt brauchbar: der
-  Bildschirm ist gesperrt/getrennt, `CopyFromScreen` scheitert und synthetische Tasten kommen
-  nicht an (s. E2E-Fallen). Für README-Bilder ist die **macOS**-Session der bessere Ort —
-  entsprechend abstimmen, statt hier Bilder zu erzwingen.
-- Bauen/Testen wie gehabt: `.\tools\vsdev-build.cmd "windows-release" all` und
-  `ctest --test-dir build\windows-release -E "^test_pty$"` (Qt-`bin` in den PATH).
+| 1/2 | einklappbare Seitenleiste (52 px) + Hover-Flyout, `ui/*`-Persistenz, Splitter | `1a644c3` |
+| 3 | Statusleiste (Footer, 7 Felder) | `dd7df2f` |
+| 4 | sechs Menüs + Palette-Ergänzungen | `d421e1e` |
+| 5 | Einstellungsfenster: Rail-Gruppen, `PrefRow`, `SegmentedControl`, `AppSwitch` | `aa269a1` |
+| 6 | `SettingsIo` (Reset/Import/Export, Allowlist) + `tst_settingsio` | `144c318` |
+| 7 | i18n finalisiert (de/en 0 unfinished), README-Screenshots (`docs/images/`) | `36cb06a` |
 
 **Bewusste Abweichungen von der Anweisung** (Mechanik jeweils in der Feature-Referenz):
 Stufe 4 — keine **macOS-Menü-Rollen** (QtQuick.Controls kennt sie nicht → „Einstellungen …"
@@ -415,98 +400,43 @@ Feature-Referenz: kein Leck durch Wachstum, und ein Reset darf das Fenster-/Sess
 nicht mitnehmen) · Rückmeldung nach Reset/Import erscheint als Zeile am Fuß der Rail, nicht
 als weiterer Dialog · beim Import werden unbekannte Schlüssel **angezeigt und übersprungen**
 (die Anweisung sagt dazu nichts).
+Stufe 7 — README-Bilder über ein **sichtbares cocoa-Fenster + `grabWindow()`** (der
+Offscreen-Grab lässt das custom `TerminalItem` leer; die native macOS-Menüleiste ist global und
+nicht im Fenster-Grab); das separate Einstellungsfenster via QML-`grabToImage` des PrefsWindow
+(`prefs.contentItem.children[0]` — der C++-`contentItem` selbst hat keine QML-Engine).
 
-**Offen aus 1–6, bewusst nicht behauptet:** Rastergröße (80×24) fehlt im Statusleisten-Feld
-(sie lebt im `TerminalItem`, dafür müssten Spalten/Zeilen erst an der Session veröffentlicht
-werden) · macOS/Linux ungeprüft — insbesondere ist das **Fenster-Menü dort nie gelaufen**
-(auf Windows ist es per `removeMenu` entfernt) · **Export/Import durch die echten
-Dateidialoge** ist hier nicht automatisierbar gewesen (Logik im Unit-Test bewiesen, das Öffnen
-der Dialoge per Screenshot — der Rest steht in der Abnahmeliste) · Owner-Durchklick von Leiste,
-Statusleiste, Menüstruktur und Einstellungsfenster offen.
+**Offen (bewusst nicht behauptet):** **Rastergröße (80×24)** fehlt im Statusleisten-Feld (sie
+lebt im `TerminalItem`, dafür müssten Spalten/Zeilen erst an der Session veröffentlicht werden) ·
+**Export/Import durch die echten Dateidialoge** ist auf keiner Maschine automatisierbar (Logik im
+Unit-Test bewiesen, Dialog-Öffnen per Screenshot) · **Owner-Durchklick** der GUI offen, v. a. die
+macOS-**nativen Menüs** (Fenster-Menü Minimieren/Zoomen ohne Cocoa-Dublette; sechs Menüs mit
+„Einstellungen …" im Datei-Menü; Kürzel Cmd+B Seitenleiste, Cmd+A=Alles auswählen darf das
+Terminal nicht kapern und `tst_hotkeys::defaultsAreConflictFree` grün halten) sowie Flyout,
+Statusleiste, Einstellungsfenster und `App.reduceMotion` in **beiden** Designs. Menü-Icons fehlen
+nativ = QTMUX-13 (deferred), kein neuer Fehler. Abnahme-Rezepte in der Tabelle unten.
 
-### Arbeitsteilung Windows ↔ macOS (vereinbart 2026-07-30)
+### Zusammenarbeit Windows ↔ macOS
 
-**Windows-Session** schreibt den Code der Stufen (jetzt: 6 fertig, 7 offen) und committet auf
-`main`. **macOS-Session** verifiziert jede fertige Stufe auf den zwei Plattformen, die Windows
-nicht sieht — **macOS und Linux** (`rtzsvr02`) bauen + testen — macht die GUI-Abnahmen, die auf
-Windows prinzipiell nicht prüfbar sind, und pflegt **Jira/Confluence** (geht nur dort, s. u.).
-Koordination auf der geteilten Arbeitskopie: die drei Regeln aus
+Zwei Claude-Sessions teilen die Arbeitskopie (Windows-Maschine + Mac). Windows baut/testet auf
+rtzbld01; macOS lokal + Linux auf rtzsvr02 (Container); **Jira/Confluence gehen nur vom Mac**
+(`CLAUDE.local.md` existiert nur dort). **Nach jeder großen Anpassung auf allen drei Plattformen
+bauen + testen** ([[qtmux-build-alle-plattformen]]). Koordination: die drei Regeln aus
 [[zwei-sessions-eine-arbeitskopie]] — gezielt stagen (**nie** `git add -A`), vor dem Push
 `git fetch` und bei Divergenz erst committen, dann mergen, und nach jedem Merge, der die
 CLAUDE.md anfasst, `test_doc_duplicates` laufen lassen.
 
-### ÜBERGABE an die macOS-Session (Stand 2026-07-30, Stufe 6)
+### Offen: Jira/Confluence-Nachträge (nur vom Mac)
 
-Die Stufen 1–6 sind **ausschließlich auf Windows** gebaut und geprüft. Auf dem Mac ist der
-letzte belegte Teststand `2e9eeec` (18/18) — alles danach ist dort **ungesehen**. Diese Liste
-ist der Auftrag für die Mac-Session; Anweisung selbst: `Arbeitsanweisung-1a-2a.md` im
-Design-Projekt (über `DesignSync`, s. oben).
-
-**0. Lage prüfen, bevor irgendetwas gebaut wird.**
-`git fetch && git log --oneline -5` → erwartet **`144c318`** („Design 1a, Stufe 6", gepusht;
-davor `c0f8513` Qt-Fallback im Preset). Teilen Mac und Windows dieselbe
-Arbeitskopie ([[zwei-sessions-eine-arbeitskopie]]), ist der Stand schon da; sonst pullen.
-⚠️ **Die Produktivinstanz läuft aus `build/macos`** und deren Binary ist vom **28.07.**, also
-ohne QTMUX-85/-97/-98 **und ohne die Stufen 1–5**. Nicht dorthin bauen, solange sie läuft —
-das Überschreiben reißt alle Terminal-Sessions mit. Erst `lsof -nP -iTCP:7345 -sTCP:LISTEN`,
-dann in `build/macos-test` (Debug) bzw. `build/macos-release` bauen.
-
-**1. Bauen und Tests — auf BEIDEN Plattformen** (macOS und Linux `rtzsvr02`).
-```bash
-cmake --preset macos -B build/macos-test && cmake --build build/macos-test
-ctest --test-dir build/macos-test --output-on-failure          # erwartet 19/19 (test_settingsio ist neu)
-cmake --preset macos-release && cmake --build --preset macos-release
-```
-🔑 `test_settingsio` läuft mit `QSettings::IniFormat` im Temp-Verzeichnis und
-`QStandardPaths`-Testmodus — er fasst also weder echte Einstellungen noch den echten Vault an.
-Auf Windows grün in Debug und Release; INI ist der pessimistische Fall (dort kommt jeder Wert
-als Text zurück), macOS/Linux sollten also nicht überraschen.
-
-**2. Die macOS-spezifischen Punkte — das ist der eigentliche Grund der Übergabe.**
-Jeder Punkt ist auf Windows **prinzipiell nicht** prüfbar:
-- **Fenster-Menü** (Minimieren · Zoomen): existiert nur hier. Auf Windows wird es per
-  `appMenuBar.removeMenu(macWindowMenu)` entfernt — also ist der `visible`-freie Pfad dort nie
-  gelaufen. Prüfen: Menü vorhanden, beide Einträge wirken, **kein** doppeltes Fenster-Menü
-  neben dem von Cocoa.
-- **Natives Menü mit sechs Menüs**: „Einstellungen …" bleibt bewusst im **Datei**-Menü
-  (QtQuick.Controls kennt keine Menü-Rollen — Begründung in der Feature-Referenz). Prüfen, ob
-  Cocoa daneben eigene App-Menü-Einträge zeigt und ob das verwirrt; **nicht** „reparieren",
-  sondern Befund notieren.
-- ⚠️ **Menü-Icons fehlen im nativen Menü** — das ist QTMUX-13 (deferred), **kein** neuer
-  Fehler der Stufe 4.
-- **Kürzel**: Seitenleiste = **Cmd+B** (auf Windows/Linux Ctrl+Shift+L), `Cmd+A` = Alles
-  auswählen (auf Windows bewusst ohne Kürzel, dort gehört Ctrl+A der Shell). Prüfen, dass
-  Cmd+A das Terminal nicht kapert und `tst_hotkeys::defaultsAreConflictFree` grün bleibt.
-- **Einstellungsfenster** (Stufe 5): Rail-Gruppen, `PrefRow`-Zeilen, `SegmentedControl`,
-  `AppSwitch` und die Lesbarkeit von `Theme.accentText` in **beiden** Designs.
-- **Seitenleiste eingeklappt + Flyout + Statusleiste** (Stufen 1–3) sind auf dem Mac ebenfalls
-  ungesehen; dazu `App.reduceMotion` (dort echte Systemeinstellung).
-- **Stufe 6 — genau die zwei Punkte, die hier nicht automatisierbar waren:**
-  (a) **Export in eine Datei und Import daraus** (native Dateidialoge; auf dieser Maschine
-  scheiterte jede Automatisierung, s. E2E-Fallen). Erwartung: Export-JSON enthält die
-  Einstellungen, **kein** `windows/*`/`sessions/*` und kein Geheimnis; nach dem Import steht der
-  geänderte Wert **sofort** im Dialog, ohne Neustart.
-  (b) **Optik der Kopfzeile** in beiden Designs: zwei Textknöpfe, deren Menüs, und ein
-  deaktiviertes „Diese Seite zurücksetzen" (neu gedimmt über `opacity`, s. Feature-Referenz —
-  das betrifft **alle** Menüs, also beim Durchklicken der nativen macOS-Menüs mit ansehen).
-- Screenshots: `--screenshot` greift nur das **Root**-Fenster; für das Einstellungsfenster
-  `screencapture -l <windowid>` o. Ä. nehmen (der Windows-Weg über `EnumWindows`/`PrintWindow`
-  gilt dort nicht).
-
-**3. Jira/Confluence nachtragen — geht NUR vom Mac** (`CLAUDE.local.md` existiert nur dort).
-Vorher in **beiden** Systemen die höchste Nummer holen (`ORDER BY key DESC`, maxResults 1):
-- **QTMUX-2 → Done** (Funktionstest bestanden; die PowerShell-Einschränkung ist keine
+Die Übergabe selbst (Build+Test auf macOS/Linux, README-Screenshots) ist **erledigt** — offen
+bleiben die Doku-Nachträge. Vorher in **beiden** Systemen die höchste Nummer holen
+(`ORDER BY key DESC`, maxResults 1):
+- **QTMUX-2 → Done** (Funktionstest bestanden; die PowerShell-CWD-Einschränkung ist keine
   Bringschuld von QTmux).
-- Neu anlegen: **Verzeichniszeile auf der Kachel** · **OSC 7** · **`--screenshot` auf Windows**
-  (behoben, nur nachzutragen) · **Design 1a/2a** — sinnvoll ein Ticket je Stufe, 1–6 sofort
-  als umgesetzt (Commits `1a644c3`, `dd7df2f`, `d421e1e`, `aa269a1`, `144c318`), 7 offen · **Qt-Standardknöpfe unübersetzt** („OK"/„Cancel" in jedem `AppDialog` mit
-  `standardButtons`, weil kein `qtbase_<lang>`-Translator installiert wird — Befund aus Stufe 6,
-  betrifft die ganze App).
+- **Neu anlegen:** Verzeichniszeile auf der Kachel · OSC 7 · `--screenshot` auf Windows
+  (behoben, nur nachzutragen) · **Design 1a/2a** je Stufe (1–7 umgesetzt: `1a644c3` `dd7df2f`
+  `d421e1e` `aa269a1` `144c318` `36cb06a`) · **Qt-Standardknöpfe** „OK"/„Cancel" unübersetzt
+  (kein `qtbase_<lang>`-Translator installiert, betrifft die ganze App).
 - Kanban dual weiterschieben, Kurzkommentar je Ticket.
-
-**4. Danach.** **Stufe 7** (README-Screenshots) macht sinnvoll der **Mac** — auf der
-Windows-Maschine sind Bildschirm-Grabs derzeit nicht möglich (s. E2E-Fallen). Die
-Arbeitsteilung im Übrigen steht im Abschnitt darüber.
 
 ### Owner-Abnahmen offen (seit v1.7.1, je umgesetzt + selbst verifiziert)
 
@@ -522,7 +452,7 @@ Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme
 | **101/102/103** | ToolTip · geklemmter Drag · „Arbeitsverzeichnis öffnen"/„Pfad kopieren" | ToolTip in beiden Designs; Kachel bleibt im Bild; Menüpunkte an serieller Session ausgegraut |
 | **61** | Bildschirm leeren, Verlauf behalten (`Ctrl/Cmd+Shift+K`) | in einem laufenden Agenten leeren — Prompt oben, Verlauf im Scrollback |
 | **89** | Ruhezustand verhindern, solange Agenten arbeiten | Schalter an, Agent arbeiten lassen (macOS `pmset -g assertions`, Windows `powercfg /requests`) |
-| — | Verzeichnis als zweite Kachelzeile, Seitenleiste + Flyout, Statusleiste (Design 1a/2a, Stufen 1–3) | durchklicken; **Jira-Nummern fehlen** (s. ÜBERGABE) |
+| — | Verzeichnis als zweite Kachelzeile, Seitenleiste + Flyout, Statusleiste (Design 1a/2a, Stufen 1–3) | durchklicken; **Jira-Nummern fehlen** (s. „Offen: Jira/Confluence-Nachträge") |
 | — | **sechs Menüs** (Stufe 4) | jedes Menü öffnen; kein Eintrag schaltet mehr eine Einstellung außer Seitenleiste/Statusleiste/Broadcast; alles Verschobene über Einstellungen UND Palette erreichbar |
 | — | **Einstellungsfenster** (Stufe 5) | Rail-Gruppen, Zeilen mit Beschreibung, Segment-Umschalter, Schalter in Akzentfarbe — in **beiden** Designs |
 | — | **Zurücksetzen / Import / Export** (Stufe 6) | „Diese Seite zurücksetzen" auf einer geänderten Seite (Werte springen sofort auf Standard, danach ist der Punkt ausgegraut) · „Alle Einstellungen zurücksetzen …" **abbrechen** und bestätigen · **Export in eine Datei und Import daraus** — das ist der Teil, den hier **kein Automat** prüfen konnte (native Dateidialoge, s. E2E-Fallen): danach muss der geänderte Wert live stehen, und die offenen Fenster/Sessions müssen unberührt sein |
@@ -535,11 +465,11 @@ behobene, in der App nicht gegengeprüft, im Ticket notiert.
 
 ### Arbeitsstand (compact-fest — hier pflegen, nicht im Gespräch lassen)
 
-- ⚠️ **`build/macos` ist der Nachzügler — und die Produktivinstanz läuft daraus** (Binary vom
-  **28.07. 22:30**, also ohne QTMUX-85/-97/-98 und ohne die Stufen 1–5). Vorgehen dazu steht in
-  der ÜBERGABE oben; verifizierte Endstände sind `build/macos-test` und `build/macos-release`.
-  Neubau von `build/macos` nur mit Freigabe: er überschreibt das Binary und reißt alle
-  Terminal-Sessions mit (`cmake --build build/macos`, NICHT `--preset` mit `-B`).
+- ⚠️ **`build/macos` ist der Nachzügler — und die Produktivinstanz läuft daraus** (altes Binary,
+  ohne die Design-1a/2a-Stufen). Verifizierte Endstände sind `build/macos-test` und
+  `build/macos-release`; Neubau von `build/macos` nur mit Freigabe (vorher `lsof -nP -iTCP:7345
+  -sTCP:LISTEN`) — er überschreibt das Binary und reißt alle Terminal-Sessions mit
+  (`cmake --build build/macos`, NICHT `--preset` mit `-B`).
   🔑 **Dauerhafte Konsequenz:** Solange die Produktivinstanz aus einem Build-Verzeichnis läuft,
   ist „steht im Repo" **nie** gleichbedeutend mit „ist in der App" — genau daraus entstand die
   Fehlannahme, die Agenten-Schalter seien nicht im Dialog gelandet. Jede Owner-Abnahme braucht
@@ -556,8 +486,8 @@ behobene, in der App nicht gegengeprüft, im Ticket notiert.
   🔑 **Werkzeug-Falle:** Für die **Cloud** schlägt Python-`urllib` hier mit
   `CERTIFICATE_VERIFY_FAILED` fehl (kein Issuer im Store) — ADF-Rumpf mit Python **bauen**,
   aber mit `curl --data @datei` **senden**. On-prem braucht ohnehin `curl -k`.
-- **Jira-Nachträge, die nur vom Mac gehen:** Liste in der ÜBERGABE oben (Punkt 3) — nicht
-  doppelt pflegen. Fachlicher Hintergrund zu **OSC 7** (dem einzigen Weg zum CWD bei
+- **Jira-Nachträge, die nur vom Mac gehen:** Liste unter „Offen: Jira/Confluence-Nachträge"
+  oben — nicht doppelt pflegen. Fachlicher Hintergrund zu **OSC 7** (dem einzigen Weg zum CWD bei
   PowerShell/`ssh`/Containern; Parser kennt es nicht, `shell-integration/` sendet es nicht)
   steht im ConPTY-Abschnitt.
 - **Zwei Sessions arbeiten parallel in DERSELBEN Arbeitskopie** (Mac und Windows-Maschine,
@@ -600,7 +530,7 @@ Terminal-Manager, kein IDE-Ersatz. Diese Linie beim nächsten Feature-Vergleich 
 (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff (CAN-FD, ID-Filter,
 Konfig-Dialog, DBC-Decoding) · CI-Action-Versionen anheben (Node-20-Deprecation ab Sept. 2026) ·
 optional CPack-Distro-Pakete (.deb/.rpm) · **LGPL-Beilagen** fürs gebündelte Qt (Lizenztext +
-Quellen-Hinweis) · Screenshot im README.
+Quellen-Hinweis).
 
 ## Repository, Release, Zusammenarbeit
 
