@@ -1192,6 +1192,16 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   (`applyPendingResize`). Was in `Session` steht, ist genau das, was auch im PTY ankommt.
   Ohne Session blendet sich das Feld aus — eine Größe ohne Terminal wäre eine Erfindung.
   Test `tst_session::gridSizeIsPublishedAndSignalled` (Signal nur bei echter Änderung).
+  🔑 **Kein Text ohne `elide` in eine Leiste (QTMUX-121).** Das `Text` im `StatusField` hatte
+  weder `elide` noch Breitengrenze; die `Layout.maximumWidth` an der Aufrufstelle begrenzt nur
+  das **Item**, der Text darin malte einfach weiter — bei einem langen Arbeitsverzeichnis über
+  „x Sessions", Rastergröße und „UTF-8" hinweg. Mit `~` als CWD bleibt das unsichtbar, deshalb
+  fiel es erst bei der Bildabnahme auf.
+  ⚠️ **Der naheliegende Fix ist eine Bindungsschleife** (selbst hineingelaufen): `width` aus
+  `sf.width` zu rechnen schließt einen Kreis, denn die Feldbreite kommt ja aus
+  `sfRow.implicitWidth`, also aus der Textbreite. QML löst das mit **0** auf → die ganze
+  Statusleiste war leer. Richtig ist eine **eigene** Property (`maxLabelWidth`, 0 = unbegrenzt),
+  die nur das eine lange Feld setzt.
   🔑 **Drei QML-Fallen, jede einzeln erlebt:** (1) `Behavior on Layout.preferredWidth` ist
   **ungültig** — auf einer *attached property* erlaubt QML kein `Behavior`; es braucht eine
   eigene Property (hier `animWidth`). (2) Der **Inhalt eines `Popup` entsteht mit dem
@@ -1253,6 +1263,15 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   der aktuellen Doku **nicht belegt** (dort nur „File name without extension"); dokumentiert ist
   die Namespace-Regel allein bei Gemini CLI. Verkettet wird trotzdem einheitlich mit `:` — eine
   begründete Entscheidung, keine Messung.
+  🔑 **Die neue Funktion legte einen alten Layout-Fehler frei — Befund der Bildabnahme.** Im
+  Palette-Delegate hat der **Titel** `Layout.fillWidth: true` (Minimum also 0), die
+  Beschreibung (`sub`) hatte **weder `elide` noch Deckel** und bekam ihre volle
+  `implicitWidth`: Sie quetschte den **Befehlsnamen auf null**, ausgerechnet bei den ausführlich
+  beschriebenen Einträgen. Jahrelang unauffällig, weil `sub` bis dahin nur kurze Tastenkürzel
+  trug — die Projekt-Befehle sind die ersten Einträge mit langen Beschreibungen. Fix:
+  `elide` + `Layout.maximumWidth: cmdRow.width * 0.55` an der Beschreibung.
+  **Merke:** Ein neuer Datentyp in einer bestehenden Liste ist ein Layout-Risiko; kein Test
+  findet so etwas, nur der Blick aufs Bild.
 - **Umbenennen erhält den Aktivitäts-Indikator (QTMUX-116):** `windowTitle(w)` gab bei gesetztem
   custom `w.name` bisher sofort den Namen zurück und verwarf damit den Session-Titel samt
   führendem Aktivitäts-Indikator (Agenten wie Claude Code setzen `✳` U+2733 im Ruhezustand, einen

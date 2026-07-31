@@ -2071,6 +2071,12 @@ ApplicationWindow {
         property color dotColor: "transparent"
         property string tip
         property bool clickable: true
+        // Deckel für die Beschriftung; 0 = unbegrenzt (Vorgabe, für die kurzen Felder).
+        // 🔑 Muss eine EIGENE Property sein und darf nicht aus `sf.width` gerechnet werden:
+        // die Feldbreite entsteht ja aus `sfRow.implicitWidth`, also aus der Textbreite —
+        // ein Rückgriff auf `sf.width` ist eine Bindungsschleife, und QML löst die mit 0 auf
+        // (Symptom: die ganze Statusleiste bleibt leer).
+        property real maxLabelWidth: 0
         signal clicked()
         signal rightClicked()
 
@@ -2089,17 +2095,26 @@ ApplicationWindow {
             anchors.centerIn: parent
             spacing: 5
             Rectangle {
+                id: sfDot
                 visible: sf.dotColor !== "transparent"
                 width: 7; height: 7; radius: 3.5
                 color: sf.dotColor
                 anchors.verticalCenter: parent.verticalCenter
             }
             Text {
+                id: sfLabel
                 text: sf.label
                 color: sf.labelColor
                 font.pixelSize: 11
                 font.family: window.terminalFontFamily
                 anchors.verticalCenter: parent.verticalCenter
+                // 🔑 Ohne diese zwei Zeilen malt ein langer Text ÜBER die Nachbarfelder:
+                // `Layout.maximumWidth` an der Aufrufstelle begrenzt nur das Item, der Text
+                // darin folgte dem nicht. Sichtbar wird das erst bei einem langen
+                // Arbeitsverzeichnis — mit „~" bleibt der Fehler unentdeckt.
+                elide: Text.ElideRight
+                width: sf.maxLabelWidth > 0 ? Math.min(implicitWidth, sf.maxLabelWidth)
+                                            : implicitWidth
             }
         }
         HoverHandler { id: sfHover; cursorShape: sf.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor }
@@ -2149,7 +2164,9 @@ ApplicationWindow {
                 }
                 labelColor: Theme.textBright
                 tip: qsTr("Klick: Fokus ins aktive Pane")
-                Layout.maximumWidth: 460
+                // Einziges Feld mit unbegrenzt langem Inhalt (Titel + Arbeitsverzeichnis) —
+                // deshalb hier der Deckel. Der ToolTip zeigt weiterhin alles.
+                maxLabelWidth: 440
                 onClicked: window.focusActivePane()
             }
 
@@ -2690,6 +2707,17 @@ ApplicationWindow {
                                     visible: cmdRow.modelData.sub.length > 0
                                     color: Theme.textDim
                                     font.pixelSize: 11
+                                    // 🔑 Beides Pflicht, sonst verschwindet der NAME des Befehls.
+                                    // `sub` hatte weder Deckel noch elide und bekam im RowLayout
+                                    // seine volle implicitWidth; der Titel daneben hat
+                                    // `fillWidth` und damit ein Minimum von 0 — er wurde also
+                                    // auf null gequetscht. Jahrelang unauffällig, weil `sub`
+                                    // immer nur ein kurzes Tastenkürzel war; erst die
+                                    // Projekt-Befehle aus QTMUX-96 bringen lange Beschreibungen
+                                    // mit, und dann fehlte ausgerechnet bei den ausführlich
+                                    // beschriebenen Einträgen der Name.
+                                    elide: Text.ElideRight
+                                    Layout.maximumWidth: cmdRow.width * 0.55
                                 }
                             }
                         }
