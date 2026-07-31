@@ -68,7 +68,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
-| `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` · FIFO-Warteschlange + Abgabe-Regel. **Anbindung (Kachel, Palette, Session/MCP) steht noch aus** |
+| `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + Abgabe-Regel. **Angebunden ist nur QTMUX-96** (Palette); Kachel-Branch und Warteschlangen-Verdrahtung stehen aus |
 | `tests/` | 24 ctest-Tests: 23 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
@@ -227,9 +227,12 @@ beiden Themes + MCP-Smoke — Theming-Regressionen sind unit-test-unsichtbar).
   verzeichnis des Prozesses bleibt, wo die Shell gestartet ist. Bewiesen in einer Zeile:
   `(Get-Location).Path` = `C:\Windows\System32`, gleichzeitig
   `[System.IO.Directory]::GetCurrentDirectory()` = `D:\…\src\core`. QTmux liest also richtig;
-  jedes Werkzeug, das das Prozess-CWD liest, sieht dasselbe. Der einzige saubere Ausweg wäre
-  **OSC 7** (Shell meldet ihr Verzeichnis selbst) — im Parser **nicht** implementiert und in
-  `shell-integration/` nicht gesendet; als Ticket vorgemerkt (s. Arbeitsstand).
+  jedes Werkzeug, das das Prozess-CWD liest, sieht dasselbe. Der einzige saubere Ausweg ist
+  **OSC 7** (die Shell meldet ihr Verzeichnis selbst) — **seit QTMUX-108 umgesetzt**, Mechanik
+  in der Feature-Referenz. Auf rtzbld01 am echten PowerShell 5.1 belegt: **ohne** die
+  Shell-Integration bleibt die Anzeige nach `Set-Location` auf `C:\` stehen, **mit** ihr folgt
+  sie (`…\tests` → `…\src\core` → `C:\Windows`). ⚠️ Voraussetzung ist also die gesourcte
+  `qtmux.ps1` — ohne sie gilt der Absatz oben unverändert weiter.
   🔑 Testfalle dabei: `cd H:\…` **ohne `/d`** wechselt in `cmd` das Laufwerk nicht — der
   Prompt bleibt stehen, und QTmux meldet korrekt *keine* Änderung. Sah zunächst wie ein
   Fehler aus; der Bildschirminhalt hat es aufgeklärt.
@@ -406,14 +409,15 @@ braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
-**Nächster Punkt: die zweite Hälfte der drei gemergten Kerne** — sie sind Gui-frei fertig
-und getestet, aber **noch nirgends angebunden** (Details je Ticket im Jira-Kommentar):
-**QTMUX-58** → Rollen in `SessionModel` + Sidebar-Kachel · **QTMUX-96** → dynamischer Block
-in der Befehlspalette · **QTMUX-90** → Uhr für `msSinceLastOutput`, Abgabe über
-`writeWithEnter` (QTMUX-31!), Zähler auf der Kachel, MCP-Tool `queue_text`, dazu ein
-`static_assert` gegen Enum-Drift zwischen `ActivityCode` und `Session::Activity`.
-Danach der Rest des Air-Backlogs (94/96) und der **Owner-Durchklick** der GUI (Rezepte in der
-Abnahme-Tabelle unten) — dort warten **23 fertige Tickets** auf Abnahme.
+**Nächster Punkt: die fehlenden zweiten Hälften.** **QTMUX-108** und **QTMUX-96** sind
+komplett (Parser + Skripte bzw. Kern + Palette), **QTMUX-58** und **QTMUX-90** liegen nur als
+Gui-freier Kern vor: **58** → Rollen in `SessionModel` + Sidebar-Kachel · **90** → Uhr für
+`msSinceLastOutput`, Abgabe über `writeWithEnter` (QTMUX-31!), Zähler auf der Kachel, MCP-Tool
+`queue_text`. Details je Ticket im Jira-Kommentar.
+Danach der Rest des Air-Backlogs (94) und der **Owner-Durchklick** der GUI (Rezepte in der
+Abnahme-Tabelle unten) — dort warten **23 fertige Tickets** auf Abnahme, neu dazu die
+**Palette-Darstellung** aus QTMUX-96 (die Kette ist belegt, die Anzeige nicht — kein
+Bedienungshilfen-Recht auf dieser Maschine).
 🔑 **Parallelarbeit mit Worker-Sessions: Worktrees, nicht ein gemeinsamer Baum.** Vier Worker
 in derselben Arbeitskopie kollidieren zwangsläufig, weil fast jede Aufgabe in `qml/Main.qml`
 und den beiden `CMakeLists.txt` endet. Bewährtes Muster (2026-07-31): je Worker ein
@@ -586,9 +590,8 @@ behobene, in der App nicht gegengeprüft, im Ticket notiert.
   `CERTIFICATE_VERIFY_FAILED` fehl (kein Issuer im Store) — ADF-Rumpf mit Python **bauen**,
   aber mit `curl --data @datei` **senden**. On-prem braucht ohnehin `curl -k`.
 - **Arbeitsteilung und die drei Git-Regeln** stehen im Abschnitt „Zusammenarbeit Windows ↔ macOS"
-  oben — nicht doppelt pflegen. Fachlicher Hintergrund zu **OSC 7** (dem einzigen Weg zum CWD bei
-  PowerShell/`ssh`/Containern; Parser kennt es nicht, `shell-integration/` sendet es nicht)
-  steht im ConPTY-Abschnitt.
+  oben — nicht doppelt pflegen. **OSC 7** ist seit QTMUX-108 umgesetzt (Mechanik in der
+  Feature-Referenz, PowerShell-Hintergrund im ConPTY-Abschnitt).
 
 **Offene Jira:**
 **QTMUX-40** (OSC-8-Hyperlinks — deferred; die Heuristik-Links aus QTMUX-39
@@ -1212,8 +1215,44 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   (`QDir::homePath()` liefert `/`, die Shell unter Windows `\`), **zeigt** aber den
   Originalpfad — sonst stünde dort `C:/Windows/System32`. Der Home-Vergleich geht gegen
   Gleichheit bzw. `home + "/"`, sonst würde `/Users/nrx` als Home `/Users/nr` gelesen.
-  ⚠️ Bei **PowerShell**-Sessions steht hier dauerhaft das Startverzeichnis — nicht die
-  Anzeige ist schuld, sondern `Set-Location` (Begründung im ConPTY-Abschnitt).
+  ⚠️ Bei **PowerShell**-Sessions **ohne** gesourcte Shell-Integration steht hier dauerhaft das
+  Startverzeichnis — nicht die Anzeige ist schuld, sondern `Set-Location` (Begründung im
+  ConPTY-Abschnitt). Mit der Integration meldet die Shell ihr Verzeichnis per OSC 7 (QTMUX-108)
+  und die Zeile folgt.
+- **Arbeitsverzeichnis per OSC 7 (QTMUX-108):** `VtScreen` wertet `ESC ] 7 ; file://host/pfad`
+  aus (`case 7` im OSC-Fallback — libvterm behandelt nur 0/1/2/52 selbst), dekodiert die
+  Prozent-Kodierung und trennt den Host ab; `Session` nimmt die Meldung an, sie hat **Vorrang**
+  vor dem gepollten `Pty::currentWorkingDirectory()`, und sobald gemeldet wird, **schweigt das
+  Polling** (sonst überschriebe es die genauere Angabe im 1500-ms-Takt).
+  🔑 **Ein Pfad von einem FREMDEN Host wird angezeigt, aber nicht als lokales CWD
+  weitergereicht.** An `currentWorkingDirectory()` hängen Persistenz und die CWD-Vererbung an
+  neue Shells — ein Verzeichnis der Gegenstelle existiert hier womöglich gar nicht. Genau daran
+  hängt auch das Gate in `refreshWorkingDirectory()`: Beim entfernten Fall fällt
+  `currentWorkingDirectory()` bewusst auf den gepollten Wert zurück, der nicht in die Anzeige
+  gespeichert werden darf. **Nur dieser Fall prüft das Gate** — bei einer *lokalen* Meldung
+  greift die Vorrangregel ohnehin, der erste Gegentest bestand deshalb fälschlich.
+  🔑 **Der Fehler, den kein Unit-Test fand:** `printf '%d' "'$str"` liefert in bash für Bytes
+  ≥ 0x80 eine **negative** Zahl (signed char) — das erste Skript schrieb
+  `%FFFFFFFFFFFFFFC3` statt `%C3`, also war **jeder Umlaut im Pfad** kaputt. Sichtbar erst im
+  realen Skriptlauf; Abhilfe `$((byte & 0xFF))` in `qtmux.bash`/`.zsh`.
+  Tests `tst_vtscreen` (3 Fälle) + `tst_session::osc7*` (2, volle Kette PTY→libvterm→Session).
+  **Offen:** `pwsh` (nur PS 5.1 belegt), Linux-Lauf, `cmd.exe` (hat keinen Prompt-Hook), und
+  die GUI kennzeichnet einen **entfernten** Pfad nicht als solchen.
+- **Projekt-Befehle in der Befehlspalette (QTMUX-96):** `ProjectCommands::scan(dir)` (Gui-frei)
+  liest `.claude/commands`, `.claude/skills`, `.gemini/commands` (TOML), `.junie/commands`,
+  `.agents/skills`; `filterForAgent()` blendet auf den erkannten Agenten ein — **kein** erkannter
+  Agent heißt **alles zeigen** (dieselbe Linie wie QTMUX-30: nichts ableiten; der Anwender tippt
+  den Agenten oft erst noch, und ein verborgener Befehl sieht aus wie ein fehlender). QML-Brücke
+  `App.projectCommands(dir, agentId)`, Absenden über `sessions.sendText(row, text, submit)` →
+  `Session::writeWithEnter`. 🔑 **Die Enter-Verzögerung ist hier kein Detail:** Ein Palette-Befehl
+  landet typischerweise in einem Agenten-TUI, und dort wird ein `\r` im selben Block als
+  Einfügen gewertet (QTMUX-31).
+  🔑 **Bei Skills bestimmt das VERZEICHNIS den Befehl**, `name:` im Frontmatter ist nur
+  Anzeige-Label (an den echten Bäumen unter `~/.hermes/skills`, `~/.cursor/skills-cursor`
+  gegengeprüft). Und die Ticket-Annahme `/db:reset` für verschachtelte `.claude/commands` ist in
+  der aktuellen Doku **nicht belegt** (dort nur „File name without extension"); dokumentiert ist
+  die Namespace-Regel allein bei Gemini CLI. Verkettet wird trotzdem einheitlich mit `:` — eine
+  begründete Entscheidung, keine Messung.
 - **Umbenennen erhält den Aktivitäts-Indikator (QTMUX-116):** `windowTitle(w)` gab bei gesetztem
   custom `w.name` bisher sofort den Namen zurück und verwarf damit den Session-Titel samt
   führendem Aktivitäts-Indikator (Agenten wie Claude Code setzen `✳` U+2733 im Ruhezustand, einen
