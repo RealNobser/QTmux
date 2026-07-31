@@ -30,6 +30,9 @@ struct GitInfo {
     ///   Pfad **relativ** sein darf (bei Submodulen der Normalfall) und dann gegen das
     ///   Verzeichnis der `.git`-Datei aufgelöst wird.
     /// - **Detached HEAD**: `HEAD` enthält dann einen rohen SHA statt `ref: refs/heads/…`.
+    /// - **bare-Repository** (`<name>.git`, kein Arbeitsbaum): `HEAD`, `objects/` und `refs/`
+    ///   liegen direkt im Verzeichnis, ein `.git` gibt es nicht. Erkannt wird an allen drei
+    ///   Marken zugleich — eine beliebige Datei namens `HEAD` allein darf kein Repo vortäuschen.
     /// - Kein Repo, nicht existierendes oder unlesbares Verzeichnis, kaputtes `HEAD`
     ///   → `valid == false`, ohne Absturz und **ohne Logausgabe** (der Normalfall „hier ist
     ///   einfach kein Repo" darf die Konsole nicht mit Warnungen fluten).

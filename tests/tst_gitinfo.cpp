@@ -157,6 +157,55 @@ private slots:
         QVERIFY(g.branch.isEmpty());
     }
 
+    // --- bare-Repository ----------------------------------------------------
+
+    void bareRepoIsDetected() {
+        // Ein bare-Repo (`<name>.git`) hat keinen Arbeitsbaum: HEAD, objects/ und refs/
+        // liegen direkt in der Wurzel, ein `.git` gibt es nicht.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString bare = tmp.filePath("projekt.git");
+        writeFile(bare + "/HEAD", "ref: refs/heads/main\n");
+        QVERIFY(QDir().mkpath(bare + "/objects"));
+        QVERIFY(QDir().mkpath(bare + "/refs/heads"));
+
+        const GitInfo g = GitInfo::forDirectory(bare);
+        QVERIFY(g.valid);
+        QVERIFY(!g.detached);
+        QCOMPARE(g.branch, QStringLiteral("main"));
+    }
+
+    void bareRepoIsFoundFromSubdirectory() {
+        // Auch aus einem Unterverzeichnis heraus (etwa `objects/`) — die Aufwärtssuche
+        // muss die bare-Wurzel genauso finden wie eine `.git`-Wurzel.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString bare = tmp.filePath("projekt.git");
+        writeFile(bare + "/HEAD", "ref: refs/heads/release/2.0\n");
+        QVERIFY(QDir().mkpath(bare + "/objects/pack"));
+        QVERIFY(QDir().mkpath(bare + "/refs/heads"));
+
+        const GitInfo g = GitInfo::forDirectory(bare + "/objects/pack");
+        QVERIFY(g.valid);
+        QCOMPARE(g.branch, QStringLiteral("release/2.0"));
+    }
+
+    void headFileAloneIsNoRepo() {
+        // Der Fehlalarm, den die bare-Erkennung erzeugen könnte: ein gewöhnliches
+        // Verzeichnis mit einer beliebigen Datei namens `HEAD` (Fixture, Datenformat,
+        // Dokumentation) darf KEIN Repository vortäuschen — sonst hinge an der Kachel ein
+        // erfundener Branch. Erst alle drei Marken zusammen zählen.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString dir = tmp.filePath("kein-repo");
+        writeFile(dir + "/HEAD", "ref: refs/heads/main\n");
+        QVERIFY(!GitInfo::forDirectory(dir).valid);
+
+        // auch mit einer der beiden anderen Marken noch nicht
+        QVERIFY(QDir().mkpath(dir + "/refs"));
+        QVERIFY(!GitInfo::forDirectory(dir).valid);
+    }
+
     // --- Detached HEAD ------------------------------------------------------
 
     void detachedHeadGivesShortSha() {
