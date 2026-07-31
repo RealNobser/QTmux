@@ -1,8 +1,33 @@
 #include <QtTest>
 
 #include "PromptQueue.h"
+#include "Session.h"   // NUR für den Drift-Wächter unten — PromptQueue selbst kennt Session nicht
 
 using namespace qtmux;
+
+// ---------------------------------------------------------------------------------
+// Drift-Wächter für die gespiegelten Aktivitätswerte.
+//
+// `ActivityCode` in [PromptQueue.h](../src/core/PromptQueue.h) bildet `Session::Activity`
+// per **Zahl** ab, damit der Kern die Session nicht kennen muss (dieselbe Entkopplung wie
+// bei `shouldPreventSleep(bool, QList<int>)`). Der Preis dieser Entkopplung ist, dass ein
+// umsortiertes oder erweitertes `Session::Activity` hier lautlos durchrutschen würde: Aus
+// „arbeitet gerade" würde stillschweigend „ist frei" — die Warteschlange schriebe dann
+// mitten in die laufende Ausgabe, also genau der Fehler, den QTMUX-90 beheben soll. Ein
+// Test würde das nicht merken, denn beide Seiten wären ja in sich schlüssig.
+//
+// Der Wächter gehört bewusst **hierher und nicht in den Kern**: In `PromptQueue.cpp` würde
+// er `Session.h` erzwingen und damit die Entkopplung aufgeben, um die es geht. Der Test ist
+// die erste Stelle, an der beide Seiten ohnehin sichtbar sind. Ein Verstoß bricht damit den
+// **Build** des Tests, nicht erst seinen Lauf — schärfer als jede Laufzeitprüfung.
+//
+// (Wenn die Anbindung aus Teil 2 steht, darf derselbe Wächter dort zusätzlich stehen; er
+// ist beidseitig unschädlich und an der Anbindungsstelle das direktere Dokument.)
+static_assert(int(Session::Activity::Idle)    == ActivityIdle);
+static_assert(int(Session::Activity::Running) == ActivityRunning);
+static_assert(int(Session::Activity::Waiting) == ActivityWaiting);
+static_assert(int(Session::Activity::Error)   == ActivityError);
+static_assert(int(Session::Activity::Closed)  == ActivityClosed);
 
 /// Tests für die Gui-freie Prompt-Warteschlange (QTMUX-90).
 ///
