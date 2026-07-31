@@ -19,6 +19,10 @@ qt_add_executable(test_terminalsearch tst_terminalsearch.cpp)
 target_link_libraries(test_terminalsearch PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_terminalsearch COMMAND test_terminalsearch)
 
+qt_add_executable(test_promptqueue tst_promptqueue.cpp)
+target_link_libraries(test_promptqueue PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_promptqueue COMMAND test_promptqueue)
+
 qt_add_executable(test_agent tst_agent.cpp)
 target_link_libraries(test_agent PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_agent COMMAND test_agent)
