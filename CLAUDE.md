@@ -68,7 +68,8 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
-| `tests/` | 21 ctest-Tests: 20 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration) + `test_doc_duplicates` (reines CMake-Skript) |
+| `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` · FIFO-Warteschlange + Abgabe-Regel. **Anbindung (Kachel, Palette, Session/MCP) steht noch aus** |
+| `tests/` | 24 ctest-Tests: 23 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
 
@@ -334,12 +335,25 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   `installer/build-appimage.sh`, `.github/workflows/ci.yml` (AppImage-Schritt),
   `installer/QTmux.wxs`, `README.md` (DE **und** EN).
 - **i18n:** Quellsprache Deutsch; QML `qsTr`, C++ `QCoreApplication::translate("<Kontext>",…)`.
-  `cmake --build … --target update_translations` (lupdate scannt automatisch alle Targets
-  inkl. `qtmux_core`); `cmake/FinishSourceLanguageTs.cmake` finalisiert die DE-Datei
+  `cmake --build … --target update_translations`; gescannt werden **genau `qtmux` und
+  `qtmux_core`** (`SOURCE_TARGETS` an `qt_add_translations`);
+  `cmake/FinishSourceLanguageTs.cmake` finalisiert die DE-Datei
   automatisch — **nur `i18n/qtmux_en.ts` braucht echte Übersetzungspflege**. Eigennamen
   (PowerShell, Bash, …) bleiben unübersetzt. Neben den eigenen `.qm` wird **`qtbase_<lang>`**
   eingebettet und geladen (QTMUX-117) — sonst bleiben Qts eigene Texte englisch, allen voran
   die Standardknöpfe; Mechanik in den QML-/Theming-Lektionen.
+  🔑 **`SOURCE_TARGETS` ist Pflicht, nicht Kosmetik (2026-07-31).** Ohne die Angabe scannt
+  lupdate **alle** Targets — auch `tests/`. `tst_i18n.cpp` fragt für QTMUX-117 gezielt
+  Qt-eigene Texte ab (Kontext **`QPlatformTheme`**: „Cancel"/„OK"/„Save"/„Close"), und
+  lupdate trug sie in unsere `.ts` ein; weil Deutsch Quellsprache ist, finalisierte der Hook
+  sie prompt als `Cancel` → **„Cancel"**. Damit lag in `qtmux_de` ein **konkurrierender**
+  Eintrag zu dem aus `qtbase_de` (dort korrekt „Abbrechen") — also eine latente Regression
+  von QTMUX-117. Unsichtbar blieb sie nur, weil Qt die Translator in **umgekehrter
+  Installationsreihenfolge** befragt und `qtbase` zuletzt installiert wird: Ein Vertauschen
+  der zwei `swapTranslator`-Zeilen in [main.cpp](src/app/main.cpp) hätte QTMUX-117 still
+  zurückgedreht. **Merke:** Ein Test, der Fremdtexte abfragt, wird sonst zur
+  Übersetzungsquelle. Kontrollzahl nach der Eingrenzung: **481** Quelltexte (vorher 485),
+  kein `QPlatformTheme`-Kontext in den `.ts`.
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
@@ -383,20 +397,30 @@ dual angelegt. Danach zwei Nachzügler von der Windows-Seite:
 Qt **6.10.3** lokal installiert und im `windows`-Preset vor 6.11.1 gezogen (`e1eef80`), und
 das Fenster startet nicht mehr **neben** dem Bildschirm (`1bb0ba1`, Anwenderbefund „App startet
 nicht, nichts zu sehen" — Mechanik in der Feature-Referenz).
-**Teststände:** macOS Debug (`macos-test`) und Release je **21/21** grün (neu:
-`test_shellintegration`). Der CI-Lauf `30640022530` belegte für den Stand davor alle drei
-Plattformen (macOS 20/20, Linux 20/20, Windows 19/19 ohne `test_pty`); für QTMUX-38 steht der
-CI-Lauf noch aus.
+**Teststände:** macOS Debug (`macos-test`) und Release je **24/24** grün (neu:
+`test_gitinfo`, `test_projectcommands`, `test_promptqueue`). Der CI-Lauf `30640022530` belegte
+für einen älteren Stand alle drei Plattformen (macOS 20/20, Linux 20/20, Windows 19/19 ohne
+`test_pty`); für QTMUX-38/120 und die drei neuen Kerne steht der CI-Lauf noch aus.
 `test_pty` fällt auf Windows/Linux umgebungsbedingt (nicht-interaktive Shell/ConPTY); auf Windows
 braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
-**Nächster Punkt:** die fehlende **Rastergröße** im Statusleisten-Feld, dann der
-Air-Backlog 90/94/96. **QTMUX-108 (OSC 7)** ist der Ausreißer nach oben mit dem besten
-Verhältnis — der einzige Weg zum CWD bei PowerShell/`ssh`/Containern, und damit die Grundlage
-der Verzeichniszeile in der Kachel. Parallel offen bleibt der **Owner-Durchklick** der GUI
-(Rezepte in der Abnahme-Tabelle unten) — dort warten **23 fertige Tickets** auf Abnahme.
+**Nächster Punkt: die zweite Hälfte der drei gemergten Kerne** — sie sind Gui-frei fertig
+und getestet, aber **noch nirgends angebunden** (Details je Ticket im Jira-Kommentar):
+**QTMUX-58** → Rollen in `SessionModel` + Sidebar-Kachel · **QTMUX-96** → dynamischer Block
+in der Befehlspalette · **QTMUX-90** → Uhr für `msSinceLastOutput`, Abgabe über
+`writeWithEnter` (QTMUX-31!), Zähler auf der Kachel, MCP-Tool `queue_text`, dazu ein
+`static_assert` gegen Enum-Drift zwischen `ActivityCode` und `Session::Activity`.
+Danach der Rest des Air-Backlogs (94/96) und der **Owner-Durchklick** der GUI (Rezepte in der
+Abnahme-Tabelle unten) — dort warten **23 fertige Tickets** auf Abnahme.
+🔑 **Parallelarbeit mit Worker-Sessions: Worktrees, nicht ein gemeinsamer Baum.** Vier Worker
+in derselben Arbeitskopie kollidieren zwangsläufig, weil fast jede Aufgabe in `qml/Main.qml`
+und den beiden `CMakeLists.txt` endet. Bewährtes Muster (2026-07-31): je Worker ein
+`git worktree` mit eigenem Branch **und eigenem Build-Verzeichnis** (`build/w<N>`), Auftrag
+strikt auf die **Gui-freie** Hälfte plus Tests in **neuen** Dateien begrenzt, QML-Anbindung
+danach seriell durch eine Instanz. Ergebnis: drei Merges, genau **ein** trivialer Konflikt
+(gleiche Einfügestelle in `tests/CMakeLists.txt`).
 🔑 Die Node-20-Abkündigung ist **erledigt** (`db52b41` + die fremde SHA-Pinnung); offen ist
 dort nur noch `jurplel/install-qt-action@v4`.
 
@@ -453,8 +477,10 @@ Offscreen-Grab lässt das custom `TerminalItem` leer; die native macOS-Menüleis
 nicht im Fenster-Grab); das separate Einstellungsfenster via QML-`grabToImage` des PrefsWindow
 (`prefs.contentItem.children[0]` — der C++-`contentItem` selbst hat keine QML-Engine).
 
-**Offen (bewusst nicht behauptet):** **Rastergröße (80×24)** fehlt im Statusleisten-Feld (sie
-lebt im `TerminalItem`, dafür müssten Spalten/Zeilen erst an der Session veröffentlicht werden) ·
+Die **Rastergröße** ist seit QTMUX-120 nachgeliefert (`Session::cols/rows` +
+`window.windowGridText`, s. Feature-Referenz).
+
+**Offen (bewusst nicht behauptet):**
 **Export/Import durch die echten Dateidialoge** ist auf keiner Maschine automatisierbar (Logik im
 Unit-Test bewiesen, Dialog-Öffnen per Screenshot) · **Owner-Durchklick** der GUI offen, v. a. die
 macOS-**nativen Menüs** (Fenster-Menü Minimieren/Zoomen ohne Cocoa-Dublette; sechs Menüs mit
@@ -1154,6 +1180,15 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `SessionModel` (`waitingCount`/`errorCount` + `countersChanged`, Test
   `tst_sessiongroups::statusBarCounters`) — **nicht** in `WindowModel`, das kennt keine
   Sessions.
+  🔑 **Rastergröße „80×24" (QTMUX-120) kommt aus der SESSION, nie aus dem `TerminalItem`.**
+  `Session` hielt `m_cols`/`m_rows` längst; es fehlte nur die Veröffentlichung als
+  `Q_PROPERTY cols/rows` (NOTIFY `sizeChanged`), die Leiste bindet über
+  `window.windowGridText()`. Der Grund für die Quelle ist QTMUX-86: Ans Item gebunden zeigt
+  die Anzeige die **transienten** Layout-Zwischengrößen (beim Window-Wechsel und beim Teilen
+  gemessen 80×2), denn dorthin gelangt die Größe erst nach der 60-ms-Entprellung
+  (`applyPendingResize`). Was in `Session` steht, ist genau das, was auch im PTY ankommt.
+  Ohne Session blendet sich das Feld aus — eine Größe ohne Terminal wäre eine Erfindung.
+  Test `tst_session::gridSizeIsPublishedAndSignalled` (Signal nur bei echter Änderung).
   🔑 **Drei QML-Fallen, jede einzeln erlebt:** (1) `Behavior on Layout.preferredWidth` ist
   **ungültig** — auf einer *attached property* erlaubt QML kein `Behavior`; es braucht eine
   eigene Property (hier `animWidth`). (2) Der **Inhalt eines `Popup` entsteht mit dem
