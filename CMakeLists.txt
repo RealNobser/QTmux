@@ -76,6 +76,8 @@ add_library(qtmux_core STATIC
     src/core/HotkeyRegistry.cpp
     src/core/AgentEventHub.h
     src/core/AgentEventHub.cpp
+    src/core/PromptQueue.h
+    src/core/PromptQueue.cpp
     src/core/SecretsVault.h
     src/core/SecretsVault.cpp
     src/core/GlobalHotkey.h

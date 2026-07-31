@@ -28,6 +28,11 @@ qt_add_executable(test_projectcommands tst_projectcommands.cpp)
 target_link_libraries(test_projectcommands PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_projectcommands COMMAND test_projectcommands)
 
+# QTMUX-90: Kern der Prompt-Warteschlange (FIFO + Abgabe-Regel), reine Logik.
+qt_add_executable(test_promptqueue tst_promptqueue.cpp)
+target_link_libraries(test_promptqueue PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_promptqueue COMMAND test_promptqueue)
+
 qt_add_executable(test_agent tst_agent.cpp)
 target_link_libraries(test_agent PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_agent COMMAND test_agent)
