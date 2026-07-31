@@ -38,6 +38,14 @@ CatPage {
                     onToggled: page.host.app.pasteWarnMultiline = checked
                 }
             }
+            PrefRow {
+                title: qsTr("Programme dürfen die Zwischenablage füllen")
+                description: qsTr("Der einzige Weg für Text aus einer SSH-Sitzung, einem Container oder einer Oberfläche mit eigener Auswahl. Auslesen bleibt immer verwehrt.")
+                AppSwitch {
+                    checked: page.host.app.appClipboardWrite
+                    onToggled: page.host.app.appClipboardWrite = checked
+                }
+            }
         }
     }
 

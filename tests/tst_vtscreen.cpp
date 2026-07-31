@@ -38,7 +38,81 @@ private slots:
     void osc7WorkingDirectory();
     void osc7HostHandling();
     void osc7TakesPrecedenceOverPolling();
+    void osc52WritesClipboard();
+    void osc52QueryIsRefused();
 };
+
+// OSC 52: Ein Programm legt Text in die Zwischenablage. Das ist der einzige Weg für
+// alles, was auf einem ENTFERNTEN Rechner läuft oder seine eigene Maus-Auswahl führt
+// (Claude Code im Alt-Screen) — dort hat QTmux selbst gar keine Auswahl zum Kopieren.
+void TestVtScreen::osc52WritesClipboard() {
+    VtScreen vt(24, 80);
+    QStringList erhalten;
+    QObject::connect(&vt, &VtScreen::clipboardWriteRequested,
+                     [&](const QString &t) { erhalten << t; });
+
+    // Normalfall: Selektor 'c' (clipboard), Base64-Nutzlast.
+    vt.inputWrite("\x1b]52;c;" + QByteArrayLiteral("Hallo Welt").toBase64() + "\x07");
+    QCOMPARE(erhalten.size(), 1);
+    QCOMPARE(erhalten.last(), QStringLiteral("Hallo Welt"));
+
+    // UTF-8 muss unverfälscht ankommen (Base64 transportiert Bytes, keine Zeichen).
+    vt.inputWrite("\x1b]52;c;" + QStringLiteral("Größe: 20 µm").toUtf8().toBase64() + "\x07");
+    QCOMPARE(erhalten.last(), QStringLiteral("Größe: 20 µm"));
+
+    // Ohne Selektor: libvterm setzt SELECT|CUT0 — der xterm-Standardfall, gilt als
+    // „gemeint ist die Zwischenablage".
+    vt.inputWrite("\x1b]52;;" + QByteArrayLiteral("ohne Selektor").toBase64() + "\x07");
+    QCOMPARE(erhalten.last(), QStringLiteral("ohne Selektor"));
+
+    // ST-Terminator (ESC \) statt BEL ist ebenso zulässig.
+    vt.inputWrite("\x1b]52;c;" + QByteArrayLiteral("mit ST").toBase64() + "\x1b\\");
+    QCOMPARE(erhalten.last(), QStringLiteral("mit ST"));
+
+    // PRIMARY allein ist die X11-Maus-Auswahl (Mittelklick-Einfügen) und hat auf
+    // macOS/Windows keine Entsprechung — sie darf die Zwischenablage NICHT kapern.
+    const int vorher = erhalten.size();
+    vt.inputWrite("\x1b]52;p;" + QByteArrayLiteral("nur primary").toBase64() + "\x07");
+    QCOMPARE(erhalten.size(), vorher);
+
+    // 🔑 ZERSTÜCKELT einspeisen: Vom PTY kommt eine Sequenz nicht garantiert am Stück,
+    // erst recht nicht über eine SSH-Verbindung. libvterm hält den Dekodierzustand über
+    // Fragmente hinweg (recvpartial) und ruft den Callback mehrfach — wer nur auf ein
+    // einzelnes Stück hört, verliert genau dann den Text, wenn es darauf ankommt.
+    {
+        VtScreen vt2(24, 80);
+        QStringList st;
+        QObject::connect(&vt2, &VtScreen::clipboardWriteRequested,
+                         [&](const QString &t) { st << t; });
+        const QByteArray seq = "\x1b]52;c;"
+                             + QByteArrayLiteral("Text ueber mehrere Bloecke").toBase64()
+                             + "\x07";
+        for (int i = 0; i < seq.size(); ++i) vt2.inputWrite(seq.mid(i, 1));   // Byte für Byte
+        QCOMPARE(st.join(QString()), QStringLiteral("Text ueber mehrere Bloecke"));
+    }
+}
+
+// 🔑 Sicherheitsgrenze: OSC 52 kann die Zwischenablage auch ABFRAGEN. Darauf antwortet
+// QTmux nicht — sonst könnte jedes Programm im Terminal (auch eines auf einem fremden
+// Rechner oder ein KI-Agent) mitlesen, was der Anwender zuletzt kopiert hat.
+void TestVtScreen::osc52QueryIsRefused() {
+    VtScreen vt(24, 80);
+    QStringList erhalten;
+    QByteArray anPty;
+    QObject::connect(&vt, &VtScreen::clipboardWriteRequested,
+                     [&](const QString &t) { erhalten << t; });
+    QObject::connect(&vt, &VtScreen::outputToPty,
+                     [&](const QByteArray &d) { anPty += d; });
+
+    vt.inputWrite("\x1b]52;c;?\x07");
+    QVERIFY2(erhalten.isEmpty(), "Abfrage darf nichts in die Zwischenablage schreiben");
+    QVERIFY2(anPty.isEmpty(), "Abfrage darf NICHT beantwortet werden (Mitlesen verhindern)");
+
+    // Schreiben funktioniert danach weiterhin — die Ablehnung darf den Kanal nicht stören.
+    vt.inputWrite("\x1b]52;c;" + QByteArrayLiteral("danach").toBase64() + "\x07");
+    QCOMPARE(erhalten.size(), 1);
+    QCOMPARE(erhalten.last(), QStringLiteral("danach"));
+}
 
 // OSC 7 (QTMUX-108): Die Shell meldet ihr Arbeitsverzeichnis selbst. Geprüft wird der
 // ECHTE Weg — Bytes durch den Parser —, nicht eine herausgelöste Hilfsfunktion.

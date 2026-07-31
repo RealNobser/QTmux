@@ -471,6 +471,11 @@ ApplicationWindow {
     property bool copyOnSelect: false       // Auswahl automatisch kopieren
     property bool rightClickPaste: false    // Rechtsklick fügt ein (statt Kontextmenü)
     property bool pasteWarnMultiline: true  // Vor mehrzeiligem Einfügen warnen
+    // OSC 52: Darf ein Programm im Terminal die Zwischenablage SETZEN? Vorgabe an — für
+    // Text aus einer SSH-Sitzung, einem Container oder einer TUI mit eigener Auswahl ist
+    // das der einzige Weg. Das AUSLESEN bleibt immer verwehrt (der VtScreen beantwortet
+    // die Abfrage grundsätzlich nicht), der Schalter betrifft also nur das Schreiben.
+    property bool appClipboardWrite: true
     property bool confirmQuit: true         // Vor dem Beenden nachfragen (QTMUX-41)
     // Mausrad in einer Vollbild-App, die die Maus nicht greift: 0 = nur wenn die App es
     // per DECSET 1007 verlangt (Vorgabe), 1 = immer. Regeln in src/core/AltScroll.h.
@@ -1684,6 +1689,7 @@ ApplicationWindow {
         property alias rightClickPaste: window.rightClickPaste
         property alias pasteWarnMultiline: window.pasteWarnMultiline
         property alias altScrollMode: window.altScrollMode
+        property alias appClipboardWrite: window.appClipboardWrite
         property alias confirmQuit: window.confirmQuit
         property alias restoreSessionMode: window.restoreSessionMode
         property alias preventSleep: window.preventSleep
@@ -1752,6 +1758,7 @@ ApplicationWindow {
         case "window/rightClickPaste":      window.rightClickPaste = b(false); break
         case "window/pasteWarnMultiline":   window.pasteWarnMultiline = b(true); break
         case "window/altScrollMode":        window.altScrollMode = i(0); break
+        case "window/appClipboardWrite":    window.appClipboardWrite = b(true); break
         case "window/restoreAgents":        window.restoreAgents = b(false); break
         case "window/resumeAgentMode":      window.resumeAgentMode = i(0); break
         }
@@ -2540,6 +2547,7 @@ ApplicationWindow {
                             { title: qsTr("GPU-Rendering umschalten"),   sub: "",             icon: "terminal-window", run: function(){ window.terminalGpuRendering = !window.terminalGpuRendering } },
                             { title: qsTr("Auswahl automatisch kopieren"), sub: "",           icon: "copy",            run: function(){ window.copyOnSelect = !window.copyOnSelect } },
                             { title: qsTr("Rechtsklick fügt ein"),       sub: "",             icon: "clipboard",       run: function(){ window.rightClickPaste = !window.rightClickPaste } },
+                            { title: qsTr("Programme dürfen die Zwischenablage füllen"), sub: "", icon: "clipboard", run: function(){ window.appClipboardWrite = !window.appClipboardWrite } },
                             { title: qsTr("Vor mehrzeiligem Einfügen warnen"), sub: "",       icon: "info",            run: function(){ window.pasteWarnMultiline = !window.pasteWarnMultiline } },
                             { title: qsTr("Mausrad in Vollbild-Anwendungen: nur auf Anforderung"), sub: "", icon: "terminal-window", run: function(){ window.altScrollMode = 0 } },
                             { title: qsTr("Mausrad in Vollbild-Anwendungen: immer"), sub: "", icon: "terminal-window", run: function(){ window.altScrollMode = 1 } },

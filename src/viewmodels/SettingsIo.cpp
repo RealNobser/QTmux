@@ -132,7 +132,8 @@ QStringList SettingsIo::patternsFor(const QString &category) {
         return { QStringLiteral("window/copyOnSelect"),
                  QStringLiteral("window/rightClickPaste"),
                  QStringLiteral("window/pasteWarnMultiline"),
-                 QStringLiteral("window/altScrollMode") };
+                 QStringLiteral("window/altScrollMode"),
+                 QStringLiteral("window/appClipboardWrite") };
     if (category == QLatin1String("agenten"))
         return { QStringLiteral("window/restoreAgents"),
                  QStringLiteral("window/resumeAgentMode"),

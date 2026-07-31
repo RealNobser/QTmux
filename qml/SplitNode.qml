@@ -234,6 +234,7 @@ Item {
                     // Komfortoptionen (PuTTY-Stil) + Multiline-Paste-Warnung.
                     copyOnSelect: win.copyOnSelect
                     rightClickPaste: win.rightClickPaste
+                    appClipboardWrite: win.appClipboardWrite
                     pasteWarnMultiline: win.pasteWarnMultiline
                     // Rad in Vollbild-Apps ohne Maus-Tracking (Codex): s. core/AltScroll.h.
                     altScrollMode: win.altScrollMode
@@ -376,6 +377,39 @@ Item {
                     textFormat: Text.PlainText
                     text: (Qt.platform.os === "osx" ? "⌘" : "Strg")
                           + qsTr("-Klick zum Öffnen: ") + paneTerm.hoverLinkTarget
+                    color: Theme.textBright
+                }
+            }
+
+            // Maus-Hinweis: Hält die Anwendung die Maus (Vollbild-TUI mit Maus-Tracking,
+            // z. B. ein Agent), markiert ein Ziehen DORT — QTmux hat dann gar keine
+            // Auswahl, und Kopieren wirkt wirkungslos. Ohne diesen Hinweis findet man die
+            // Shift-Geste nicht; dieselbe Erfahrung wie bei den klickbaren Links (QTMUX-39).
+            Rectangle {
+                id: appMouseHintPill
+                visible: paneTerm.appMouseHint
+                z: 71
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 8
+                radius: 6
+                color: Theme.bgElevated
+                border.color: Theme.border
+                border.width: 1
+                width: Math.min(appMouseHintText.implicitWidth + 20, pane.width - 16)
+                height: appMouseHintText.implicitHeight + 10
+                opacity: visible ? 1 : 0
+                Behavior on opacity { enabled: !App.reduceMotion; NumberAnimation { duration: 120 } }
+                Text {
+                    id: appMouseHintText
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
+                    font.pixelSize: 11
+                    textFormat: Text.PlainText
+                    text: qsTr("Die Anwendung steuert die Maus · Shift halten zum Markieren")
                     color: Theme.textBright
                 }
             }

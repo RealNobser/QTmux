@@ -169,6 +169,13 @@ signals:
     /// dekodiert, `host` roh wie gemeldet, `local` = gehört zu dieser Maschine.
     /// Feuert nur bei echten Änderungen — die Shell sendet OSC 7 an JEDER Prompt.
     void workingDirectoryReported(const QString &path, const QString &host, bool local);
+    /// Ein Programm möchte Text in die Zwischenablage legen (OSC 52); der Text ist
+    /// bereits Base64-dekodiert. Gui-frei gehalten — das Setzen der Zwischenablage macht
+    /// das TerminalItem, `qtmux_core` kennt QClipboard nicht.
+    /// 🔑 Der einzige Weg, auf dem ein Programm auf einem ENTFERNTEN Rechner (SSH,
+    /// Container) oder eines mit EIGENER Maus-Auswahl (Agenten-TUI im Alt-Screen) Text in
+    /// die lokale Zwischenablage bekommt: Dort hat QTmux selbst gar keine Auswahl.
+    void clipboardWriteRequested(const QString &text);
 
 public:
     // Interne Handler — von den C-Callbacks in VtScreen.cpp aufgerufen.
@@ -183,6 +190,8 @@ public:
     void cbSetMouse(int mode);
     void cbSetAltScreen(bool on);
     void cbSetAltScroll(bool on);
+    /// Sammelt die (von libvterm bereits Base64-dekodierten) OSC-52-Fragmente.
+    void cbSelectionSet(unsigned mask, const char *str, int len, bool initial, bool final);
     /// Sammelt OSC-Fragmente (libvterm liefert sie ggf. stückweise) und parst sie.
     void cbOsc(int command, const char *str, int len, bool initial, bool final);
 
@@ -198,6 +207,15 @@ private:
     int m_mouseTracking = 0;   // VTERM_PROP_MOUSE: 0=aus,1=Klick,2=Drag,3=Move
     bool m_altScreen = false;  // VTERM_PROP_ALTSCREEN: Vollbild-TUI aktiv (DECSET 1049)
     bool m_altScroll = false;  // VTERM_PROP_ALTSCROLL: Rad als Cursor-Tasten (DECSET 1007)
+
+    // OSC 52: Puffer, in den libvterm das Base64 dekodiert, plus der eingesammelte Text.
+    // `kMaxClipboardBytes` deckelt, was ein Programm ablegen darf — ein Agent, der
+    // versehentlich eine Logdatei durchreicht, soll die Zwischenablage nicht sprengen.
+    static constexpr int kSelectionBufSize = 4096;
+    static constexpr int kMaxClipboardBytes = 1 << 20;   // 1 MiB
+    char m_selectionBuf[kSelectionBufSize] = {};
+    QByteArray m_selectionText;
+    bool m_selectionOverflow = false;
 
     // Scrollback-Zeile + ob sie ein weicher Umbruch der vorigen ist (für Copy).
     struct SbLine {

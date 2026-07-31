@@ -50,6 +50,16 @@ class TerminalItem : public QQuickItem {
     /// Alt-Screen). Persistiert als `window/altScrollMode`; Regeln in core/AltScroll.h.
     Q_PROPERTY(int altScrollMode READ altScrollMode WRITE setAltScrollMode NOTIFY altScrollModeChanged)
     Q_PROPERTY(bool pasteWarnMultiline READ pasteWarnMultiline WRITE setPasteWarnMultiline NOTIFY pasteWarnMultilineChanged)
+    // Darf ein Programm im Terminal die Zwischenablage SETZEN (OSC 52)? Für Text aus einer
+    // SSH-Sitzung, einem Container oder einer TUI mit eigener Maus-Auswahl ist das der
+    // einzige Weg — dort hat QTmux selbst keine Auswahl. Abschaltbar, weil damit auch ein
+    // unbeaufsichtigter Agent die Ablage überschreiben kann; das LESEN bleibt immer
+    // verwehrt (s. VtScreen: kein query-Callback).
+    Q_PROPERTY(bool appClipboardWrite READ appClipboardWrite WRITE setAppClipboardWrite
+               NOTIFY appClipboardWriteChanged)
+    // Die Anwendung hält gerade die Maus (Tracking + Alt-Screen) — ein Ziehen markiert
+    // dann DORT, nicht in QTmux. Treibt den Hinweis „Shift halten zum Markieren".
+    Q_PROPERTY(bool appMouseHint READ appMouseHint NOTIFY appMouseHintChanged)
     // Ziel des Links unter der Maus (leer = keiner). Treibt den QML-Tooltip „⌘-Klick zum
     // Öffnen"; die Erkennung läuft beim einfachen Drüberfahren, das Öffnen bleibt Cmd/Ctrl.
     Q_PROPERTY(QString hoverLinkTarget READ hoverLinkTarget NOTIFY hoverLinkChanged)
@@ -100,6 +110,9 @@ public:
     void setAltScrollMode(int m) { if (m != m_altScrollMode) { m_altScrollMode = m; emit altScrollModeChanged(); } }
     bool pasteWarnMultiline() const { return m_pasteWarnMultiline; }
     void setPasteWarnMultiline(bool b) { if (b != m_pasteWarnMultiline) { m_pasteWarnMultiline = b; emit pasteWarnMultilineChanged(); } }
+    bool appClipboardWrite() const { return m_appClipboardWrite; }
+    void setAppClipboardWrite(bool b) { if (b != m_appClipboardWrite) { m_appClipboardWrite = b; emit appClipboardWriteChanged(); } }
+    bool appMouseHint() const { return m_appMouseHint; }
 
     QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) override;
 
@@ -152,6 +165,8 @@ signals:
     void rightClickPasteChanged();
     void altScrollModeChanged();
     void pasteWarnMultilineChanged();
+    void appClipboardWriteChanged();
+    void appMouseHintChanged();
     /// Mehrzeilige Einfügung erkannt — QML fragt nach (lineCount = Zeilenzahl).
     void multilinePasteWarning(int lineCount);
     /// Link unter der Maus hat gewechselt (Ziel geändert) — QML aktualisiert den Tooltip.
@@ -212,6 +227,11 @@ private:
     bool openLinkAt(const QPointF &pos);
     void clearSelection();
     void onDamaged();                            // Damage + Scroll-Anker nachführen
+    /// Zeigt kurz „Die Anwendung steuert die Maus · Shift halten zum Markieren".
+    /// Ausgelöst, wenn jemand ohne Shift zieht, während die Anwendung die Maus hält —
+    /// ohne diesen Hinweis sieht es aus, als markiere QTmux und verliere den Text
+    /// (die Auswahl gehört dann der Anwendung, QTmux hat gar keine).
+    void showAppMouseHint();
     int maxScrollOffset() const;                 // = Scrollback-Zeilenzahl
     void scrollByLines(int lines);               // + = in die Historie, - = zurück
     /// Quelle einer sichtbaren Zeile (0..rows-1): true + sbIndex = Scrollback-Zeile,
@@ -265,6 +285,10 @@ private:
     bool m_rightClickPaste = false;    // Rechtsklick fügt ein statt Kontextmenü
     int m_altScrollMode = 0;           // qtmux::AltScrollMode (0 = nur auf Anforderung)
     bool m_pasteWarnMultiline = true;  // Vor mehrzeiligem Einfügen warnen
+    bool m_appClipboardWrite = true;   // OSC 52: Programm darf die Zwischenablage setzen
+    bool m_appMouseHint = false;       // „Shift halten zum Markieren" gerade anzeigen?
+    QTimer m_appMouseHintTimer;        // blendet den Hinweis wieder aus
+    QPoint m_appMouseDragStart{-1, -1}; // Startzelle eines an die App gehenden Drags
     QByteArray m_pendingPaste;         // zurückgehaltene Einfügung (Multiline-Warnung)
 
     // Scrollback-Ansicht: 0 = Live-Boden, >0 = so viele Zeilen in die Historie.

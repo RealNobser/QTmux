@@ -192,6 +192,15 @@ TerminalItem::TerminalItem(QQuickItem *parent) : QQuickItem(parent) {
     m_resizeTimer.setInterval(60);
     connect(&m_resizeTimer, &QTimer::timeout, this, &TerminalItem::applyPendingResize);
 
+    // Hinweis „Shift halten zum Markieren" blendet sich nach ein paar Sekunden aus.
+    m_appMouseHintTimer.setSingleShot(true);
+    m_appMouseHintTimer.setInterval(4000);
+    connect(&m_appMouseHintTimer, &QTimer::timeout, this, [this] {
+        if (!m_appMouseHint) return;
+        m_appMouseHint = false;
+        emit appMouseHintChanged();
+    });
+
     setFlag(ItemHasContents, true);
     setAcceptedMouseButtons(Qt::AllButtons);
     setAcceptHoverEvents(true);   // für Link-Hervorhebung unter der Maus
@@ -220,6 +229,14 @@ void TerminalItem::setSession(QObject *session) {
     if (VtScreen *sc = screen()) {
         connect(sc, &VtScreen::damaged, this, [this](const QRect &) { onDamaged(); });
         connect(sc, &VtScreen::cursorMoved, this, [this]() { update(); });
+        // OSC 52: Ein Programm legt Text in die Zwischenablage (der einzige Weg für alles,
+        // was entfernt läuft oder eine eigene Maus-Auswahl führt). Über das Signal, damit
+        // qtmux_core Gui-frei bleibt — QClipboard ist QtGui. Nur SCHREIBEN; das Auslesen
+        // lehnt der VtScreen grundsätzlich ab.
+        connect(sc, &VtScreen::clipboardWriteRequested, this, [this](const QString &text) {
+            if (!m_appClipboardWrite || text.isEmpty()) return;
+            QGuiApplication::clipboard()->setText(text);
+        });
         m_lastSbCount = sc->scrollbackCount();
         // Kein Größen-Vorbehalt mehr an dieser Stelle: recomputeGrid() bricht selbst ab,
         // wenn die Größe noch nicht feststeht (gridFor), und reicht die Größe ohnehin nur
@@ -1217,6 +1234,7 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
             && !(event->modifiers() & Qt::ShiftModifier)) {
         const QPoint c = cellAt(event->position());
         m_lastMouseCell = c;
+        m_appMouseDragStart = (event->button() == Qt::LeftButton) ? c : QPoint(-1, -1);
         m_mouseReporting = true;
         sc->mouseButton(btn, true, c.y(), c.x(), event->modifiers());
         event->accept();
@@ -1248,6 +1266,12 @@ void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
             m_lastMouseCell = c;
             sc->mouseMove(c.y(), c.x(), event->modifiers());
         }
+        // Wer mit gedrückter Taste über mehrere Zellen zieht, will markieren — bekommt
+        // aber die Auswahl der ANWENDUNG (die Maus gehört ihr, s. appMouseActive).
+        // Erst ab ein paar Zellen, damit ein normaler Klick in einer TUI nichts einblendet.
+        if (m_appMouseDragStart.x() >= 0 && !m_appMouseHint
+            && (qAbs(c.x() - m_appMouseDragStart.x()) >= 3 || c.y() != m_appMouseDragStart.y()))
+            showAppMouseHint();
         event->accept();
         return;
     }
@@ -1271,6 +1295,7 @@ void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
             sc->mouseButton(btn, false, c.y(), c.x(), event->modifiers());
         }
         m_mouseReporting = false;
+        m_appMouseDragStart = QPoint(-1, -1);
         event->accept();
         return;
     }
@@ -1282,6 +1307,14 @@ void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
         return;
     }
     event->ignore();
+}
+
+void TerminalItem::showAppMouseHint() {
+    if (m_appMouseHint) return;
+    m_appMouseHint = true;
+    emit appMouseHintChanged();
+    // Von allein wieder verschwinden: Der Hinweis ist eine Erinnerung, kein Zustand.
+    m_appMouseHintTimer.start();
 }
 
 void TerminalItem::hoverMoveEvent(QHoverEvent *event) {

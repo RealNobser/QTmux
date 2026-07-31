@@ -160,6 +160,26 @@ int cbOscFallback(int command, VTermStringFragment frag, void *user) {
     return 1;
 }
 
+// OSC 52 (Zwischenablage setzen). libvterm dekodiert das Base64 selbst in den Puffer,
+// den wir bereitstellen, und ruft `set` ggf. mehrfach mit Teilstücken.
+int cbSelectionSet(VTermSelectionMask mask, VTermStringFragment frag, void *user) {
+    static_cast<VtScreen *>(user)->cbSelectionSet(unsigned(mask), frag.str,
+                                                  static_cast<int>(frag.len),
+                                                  frag.initial, frag.final);
+    return 1;
+}
+
+// 🔑 `query` bleibt bewusst NICHT gesetzt: Mit OSC 52 kann man den Inhalt der
+// Zwischenablage auch ABFRAGEN. Das würde jedem Programm im Terminal — auch einem auf
+// einem fremden Rechner oder einem KI-Agenten — erlauben mitzulesen, was der Anwender
+// zuletzt kopiert hat (Passwörter, Token). QTmux beantwortet solche Anfragen nicht;
+// ohne Callback verwirft libvterm sie. Dieselbe Linie wie beim Vault (nie über MCP):
+// Schreiben ja, Lesen nie.
+const VTermSelectionCallbacks kSelectionCallbacks = {
+    /* set   */ cbSelectionSet,
+    /* query */ nullptr,
+};
+
 const VTermStateFallbacks kStateFallbacks = {
     /* control */ nullptr,
     /* csi     */ nullptr,
@@ -202,6 +222,11 @@ VtScreen::VtScreen(int rows, int cols, QObject *parent)
     // Maus-Reporting wird nur im Alt-Screen weitergeleitet; (2) nach einem TUI kehrt
     // der vorherige Shell-Inhalt zurück (korrektes Terminal-Verhalten).
     vterm_screen_enable_altscreen(m_screen, 1);
+    // OSC 52: Ohne gesetzte Callbacks verwirft libvterm die Sequenz ersatzlos — genau
+    // daran scheiterte bisher jedes Kopieren aus einem Programm, das seine eigene
+    // Auswahl führt (Claude Code im Alt-Screen) oder auf einem entfernten Rechner läuft.
+    vterm_state_set_selection_callbacks(m_state, &kSelectionCallbacks, this,
+                                        m_selectionBuf, sizeof(m_selectionBuf));
     vterm_screen_reset(m_screen, 1);
 }
 
@@ -395,6 +420,38 @@ void VtScreen::cbSetMouse(int mode) { m_mouseTracking = mode; }
 void VtScreen::cbSetAltScreen(bool on) { m_altScreen = on; }
 
 void VtScreen::cbSetAltScroll(bool on) { m_altScroll = on; }
+
+void VtScreen::cbSelectionSet(unsigned mask, const char *str, int len,
+                              bool initial, bool final) {
+    if (initial) {
+        m_selectionText.clear();
+        m_selectionOverflow = false;
+    }
+    if (str && len > 0) {
+        // Deckeln, aber weiterlaufen lassen: libvterm ruft uns bis `final` ohnehin
+        // weiter auf, und ein halber Text wäre schlimmer als gar keiner.
+        if (m_selectionText.size() + len > kMaxClipboardBytes) m_selectionOverflow = true;
+        else m_selectionText.append(str, len);
+    }
+    if (!final) return;
+
+    const QByteArray text = m_selectionText;
+    const bool overflow = m_selectionOverflow;
+    m_selectionText.clear();
+    m_selectionOverflow = false;
+    if (overflow || text.isEmpty()) return;
+
+    // PRIMARY ist die X11-Maus-Auswahl (Einfügen per Mittelklick) — dafür gibt es auf
+    // macOS/Windows keine Entsprechung. Nur wer ausdrücklich die Zwischenablage meint,
+    // darf sie überschreiben; sonst kapert eine bewegte Maus in einem TUI die Ablage.
+    // (Ohne Selektor setzt libvterm SELECT|CUT0 — das ist der xterm-Standardfall.)
+    const unsigned erlaubt = unsigned(VTERM_SELECTION_CLIPBOARD)
+                           | unsigned(VTERM_SELECTION_SELECT)
+                           | unsigned(VTERM_SELECTION_CUT0);
+    if (!(mask & erlaubt)) return;
+
+    emit clipboardWriteRequested(QString::fromUtf8(text));
+}
 
 void VtScreen::resetInputModes() {
     // Hängende Reporting-Modi lösen, ohne Bildschirm/Alt-Screen anzutasten. In den
