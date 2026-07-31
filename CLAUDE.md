@@ -357,6 +357,14 @@ Flag seit 2026-07-30 plattformabhängig: macOS/Linux offscreen (falls das Plugin
 **Windows am sichtbaren Fenster** — Begründung in den E2E-Fallen. Fehler, die im Glyph-Atlas
 sitzen (QTMUX-97), sind darauf **prinzipiell unsichtbar** — dafür braucht es den Atlas selbst
 als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
+🔑 **Und offscreen rendert `MultiEffect` NICHT** (2026-07-31, an der Seitenleiste erlebt): Alle
+per `MultiEffect` eingefärbten Icons — Sidebar-Chevron, Delegate-Icons — fehlen im
+`--screenshot`-Bild **ersatzlos**, ohne Warnung. Toolbar-Icons erscheinen trotzdem, weil sie
+über `icon.source`/`icon.color` laufen; das Bild sieht also völlig plausibel aus. Wer daraus
+„das Element fehlt" schließt, diagnostiziert das Messmittel. **Abhilfe:**
+`QT_QPA_PLATFORM=cocoa` vor den Aufruf setzen — `main.cpp` überschreibt eine **bereits
+gesetzte** Variable nicht, der Flag greift dann am sichtbaren Fenster (derselbe Weg wie bei
+den README-Bildern). Nur dort ist eine `MultiEffect`-Änderung abnehmbar.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
@@ -1001,7 +1009,14 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   240-px-`Rectangle`; die `SplitView`s gehören den Panes), `DragHandler` mit `target: null`
   wie bei QTMUX-100. Eingeklappt zeigt **dieselbe Kachel** einen zweiten Inhalt (Icon +
   Nummer + Statuspunkt) statt eines zweiten Delegates — sonst müsste die
-  Rückkopplungsfalle aus QTMUX-100 zweimal richtig vermieden werden. Statusleiste als
+  Rückkopplungsfalle aus QTMUX-100 zweimal richtig vermieden werden.
+  🔑 **Der Chevron ist in BEIDEN Zuständen sichtbar** (2026-07-31): Er war eingeklappt
+  ausgeblendet — Begründung damals „kein Platz, Splitter/Kürzel/Ansicht-Menü bleiben als
+  Wege". Das trug nicht (Anwender-Befund): Ohne sichtbaren Knopf findet man den Rückweg
+  nicht, Kürzel und Menü muss man erst kennen, und der Splitter ist eine unbeschriftete
+  Kante. Eingeklappt weicht daher der **Schriftzug** („QTmux" → unsichtbar) und der Chevron
+  rückt mittig; die Spitze zeigt, was der Klick tut (`rotation: 90` = links = einklappen,
+  `-90` = rechts = ausklappen). Statusleiste als
   `footer` mit Inline-Komponente `StatusField`; die Aggregat-Zähler liegen in
   `SessionModel` (`waitingCount`/`errorCount` + `countersChanged`, Test
   `tst_sessiongroups::statusBarCounters`) — **nicht** in `WindowModel`, das kennt keine

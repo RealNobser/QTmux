@@ -2872,17 +2872,23 @@ ApplicationWindow {
                     Layout.bottomMargin: 8
                     spacing: 6
                     Text {
-                        text: window.sidebarCollapsed ? "Q" : "QTmux"
+                        // Eingeklappt weicht der Schriftzug dem Chevron: In der 52-px-Leiste
+                        // ist nur EIN Element sinnvoll unterzubringen, und das muss die
+                        // Bedienung sein, nicht die Marke.
+                        text: "QTmux"
+                        visible: !window.sidebarCollapsed
                         color: Theme.textBright
-                        font.pixelSize: window.sidebarCollapsed ? 15 : 18
+                        font.pixelSize: 18
                         font.bold: true
-                        Layout.fillWidth: !window.sidebarCollapsed
-                        horizontalAlignment: window.sidebarCollapsed ? Text.AlignHCenter
-                                                                     : Text.AlignLeft
+                        Layout.fillWidth: true
                     }
-                    // Chevron: klappt ein. Im eingeklappten Zustand ausgeblendet — dort ist
-                    // kein Platz, und Splitter, Kürzel und das Ansicht-Menü bleiben als Wege
-                    // übrig. Die Spitze zeigt, was der Klick TUT: nach links = einklappen.
+                    // Chevron: klappt ein UND aus. Die Spitze zeigt, was der Klick TUT —
+                    // nach links = einklappen, nach rechts = ausklappen.
+                    // 🔑 Eingeklappt war er früher ausgeblendet („kein Platz, Splitter/Kürzel/
+                    //    Menü bleiben als Wege"). Das trug nicht: Ohne sichtbaren Knopf findet
+                    //    man den Rückweg nicht — Kürzel und Menü muss man erst kennen, und der
+                    //    Splitter ist eine unbeschriftete Kante. Deshalb ist er jetzt immer da
+                    //    und der Schriftzug weicht.
                     // 🔑 Zwei Fehler steckten hier, beide erst am Bild aufgefallen:
                     //   (1) `rotation: -90` dreht die Spitze nach RECHTS. Positive Rotation
                     //       ist im Bildschirm-Koordinatensystem (y nach unten) im
@@ -2892,15 +2898,16 @@ ApplicationWindow {
                     //       mit der Quell-Luminanz (bei Schwarz ≈ 0). Deshalb die explizite
                     //       Form mit versteckter Quelle — dieselbe wie in der Befehlspalette.
                     Rectangle {
-                        visible: !window.sidebarCollapsed
                         Layout.preferredWidth: 22
                         Layout.preferredHeight: 22
+                        // Eingeklappt ist er das einzige Element der Zeile und gehört mittig.
+                        Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
                         radius: 11
                         color: chevHover.hovered ? Theme.sidebarHover : "transparent"
                         Item {
                             anchors.centerIn: parent
                             width: 14; height: 14
-                            rotation: 90
+                            rotation: window.sidebarCollapsed ? -90 : 90
                             Image {
                                 id: chevIcon
                                 anchors.fill: parent
@@ -2920,7 +2927,8 @@ ApplicationWindow {
                         TapHandler { onTapped: actToggleSidebar.trigger() }
                         AppToolTip {
                             visible: chevHover.hovered
-                            text: qsTr("Seitenleiste einklappen (%1)")
+                            text: (window.sidebarCollapsed ? qsTr("Seitenleiste ausklappen (%1)")
+                                                           : qsTr("Seitenleiste einklappen (%1)"))
                                   .arg(App.shortcutText(actToggleSidebar.shortcut))
                         }
                     }
