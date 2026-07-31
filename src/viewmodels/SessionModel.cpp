@@ -535,6 +535,18 @@ void SessionModel::writeToAll(const QByteArray &data) {
         if (s) s->write(data);
 }
 
+void SessionModel::sendText(int row, const QString &text, bool submit, int enterDelayMs) {
+    if (row < 0 || row >= count() || text.isEmpty()) return;
+    Session *s = m_sessions.at(row);
+    if (!s) return;
+    const QByteArray data = text.toUtf8();
+    const int delay = enterDelayMs < 0 ? Session::kDefaultEnterDelayMs : enterDelayMs;
+    if (submit)
+        s->writeWithEnter(data, delay);          // QTMUX-31: Enter zeitlich abgesetzt
+    else
+        s->write(data);
+}
+
 QString SessionModel::historyDir() const {
     // AppDataLocation trägt den Profil-Suffix des App-Namens → per Profil getrennt.
     return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)

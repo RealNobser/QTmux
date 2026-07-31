@@ -66,6 +66,22 @@ public:
     /// Liefert false, wenn der Pfad leer ist oder das System das Öffnen ablehnt.
     Q_INVOKABLE bool openLocalPath(const QString &path) const;
 
+    /// Die Befehle und Skills, die das Projekt im Arbeitsverzeichnis `workingDir`
+    /// mitbringt (QTMUX-96) — für die Befehlspalette. Je Eintrag eine Map mit
+    /// `name`, `description`, `source`, `agentId` und `filePath`; ausgewählt wird
+    /// schlicht `/<name>` an die Session geschickt.
+    ///
+    /// `agentId` ist der Agent der **fragenden Session**: ist er gesetzt, kommen nur
+    /// dessen eigene und die agentenneutral geteilten Befehle zurück (Regel und
+    /// Begründung in `ProjectCommands::filterForAgent`). Leerer Pfad → leere Liste.
+    ///
+    /// 🔑 Es wird bei JEDEM Aufruf frisch gescannt, bewusst ohne Cache: gemessen
+    /// 0 ms für ein Projekt ohne solche Ordner (der Normalfall) und 14,6 ms für
+    /// einen Extrembaum mit 72 Skills — beides unter einem Frame, während ein Cache
+    /// einen soeben angelegten Befehl verschwiegen hätte.
+    Q_INVOKABLE QVariantList projectCommands(const QString &workingDir,
+                                             const QString &agentId = QString()) const;
+
     /// Installierte Monospace-Schriftfamilien (für die Terminal-Schriftwahl).
     Q_INVOKABLE QStringList monospaceFonts() const;
     /// Plattformübliche Standard-Monospace-Familie (Default der Terminal-Schrift).

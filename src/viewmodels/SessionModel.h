@@ -95,6 +95,18 @@ public:
     /// Schreibt `data` an ALLE Sessions (Broadcast-/Sync-Input). Genutzt vom
     /// Broadcast-Modus: einmal getippt → alle Sessions erhalten dieselbe Eingabe.
     Q_INVOKABLE void writeToAll(const QByteArray &data);
+    /// Schickt `text` an EINE Session (QTMUX-96: der von der Palette ausgewählte
+    /// Projekt-Befehl). Mit `submit` folgt ein Enter — und zwar **zeitlich abgesetzt**
+    /// über `Session::writeWithEnter`, weil TUI-Agenten einen in einem Rutsch
+    /// ankommenden Block samt `\r` als Einfügevorgang werten und das Enter dann zum
+    /// Zeilenumbruch im Eingabefeld wird statt abzuschicken (QTMUX-31 — genau der
+    /// Fall, den ein Palette-Befehl an Claude Code trifft).
+    /// Ungültige Zeile oder leerer Text: passiert nichts.
+    /// `enterDelayMs < 0` bedeutet „Standardverzögerung" — der Wert selbst steht in
+    /// `Session::kDefaultEnterDelayMs` und kann hier nicht stehen, weil `Session` in
+    /// diesem Header bewusst nur vorwärtsdeklariert ist.
+    Q_INVOKABLE void sendText(int row, const QString &text, bool submit = true,
+                              int enterDelayMs = -1);
     /// Verschiebt die Session von `from` an die Zielposition `to` (Drag-Reorder
     /// in der Sidebar). Persistiert die neue Reihenfolge. Die Session übernimmt
     /// dabei die Gruppe ihrer neuen Nachbarschaft (QTMUX-42) — Ziehen in einen
