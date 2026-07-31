@@ -17,8 +17,37 @@ anderen Session **fertig** ist oder eine **Frage** hat).
 | `qtmux-wait.sh` | macOS/Linux | **Warten** auf ein Ereignis; blockiert und endet beim ersten Treffer — siehe unten |
 | `qtmux-wait.ps1` / `qtmux-wait.cmd` | Windows | dito für Windows |
 
-Installation (interaktiv): die jeweilige Datei im Shell-Profil sourcen
-(`~/.bashrc`, `~/.zshrc`, `$PROFILE`), bzw. die `.cmd` in ein PATH-Verzeichnis legen.
+## Woher bekomme ich diese Dateien?
+
+**Als Anwender einer Installation** (DMG, MSI, portables ZIP, AppImage) stecken sie **im
+Programm** — hol sie dir an einen stabilen Ort:
+
+```bash
+qtmux --install-shell-integration            # Standardziel (s. Tabelle)
+qtmux --install-shell-integration /mein/ort  # eigenes Verzeichnis
+```
+
+Der Befehl schreibt alle Dateien, setzt unter Unix das Ausführbar-Bit und nennt anschließend
+den Pfad **samt fertiger Hook-Zeile zum Kopieren**. Er öffnet kein Fenster. Ein zweiter Aufruf
+ist gefahrlos: inhaltsgleiche Dateien werden nicht angefasst, veränderte auf die zur laufenden
+Version passende Fassung zurückgesetzt.
+
+| Plattform | Standardziel |
+|---|---|
+| macOS | `~/Library/Application Support/QTmux/shell-integration` |
+| Linux | `~/.local/share/QTmux/shell-integration` |
+| Windows | `%LOCALAPPDATA%\QTmux\shell-integration` |
+
+> **Warum nicht einfach im Installationsverzeichnis?** Weil das AppImage keines hat: Es wird
+> bei jedem Start unter einem anderen `/tmp/.mount_XXXXXX` gemountet — ein Hook-Eintrag, der
+> dorthin zeigt, überlebt keinen Neustart. Der Weg über das Programm gilt deshalb auf allen
+> drei Plattformen gleich.
+
+**Als Entwickler** liegen dieselben Dateien hier im Repo; sie sind zugleich die Quelle der
+eingebetteten Ressource, es gibt also keine zweite Fassung, die veralten könnte.
+
+Danach: die zur Shell passende Datei im Profil sourcen (`~/.bashrc`, `~/.zshrc`, `$PROFILE`),
+bzw. die `.cmd` in ein PATH-Verzeichnis legen.
 
 ## Zwei Wege, ein Ereignis zu melden
 

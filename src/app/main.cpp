@@ -25,8 +25,11 @@
 #  include <CoreFoundation/CoreFoundation.h>
 #endif
 
+#include <QTextStream>
+
 #include "AppController.h"
 #include "AgentEventHub.h"
+#include "ShellIntegration.h"
 #include "ColorScheme.h"
 #include "ConnectionProfile.h"
 #include "HotkeyRegistry.h"
@@ -65,6 +68,58 @@ void applyLanguage(QGuiApplication &app, QQmlApplicationEngine &engine,
     swapTranslator(app, active, QStringLiteral("qtmux"), lang);
     swapTranslator(app, activeQt, QStringLiteral("qtbase"), lang);
     engine.retranslate();
+}
+
+// `--install-shell-integration [ZIEL]` (QTMUX-38): schreibt die mitgelieferten Helfer an
+// einen stabilen Ort und nennt die Zeile, die in einen Stop-Hook gehört.
+//
+// 🔑 Läuft VOR der QGuiApplication und beendet den Prozess selbst — sonst blitzte auf macOS
+// kurz ein Dock-Icon auf und Qt würde eine GUI-Umgebung hochfahren, die hier niemand braucht.
+// Rückgabe: Exit-Code für main().
+int runInstallShellIntegration(int argc, char *argv[], const QString &target) {
+#if defined(Q_OS_WIN)
+    // 🔑 Der Grund, warum dieser Befehl unter Windows sonst „kaputt" wirkt: qtmux MUSS
+    // WIN32_EXECUTABLE sein (eine Konsolen-App vererbt ihre Konsole an die ConPTY-
+    // Kindshells → Terminal stumm). Eine GUI-App hat aber kein stdout — die Ausgabe ginge
+    // an niemanden. AttachConsole hängt uns an die Konsole des Aufrufers; nur wenn es die
+    // gar nicht gibt (Start aus dem Explorer), bleibt die Ausgabe zwangsläufig stumm, und
+    // dann hat der Aufrufer auch keine Argumente übergeben können.
+    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+        FILE *dummy = nullptr;
+        freopen_s(&dummy, "CONOUT$", "w", stdout);
+        freopen_s(&dummy, "CONOUT$", "w", stderr);
+        SetConsoleOutputCP(CP_UTF8);   // sonst Mojibake bei Umlauten
+    }
+#endif
+    QCoreApplication app(argc, argv);
+    QTextStream out(stdout);
+
+    const qtmux::ShellIntegrationResult r = qtmux::ShellIntegration::install(target);
+    if (!r.ok) {
+        QTextStream(stderr) << QStringLiteral("QTmux: %1\n").arg(r.error);
+        return 1;
+    }
+
+    out << QStringLiteral("Shell-Helfer installiert in:\n  %1\n\n").arg(
+        QDir::toNativeSeparators(r.targetDir));
+    if (!r.written.isEmpty())
+        out << QStringLiteral("  geschrieben:  %1\n").arg(r.written.join(QLatin1String(", ")));
+    if (!r.unchanged.isEmpty())
+        out << QStringLiteral("  unverändert:  %1\n").arg(r.unchanged.join(QLatin1String(", ")));
+
+    // Eine Zeile zum Kopieren statt einer Pfadsuche — das ist der eigentliche Zweck.
+    out << QStringLiteral(
+        "\nStop-Hook eines Agenten (z. B. in ~/.claude/settings.json), Feld \"command\":\n"
+        "  %1\n"
+        "\nShell-Integration (OSC 133) laden — Zeile in die Startdatei der Shell:\n"
+        "  bash:       source \"%2/qtmux.bash\"\n"
+        "  zsh:        source \"%2/qtmux.zsh\"\n"
+        "  PowerShell: . \"%2/qtmux.ps1\"\n"
+        "\nEinzelheiten: %2/README.md\n")
+               .arg(qtmux::ShellIntegration::hookCommandExample(r.targetDir),
+                    QDir::toNativeSeparators(r.targetDir));
+    out.flush();
+    return 0;
 }
 
 #if !defined(Q_OS_WIN)
@@ -124,6 +179,16 @@ int main(int argc, char *argv[])
     // So kann „Neues Fenster" (AppController::openNewInstance) eine unabhängige Instanz
     // mit eigenem Profil + freiem Port starten, ohne dass Umgebungsvererbung nötig wäre.
     // Bereits gesetzte Env-Vars haben Vorrang (explizit gestartete Testinstanz).
+    // `--install-shell-integration [ZIEL]` (QTMUX-38) wird VOR allem anderen behandelt und
+    // beendet den Prozess: kein QML, kein Fenster, keine QSettings-Domain. Eigene Schleife,
+    // weil das Zielverzeichnis OPTIONAL ist — die Paar-Schleife unten sieht nur `--x <wert>`.
+    for (int i = 1; i < argc; ++i) {
+        if (QByteArray(argv[i]) != "--install-shell-integration") continue;
+        const bool hasTarget = (i + 1 < argc) && argv[i + 1][0] != '-';
+        return runInstallShellIntegration(
+            argc, argv, hasTarget ? QString::fromLocal8Bit(argv[i + 1]) : QString());
+    }
+
     QString shotPath;          // --screenshot <png>: stiller Selbst-Screenshot (s. u.)
     int shotSettleMs = 700;    // --settle <ms>: Wartezeit, damit das Layout sich setzt
     for (int i = 1; i + 1 < argc; ++i) {

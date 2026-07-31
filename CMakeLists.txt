@@ -58,6 +58,8 @@ add_library(qtmux_core STATIC
     src/core/TerminalGrid.h
     src/core/TerminalGrid.cpp
     src/core/RestoreMode.h
+    src/core/ShellIntegration.h
+    src/core/ShellIntegration.cpp
     src/core/SleepInhibitor.h
     src/core/SleepInhibitor.cpp
     src/core/TerminalSearch.h
@@ -90,6 +92,31 @@ add_library(qtmux_core STATIC
 )
 target_include_directories(qtmux_core PUBLIC src/core src/plugins)
 target_link_libraries(qtmux_core PUBLIC Qt6::Core Qt6::SerialPort PRIVATE vterm::vterm)
+
+# Shell-Helfer als Ressource (QTMUX-38) -------------------------------------
+# Die Skripte lagen bisher NUR im Repo — wer QTmux aus DMG/MSI/ZIP/AppImage bezieht,
+# hatte sie nicht, obwohl genau er derjenige ist, der einen Stop-Hook einrichtet.
+# Mitpaketieren allein löst das nicht: Ein AppImage wird bei jedem Start unter einem
+# anderen `/tmp/.mount_XXXXXX` gemountet, ein dorthin zeigender Hook-Eintrag überlebt
+# also keinen Neustart. Deshalb stecken sie im Binary und werden per
+# `qtmux --install-shell-integration` an einen stabilen Ort geschrieben. Nebeneffekt:
+# die installierte Fassung passt zwangsläufig zur laufenden Version.
+qt_add_resources(qtmux_core "shell_integration"
+    PREFIX "/shell-integration"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/shell-integration"
+    FILES
+        shell-integration/qtmux.bash
+        shell-integration/qtmux.zsh
+        shell-integration/qtmux.ps1
+        shell-integration/qtmux-event.cmd
+        shell-integration/qtmux-emit.sh
+        shell-integration/qtmux-emit.ps1
+        shell-integration/qtmux-emit.cmd
+        shell-integration/qtmux-wait.sh
+        shell-integration/qtmux-wait.ps1
+        shell-integration/qtmux-wait.cmd
+        shell-integration/README.md
+)
 
 # Windows: ConPTY (kernel32, default) + TCP-Tabelle/Sockets für ProcessInfo.
 if(WIN32)

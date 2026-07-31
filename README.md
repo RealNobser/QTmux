@@ -96,9 +96,11 @@ curl -s -X POST $U -d '{"jsonrpc":"2.0","id":2,"method":"tools/call",
 `subscribe_events` und wartet per Long-Poll auf `wait_for_events`. Wichtig zu wissen:
 Es kommt nur an, was eine Sitzung **selbst meldet** — QTmux leitet nichts aus
 Bildschirminhalt oder Prozesszustand ab. Ein Claude-Code-Worker wird ereignisfähig, indem
-sein Stop-Hook [`shell-integration/qtmux-emit.sh`](shell-integration/qtmux-emit.sh)
-aufruft. `subscribe_events` sagt einem direkt, ob die beobachteten Quellen überhaupt schon
-je etwas gemeldet haben.
+sein Stop-Hook `qtmux-emit.sh` aufruft. Das Skript und seine Geschwister stecken **im
+Programm**: `qtmux --install-shell-integration` schreibt sie an einen stabilen Ort und nennt
+die fertige Hook-Zeile (Einzelheiten:
+[shell-integration/README.md](shell-integration/README.md)). `subscribe_events` sagt einem
+direkt, ob die beobachteten Quellen überhaupt schon je etwas gemeldet haben.
 
 **Zweite Instanz zum Testen:** `QTMUX_MCP_PORT` wählt den Port, `QTMUX_PROFILE` trennt die
 komplette Einstellungs-Domain — so probiert man etwas aus, ohne einer produktiv
@@ -282,8 +284,11 @@ curl -s -X POST $U -d '{"jsonrpc":"2.0","id":2,"method":"tools/call",
 `subscribe_events` and wait with the `wait_for_events` long poll. One thing to know: only
 what a session **reports itself** ever arrives — QTmux infers nothing from screen content
 or process state. A Claude Code worker becomes event-capable by pointing its Stop hook at
-[`shell-integration/qtmux-emit.sh`](shell-integration/qtmux-emit.sh). `subscribe_events`
-tells you upfront whether the sources you are watching have ever reported anything.
+`qtmux-emit.sh`. That script and its siblings ship **inside the binary**:
+`qtmux --install-shell-integration` writes them to a stable location and prints the ready-made
+hook line (details: [shell-integration/README.md](shell-integration/README.md)).
+`subscribe_events` tells you upfront whether the sources you are watching have ever reported
+anything.
 
 **A second instance for testing:** `QTMUX_MCP_PORT` picks the port and `QTMUX_PROFILE`
 separates the entire settings domain, so you can experiment without disturbing an instance

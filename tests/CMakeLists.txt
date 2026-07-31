@@ -41,6 +41,13 @@ if(_qtmux_qtbase_qm)
     add_test(NAME test_i18n COMMAND test_i18n)
 endif()
 
+# QTMUX-38: Shell-Helfer aus der Ressource an einen stabilen Ort schreiben. Der Test
+# prueft zugleich, dass die Ressource aus der STATISCHEN qtmux_core im Programm landet —
+# ein Linker darf Objektdateien verwerfen, auf die niemand verweist.
+qt_add_executable(test_shellintegration tst_shellintegration.cpp)
+target_link_libraries(test_shellintegration PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_shellintegration COMMAND test_shellintegration)
+
 qt_add_executable(test_profiles tst_profiles.cpp)
 target_link_libraries(test_profiles PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_profiles COMMAND test_profiles)

@@ -207,7 +207,7 @@ benachrichtigt und erhält **A's Session-ID**, um dort per `send_text`/`read_scr
 **Ereignis erzeugen** — zwei Wege, die sich NICHT ersetzen:
 - **Aus einem Agenten-Hook: `post_event` (HTTP)** — `post_event {kind, text, sessionId?}`
   (Quelle = `$QTMUX_SESSION_ID` bzw. der Prozess-Heuristik-Fallback), am bequemsten über
-  die mitgelieferten `shell-integration/qtmux-emit.{sh,ps1}`. **Nur dieser Weg trägt in
+  die mitgelieferten `qtmux-emit.{sh,ps1}` (Beschaffung: `--install-shell-integration`, s. u.). **Nur dieser Weg trägt in
   Hooks** (Begründung unten: der stdout eines Hooks erreicht das Terminal nicht).
 - **Aus der interaktiven Shell: OSC** — `qtmux-event done|question|error|info "Text"`
   (aus `shell-integration/qtmux.{bash,zsh,ps1}`). Für Tools, die in ihr eigenes TTY
@@ -268,7 +268,7 @@ Klasse stiller Fehlfunktion wie bei QTMUX-30.
 **Die Lösung ist ein Hintergrundprozess**, der stellvertretend wartet und **endet**, sobald
 etwas vorliegt: Das Ende eines Hintergrundbefehls ist die eine Stelle, an der die
 Agenten-Umgebung einen arbeitenden Agenten von außen weckt. Damit wird aus dem Abholen ein
-Zustellen. Dafür liegt **`shell-integration/qtmux-wait.sh`** bei (Windows:
+Zustellen. Dafür liegt **`qtmux-wait.sh`** bei (Windows:
 `qtmux-wait.ps1` / `qtmux-wait.cmd`) — das Gegenstück zu `qtmux-emit.*`:
 
 ```bash
@@ -297,6 +297,36 @@ vorhandenes unangetastet.
 > dieselben herausgefilterten Ereignisse); und ohne Gesamt-Deckel überlebt ein vergessener
 > Wächter die Sitzung.
 
+### Die Helfer-Skripte beschaffen (`--install-shell-integration`)
+
+Die Skripte stecken **im Programm** und werden auf Wunsch an einen stabilen Ort geschrieben:
+
+```bash
+qtmux --install-shell-integration            # Standardziel, s. u.
+qtmux --install-shell-integration /mein/ort  # eigenes Verzeichnis
+```
+
+Der Befehl nennt anschließend den Pfad **und die fertige Hook-Zeile zum Kopieren**. Er startet
+keine Oberfläche. Standardziel:
+
+| Plattform | Ziel |
+|---|---|
+| macOS | `~/Library/Application Support/QTmux/shell-integration` |
+| Linux | `~/.local/share/QTmux/shell-integration` |
+| Windows | `%LOCALAPPDATA%\QTmux\shell-integration` |
+
+> **Warum nicht einfach mitpaketieren?** Für DMG und MSI ginge das — für das **AppImage
+> nicht**: Es wird bei jedem Start unter einem anderen `/tmp/.mount_XXXXXX` gemountet, ein
+> dorthin zeigender Hook-Eintrag überlebt also keinen Neustart. Aus dem Programm heraus
+> geschrieben, liegen die Dateien überall an einem Ort, der bleibt — und passen zwangsläufig
+> zur laufenden Version.
+
+Unter Windows hängt sich der Befehl an die Konsole des Aufrufers (QTmux ist eine GUI-Anwendung
+und hat von sich aus kein stdout). Aus `cmd`/PowerShell gestartet erscheint die Ausgabe also
+normal; per Doppelklick aus dem Explorer gäbe es weder Ausgabe noch Argumente.
+
+Im Repo liegen dieselben Dateien unter `shell-integration/` — für Entwickler ändert sich nichts.
+
 ### Worker ereignisfähig machen (Stop-/Notification-Hook)
 
 **Wichtig:** Aus einem KI-Agenten-**Hook** muss `post_event` (HTTP) verwendet werden, **nicht**
@@ -304,7 +334,7 @@ die OSC-Variante `qtmux-event` — der **stdout eines Hooks wird vom Agenten gek
 erreicht das Terminal nicht, eine OSC-Sequenz käme also nicht bei QTmux an. Der HTTP-Aufruf
 geht out-of-band und funktioniert immer.
 
-Dafür liegen fertige Helfer bei: **`shell-integration/qtmux-emit.sh`** (macOS/Linux) und
+Dafür liegen fertige Helfer bei: **`qtmux-emit.sh`** (macOS/Linux) und
 **`qtmux-emit.ps1`** (Windows). Beide lesen `$QTMUX_SESSION_ID` (steckt in jeder
 QTmux-Shell und wird an den Agenten samt Hook-Subprozess vererbt) sowie `$QTMUX_MCP_PORT`.
 
@@ -312,9 +342,9 @@ QTmux-Shell und wird an den Agenten samt Hook-Subprozess vererbt) sowie `$QTMUX_
 // ~/.claude/settings.json  (Worker-Agent meldet „fertig" bei jedem Stop)
 "hooks": {
   "Stop": [ { "hooks": [ { "type": "command",
-    "command": "/Pfad/zu/QTmux/shell-integration/qtmux-emit.sh done \"Aufgabe erledigt\"" } ] } ],
+    "command": "~/Library/Application Support/QTmux/shell-integration/qtmux-emit.sh done \"Aufgabe erledigt\"" } ] } ],
   "Notification": [ { "hooks": [ { "type": "command",
-    "command": "/Pfad/zu/QTmux/shell-integration/qtmux-emit.sh question \"Rückfrage offen\"" } ] } ]
+    "command": "~/Library/Application Support/QTmux/shell-integration/qtmux-emit.sh question \"Rückfrage offen\"" } ] } ]
 }
 ```
 

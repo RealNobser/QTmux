@@ -67,8 +67,8 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
-| `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37) |
-| `tests/` | 20 ctest-Tests: 19 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n) + `test_doc_duplicates` (reines CMake-Skript) |
+| `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
+| `tests/` | 21 ctest-Tests: 20 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
 
@@ -383,16 +383,17 @@ dual angelegt. Danach zwei Nachzügler von der Windows-Seite:
 Qt **6.10.3** lokal installiert und im `windows`-Preset vor 6.11.1 gezogen (`e1eef80`), und
 das Fenster startet nicht mehr **neben** dem Bildschirm (`1bb0ba1`, Anwenderbefund „App startet
 nicht, nichts zu sehen" — Mechanik in der Feature-Referenz).
-**Teststände — alle drei Plattformen grün** (CI-Lauf `30640022530` gegen `6c3da0a`):
-macOS **20/20**, Linux **20/20**, Windows **19/19** (ohne `test_pty`); `test_i18n` lief überall
-mit. Lokal zusätzlich macOS Debug (`macos-test`) und Release je **20/20**.
+**Teststände:** macOS Debug (`macos-test`) und Release je **21/21** grün (neu:
+`test_shellintegration`). Der CI-Lauf `30640022530` belegte für den Stand davor alle drei
+Plattformen (macOS 20/20, Linux 20/20, Windows 19/19 ohne `test_pty`); für QTMUX-38 steht der
+CI-Lauf noch aus.
 `test_pty` fällt auf Windows/Linux umgebungsbedingt (nicht-interaktive Shell/ConPTY); auf Windows
 braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
-**Nächster Punkt:** **QTMUX-38** (Shell-Helfer in MSI/ZIP), dann die fehlende
-**Rastergröße** im Statusleisten-Feld und der Air-Backlog 90/94/96. **QTMUX-108 (OSC 7)** ist der Ausreißer nach oben mit dem besten
+**Nächster Punkt:** die fehlende **Rastergröße** im Statusleisten-Feld, dann der
+Air-Backlog 90/94/96. **QTMUX-108 (OSC 7)** ist der Ausreißer nach oben mit dem besten
 Verhältnis — der einzige Weg zum CWD bei PowerShell/`ssh`/Containern, und damit die Grundlage
 der Verzeichniszeile in der Kachel. Parallel offen bleibt der **Owner-Durchklick** der GUI
 (Rezepte in der Abnahme-Tabelle unten) — dort warten **23 fertige Tickets** auf Abnahme.
@@ -566,9 +567,7 @@ behobene, in der App nicht gegengeprüft, im Ticket notiert.
 **Offene Jira:**
 **QTMUX-40** (OSC-8-Hyperlinks — deferred; die Heuristik-Links aus QTMUX-39
 decken den Agenten-Fall ab, OSC-8 bräuchte Cursor-Span-Tracking + neues `Cell`-Feld, teuer da
-`VtScreen` den Sichtbereich lazy aus libvterm bildet) · **QTMUX-38** (Shell-Helfer für
-Installationsnutzer unerreichbar — nur im Repo, in keinem Paket; AppImage-Mount-Pfad wechselt,
-Windows ohne stdout) ·
+`VtScreen` den Sichtbereich lazy aus libvterm bildet) ·
 **QTMUX-13** (native macOS-Menü-Icons — Qt reicht `icon.source`/`icon.name` in nativen Menüs
 nicht durch; einziger Weg wäre ein QMenuBar-Umbau, deferred; [[qtmux-native-menu-icons]]).
 
@@ -1052,6 +1051,32 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   idempotent, sonst sammelt sich `--continue --continue …` über Neustarts an.
   Tests: `tst_agent` (Einfügen/Idempotenz/unbekannt), `tst_session`
   (`agentCommandLineIsRemembered`, `restoredAgentSetsIdentityAndRunsCommand`).
+- **Shell-Helfer stecken im Binary (QTMUX-38):** `src/core/ShellIntegration.{h,cpp}` (Gui-frei)
+  plus `qt_add_resources(qtmux_core "shell_integration" …)`; `qtmux --install-shell-integration
+  [ZIEL]` schreibt sie heraus, nennt den Pfad **und die fertige Hook-Zeile**. Standardziel
+  `<GenericDataLocation>/QTmux/shell-integration`.
+  🔑 **Warum nicht mitpaketieren** (der Grund, warum es jahrelang liegen blieb): Für DMG und MSI
+  ginge das — das **AppImage hat aber gar keinen stabilen Pfad**, es wird bei jedem Start unter
+  einem anderen `/tmp/.mount_XXXXXX` gemountet. Ein Hook-Eintrag in einer `settings.json` muss
+  Neustarts überleben; Mitpaketieren löst den Linux-Fall also grundsätzlich nicht. Aus dem
+  Programm geschrieben gilt **ein** Weg für alle drei Plattformen, und die Dateien passen
+  zwangsläufig zur laufenden Version (keine Drift gegenüber einzeln von GitHub Gezogenem).
+  🔑 **`GenericDataLocation`, NICHT `AppDataLocation`:** Letzteres trägt den `applicationName`,
+  und der bekommt bei `--profile`/`QTMUX_PROFILE` ein Suffix — das Ziel wanderte je Instanz,
+  obwohl ein Hook-Eintrag für alle Profile gilt. Test `defaultTargetIsProfileIndependent`.
+  🔑 **Windows: GUI-App ohne stdout.** `qtmux` MUSS `WIN32_EXECUTABLE` sein (ConPTY, s. o.), hat
+  damit aber keine Ausgabe. `runInstallShellIntegration` ruft deshalb
+  `AttachConsole(ATTACH_PARENT_PROCESS)` + `freopen_s("CONOUT$")` + `SetConsoleOutputCP(CP_UTF8)`
+  (ohne das Letzte Mojibake bei Umlauten). Aus `cmd`/PowerShell erscheint die Ausgabe normal;
+  per Doppelklick gäbe es weder Ausgabe noch Argumente.
+  🔑 Der Befehl läuft **vor** der `QGuiApplication` mit eigener `QCoreApplication` und beendet
+  den Prozess selbst — sonst blitzt auf macOS ein Dock-Icon auf und Qt fährt eine GUI-Umgebung
+  hoch, die niemand braucht. Eigene Argument-Schleife, weil das Ziel **optional** ist (die
+  bestehende Schleife sieht nur `--x <wert>`-Paare).
+  Tests: `tst_shellintegration` (8 Fälle) — darunter der Wächter, dass die Ressource aus der
+  **statischen** `qtmux_core` überhaupt im Programm landet (ein Linker darf Objektdateien
+  verwerfen, auf die niemand verweist), Ausführbar-Bit nur für `.sh`, Idempotenz, und dass eine
+  veränderte Datei wieder auf die mitgelieferte Fassung zurückgesetzt wird.
 - **AgentEventHub** (Gui-frei, Ringpuffer 256, monotone `seq`): Inter-Agenten-Ereignisse
   `done|question|error|info` via OSC `777;qtmux-event` oder MCP `post_event`; Zustellung
   über MCP-Long-Poll `wait_for_events`. **⚠️ Hook-stdout wird vom Agenten gekapselt** —
@@ -1487,6 +1512,13 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Argumente** hinaus. Symptom: `cwd` schien ignoriert, `send_text` tat nichts, `read_screen`
   antwortete „Parameter 'id' fehlt". Sah wie drei Fehler in der App aus, war einer im Skript.
   Dieselbe Klasse wie `$pid`/`$Profile` — Parameternamen in PowerShell-Harnessen präfixen.
+- ⚠️ **`wait_for_events` ohne `afterSeq` zeigt NUR künftige Ereignisse.** Der Long-Poll steigt
+  beim aktuellen Stand ein; ein soeben gesendetes Ereignis fehlt dann in der Antwort, und das
+  sieht exakt aus wie „der Ereignisweg ist kaputt". Verräter ist `nextSeq` — steht es über 0,
+  liegen Ereignisse vor. Für eine **Messung** darum `afterSeq: 0` übergeben. (Beim
+  QTMUX-38-Nachweis erst als Fehlschlag gelesen.) Zweite Falle daneben: `subscribe_events`
+  braucht die `sessionId` als **Argument**; ohne sie antwortet es „Keine Subscriber-Session",
+  auch wenn `attach_controller` vorher „ok" meldete.
 - MCP-E2E ist der Standard-Verifikationsweg gegen die echte GUI (create_session/send_text/
   read_screen, `scrollback:true` für Historie) — gegen eine **isolierte Testinstanz**
   (s. Build-Abschnitt macOS), nie gegen eine, in der jemand arbeitet. Ergebnisse möglichst
