@@ -60,8 +60,24 @@ QString gitDirFromFile(const QString &gitFilePath, const QDir &containingDir)
     return QFileInfo(resolved).isDir() ? resolved : QString();
 }
 
+/// Ist `d` selbst ein Git-Verzeichnis? Das ist der **bare**-Fall: ein Repository ohne
+/// Arbeitsbaum (üblich benannt `<name>.git`) legt `HEAD`, `objects/` und `refs/` direkt
+/// in sein Wurzelverzeichnis, es gibt kein `.git` darin.
+///
+/// Geprüft werden bewusst **alle drei** Marken — dieselbe Heuristik, die git selbst
+/// verwendet (`is_git_directory`). Allein die Datei `HEAD` genügt nicht: Ein Projekt mit
+/// einer beliebigen Datei dieses Namens (Dokumentation, Fixture, Datenformat) würde sonst
+/// als Repository durchgehen und der Kachel einen erfundenen Branch anhängen.
+bool looksLikeGitDir(const QDir &d)
+{
+    return QFileInfo(d.filePath(QStringLiteral("HEAD"))).isFile()
+        && QFileInfo(d.filePath(QStringLiteral("objects"))).isDir()
+        && QFileInfo(d.filePath(QStringLiteral("refs"))).isDir();
+}
+
 /// Sucht von `dir` aus nach oben das Git-Verzeichnis. Rückgabe ist der Pfad, in dem `HEAD`
-/// liegt — bei einem Worktree also `<repo>/.git/worktrees/<name>`, nicht `<repo>/.git`.
+/// liegt — bei einem Worktree also `<repo>/.git/worktrees/<name>`, nicht `<repo>/.git`,
+/// und bei einem bare-Repository das Verzeichnis selbst.
 QString findGitDir(const QString &dir)
 {
     if (dir.isEmpty())
@@ -78,6 +94,8 @@ QString findGitDir(const QString &dir)
             return candidate;
         if (fi.isFile())                       // Worktree/Submodul: Zeiger auf das echte gitdir
             return gitDirFromFile(candidate, d);
+        if (looksLikeGitDir(d))                // bare-Repository (kein `.git` darin)
+            return d.absolutePath();
         if (!d.cdUp())                         // Wurzel erreicht
             break;
     }
