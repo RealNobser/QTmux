@@ -2,30 +2,93 @@
 
 namespace qtmux {
 
+bool AgentInfo::matches(const QString &base) const {
+    if (base.compare(command, Qt::CaseInsensitive) == 0) return true;
+    for (const QString &a : aliases)
+        if (base.compare(a, Qt::CaseInsensitive) == 0) return true;
+    return false;
+}
+
 const QList<AgentInfo> &AgentRegistry::all() {
     // Vorlagen nur eintragen, wenn sie am echten CLI gegengeprüft wurden — ein
     // geratenes Flag lässt den Start scheitern und sieht wie ein QTmux-Fehler aus.
-    // Verifiziert (2026-07-28/29, `<agent> --help`): claude, agy, opencode, hermes.
-    // Einen dokumentierten interaktiven Picker hat bislang nur Claude Code.
+    // Verifiziert an `<agent> --help`: claude, agy, opencode, hermes (2026-07-28/29),
+    // codex (2026-07-31, alle drei Wege). Alle übrigen bleiben bewusst leer und
+    // starten damit frisch. Einen Picker per Kommandozeile haben nur claude und codex.
+    //
+    // Designierte Initialisierer (C++20): Ein neues Feld verschiebt damit keine Werte
+    // mehr still nach hinten — vorher hätte ein Feld in der Mitte alle 9 Einträge
+    // lautlos verdreht.
     static const QList<AgentInfo> kAgents = {
-        {QStringLiteral("claude"),      QStringLiteral("claude"), QStringLiteral("Claude Code"),
-         QStringLiteral("--continue"), QStringLiteral("--resume"), QStringLiteral("--resume {id}")},
-        {QStringLiteral("codex"),       QStringLiteral("codex"),  QStringLiteral("Codex"),
-         {}, {}, {}},
-        {QStringLiteral("gemini"),      QStringLiteral("gemini"), QStringLiteral("Gemini"),
-         {}, {}, {}},
-        {QStringLiteral("antigravity"), QStringLiteral("agy"),    QStringLiteral("AntiGravity"),
-         QStringLiteral("--continue"), {}, QStringLiteral("--conversation {id}")},
-        {QStringLiteral("aider"),       QStringLiteral("aider"),  QStringLiteral("Aider"),
-         {}, {}, {}},
-        {QStringLiteral("cursor"),      QStringLiteral("cursor"), QStringLiteral("Cursor"),
-         {}, {}, {}},
-        {QStringLiteral("qwen"),        QStringLiteral("qwen"),   QStringLiteral("Qwen Coder"),
-         {}, {}, {}},
-        {QStringLiteral("opencode"),    QStringLiteral("opencode"), QStringLiteral("OpenCode"),
-         QStringLiteral("--continue"), {}, QStringLiteral("--session {id}")},
-        {QStringLiteral("hermes"),      QStringLiteral("hermes"), QStringLiteral("Hermes"),
-         QStringLiteral("--continue"), {}, QStringLiteral("--resume {id}")},
+        {.id = QStringLiteral("claude"), .command = QStringLiteral("claude"),
+         .displayName = QStringLiteral("Claude Code"),
+         .resumeLastArgs = QStringLiteral("--continue"),
+         .resumePickArgs = QStringLiteral("--resume"),
+         .resumeIdArgs   = QStringLiteral("--resume {id}")},
+
+        // Codex fortsetzt über ein UNTERKOMMANDO, nicht über ein Flag: `codex resume`
+        // zeigt den Picker, `--last` nimmt die jüngste, ein positionales SESSION_ID die
+        // gemeldete. `codex resume` nimmt dieselben Optionen wie der Direktstart an
+        // (-m/--model, -p/--profile, -s/--sandbox … am `--help` geprüft), eine bereits
+        // getippte Optionsliste bleibt also gültig.
+        {.id = QStringLiteral("codex"), .command = QStringLiteral("codex"),
+         .displayName = QStringLiteral("Codex"),
+         .resumeLastArgs = QStringLiteral("resume --last"),
+         .resumePickArgs = QStringLiteral("resume"),
+         .resumeIdArgs   = QStringLiteral("resume {id}")},
+
+        {.id = QStringLiteral("gemini"), .command = QStringLiteral("gemini"),
+         .displayName = QStringLiteral("Gemini")},
+
+        {.id = QStringLiteral("antigravity"), .command = QStringLiteral("agy"),
+         .displayName = QStringLiteral("AntiGravity"),
+         .resumeLastArgs = QStringLiteral("--continue"),
+         .resumeIdArgs   = QStringLiteral("--conversation {id}")},
+
+        {.id = QStringLiteral("aider"), .command = QStringLiteral("aider"),
+         .displayName = QStringLiteral("Aider")},
+
+        // ⚠️ NICHT `cursor` (QTMUX-88): das ist der Editor-Starter, wie `code` bei VS Code.
+        // Der Agent hieß bei Einführung `cursor-agent`; die Dokumentation installiert
+        // inzwischen `agent` (cursor.com/docs/cli/installation, geprüft 2026-07-31) —
+        // deshalb beide Namen. `agent` ist zugegeben generisch: nennt jemand ein eigenes
+        // Skript so, bekommt dessen Session das Cursor-Etikett. Folgen sind begrenzt
+        // (Titel/Icon; die Fortsetzungs-Vorlagen sind leer, es wird also kein Flag
+        // untergeschoben) — und ein Streichen kostet ein Wort.
+        {.id = QStringLiteral("cursor"), .command = QStringLiteral("cursor-agent"),
+         .displayName = QStringLiteral("Cursor"),
+         .aliases = {QStringLiteral("agent")}},
+
+        {.id = QStringLiteral("qwen"), .command = QStringLiteral("qwen"),
+         .displayName = QStringLiteral("Qwen Coder")},
+
+        {.id = QStringLiteral("opencode"), .command = QStringLiteral("opencode"),
+         .displayName = QStringLiteral("OpenCode"),
+         .resumeLastArgs = QStringLiteral("--continue"),
+         .resumeIdArgs   = QStringLiteral("--session {id}")},
+
+        {.id = QStringLiteral("hermes"), .command = QStringLiteral("hermes"),
+         .displayName = QStringLiteral("Hermes"),
+         .resumeLastArgs = QStringLiteral("--continue"),
+         .resumeIdArgs   = QStringLiteral("--resume {id}")},
+
+        // --- 2026-07-31 ergänzt (QTMUX-88) -------------------------------------
+        // Kommandonamen an der jeweiligen Primärquelle geprüft, Fortsetzungs-Vorlagen
+        // NICHT (die CLIs sind hier nicht installiert) → bewusst leer.
+        {.id = QStringLiteral("copilot"), .command = QStringLiteral("copilot"),
+         .displayName = QStringLiteral("Copilot CLI")},
+
+        {.id = QStringLiteral("crush"), .command = QStringLiteral("crush"),
+         .displayName = QStringLiteral("Crush")},
+
+        {.id = QStringLiteral("goose"), .command = QStringLiteral("goose"),
+         .displayName = QStringLiteral("Goose")},
+
+        // Amp fortsetzt laut Handbuch über `amp threads continue` — als Unterkommando
+        // grundsätzlich eintragbar, aber nicht am echten CLI gegengeprüft. Bleibt leer,
+        // bis jemand es laufen hat (dasselbe Muster wie codex).
+        {.id = QStringLiteral("amp"), .command = QStringLiteral("amp"),
+         .displayName = QStringLiteral("Amp")},
     };
     return kAgents;
 }
@@ -56,7 +119,7 @@ const AgentInfo *AgentRegistry::detect(const QString &commandLine, int *tokenInd
         }
 
         for (const AgentInfo &a : all()) {
-            if (base.compare(a.command, Qt::CaseInsensitive) == 0) {
+            if (a.matches(base)) {
                 if (tokenIndex) *tokenIndex = i;
                 return &a;
             }
@@ -106,6 +169,15 @@ QString AgentRegistry::resumeCommand(const QString &commandLine, ResumeMode mode
     // Idempotenz: steht das Argument schon da, nicht noch einmal einfügen — sonst
     // sammelt sich über mehrere Neustarts `--continue --continue …` an.
     if (tokens.contains(add.first())) return commandLine;
+
+    // Ist die Vorlage ein UNTERKOMMANDO (erstes Zeichen kein '-', z. B. codex' `resume
+    // --last`), darf die Zeile nicht schon ein eigenes Unterkommando tragen: aus
+    // `codex exec "…"` würde sonst `codex resume --last exec "…"` — eine kaputte Zeile.
+    // Bei Flag-Vorlagen (`--continue`) ist das Einfügen dagegen immer gültig, deshalb
+    // hängt die Prüfung an der Form der Vorlage, nicht am Agenten.
+    if (!add.first().startsWith(QLatin1Char('-')) && idx + 1 < tokens.size()
+        && !tokens.at(idx + 1).startsWith(QLatin1Char('-')))
+        return commandLine;
 
     for (int k = 0; k < add.size(); ++k) tokens.insert(idx + 1 + k, add.at(k));
     return tokens.join(QChar(' '));
