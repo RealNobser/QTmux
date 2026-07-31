@@ -89,6 +89,50 @@ const QList<AgentInfo> &AgentRegistry::all() {
         // bis jemand es laufen hat (dasselbe Muster wie codex).
         {.id = QStringLiteral("amp"), .command = QStringLiteral("amp"),
          .displayName = QStringLiteral("Amp")},
+
+        // --- 2026-07-31, zweite Hälfte (QTMUX-88) ------------------------------
+        // Jeder Kommandoname am **bin-Feld der npm-Registry** bzw. an der Hersteller-
+        // dokumentation belegt — NICHT am Paket- oder Homebrew-Formelnamen. Genau da
+        // lag der Fehler der Vorrecherche: `brew install gemini-cli` legt kein Kommando
+        // `gemini-cli` an, die Formel macht `bin.install_symlink libexec.glob("bin/*")`
+        // und verlinkt damit exakt das npm-`bin` (`gemini`). Fortsetzungs-Vorlagen
+        // bleiben durchweg leer — keines dieser CLIs ist hier installiert, und ein
+        // ungeprüftes Flag sieht für den Anwender wie ein QTmux-Fehler aus.
+        {.id = QStringLiteral("junie"), .command = QStringLiteral("junie"),
+         .displayName = QStringLiteral("Junie")},                 // @jetbrains/junie-cli
+
+        {.id = QStringLiteral("grok"), .command = QStringLiteral("grok"),
+         .displayName = QStringLiteral("Grok Build")},            // @xai-official/grok
+
+        {.id = QStringLiteral("droid"), .command = QStringLiteral("droid"),
+         .displayName = QStringLiteral("Droid")},                 // docs.factory.ai/cli
+
+        // Kilo liefert als einziger tatsächlich ZWEI Kommandonamen aus
+        // (npm @kilocode/cli, bin: {"kilo", "kilocode"}) — der einzige belegte Alias
+        // dieser Runde, und einer, den die Vorrecherche nicht kannte.
+        {.id = QStringLiteral("kilo"), .command = QStringLiteral("kilo"),
+         .displayName = QStringLiteral("Kilo CLI"),
+         .aliases = {QStringLiteral("kilocode")}},
+
+        // ⚠️ `kiro-cli`, NICHT `kiro` (kiro.dev/docs/cli/installation) — derselbe
+        // Fall wie cursor/cursor-agent: Kiro ist die IDE, kiro-cli der Agent.
+        {.id = QStringLiteral("kiro"), .command = QStringLiteral("kiro-cli"),
+         .displayName = QStringLiteral("Kiro")},
+
+        // ⚠️ `auggie`, NICHT `augment` (npm @augmentcode/auggie, bin: {"auggie"}).
+        {.id = QStringLiteral("augment"), .command = QStringLiteral("auggie"),
+         .displayName = QStringLiteral("Auggie")},
+
+        {.id = QStringLiteral("openclaw"), .command = QStringLiteral("openclaw"),
+         .displayName = QStringLiteral("OpenClaw")},              // npm openclaw
+
+        // ⚠️ `kimi`, NICHT `kimi-code-cli` (github.com/MoonshotAI/kimi-cli) — das
+        // Produkt heißt „Kimi Code CLI", das Kommando ist kurz.
+        {.id = QStringLiteral("kimi"), .command = QStringLiteral("kimi"),
+         .displayName = QStringLiteral("Kimi Code")},
+
+        {.id = QStringLiteral("iflow"), .command = QStringLiteral("iflow"),
+         .displayName = QStringLiteral("iFlow CLI")},             // @iflow-ai/iflow-cli
     };
     return kAgents;
 }

@@ -12,6 +12,8 @@ private slots:
     void ignoresUnknown();
     void detectsHermes();
     void detectsCursorAgentNotTheEditor();
+    void detectsSecondWaveAgents();
+    void packageNamesAreNotCommandNames();
     void aliasesResolveToTheSameAgent();
     void registryNamesAreUniqueAndDetectable();
     void codexResumesViaSubcommand();
@@ -70,6 +72,56 @@ void TestAgent::detectsCursorAgentNotTheEditor() {
     // ... und `cursor` darf auch nicht als Alias zurueckkommen.
     for (const AgentInfo &e : AgentRegistry::all())
         QVERIFY2(!e.matches(QStringLiteral("cursor")), qPrintable(e.id));
+}
+
+// QTMUX-88, zweite Hälfte: die neun Nachzügler. Jeder Kommandoname ist am bin-Feld
+// der npm-Registry bzw. an der Herstellerdoku belegt (2026-07-31).
+void TestAgent::detectsSecondWaveAgents() {
+    const struct { const char *cmd; const char *id; } kCases[] = {
+        {"junie", "junie"},         {"grok", "grok"},
+        {"droid", "droid"},         {"kilo", "kilo"},
+        {"kilocode", "kilo"},       // zweites bin von @kilocode/cli
+        {"kiro-cli", "kiro"},       // NICHT `kiro` — das ist die IDE
+        {"auggie", "augment"},      // NICHT `augment`
+        {"openclaw", "openclaw"},   {"kimi", "kimi"},   // NICHT `kimi-code-cli`
+        {"iflow", "iflow"},
+    };
+    for (const auto &c : kCases) {
+        const AgentInfo *a = AgentRegistry::detect(QString::fromLatin1(c.cmd));
+        QVERIFY2(a != nullptr, c.cmd);
+        QCOMPARE(a->id, QString::fromLatin1(c.id));
+        // Keine Fortsetzungs-Vorlage geraten: keines dieser CLIs ist hier installiert.
+        QVERIFY2(a->resumeLastArgs.isEmpty() && a->resumePickArgs.isEmpty()
+                     && a->resumeIdArgs.isEmpty(), c.cmd);
+    }
+    // Pfad- und Windows-Suffix-Variante für einen der neuen Einträge.
+    QVERIFY(AgentRegistry::detect("C:\\Program\\droid.cmd --auto") != nullptr);
+    QVERIFY(AgentRegistry::detect("env FOO=1 /opt/kiro/bin/kiro-cli") != nullptr);
+}
+
+// 🔑 Der teuerste Fehler dieser Runde, als Wächter festgeschrieben: PAKETNAMEN sind
+// keine Kommandonamen. `brew install gemini-cli` bzw. `npm i -g @qwen-code/qwen-code`
+// legen die Kommandos `gemini`/`qwen` an — die Formel verlinkt exakt das npm-`bin`.
+// Genau diese drei Aliase forderte die Ticket-Recherche; sie dürfen NICHT greifen,
+// sonst erkennt QTmux einen Namen, den es auf keiner Maschine gibt. Dazu die
+// bewussten Ausschlüsse aus der Arbeitsanweisung.
+void TestAgent::packageNamesAreNotCommandNames() {
+    for (const char *name : {"gemini-cli", "qwen-code", "iflow-cli",
+                             // Produkt- statt Kommandoname:
+                             "augment", "kiro", "kimi-code-cli", "kimi-cli",
+                             // bewusst NICHT aufgenommen (Begruendung im Ticket):
+                             "air",      // cosmtrek/air, Go-Live-Reload
+                             "warp", "cline", "continue"}) {
+        QVERIFY2(AgentRegistry::detect(QString::fromLatin1(name)) == nullptr, name);
+        for (const AgentInfo &e : AgentRegistry::all())
+            QVERIFY2(!e.matches(QString::fromLatin1(name)), name);
+    }
+    // `gh copilot` ist ein Subkommando: der erste Token ist `gh`, und `gh` darf nie
+    // als Agent gelten (sonst waere jedes gh-Kommando eine Agenten-Session). Das
+    // eigenstaendige `copilot` dagegen schon.
+    QCOMPARE(AgentRegistry::detect("gh status"), nullptr);
+    QCOMPARE(AgentRegistry::detect("gh copilot"), nullptr);
+    QVERIFY(AgentRegistry::detect("copilot") != nullptr);
 }
 
 // Aliase sind gleichwertig — auch mit Pfad und Windows-Suffix (QTMUX-88).

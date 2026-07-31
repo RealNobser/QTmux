@@ -356,10 +356,11 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-31** · **⚠️ NICHT auf `main`**: Der Mac steht auf Branch
-**`ci/node24-windows-tests`** = `fa09bfb`, **3 Commits voraus und ungepusht**
-(`db52b41` CI-Node-24, `108e52f` Chevron/QTMUX-118, `fa09bfb` Merge von `origin/main`).
-`origin/main` = `af32cea`. Version **1.7.1**. Jira dual synchron bis **QTMUX-119**.
+Stand **2026-07-31** · Der Mac steht wieder auf **`main`**, alles gepusht; der Branch
+`ci/node24-windows-tests` ist **abgeschlossen und gelöscht** (lokal + remote). Seine
+CI-Umstellung war am Branch belegt — Lauf `30617051869` gegen `db52b41` grün auf allen drei
+Plattformen, inklusive der jetzt **blockierenden** Windows-Tests (nur `test_pty` per `-E`
+ausgenommen). Version **1.7.1**. Jira dual synchron bis **QTMUX-119**.
 🔑 **Im Arbeitsbaum liegt zusätzlich eine FREMDE, uncommittete Änderung** an
 `.github/workflows/ci.yml` (Windows-Session: `setup-msvc-dev` auf Commit-SHA statt Tag
 gepinnt) — beim Committen **nicht** mitnehmen, gezielt stagen.
@@ -377,25 +378,31 @@ braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
-**Nächster Punkt: die 3 Commits nach `main` bringen** (Chevron gehört thematisch nicht auf
-den CI-Branch — entweder cherry-picken oder den CI-Branch abschließen), dann **QTMUX-88
-fertigstellen** (Delta unten), danach **QTMUX-38** (Shell-Helfer in MSI/ZIP), CI-Action-Versionen
-(Node-20-Abkündigung ab September 2026), Air-Backlog 90/94/96. Parallel offen bleibt der
-**Owner-Durchklick** der GUI (Rezepte in der Abnahme-Tabelle unten).
+**Nächster Punkt:** **QTMUX-38** (Shell-Helfer in MSI/ZIP), dann **QTMUX-117**
+(`qtbase_<lang>`-Translator — „OK"/„Cancel" bleiben sonst englisch; die Arbeit steckt im
+Mitliefern der `.qm` in alle drei Pakete), die fehlende **Rastergröße** im Statusleisten-Feld
+und der Air-Backlog 90/94/96. **QTMUX-108 (OSC 7)** ist der Ausreißer nach oben mit dem besten
+Verhältnis — der einzige Weg zum CWD bei PowerShell/`ssh`/Containern, und damit die Grundlage
+der Verzeichniszeile in der Kachel. Parallel offen bleibt der **Owner-Durchklick** der GUI
+(Rezepte in der Abnahme-Tabelle unten) — dort warten **23 fertige Tickets** auf Abnahme.
+🔑 Die Node-20-Abkündigung ist **erledigt** (`db52b41` + die fremde SHA-Pinnung); offen ist
+dort nur noch `jurplel/install-qt-action@v4`.
 
-⚠️ **QTMUX-88 ist NICHT fertig — Abgleich Mac↔Ticket am 2026-07-31 nachgeholt.** Das Ticket war
-kurzzeitig auf Done gesetzt, ist aber wieder „In Progress": Erledigt sind der Bestandsfehler
-(`cursor` → `cursor-agent`), der **Alias-Mechanismus** und fünf Einträge (hermes, copilot,
-crush, goose, amp). **Offen: neun geforderte Agenten** — junie, grok, droid, kilo, kiro,
-augment, openclaw, kimi-code-cli, iflow — **plus die konkreten Aliase** gemini/`gemini-cli`,
-qwen/`qwen-code`, iflow/`iflow-cli` (der Mechanismus trägt, nur die Werte fehlen).
-Die Arbeitsanweisung mit Herstellern und Begründungen steht **im Ticket** und ist vom
-Windows-Rechner nicht lesbar (`CLAUDE.local.md` nur auf dem Mac) — dort steht auch, warum
-`air`/`q`/`warp` **nicht** hineingehören (eingehalten).
-🔑 Zusätzlich in der Registry, aber **nicht** aus der Recherche: Alias **`agent`** für
-`cursor-agent` (Quelle cursor.com/docs, 2026-07-31). Generisch — nennt jemand ein eigenes
-Skript so, trägt dessen Session das Cursor-Etikett; Folgen auf Titel/Icon begrenzt, weil die
-Fortsetzungs-Vorlagen leer sind. Owner-Entscheidung beim Durchklick.
+🔑 **QTMUX-88 ist abgeschlossen (2026-07-31), aber die Recherche im Ticket ist an drei
+Stellen falsch — die Korrektur ist die dauerhafte Lektion:** **Ein Paketname ist kein
+Kommandoname.** `brew install gemini-cli` legt kein Kommando `gemini-cli` an; die Formel macht
+`bin.install_symlink libexec.glob("bin/*")` und verlinkt damit exakt das npm-`bin` (`gemini`).
+Genauso sind `qwen-code` und `iflow-cli` reine Paketnamen — die drei vom Ticket geforderten
+Aliase wurden deshalb **nicht** eingetragen. Ebenso widerlegt: `augment` → **`auggie`**,
+`kiro` → **`kiro-cli`** (Kiro ist die IDE, derselbe Fall wie cursor/cursor-agent),
+`kimi-code-cli` → **`kimi`**. Neu gefunden und belegt: `kilocode` als zweites `bin` von
+`@kilocode/cli` — der einzige echte Alias dieser Runde. **Prüfweg für künftige Einträge:**
+`curl -s https://registry.npmjs.org/<paket>/latest | python3 -c "…d['bin']"` schlägt jede
+Doku-Seite, weil er das tatsächlich installierte Kommando nennt.
+🔑 In der Registry, aber **nicht** aus der Recherche: Alias **`agent`** für `cursor-agent`
+(cursor.com/docs). Generisch — nennt jemand ein eigenes Skript so, trägt dessen Session das
+Cursor-Etikett; Folgen auf Titel/Icon begrenzt, weil die Fortsetzungs-Vorlagen leer sind.
+Owner-Entscheidung beim Durchklick.
 
 ### Design 1a/2a (GUI-Umbau) — abgeschlossen
 
@@ -466,8 +473,8 @@ die Zeile identisch war.
 Beide Systeme synchron bis **QTMUX-119**.
 **Am 2026-07-31 dazugekommen:** **97** (Emoji-Artefakte, Done — der Fix trug vorher irrtümlich
 die Nummer 88, die aber der AgentRegistry gehört), **98** (Fortsetzungs-Modi, In Progress),
-**118** (Chevron klappt wieder aus, In Progress) und **119** (Fenster neben dem Bildschirm — Fix `1bb0ba1` stand ohne Nummer in der Abnahme-Tabelle, nachgetragen); **85** bleibt In Progress, **88** wurde nach
-dem Abgleich von Done auf In Progress **zurückgesetzt** (Delta oben im Wiedereinstieg). Design 1a/2a je Stufe angelegt (Stufen 1–6 =
+**118** (Chevron klappt wieder aus, In Progress) und **119** (Fenster neben dem Bildschirm — Fix `1bb0ba1` stand ohne Nummer in der Abnahme-Tabelle, nachgetragen); **85** bleibt In Progress, **88** ist nach
+der zweiten Hälfte **Done** (Lektion oben im Wiedereinstieg). Design 1a/2a je Stufe angelegt (Stufen 1–6 =
 QTMUX-109…114, Stufe 7 = **115**), dazu **116** (Umbenennen-Indikator, In Progress) und **117**
 (Qt-Standardknöpfe „OK"/„Cancel" unübersetzt — kein `qtbase_<lang>`-Translator, Backlog);
 QTMUX-2 ist Done. Verzeichniszeile (106), OSC 7 (108) und der `--screenshot`-Windows-Fix (107)
@@ -475,15 +482,12 @@ waren bereits von der Windows-Session angelegt. Confluence-Entwicklerdoku-Seite 
 Design 1a/2a" dual angelegt (on-prem **212598811**, Cloud **233177089**).
 🔑 Vor jedem neuen Ticket in **beiden** Systemen die höchste Nummer holen (`ORDER BY key DESC`) —
 die Windows-Session legt ebenfalls an (die alte „bis 103"-Notiz war prompt veraltet).
-**Noch nachzutragen (nur vom Mac):** ein Ticket für **Fenster startet neben dem Bildschirm**
-(`1bb0ba1`, umgesetzt + selbst verifiziert) und eines für **Qt 6.10.3 lokal + Preset-Reihenfolge**
-(`e1eef80`, erledigt, nur Buchführung); dazu **QTMUX-88 auf Done** schieben (umgesetzt + hier
-verifiziert, Mechanik in der Feature-Referenz) — und beim Durchgehen des Tickets die dort
-recherchierte **Agentenliste** gegen die jetzt eingetragene abgleichen (ergänzt wurden
-`copilot`/`crush`/`goose`/`amp`; deren Kommandonamen sind an der Primärquelle geprüft, die
-Auswahl aber ohne Kenntnis der Ticket-Recherche getroffen). Der Ticket-Punkt „für welche Agenten
+**Noch nachzutragen (nur vom Mac):** ein Ticket für **Qt 6.10.3 lokal + Preset-Reihenfolge**
+(`e1eef80`, erledigt, nur Buchführung). Der Ticket-Punkt „für welche Agenten
 die Fortsetzungs-Vorlagen fehlen" ist teilweise erledigt: **codex ist jetzt verifiziert** (alle
-drei Modi), offen bleiben gemini/aider/cursor/qwen/copilot/crush/goose/amp (s. a. QTMUX-91).
+drei Modi), offen bleiben gemini/aider/cursor/qwen und alle 13 Einträge der beiden
+Nachtrags-Runden (s. a. QTMUX-91) — sie sind hier nicht installiert, und ein ungeprüftes Flag
+sieht für den Anwender wie ein QTmux-Fehler aus.
 Sonst offen: der **Owner-Durchklick** (nächster Abschnitt).
 
 ### Owner-Abnahmen offen (seit v1.7.1, je umgesetzt + selbst verifiziert)
@@ -964,12 +968,30 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   darf eine Unterkommando-Vorlage nicht davor rutschen (aus `codex exec "…"` würde sonst
   `codex resume --last exec "…"`). Die Prüfung hängt an der **Form der Vorlage** (erstes Zeichen
   kein `-`), nicht am Agenten — gilt also für jeden künftigen Eintrag dieser Art.
-  Jetzt 13 Einträge; neu `copilot`/`crush`/`goose`/`amp` (Kommandoname an der Primärquelle geprüft,
-  Vorlagen leer, weil die CLIs hier nicht installiert sind).
-  Tests: `tst_agent` 15 Fälle (u. a. `registryNamesAreUniqueAndDetectable` — kein Name doppelt,
-  jeder eingetragene Name auch erkennbar, `{id}`-Platzhalter vorhanden). Gegentest mit dem alten
-  `cursor`-Eintrag und ohne den Unterkommando-Wächter: **3 Fälle FAIL**. Dazu E2E über MCP gegen
-  eine isolierte Instanz (6 Fälle, u. a. `cursor .` → **nicht** erkannt, `agent`/`goose` → erkannt).
+  Jetzt **22 Einträge** (Vorlagen bei allen Nachträgen leer, weil die CLIs hier nicht installiert
+  sind — ein ungeprüftes Flag sieht wie ein QTmux-Fehler aus).
+  🔑 **Ein Paketname ist kein Kommandoname — die teuerste Lektion der zweiten Runde.** Die
+  Ticket-Recherche forderte die Aliase `gemini-cli`, `qwen-code`, `iflow-cli`; alle drei sind
+  **npm-Paket- bzw. Homebrew-Formelnamen** und existieren als Kommando nirgends. Beweis in einer
+  Zeile: die Formel macht `bin.install_symlink libexec.glob("bin/*")`, verlinkt also exakt das
+  npm-`bin` — und das ist `{"gemini"}` bzw. `{"qwen"}`. Aus derselben Verwechslung stammen drei
+  falsche **Kommandonamen** im Ticket: `augment` → **`auggie`**, `kiro` → **`kiro-cli`** (Kiro ist
+  die IDE — derselbe Fall wie cursor/cursor-agent), `kimi-code-cli` → **`kimi`**. Umgekehrt fand
+  die Registry-Abfrage einen Alias, den die Recherche nicht kannte: **`kilocode`** ist ein zweites
+  `bin` von `@kilocode/cli`. **Prüfweg für jeden künftigen Eintrag:**
+  `curl -s https://registry.npmjs.org/<paket>/latest | python3 -c "…d['bin']"` — er nennt das
+  tatsächlich installierte Kommando und schlägt damit jede Doku-Seite.
+  Tests: `tst_agent` 19 Fälle (u. a. `registryNamesAreUniqueAndDetectable` — kein Name doppelt,
+  jeder eingetragene Name auch erkennbar, `{id}`-Platzhalter vorhanden; dazu
+  `packageNamesAreNotCommandNames`, das die drei Paketnamen und die bewussten Ausschlüsse
+  `air`/`warp`/`cline` als **nicht** erkennbar festschreibt). Gegentest mit dem alten
+  `cursor`-Eintrag und ohne den Unterkommando-Wächter: **3 Fälle FAIL**; Gegentest mit dem
+  Ticket-Alias `gemini-cli` und `kiro` statt `kiro-cli`: **2 Fälle FAIL**. Dazu E2E über MCP gegen
+  eine isolierte Instanz (6 Fälle, u. a. `cursor .` → **nicht** erkannt, `agent`/`goose` → erkannt),
+  und in der zweiten Runde vier weitere per **Stub-Agent** unter absolutem Pfad: `droid` →
+  „Droid", `kiro-cli` → „Kiro", dagegen `kiro` und `augment` → agentId **leer**, Titel bleibt
+  „Zsh" (die Positivkontrolle zur Namenskorrektur — ohne sie hätte man den Fehler auch dadurch
+  „behoben", dass gar nichts mehr erkannt wird).
 - **Agenten überleben den Neustart (QTMUX-85):** Ein Agent läuft **nicht** als `program` —
   er wird in eine Shell **getippt** und in `Session::observeInput` über
   `AgentRegistry::detect` erkannt. Deshalb speichert die Session die erkannte Zeile in
