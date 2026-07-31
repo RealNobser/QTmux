@@ -66,6 +66,8 @@ add_library(qtmux_core STATIC
     src/core/SleepInhibitor.cpp
     src/core/TerminalSearch.h
     src/core/TerminalSearch.cpp
+    src/core/ProjectCommands.h
+    src/core/ProjectCommands.cpp
     src/core/ColorScheme.h
     src/core/ColorScheme.cpp
     src/core/ConnectionProfile.h
