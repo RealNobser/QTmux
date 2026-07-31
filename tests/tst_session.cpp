@@ -29,6 +29,7 @@ private slots:
     void writeWithEnterKeepsOrderOnRapidCalls();
     void agentCommandLineIsRemembered();
     void restoredAgentSetsIdentityAndRunsCommand();
+    void gridSizeIsPublishedAndSignalled();
 };
 
 static QString rowText(const VtScreen &vt, int row) {
@@ -418,6 +419,34 @@ void TestSession::activityIsOnlyTrustedOnceReported() {
     s.requestActivity(QStringLiteral("busy"));
     QVERIFY(s.activityReported());
     QCOMPARE(s.activityInt(), int(Session::Activity::Running));
+}
+
+// QTMUX-120: Die Statusleiste zeigt „80×24". Der Wert MUSS von der Session kommen und
+// nicht vom TerminalItem — dorthin gelangt er erst nach der 60-ms-Entprellung aus
+// QTMUX-86, und nur so bleiben die transienten Layout-Zwischengrößen (gemessen 80×2
+// beim Window-Wechsel) aus der Anzeige heraus.
+void TestSession::gridSizeIsPublishedAndSignalled() {
+    Session s;
+    // Startwerte sind eine Annahme, kein gemessener Wert — aber sie müssen plausibel
+    // sein, damit die Leiste bis zum ersten Resize nichts Unsinniges zeigt.
+    QCOMPARE(s.cols(), 80);
+    QCOMPARE(s.rows(), 24);
+
+    QSignalSpy spy(&s, &Session::sizeChanged);
+    s.resize(120, 40);
+    QCOMPARE(s.cols(), 120);
+    QCOMPARE(s.rows(), 40);
+    QCOMPARE(spy.count(), 1);
+
+    // Gleiche Größe erneut: kein Signal. Sonst rechnet die Leiste bei jedem
+    // Layout-Zucken neu, obwohl sich nichts geändert hat.
+    s.resize(120, 40);
+    QCOMPARE(spy.count(), 1);
+
+    // Nur eine Kante ändert sich -> zählt als Änderung.
+    s.resize(120, 41);
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(s.rows(), 41);
 }
 
 QTEST_MAIN(TestSession)

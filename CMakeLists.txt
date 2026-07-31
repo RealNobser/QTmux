@@ -256,7 +256,20 @@ target_link_libraries(qtmux PRIVATE
 )
 
 # Übersetzungen (i18n) — .qm werden unter :/i18n/ eingebettet ----------------
+# 🔑 SOURCE_TARGETS ist Pflicht, nicht Kosmetik: Ohne die Angabe scannt lupdate ALLE
+# Targets des Projekts — auch die Tests. `tests/tst_i18n.cpp` fragt fuer QTMUX-117
+# gezielt Qt-eigene Texte ab (Kontext QPlatformTheme, "Cancel"/"OK"/"Save"/"Close"),
+# und lupdate trug sie daraufhin in unsere .ts ein. Da Deutsch die Quellsprache ist,
+# finalisierte FinishSourceLanguageTs.cmake sie prompt als "Cancel" -> "Cancel".
+# Damit lag in qtmux_de ein KONKURRIERENDER Eintrag zu dem aus qtbase_de, der dort
+# korrekt "Abbrechen" liefert — genau der Knopf, um den es in QTMUX-117 ging. Sichtbar
+# wurde es nur nicht, weil Qt die Translator in umgekehrter Installationsreihenfolge
+# befragt und qtbase zuletzt installiert wird; ein Vertauschen der beiden Zeilen in
+# main.cpp haette QTMUX-117 still zurueckgedreht.
 qt_add_translations(qtmux
+    SOURCE_TARGETS
+        qtmux
+        qtmux_core
     TS_FILES
         i18n/qtmux_de.ts
         i18n/qtmux_en.ts

@@ -879,6 +879,16 @@ ApplicationWindow {
         const s = window.sessionById(sid)
         return s ? (s.workingDirectory || "") : ""
     }
+    // Rastergröße des aktiven Panes als „80×24" (QTMUX-120). Leer, solange es keine
+    // Session gibt. Die Werte kommen aus der Session, nicht aus dem TerminalItem —
+    // Begründung an der Q_PROPERTY in Session.h (Entprellung, QTMUX-86).
+    function windowGridText(w) {
+        const sid = window.windowActiveSessionId(w)
+        if (sid < 0) return ""
+        const s = window.sessionById(sid)
+        if (!s || s.cols <= 0 || s.rows <= 0) return ""
+        return s.cols + "×" + s.rows
+    }
     // Icon der eingeklappten Seitenleiste (Design 2a). Der Agent hat Vorrang vor dem
     // Verbindungstyp: „läuft hier ein Agent" ist die Information, die man auf 52 px sucht.
     function sidebarIconFor(sid) {
@@ -2138,10 +2148,17 @@ ApplicationWindow {
                 tip: qsTr("Sessions insgesamt, wartend, mit Fehler")
             }
 
-            // 3) Kodierung. Die Rastergröße (80×24) fehlt hier bewusst noch: sie lebt im
-            //    TerminalItem des aktiven Panes und ist von hier nicht erreichbar, ohne
-            //    Spalten/Zeilen erst an der Session zu veröffentlichen — kommt separat,
-            //    lieber leer als geraten.
+            // 3) Rastergröße des aktiven Panes (QTMUX-120). Verschwindet, wenn keine
+            //    Session da ist — eine Größe ohne Terminal wäre eine Erfindung.
+            StatusField {
+                clickable: false
+                visible: label.length > 0
+                label: (window.windowsRevision, window.sessionsRevision,
+                        window.windowGridText(windows.windowById(window.activeWindowId)))
+                tip: qsTr("Rastergröße des aktiven Panes: Spalten × Zeilen")
+            }
+
+            // 4) Kodierung
             StatusField {
                 clickable: false
                 label: "UTF-8"
@@ -2150,7 +2167,7 @@ ApplicationWindow {
 
             Item { Layout.fillWidth: true }   // ab hier rechtsbündig
 
-            // 4) MCP-Server
+            // 5) MCP-Server
             StatusField {
                 label: mcp.listening ? qsTr("MCP :%1").arg(mcp.port) : qsTr("MCP aus")
                 labelColor: mcp.listening ? Theme.accent : Theme.textDim
@@ -2160,7 +2177,7 @@ ApplicationWindow {
                 onRightClicked: prefs.open("agenten")
             }
 
-            // 5) Vault
+            // 6) Vault
             StatusField {
                 label: Vault.unlocked ? qsTr("Vault offen") : qsTr("Vault zu")
                 labelColor: Vault.unlocked ? Theme.accent : Theme.textDim
@@ -2169,7 +2186,7 @@ ApplicationWindow {
                 onRightClicked: prefs.open("vault")
             }
 
-            // 6) Broadcast-Eingabe
+            // 7) Broadcast-Eingabe
             StatusField {
                 label: qsTr("Broadcast")
                 labelColor: window.broadcastInput ? Theme.accent : Theme.textDim
@@ -2177,7 +2194,7 @@ ApplicationWindow {
                 onClicked: window.broadcastInput = !window.broadcastInput
             }
 
-            // 7) Design + Farbschema
+            // 8) Design + Farbschema
             StatusField {
                 label: (Theme.dark ? qsTr("Dunkel") : qsTr("Hell")) + " · " + ColorSchemes.current
                 tip: qsTr("Klick: Design umschalten · Rechtsklick: Erscheinungsbild")

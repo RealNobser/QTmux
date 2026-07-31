@@ -299,10 +299,12 @@ void Session::setTitle(const QString &t) {
 
 void Session::start(int cols, int rows) {
     if (!m_backend) return;
+    const bool changed = (cols != m_cols || rows != m_rows);
     m_cols = cols;
     m_rows = rows;
     m_screen->setSize(rows, cols);
     m_backend->start(cols, rows);
+    if (changed) emit sizeChanged();   // QTMUX-120: Statusleiste zeigt das echte Raster
 }
 
 void Session::write(const QByteArray &data) {
@@ -447,6 +449,11 @@ void Session::resize(int cols, int rows) {
     m_rows = rows;
     if (m_screen) m_screen->setSize(rows, cols);
     if (m_backend) m_backend->resize(cols, rows);
+    // QTMUX-120: Erst hier — und nur hier — steht die Größe fest, die auch im PTY
+    // ankommt. Der Aufruf kommt aus TerminalItem::applyPendingResize, also NACH der
+    // 60-ms-Entprellung aus QTMUX-86; die transienten Zwischengrößen des Layouts
+    // erreichen diese Stelle nie und können die Anzeige darum nicht flackern lassen.
+    emit sizeChanged();
 }
 
 } // namespace qtmux

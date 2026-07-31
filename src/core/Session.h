@@ -47,6 +47,14 @@ class Session : public QObject {
     // Window-Zugehörigkeit (QTMUX-83, B1): jede Session ist ein Pane genau eines Windows.
     // -1 = (noch) keinem Window zugeordnet. Adressierung bleibt über die stabile id().
     Q_PROPERTY(int windowId READ windowId WRITE setWindowId NOTIFY windowIdChanged)
+    // Rastergröße (QTMUX-120), für das Statusleisten-Feld „80×24".
+    // 🔑 Bewusst HIER und nicht am TerminalItem: Das Item meldet seine Größe erst nach
+    // der 60-ms-Entprellung an die Session (QTMUX-86, applyPendingResize). Wer die
+    // Anzeige an das Item bindet, sieht die transienten Zwischenwerte — beim
+    // Window-Wechsel und beim Teilen also kurz Unsinn wie 80×2. Was hier steht, ist
+    // genau das, was auch im PTY angekommen ist.
+    Q_PROPERTY(int cols READ cols NOTIFY sizeChanged)
+    Q_PROPERTY(int rows READ rows NOTIFY sizeChanged)
 public:
     enum class Type { Shell, Ssh, Serial, App };
     Q_ENUM(Type)
@@ -138,6 +146,12 @@ public:
     int windowId() const { return m_windowId; }
     void setWindowId(int w) { if (w == m_windowId) return; m_windowId = w; emit windowIdChanged(); }
 
+    /// Rastergröße (QTMUX-120). Bis zum ersten resize() stehen hier die Startwerte
+    /// 80×24 — das ist eine Annahme, kein gemessener Wert. Sie wird binnen ~60 ms vom
+    /// echten Raster des Panes abgelöst (TerminalItem::applyPendingResize).
+    int cols() const { return m_cols; }
+    int rows() const { return m_rows; }
+
     /// Beendet den zugrundeliegenden Prozess/die Verbindung (für sauberes App-Quit).
     void shutdown();
 
@@ -208,6 +222,7 @@ signals:
     void workingDirectoryChanged();
     void groupChanged();
     void windowIdChanged();
+    void sizeChanged();
     void bell();
 
 private:
