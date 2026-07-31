@@ -349,27 +349,38 @@ seither **Window**-Gruppen. Details/Verifikation:
 (`requestQuit` + normale Rückfrage) — vorher entstand sofort ein neues, leeres Fenster mit
 höherer ID, was wie ein durchlaufender Zähler aussah. Über **MCP** beendet `close_window`
 die App bewusst **nicht** (ein aufräumender Agent würde sich sonst selbst abschalten).
-Vorarbeit QTMUX-80/81/82, dabei **stiller Selbst-Screenshot** `--screenshot <png>`
-(offscreen `grabWindow`, kein TCC) — der Standardweg für visuelle Abnahmen.
-⚠️ **Aber: `--screenshot` setzt `QTMUX_NO_GPU=1`** ([src/app/main.cpp](src/app/main.cpp)) und
-fotografiert damit den **QPainter-Fallback**, nicht den GPU-Pfad. Die **Plattform** wählt der
-Flag seit 2026-07-30 plattformabhängig: macOS/Linux offscreen (falls das Plugin da ist),
-**Windows am sichtbaren Fenster** — Begründung in den E2E-Fallen. Fehler, die im Glyph-Atlas
-sitzen (QTMUX-97), sind darauf **prinzipiell unsichtbar** — dafür braucht es den Atlas selbst
-als Messobjekt oder die Owner-Abnahme an einer laufenden Instanz.
+Vorarbeit QTMUX-80/81/82, dabei **stiller Selbst-Screenshot** `--screenshot <png>` — der
+Standardweg für visuelle Abnahmen. ⚠️ Er setzt `QTMUX_NO_GPU=1` und fotografiert damit den
+**QPainter-Fallback**: Fehler im Glyph-Atlas (QTMUX-97) sind darauf **prinzipiell unsichtbar**.
+Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fallen, nicht hier.
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-31** · `main` = `origin/main` (**`2e151b9`**), Working Tree sauber · Version **1.7.1**.
+Stand **2026-07-31** · letzter **Code**-Commit auf `main` = **`1bb0ba1`** (alles danach ist
+Doku), `main` = `origin/main`, Working Tree sauber · Version **1.7.1**.
 Zuletzt: Design-1a/2a-Umbau abgeschlossen (Stufen 1–7), Umbenennen erhält den Aktivitäts-Indikator
 der aktiven Session (`2e151b9`), Confluence-Entwicklerdoku-Seite „GUI-Auffrischung Design 1a/2a"
-dual angelegt, Jira bis **QTMUX-117** synchron.
-**Teststände (alle grün):** macOS **19/19** (`macos-release`), Windows **18/18** (rtzbld01,
-`windows`/`windows-release`), Linux **18/18** (rtzsvr02, **Container** — s. „Build & Test (Linux)").
+dual angelegt, Jira bis **QTMUX-117** synchron. Danach zwei Nachzügler von der Windows-Seite:
+Qt **6.10.3** lokal installiert und im `windows`-Preset vor 6.11.1 gezogen (`e1eef80`), und
+das Fenster startet nicht mehr **neben** dem Bildschirm (`1bb0ba1`, Anwenderbefund „App startet
+nicht, nichts zu sehen" — Mechanik in der Feature-Referenz).
+**Teststände (alle grün):** macOS **19/19** (`macos-release`), Windows **18/18**
+(Entwicklungsmaschine `30516935D11`, `windows` **und** `windows-release`), Linux **18/18**
+(rtzsvr02, **Container** — s. „Build & Test (Linux)").
 `test_pty` fällt auf Windows/Linux umgebungsbedingt (nicht-interaktive Shell/ConPTY); auf Windows
 braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
+
+**Nächster Punkt — noch nicht entschieden.** Die Stufen sind durch; offen sind (a) der
+**Owner-Durchklick** der GUI (Rezepte in der Abnahme-Tabelle unten) und (b) die Wahl des
+nächsten Tickets. Vorschlag der Windows-Session, in dieser Reihenfolge: **QTMUX-88**
+(AgentRegistry: nur 8 Agenten, `cursor` statt `cursor-agent`, Alias-Umbau — echter Fehler,
+klein, hier testbar über `tst_agent`) · **QTMUX-38** (Shell-Helfer in MSI/ZIP ausliefern) ·
+CI-Action-Versionen (Node-20-Abkündigung ab September 2026) · Air-Backlog 90/94/96.
+⚠️ Die ausführliche Arbeitsanweisung zu QTMUX-88 steht **im Ticket** — vom Windows-Rechner nicht
+lesbar (`CLAUDE.local.md` nur auf dem Mac); entweder der Mac reicht sie durch, oder es wird nach
+der Kurzfassung unter „Offene Jira" unten gearbeitet.
 
 ### Design 1a/2a (GUI-Umbau) — abgeschlossen
 
@@ -420,13 +431,20 @@ nativ = QTMUX-13 (deferred), kein neuer Fehler. Abnahme-Rezepte in der Tabelle u
 
 ### Zusammenarbeit Windows ↔ macOS
 
-Zwei Claude-Sessions teilen die Arbeitskopie (Windows-Maschine + Mac). Windows baut/testet auf
-rtzbld01; macOS lokal + Linux auf rtzsvr02 (Container); **Jira/Confluence gehen nur vom Mac**
-(`CLAUDE.local.md` existiert nur dort). **Nach jeder großen Anpassung auf allen drei Plattformen
-bauen + testen** ([[qtmux-build-alle-plattformen]]). Koordination: die drei Regeln aus
+Zwei Claude-Sessions teilen die Arbeitskopie (Windows-Maschine + Mac). **Arbeitsteilung
+(2026-07-30):** Windows schreibt Code und baut/testet **lokal auf der Entwicklungsmaschine**
+`30516935D11` (Debug **und** Release); der Mac verifiziert dieselbe Änderung auf den zwei
+Plattformen, die Windows nicht sieht — macOS lokal, Linux auf rtzsvr02 (Container) — macht die
+GUI-Abnahmen und pflegt **Jira/Confluence** (geht nur dort, `CLAUDE.local.md` existiert nur auf
+dem Mac). ⚠️ **rtzbld01 ist NICHT die Testmaschine**, sondern der Release-Build-Rechner für die
+Installer (Zugang in `CLAUDE.local.md`) — und hat als einzige Windows-Maschine Qt 6.10.3.
+**Nach jeder großen Anpassung auf allen drei Plattformen bauen + testen**
+([[qtmux-build-alle-plattformen]]). Koordination: die drei Regeln aus
 [[zwei-sessions-eine-arbeitskopie]] — gezielt stagen (**nie** `git add -A`), vor dem Push
 `git fetch` und bei Divergenz erst committen, dann mergen, und nach jedem Merge, der die
-CLAUDE.md anfasst, `test_doc_duplicates` laufen lassen.
+CLAUDE.md anfasst, `test_doc_duplicates` laufen lassen. Dass beide Sessions denselben Fehler
+(`#include <limits>`) unabhängig fixten, war der harmlose Fall — der Merge blieb sauber, weil
+die Zeile identisch war.
 
 ### Jira/Confluence-Stand (2026-07-31, dual synchron)
 
@@ -437,8 +455,10 @@ QTMUX-2 ist Done. Verzeichniszeile (106), OSC 7 (108) und der `--screenshot`-Win
 waren bereits von der Windows-Session angelegt. Confluence-Entwicklerdoku-Seite „GUI-Auffrischung
 Design 1a/2a" dual angelegt (on-prem **212598811**, Cloud **233177089**).
 🔑 Vor jedem neuen Ticket in **beiden** Systemen die höchste Nummer holen (`ORDER BY key DESC`) —
-die Windows-Session legt ebenfalls an (die alte „bis 103"-Notiz war prompt veraltet). Offen
-bleibt nur der **Owner-Durchklick** der GUI (nächster Abschnitt).
+die Windows-Session legt ebenfalls an (die alte „bis 103"-Notiz war prompt veraltet).
+**Noch nachzutragen (nur vom Mac):** ein Ticket für **Fenster startet neben dem Bildschirm**
+(`1bb0ba1`, umgesetzt + selbst verifiziert) und eines für **Qt 6.10.3 lokal + Preset-Reihenfolge**
+(`e1eef80`, erledigt, nur Buchführung). Sonst offen: der **Owner-Durchklick** (nächster Abschnitt).
 
 ### Owner-Abnahmen offen (seit v1.7.1, je umgesetzt + selbst verifiziert)
 
@@ -454,10 +474,11 @@ Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme
 | **101/102/103** | ToolTip · geklemmter Drag · „Arbeitsverzeichnis öffnen"/„Pfad kopieren" | ToolTip in beiden Designs; Kachel bleibt im Bild; Menüpunkte an serieller Session ausgegraut |
 | **61** | Bildschirm leeren, Verlauf behalten (`Ctrl/Cmd+Shift+K`) | in einem laufenden Agenten leeren — Prompt oben, Verlauf im Scrollback |
 | **89** | Ruhezustand verhindern, solange Agenten arbeiten | Schalter an, Agent arbeiten lassen (macOS `pmset -g assertions`, Windows `powercfg /requests`) |
-| — | Verzeichnis als zweite Kachelzeile, Seitenleiste + Flyout, Statusleiste (Design 1a/2a, Stufen 1–3) | durchklicken; **Jira-Nummern fehlen** (s. „Offen: Jira/Confluence-Nachträge") |
-| — | **sechs Menüs** (Stufe 4) | jedes Menü öffnen; kein Eintrag schaltet mehr eine Einstellung außer Seitenleiste/Statusleiste/Broadcast; alles Verschobene über Einstellungen UND Palette erreichbar |
-| — | **Einstellungsfenster** (Stufe 5) | Rail-Gruppen, Zeilen mit Beschreibung, Segment-Umschalter, Schalter in Akzentfarbe — in **beiden** Designs |
-| — | **Zurücksetzen / Import / Export** (Stufe 6) | „Diese Seite zurücksetzen" auf einer geänderten Seite (Werte springen sofort auf Standard, danach ist der Punkt ausgegraut) · „Alle Einstellungen zurücksetzen …" **abbrechen** und bestätigen · **Export in eine Datei und Import daraus** — das ist der Teil, den hier **kein Automat** prüfen konnte (native Dateidialoge, s. E2E-Fallen): danach muss der geänderte Wert live stehen, und die offenen Fenster/Sessions müssen unberührt sein |
+| **106/109/110/111** | Verzeichnis als zweite Kachelzeile, Seitenleiste + Flyout, Statusleiste (Design 1a/2a, Stufen 1–3) | durchklicken |
+| **112** | **sechs Menüs** (Stufe 4) | jedes Menü öffnen; kein Eintrag schaltet mehr eine Einstellung außer Seitenleiste/Statusleiste/Broadcast; alles Verschobene über Einstellungen UND Palette erreichbar |
+| **113** | **Einstellungsfenster** (Stufe 5) | Rail-Gruppen, Zeilen mit Beschreibung, Segment-Umschalter, Schalter in Akzentfarbe — in **beiden** Designs |
+| — (Ticket fehlt) | **Fenster neben dem Bildschirm** (`1bb0ba1`) | QTmux auf einem zweiten Monitor platzieren, beenden, Monitor abziehen, starten → Fenster muss zentriert auf dem verbleibenden Bildschirm erscheinen; danach eine normale Position **nicht** verschoben finden |
+| **114** | **Zurücksetzen / Import / Export** (Stufe 6) | „Diese Seite zurücksetzen" auf einer geänderten Seite (Werte springen sofort auf Standard, danach ist der Punkt ausgegraut) · „Alle Einstellungen zurücksetzen …" **abbrechen** und bestätigen · **Export in eine Datei und Import daraus** — das ist der Teil, den hier **kein Automat** prüfen konnte (native Dateidialoge, s. E2E-Fallen): danach muss der geänderte Wert live stehen, und die offenen Fenster/Sessions müssen unberührt sein |
 
 ⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
 Sessions **nicht** (Inhalt liegt im Scrollback) — betroffene Sessions neu starten.
@@ -476,28 +497,23 @@ behobene, in der App nicht gegengeprüft, im Ticket notiert.
   ist „steht im Repo" **nie** gleichbedeutend mit „ist in der App" — genau daraus entstand die
   Fehlannahme, die Agenten-Schalter seien nicht im Dialog gelandet. Jede Owner-Abnahme braucht
   darum eine frische Testinstanz (`QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`) oder den Neubau.
-- **Jira-Stand:** synchron bis **QTMUX-117** (Details im „Jira/Confluence-Stand"-Abschnitt oben).
-  Die Design-1a/2a-Stufen und ihre Fixes stehen dual auf „In Progress"/„In Arbeit" (umgesetzt +
-  selbst verifiziert, Owner-Abnahme offen). 🔑 **Lektion:** Vor dem Anlegen eines Tickets die höchste Nummer in **beiden**
-  Systemen holen (`ORDER BY key DESC`, maxResults 1) — nur solange beide gleich stehen, bleiben
-  die Keys deckungsgleich. Und prüfen, ob die Doku bereits höhere Nummern *vergeben* hat.
-  Die alte Notiz „QTMUX-46/-79 nicht angelegt" war schlicht falsch, beide existieren und sind
-  Done — Behauptungen dieser Art vor dem Handeln gegenprüfen.
+- **Drei Build-Verzeichnisse auf der Windows-Maschine:** `build/windows` (Debug) und
+  `build/windows-release` sind die Standardpaare (Qt **6.11.1** im Cache); `build/windows-qt6103`
+  ist der Nachweis, dass gegen die CI-Version gebaut wird (Qt **6.10.3**, per
+  `QTMUX_QT_PREFIX` konfiguriert) — jederzeit löschbar. Wer die Standardpaare auf 6.10.3 haben
+  will, muss sie **neu anlegen**; eine Preset-Änderung erreicht ein bestehendes Verzeichnis nie.
+- **Jira-Lektionen** (Stand selbst: Abschnitt „Jira/Confluence-Stand" oben): Vor dem Anlegen eines
+  Tickets die höchste Nummer in **beiden** Systemen holen (`ORDER BY key DESC`, maxResults 1) —
+  nur solange beide gleich stehen, bleiben die Keys deckungsgleich. Und prüfen, ob die Doku bereits
+  höhere Nummern *vergeben* hat. Die alte Notiz „QTMUX-46/-79 nicht angelegt" war schlicht falsch,
+  beide existieren und sind Done — Behauptungen dieser Art vor dem Handeln gegenprüfen.
   🔑 **Werkzeug-Falle:** Für die **Cloud** schlägt Python-`urllib` hier mit
   `CERTIFICATE_VERIFY_FAILED` fehl (kein Issuer im Store) — ADF-Rumpf mit Python **bauen**,
   aber mit `curl --data @datei` **senden**. On-prem braucht ohnehin `curl -k`.
-- **Jira-Nachträge, die nur vom Mac gehen:** Liste unter „Offen: Jira/Confluence-Nachträge"
+- **Arbeitsteilung und die drei Git-Regeln** stehen im Abschnitt „Zusammenarbeit Windows ↔ macOS"
   oben — nicht doppelt pflegen. Fachlicher Hintergrund zu **OSC 7** (dem einzigen Weg zum CWD bei
   PowerShell/`ssh`/Containern; Parser kennt es nicht, `shell-integration/` sendet es nicht)
   steht im ConPTY-Abschnitt.
-- **Zwei Sessions arbeiten parallel in DERSELBEN Arbeitskopie** (Mac und Windows-Maschine,
-  je eine Claude-Session). Daraus folgen drei Regeln, alle schon einmal gebraucht:
-  gezielt stagen (`git add <datei>`, **nie** `-A`, sonst wandert halbfertige Arbeit der
-  anderen Session mit); **vor** dem Push `git fetch` und bei Divergenz erst committen, dann
-  mergen (nicht umgekehrt — sonst kann ein Konflikt eigene, uncommittete Arbeit treffen);
-  nach jedem Merge, der die CLAUDE.md anfasst, `test_doc_duplicates` laufen lassen. Dass
-  beide Sessions denselben Fehler (`#include <limits>`) unabhängig fixten, war der harmlose
-  Fall — der Merge blieb sauber, weil die Zeile identisch war.
 
 **Offene Jira:** **QTMUX-88** (AgentRegistry deckt nur 8 CLI-Agenten ab und enthält einen
 Fehler — `cursor` statt `cursor-agent`; Ticket trägt die Arbeitsanweisung inkl. Alias-Umbau,
@@ -514,14 +530,11 @@ Windows ohne stdout) ·
 nicht durch; einziger Weg wäre ein QMenuBar-Umbau, deferred; [[qtmux-native-menu-icons]]).
 
 **Aus der Air-Evaluation (2026-07-28, air.dev)** — **89 ist umgesetzt** (s. Tabelle oben), offen
-sind: **90** (Prompt-Queue je Session) · **91** (Agenten-Startprofile —
-gehört mit QTMUX-85 zusammen) · **92** (Container-Backend Docker/Podman) · **93** (Spike ACP —
-der strukturierte Gegenentwurf zur dokumentierten Schwäche „Worker meldet von sich aus
-nichts", berührt 55/73/75/90) · **94** (Terminal-Ausgabe als Agenten-Kontext — Air holt sie
-mühsam, bei uns liegt sie in `VtScreen`) · **95** (Auslöser Zeitplan/Webhook am vorhandenen
-MCP-Server, lokal statt Cloud) · **96** (Agenten-Befehle aus `.claude/commands` in der
-Palette). Schon abgedeckt und darum NICHT neu angelegt: 55/69/72/73/75/76 — Begründungen je
-Ticket in Jira.
+sind **90** (Prompt-Queue je Session) · **91** (Agenten-Startprofile, gehört mit QTMUX-85
+zusammen) · **92** (Container-Backend) · **93** (Spike ACP, berührt 55/73/75/90) · **94**
+(Terminal-Ausgabe als Agenten-Kontext — liegt bei uns schon in `VtScreen`) · **95** (Auslöser
+Zeitplan/Webhook am MCP-Server) · **96** (Agenten-Befehle aus `.claude/commands`). Schon
+abgedeckt und darum NICHT neu angelegt: 55/69/72/73/75/76. Begründungen je Ticket in Jira.
 🔑 **Bewusst nicht übernommen:** alles Editor-artige (Symbols, Go-to-Definition, Datei-Baum,
 projektweite Suche, Commit-Erzeugung, Diff-Kommentare) und die Cloud-Hälfte — QTmux ist ein
 Terminal-Manager, kein IDE-Ersatz. Diese Linie beim nächsten Feature-Vergleich wiederverwenden.
