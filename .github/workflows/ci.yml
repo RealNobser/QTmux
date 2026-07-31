@@ -36,7 +36,7 @@ jobs:
           - { name: Linux,   os: ubuntu-latest,  host: linux,   arch: linux_gcc_64 }
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Linux: System-Bibliotheken für Qt Quick/RHI + Build-Tooling.
       - name: Linux-Systempakete
@@ -47,13 +47,19 @@ jobs:
             libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
             libxcb-cursor0 libfontconfig1-dev libfreetype-dev
 
-      - name: Ninja einrichten
-        uses: seanmiddleditch/gha-setup-ninja@v5
+      # Ninja wird NICHT eingerichtet: alle drei Runner-Images bringen es mit (1.13.2,
+      # siehe actions/runner-images). Die frühere seanmiddleditch/gha-setup-ninja liegt
+      # auch in ihrer neuesten Fassung (v6) noch auf Node 20 — der Schritt war also
+      # zugleich überflüssig und die Quelle einer Deprecation-Warnung.
 
       # Windows: MSVC-Umgebung (vcvars) in den PATH, damit Ninja + cl gefunden werden.
+      # ilammy/msvc-dev-cmd ist bis heute Node 20 (auch auf master) → Node-24-Ersatz.
       - name: MSVC-Umgebung (Windows)
         if: matrix.host == 'windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        # Kein bewegliches v4-Tag vorhanden → exakte Version pinnen.
+        uses: TheMrMilchmann/setup-msvc-dev@v4.1.0
+        with:
+          arch: x64
 
       # Qt inkl. der von QTmux benötigten Module:
       #   qtserialport  -> SerialBackend
@@ -74,21 +80,23 @@ jobs:
       - name: Bauen
         run: cmake --build build --parallel
 
-      # Tests headless (offscreen-Plattform → kein Display/GPU nötig). Auf Windows
-      # hängen die ConPTY-PTY-Tests an der CI-Konsole (siehe CLAUDE.md) → dort
-      # nicht blockierend, nur informativ.
+      # Tests headless (offscreen-Plattform → kein Display/GPU nötig).
       - name: Tests (macOS/Linux)
         if: matrix.host != 'windows'
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build --output-on-failure --timeout 120
 
-      - name: Tests (Windows, informativ)
+      # Windows: test_pty braucht eine echte Konsole (ConPTY-Anbindung, siehe CLAUDE.md)
+      # und fällt auf dem Runner umgebungsbedingt — genau dieser eine Test wird darum
+      # ausgenommen. Vorher lief der GANZE Schritt mit continue-on-error und hat damit
+      # auch die 18 übrigen Windows-Tests still durchgewinkt: ein echter Regressionsfund
+      # dort wäre unsichtbar geblieben.
+      - name: Tests (Windows, ohne test_pty)
         if: matrix.host == 'windows'
-        continue-on-error: true
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --test-dir build --output-on-failure --timeout 120
+        run: ctest --test-dir build --output-on-failure --timeout 120 -E '^test_pty$'
 
       # Linux-Installer: AppImage packen (QTMUX-10). Nutzt das bereits gebaute build/
       # (QTMUX_BUILD_DIR) statt neu zu bauen; linuxdeploy + Qt-Plugin holt das Skript.
@@ -102,7 +110,7 @@ jobs:
 
       - name: AppImage-Artefakt hochladen (Linux)
         if: matrix.host == 'linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: QTmux-AppImage
           path: dist/QTmux-*-x86_64.AppImage
