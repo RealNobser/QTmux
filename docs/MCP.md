@@ -172,10 +172,19 @@ ist kein Fehler.
 ### Parameternamen: Eingabe ist immer `id` (QTMUX-32)
 
 Alle sitzungsbezogenen Werkzeuge erwarten **`id`** — auch wenn die *Antwortfelder* von
-`list_sessions` und `get_layout` `sessionId` bzw. `paneId` heißen. Wer die Antwortnamen
-übernimmt, bekommt jetzt Klartext (`Parameter 'id' fehlt (übergeben wurde 'sessionId')`)
-statt der irreführenden Meldung „Unbekannte ID.". Ist die ID vorhanden, aber unbekannt,
-nennt die Antwort die tatsächlich vorhandenen IDs.
+`get_layout` `sessionId` bzw. `paneId` heißen. Wer die Antwortnamen übernimmt, bekommt
+Klartext (`Parameter 'id' fehlt (übergeben wurde 'sessionId')`) statt der irreführenden
+Meldung „Unbekannte ID.". Ist die ID vorhanden, aber unbekannt, nennt die Antwort die
+tatsächlich vorhandenen IDs.
+
+⚠️ **Antwortformen sind nicht einheitlich** — beim Schreiben eines Test-Harness zweimal
+hineingelaufen (2026-07-31): `list_sessions` liefert ein **flaches Array**, dessen Feld
+**`id`** heißt (nicht `sessionId` — das ist der Name im `get_layout`-Baum und der Name
+eines *Eingabe*-Parameters der Controller-Werkzeuge). `create_session` antwortet mit der
+**nackten Zahl**, nicht mit einem JSON-Objekt. Und: Werkzeug-Fehler kommen nach
+MCP-Konvention als `result.isError` zurück, **nicht** als JSON-RPC-`error` — ein Skript,
+das nur `error` prüft, läuft stumm weiter und misst nichts (hier: alle `send_text`-Aufrufe
+liefen mit `id = 0` ins Leere, und die Messung zeigte plausible, aber leere Ergebnisse).
 
 ## Inter-Agenten-Benachrichtigung (wer ist fertig / hat eine Frage?)
 

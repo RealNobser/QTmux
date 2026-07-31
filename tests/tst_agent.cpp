@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <QSet>
 #include "AgentRegistry.h"
 
 using namespace qtmux;
@@ -10,6 +11,11 @@ private slots:
     void detectsWithPathAndEnv();
     void ignoresUnknown();
     void detectsHermes();
+    void detectsCursorAgentNotTheEditor();
+    void aliasesResolveToTheSameAgent();
+    void registryNamesAreUniqueAndDetectable();
+    void codexResumesViaSubcommand();
+    void subcommandTemplateSkipsExistingSubcommand();
     void resumeInsertsAfterCommandToken();
     void resumeIsIdempotent();
     void resumeLeavesUnknownAndFlagless();
@@ -47,6 +53,97 @@ void TestAgent::detectsHermes() {
     QCOMPARE(a->id, QStringLiteral("hermes"));
     QCOMPARE(a->displayName, QStringLiteral("Hermes"));
     QCOMPARE(a->resumeLastArgs, QStringLiteral("--continue"));
+}
+
+// QTMUX-88: Der Cursor-AGENT heisst `cursor-agent` (bzw. inzwischen `agent`); `cursor`
+// selbst startet den EDITOR. Die Gegenprobe ist der Kern des Tickets: mit dem alten
+// Eintrag war `cursor .` eine Agenten-Session, und `cursor-agent` war keine.
+void TestAgent::detectsCursorAgentNotTheEditor() {
+    const AgentInfo *a = AgentRegistry::detect("cursor-agent");
+    QVERIFY(a != nullptr);
+    QCOMPARE(a->id, QStringLiteral("cursor"));
+    QCOMPARE(a->displayName, QStringLiteral("Cursor"));
+    QVERIFY(AgentRegistry::detect("agent --foo") != nullptr);
+
+    QCOMPARE(AgentRegistry::detect("cursor"), nullptr);
+    QCOMPARE(AgentRegistry::detect("cursor ."), nullptr);
+    // ... und `cursor` darf auch nicht als Alias zurueckkommen.
+    for (const AgentInfo &e : AgentRegistry::all())
+        QVERIFY2(!e.matches(QStringLiteral("cursor")), qPrintable(e.id));
+}
+
+// Aliase sind gleichwertig — auch mit Pfad und Windows-Suffix (QTMUX-88).
+void TestAgent::aliasesResolveToTheSameAgent() {
+    const AgentInfo *viaCmd   = AgentRegistry::detect("cursor-agent");
+    const AgentInfo *viaAlias = AgentRegistry::detect("agent");
+    QVERIFY(viaCmd && viaAlias);
+    QCOMPARE(viaCmd->id, viaAlias->id);
+
+    QVERIFY(AgentRegistry::detect("C:\\tools\\cursor-agent.exe --model x") != nullptr);
+    QVERIFY(AgentRegistry::detect("/opt/cursor/agent") != nullptr);
+    QVERIFY(AgentRegistry::detect("env FOO=1 AGENT") != nullptr);   // Gross/Klein egal
+}
+
+// Strukturwaechter: Kein Name darf doppelt vergeben sein — sonst gewinnt lautlos der
+// erste Eintrag, und ein Agent waere nie erkennbar. Und jeder eingetragene Name muss
+// sich auch wirklich erkennen lassen (Tippfehler im Eintrag faellt sonst nie auf).
+void TestAgent::registryNamesAreUniqueAndDetectable() {
+    QSet<QString> seen;
+    for (const AgentInfo &e : AgentRegistry::all()) {
+        QVERIFY(!e.id.isEmpty());
+        QVERIFY(!e.displayName.isEmpty());
+        QStringList names = e.aliases;
+        names.prepend(e.command);
+        for (const QString &n : names) {
+            QVERIFY2(!n.isEmpty(), qPrintable(e.id));
+            QVERIFY2(!seen.contains(n.toLower()), qPrintable(n));
+            seen.insert(n.toLower());
+            const AgentInfo *back = AgentRegistry::detect(n);
+            QVERIFY2(back != nullptr, qPrintable(n));
+            QCOMPARE(back->id, e.id);
+        }
+        // Die ID-Vorlage MUSS den Platzhalter tragen, sonst startete jeder Modus-3-Lauf
+        // dieselbe Unterhaltung.
+        if (!e.resumeIdArgs.isEmpty())
+            QVERIFY2(e.resumeIdArgs.contains(QStringLiteral("{id}")), qPrintable(e.id));
+    }
+}
+
+// QTMUX-88: Codex fortsetzt ueber ein UNTERKOMMANDO (`codex resume [--last] [ID]`,
+// am `--help` geprueft 2026-07-31) — nicht ueber ein Flag. Bereits getippte Optionen
+// bleiben gueltig, weil `codex resume` dieselben annimmt.
+void TestAgent::codexResumesViaSubcommand() {
+    QCOMPARE(AgentRegistry::resumeCommand("codex", ResumeMode::Last),
+             QStringLiteral("codex resume --last"));
+    QCOMPARE(AgentRegistry::resumeCommand("codex", ResumeMode::Pick),
+             QStringLiteral("codex resume"));
+    QCOMPARE(AgentRegistry::resumeCommand("codex", ResumeMode::Reported, "0195-uuid"),
+             QStringLiteral("codex resume 0195-uuid"));
+    QCOMPARE(AgentRegistry::resumeCommand("codex --model gpt-x", ResumeMode::Last),
+             QStringLiteral("codex resume --last --model gpt-x"));
+    // Ohne Referenz bleibt die Zeile unberuehrt (lieber frisch als fremde Unterhaltung).
+    QCOMPARE(AgentRegistry::resumeCommand("codex", ResumeMode::Reported),
+             QStringLiteral("codex"));
+    // Idempotent ueber Neustarts hinweg.
+    const QString once = AgentRegistry::resumeCommand("codex", ResumeMode::Last);
+    QCOMPARE(AgentRegistry::resumeCommand(once, ResumeMode::Last), once);
+}
+
+// Traegt die Zeile schon ein eigenes Unterkommando, darf eine Unterkommando-Vorlage
+// NICHT davor rutschen — `codex resume --last exec "…"` waere kaputt. Flag-Vorlagen
+// (`--continue`) bleiben davon unberuehrt.
+void TestAgent::subcommandTemplateSkipsExistingSubcommand() {
+    for (const auto m : {ResumeMode::Last, ResumeMode::Pick}) {
+        QCOMPARE(AgentRegistry::resumeCommand("codex exec \"tu was\"", m),
+                 QStringLiteral("codex exec \"tu was\""));
+        QCOMPARE(AgentRegistry::resumeCommand("codex review", m),
+                 QStringLiteral("codex review"));
+    }
+    QCOMPARE(AgentRegistry::resumeCommand("codex exec x", ResumeMode::Reported, "u1"),
+             QStringLiteral("codex exec x"));
+    // Gegenprobe: Flag-Vorlage darf weiterhin vor ein Unterkommando.
+    QCOMPARE(AgentRegistry::resumeCommand("hermes chat", ResumeMode::Last),
+             QStringLiteral("hermes --continue chat"));
 }
 
 // Das Fortsetzungs-Argument gehört DIREKT hinter den Kommando-Token, nicht ans Ende —

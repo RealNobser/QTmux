@@ -372,15 +372,14 @@ braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
-**Nächster Punkt — noch nicht entschieden.** Die Stufen sind durch; offen sind (a) der
-**Owner-Durchklick** der GUI (Rezepte in der Abnahme-Tabelle unten) und (b) die Wahl des
-nächsten Tickets. Vorschlag der Windows-Session, in dieser Reihenfolge: **QTMUX-88**
-(AgentRegistry: nur 8 Agenten, `cursor` statt `cursor-agent`, Alias-Umbau — echter Fehler,
-klein, hier testbar über `tst_agent`) · **QTMUX-38** (Shell-Helfer in MSI/ZIP ausliefern) ·
-CI-Action-Versionen (Node-20-Abkündigung ab September 2026) · Air-Backlog 90/94/96.
-⚠️ Die ausführliche Arbeitsanweisung zu QTMUX-88 steht **im Ticket** — vom Windows-Rechner nicht
-lesbar (`CLAUDE.local.md` nur auf dem Mac); entweder der Mac reicht sie durch, oder es wird nach
-der Kurzfassung unter „Offene Jira" unten gearbeitet.
+**Nächster Punkt: QTMUX-38** (Shell-Helfer in MSI/ZIP ausliefern) — danach CI-Action-Versionen
+(Node-20-Abkündigung ab September 2026), dann Air-Backlog 90/94/96. Parallel offen bleibt der
+**Owner-Durchklick** der GUI (Rezepte in der Abnahme-Tabelle unten).
+Zuvor erledigt: **QTMUX-88** (AgentRegistry — Mechanik in der Feature-Referenz).
+⚠️ Beim Weiterarbeiten an QTMUX-88 galt: die ausführliche Arbeitsanweisung steht **im Ticket**
+und ist vom Windows-Rechner nicht lesbar (`CLAUDE.local.md` nur auf dem Mac). Gearbeitet wurde
+nach der Kurzfassung; **der Mac muss die Agentenliste gegen die Ticket-Recherche abgleichen**
+(dort steht auch, warum `air`/`q`/`warp` nicht hineingehören).
 
 ### Design 1a/2a (GUI-Umbau) — abgeschlossen
 
@@ -458,7 +457,14 @@ Design 1a/2a" dual angelegt (on-prem **212598811**, Cloud **233177089**).
 die Windows-Session legt ebenfalls an (die alte „bis 103"-Notiz war prompt veraltet).
 **Noch nachzutragen (nur vom Mac):** ein Ticket für **Fenster startet neben dem Bildschirm**
 (`1bb0ba1`, umgesetzt + selbst verifiziert) und eines für **Qt 6.10.3 lokal + Preset-Reihenfolge**
-(`e1eef80`, erledigt, nur Buchführung). Sonst offen: der **Owner-Durchklick** (nächster Abschnitt).
+(`e1eef80`, erledigt, nur Buchführung); dazu **QTMUX-88 auf Done** schieben (umgesetzt + hier
+verifiziert, Mechanik in der Feature-Referenz) — und beim Durchgehen des Tickets die dort
+recherchierte **Agentenliste** gegen die jetzt eingetragene abgleichen (ergänzt wurden
+`copilot`/`crush`/`goose`/`amp`; deren Kommandonamen sind an der Primärquelle geprüft, die
+Auswahl aber ohne Kenntnis der Ticket-Recherche getroffen). Der Ticket-Punkt „für welche Agenten
+die Fortsetzungs-Vorlagen fehlen" ist teilweise erledigt: **codex ist jetzt verifiziert** (alle
+drei Modi), offen bleiben gemini/aider/cursor/qwen/copilot/crush/goose/amp (s. a. QTMUX-91).
+Sonst offen: der **Owner-Durchklick** (nächster Abschnitt).
 
 ### Owner-Abnahmen offen (seit v1.7.1, je umgesetzt + selbst verifiziert)
 
@@ -515,12 +521,7 @@ behobene, in der App nicht gegengeprüft, im Ticket notiert.
   PowerShell/`ssh`/Containern; Parser kennt es nicht, `shell-integration/` sendet es nicht)
   steht im ConPTY-Abschnitt.
 
-**Offene Jira:** **QTMUX-88** (AgentRegistry deckt nur 8 CLI-Agenten ab und enthält einen
-Fehler — `cursor` statt `cursor-agent`; Ticket trägt die Arbeitsanweisung inkl. Alias-Umbau,
-Recherchestand 2026-07-28 und der Begründung, warum `air`/`q`/`warp` **nicht** hineingehören;
-dort gehört auch hinein, für welche Agenten die **Fortsetzungs**-Vorlagen aus QTMUX-98 noch
-fehlen — verifiziert sind nur claude/agy/opencode/hermes, codex/gemini/aider/cursor/qwen
-sind bewusst leer, s. a. QTMUX-**91**) ·
+**Offene Jira:**
 **QTMUX-40** (OSC-8-Hyperlinks — deferred; die Heuristik-Links aus QTMUX-39
 decken den Agenten-Fall ab, OSC-8 bräuchte Cursor-Span-Tracking + neues `Cell`-Feld, teuer da
 `VtScreen` den Sichtbereich lazy aus libvterm bildet) · **QTMUX-38** (Shell-Helfer für
@@ -924,6 +925,30 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   🔑 `Waiting` zählt bewusst **nicht** als Arbeiten: Da wartet der Agent auf einen Menschen,
   und dann darf der Rechner schlafen (Gegenprobe im Test: FAIL, wenn man es mitzählt).
   Abnahme mit `pmset -g assertions` über alle Zustände, inkl. Freigabe beim Beenden.
+- **AgentRegistry: Aliase, Kommandonamen, Unterkommando-Vorlagen (QTMUX-88):** Die Liste der
+  bekannten CLIs ist **einziger Pflegeort** (nirgends im QML oder README gedoppelt — geprüft).
+  `AgentInfo` hat neben `command` jetzt `aliases`, und `AgentInfo::matches()` ist die EINE Stelle,
+  die Namen vergleicht (`detect` ruft nur noch sie). Einträge stehen als **designierte
+  Initialisierer** (C++20) da — ein neues Feld verschiebt damit keine Werte mehr lautlos.
+  🔑 **Der Fehler, um den es ging:** eingetragen war `cursor` — das ist der **Editor**-Starter (wie
+  `code` bei VS Code). Der Agent hieß `cursor-agent` und wird laut Dokumentation inzwischen als
+  `agent` installiert; beide sind eingetragen, `cursor` **keiner** von beiden (Test hält das
+  ausdrücklich fest). Wirkung vorher: `cursor .` machte eine Editor-Session zur „Cursor"-Agenten-
+  Session, und der echte Agent wurde nie erkannt.
+  ⚠️ Der Alias **`agent` ist generisch** — ein eigenes Skript dieses Namens erbt das Cursor-Etikett;
+  bewusst in Kauf genommen, Begründung am Eintrag.
+  🔑 **Codex fortsetzt über ein UNTERKOMMANDO** (`codex resume [--last] [SESSION_ID]`, am `--help`
+  belegt 2026-07-31) — damit kann Codex als **zweiter** Agent alle drei Modi aus QTMUX-98, inkl.
+  Picker. Dafür hat `resumeCommand` einen Wächter: Trägt die Zeile schon ein eigenes Unterkommando,
+  darf eine Unterkommando-Vorlage nicht davor rutschen (aus `codex exec "…"` würde sonst
+  `codex resume --last exec "…"`). Die Prüfung hängt an der **Form der Vorlage** (erstes Zeichen
+  kein `-`), nicht am Agenten — gilt also für jeden künftigen Eintrag dieser Art.
+  Jetzt 13 Einträge; neu `copilot`/`crush`/`goose`/`amp` (Kommandoname an der Primärquelle geprüft,
+  Vorlagen leer, weil die CLIs hier nicht installiert sind).
+  Tests: `tst_agent` 15 Fälle (u. a. `registryNamesAreUniqueAndDetectable` — kein Name doppelt,
+  jeder eingetragene Name auch erkennbar, `{id}`-Platzhalter vorhanden). Gegentest mit dem alten
+  `cursor`-Eintrag und ohne den Unterkommando-Wächter: **3 Fälle FAIL**. Dazu E2E über MCP gegen
+  eine isolierte Instanz (6 Fälle, u. a. `cursor .` → **nicht** erkannt, `agent`/`goose` → erkannt).
 - **Agenten überleben den Neustart (QTMUX-85):** Ein Agent läuft **nicht** als `program` —
   er wird in eine Shell **getippt** und in `Session::observeInput` über
   `AgentRegistry::detect` erkannt. Deshalb speichert die Session die erkannte Zeile in
@@ -1197,6 +1222,18 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 
 ## E2E-/Test-Fallen (alle Plattformen)
 
+- ⚠️ **`tools\vsdev-build.cmd` baut standardmäßig NUR `qtmux` — Tests brauchen `all`**
+  (`tools\vsdev-build.cmd windows all`). Steht im Kopf des Skripts, ist trotzdem passiert
+  (2026-07-31): `ctest` lief danach gegen ein **altes** Testbinary, und zwar in beide
+  Richtungen — erst meldete es „grün" für Tests, die es noch nicht kannte, dann bestand der
+  **Gegentest** mit absichtlich kaputtem Code. Genau dieses „der Gegentest besteht" ist das
+  Alarmsignal. Erste Messung darum immer die **mtime des Testbinaries**
+  (`(Get-Item build\windows\test_<x>.exe).LastWriteTime`), nicht die ctest-Zusammenfassung.
+- 🔑 **QtTest-Binaries schreiben hier nichts auf die Konsole** (`qt_add_executable` macht sie
+  auf Windows zu GUI-Programmen) — `./test_x.exe | grep FAIL` liefert **leere** Ausgabe bei
+  Exit 3. Ergebnisse mit `-o <datei>,txt` in eine Datei schreiben und die lesen; nur so sieht
+  man, **welche** Fälle fielen. (PowerShell verschluckt zusätzlich die Ausgabe, wenn der
+  Exit-Code ≠ 0 ist.)
 - **Nach einem Rebuild `open qtmux.app` NICHT auf eine laufende Instanz** — `open`
   aktiviert nur; das alte Binary antwortet dann (z. B. „Unbekanntes Tool"). Erst beenden,
   dann starten.

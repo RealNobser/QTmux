@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 #include <QList>
 
 namespace qtmux {
@@ -8,8 +9,13 @@ namespace qtmux {
 /// Metadaten zu einem bekannten KI-Agenten-CLI.
 struct AgentInfo {
     QString id;          // stabiler Schlüssel (z. B. "antigravity") — QML mappt darauf Icon/Farbe
-    QString command;     // erwarteter Kommandoname (z. B. "agy")
+    QString command;     // AKTUELLER Kommandoname (z. B. "agy")
     QString displayName; // Anzeigename in der Sidebar (z. B. "AntiGravity")
+
+    /// Weitere Kommandonamen desselben Agenten (QTMUX-88): frühere Namen nach einer
+    /// Umbenennung, Wrapper-Skripte. Nur **belegte** Namen eintragen — ein geratener
+    /// Alias erkennt entweder nie etwas oder, schlimmer, ein fremdes Programm.
+    QStringList aliases;
 
     // --- Fortsetzen einer Unterhaltung (QTMUX-85/98) ------------------------
     // Je Weg eine Argument-Vorlage. LEER heißt immer: dieser Agent kann das nicht
@@ -19,6 +25,10 @@ struct AgentInfo {
     QString resumeLastArgs;  // jüngste Unterhaltung im Verzeichnis (z. B. "--continue")
     QString resumePickArgs;  // interaktive Auswahl beim Start (z. B. "--resume" ohne Wert)
     QString resumeIdArgs;    // gezielt per ID; MUSS den Platzhalter {id} enthalten
+
+    /// Passt ein Kommando-Basisname (ohne Pfad und ohne .exe/.cmd/.bat) auf diesen
+    /// Agenten? Vergleicht `command` UND alle `aliases`, Groß-/Kleinschreibung egal.
+    bool matches(const QString &base) const;
 };
 
 /// Fortsetzungs-Weg beim Wiederherstellen (QTMUX-98). Die Werte sind persistiert
