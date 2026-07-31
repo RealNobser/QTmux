@@ -1,8 +1,10 @@
 #include <QtTest>
 #include <QSignalSpy>
+#include <QSysInfo>
 #include <QTemporaryDir>
 #include "VtScreen.h"
 #include "LinkDetector.h"
+#include "Session.h"   // nur für die Gui-freie Vorrangregel effectiveWorkingDirectory()
 
 using namespace qtmux;
 
@@ -30,7 +32,115 @@ private slots:
     void clearViewportKeepsScrollback();
     void altScreenTracked();
     void resetInputModesClearsMouse();
+    void osc7WorkingDirectory();
+    void osc7HostHandling();
+    void osc7TakesPrecedenceOverPolling();
 };
+
+// OSC 7 (QTMUX-108): Die Shell meldet ihr Arbeitsverzeichnis selbst. Geprüft wird der
+// ECHTE Weg — Bytes durch den Parser —, nicht eine herausgelöste Hilfsfunktion.
+void TestVtScreen::osc7WorkingDirectory() {
+    VtScreen vt(24, 80);
+    QSignalSpy spy(&vt, &VtScreen::workingDirectoryReported);
+    QVERIFY(vt.reportedWorkingDirectory().isEmpty());   // ungemeldet = unbekannt
+
+    // Normalfall, BEL-terminiert. Der Host fehlt („file:///…") → lokal.
+    vt.inputWrite("\x1b]7;file:///Users/nobser/Projekte\x07");
+    QCOMPARE(vt.reportedWorkingDirectory(), QStringLiteral("/Users/nobser/Projekte"));
+    QVERIFY(vt.reportedWorkingDirectoryIsLocal());
+    QVERIFY(vt.reportedWorkingDirectoryHost().isEmpty());
+    QCOMPARE(spy.count(), 1);
+
+    // Dieselbe Meldung erneut (OSC 7 kommt an JEDER Prompt) → kein weiteres Signal.
+    vt.inputWrite("\x1b]7;file:///Users/nobser/Projekte\x07");
+    QCOMPARE(spy.count(), 1);
+
+    // ST-terminiert (ESC \) statt BEL — beide Formen sind zulässig.
+    vt.inputWrite("\x1b]7;file:///tmp/zwei\x1b\\");
+    QCOMPARE(vt.reportedWorkingDirectory(), QStringLiteral("/tmp/zwei"));
+    QCOMPARE(spy.count(), 2);
+
+    // Prozent-Kodierung: Leerzeichen und UTF-8-Umlaute müssen dekodiert werden.
+    vt.inputWrite("\x1b]7;file:///tmp/mit%20Leerzeichen/Gr%C3%BC%C3%9Fe\x07");
+    QCOMPARE(vt.reportedWorkingDirectory(),
+             QStringLiteral("/tmp/mit Leerzeichen/Grüße"));
+
+    // Windows: der führende Trenner vor dem Laufwerksbuchstaben gehört zur URL, nicht
+    // zum Pfad — sonst entstünde „/C:/Users/…", das kein Werkzeug öffnen kann.
+    vt.inputWrite("\x1b]7;file:///C:/Users/nobser\x07");
+    QCOMPARE(vt.reportedWorkingDirectory(), QStringLiteral("C:/Users/nobser"));
+    // PowerShell kodiert den Doppelpunkt (EscapeDataString) — gleiches Ergebnis.
+    vt.inputWrite("\x1b]7;file:///D%3A/Projekte\x07");
+    QCOMPARE(vt.reportedWorkingDirectory(), QStringLiteral("D:/Projekte"));
+
+    // Unbrauchbares darf den bekannten Stand NICHT überschreiben: fremdes Schema,
+    // leerer Rumpf, Host ohne Pfad.
+    const int before = spy.count();
+    vt.inputWrite("\x1b]7;http://example.com/x\x07");
+    vt.inputWrite("\x1b]7;\x07");
+    vt.inputWrite("\x1b]7;file://rechner\x07");
+    QCOMPARE(vt.reportedWorkingDirectory(), QStringLiteral("D:/Projekte"));
+    QCOMPARE(spy.count(), before);
+}
+
+// Der Host-Teil entscheidet, ob der Pfad zu DIESER Maschine gehört. Fremde Hosts
+// (SSH, Container) werden übernommen, aber als nicht-lokal gekennzeichnet — sonst
+// liefe ein Pfad von einem anderen Rechner als lokales Verzeichnis weiter.
+void TestVtScreen::osc7HostHandling() {
+    {   // "localhost" zählt als diese Maschine.
+        VtScreen vt(24, 80);
+        vt.inputWrite("\x1b]7;file://localhost/tmp/eins\x07");
+        QCOMPARE(vt.reportedWorkingDirectory(), QStringLiteral("/tmp/eins"));
+        QVERIFY(vt.reportedWorkingDirectoryIsLocal());
+    }
+    {   // Der eigene Rechnername ebenfalls (so meldet es bash mit gesetztem $HOSTNAME).
+        const QString own = QSysInfo::machineHostName();
+        if (!own.isEmpty()) {
+            VtScreen vt(24, 80);
+            vt.inputWrite(("\x1b]7;file://" + own + "/tmp/zwei\x07").toUtf8());
+            QVERIFY2(vt.reportedWorkingDirectoryIsLocal(), qPrintable(own));
+            // FQDN-Form derselben Maschine gilt genauso (Shells melden mal so, mal so).
+            VtScreen vt2(24, 80);
+            vt2.inputWrite(("\x1b]7;file://" + own.section('.', 0, 0)
+                            + ".example.invalid/tmp/drei\x07").toUtf8());
+            QVERIFY(vt2.reportedWorkingDirectoryIsLocal());
+        }
+    }
+    {   // Fremder Rechner: Pfad und Host stehen bereit, aber als nicht-lokal.
+        VtScreen vt(24, 80);
+        QString host, path; bool local = true;
+        QObject::connect(&vt, &VtScreen::workingDirectoryReported,
+                         [&](const QString &p, const QString &h, bool l) {
+                             path = p; host = h; local = l;
+                         });
+        vt.inputWrite("\x1b]7;file://qtmux-fremder-rechner/opt/build\x07");
+        QCOMPARE(path, QStringLiteral("/opt/build"));
+        QCOMPARE(host, QStringLiteral("qtmux-fremder-rechner"));
+        QVERIFY(!local);
+        QVERIFY(!vt.reportedWorkingDirectoryIsLocal());
+        QCOMPARE(vt.reportedWorkingDirectoryHost(),
+                 QStringLiteral("qtmux-fremder-rechner"));
+    }
+}
+
+// Die Vorrangregel der Session (QTMUX-108): Eine lokale Meldung schlägt den gepollten
+// Wert; ohne Meldung — oder bei einem fremden Rechner — bleibt der bisherige Weg gültig.
+// (Liegt hier statt in tst_session, weil der Auftrag nur diese Testdatei umfasst.)
+void TestVtScreen::osc7TakesPrecedenceOverPolling() {
+    using qtmux::effectiveWorkingDirectory;
+    // Gemeldet + lokal gewinnt — genau der PowerShell-Fall, wo der gepollte Wert
+    // dauerhaft das Startverzeichnis zeigt.
+    QCOMPARE(effectiveWorkingDirectory(QStringLiteral("D:/Projekte/QTmux"), true,
+                                       QStringLiteral("C:/Windows/System32")),
+             QStringLiteral("D:/Projekte/QTmux"));
+    // Fremder Rechner (SSH/Container): der Pfad existiert hier nicht → gepollter Wert.
+    QCOMPARE(effectiveWorkingDirectory(QStringLiteral("/opt/build"), false,
+                                       QStringLiteral("/Users/nobser")),
+             QStringLiteral("/Users/nobser"));
+    // Keine Meldung → unverändertes Verhalten.
+    QCOMPARE(effectiveWorkingDirectory(QString(), true, QStringLiteral("/Users/nobser")),
+             QStringLiteral("/Users/nobser"));
+}
 
 // Alternate Screen (DECSET/DECRST 1049) wird verfolgt (QTMUX-104): daran hängt, ob
 // TerminalItem Maus-Events an die App weiterleitet — im Primary Screen (Shell am Prompt)

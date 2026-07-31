@@ -11,6 +11,19 @@ namespace qtmux {
 
 class VtScreen;
 
+/// Vorrangregel fürs Arbeitsverzeichnis (QTMUX-108), Gui-frei und damit prüfbar:
+/// Ein von der Shell SELBST gemeldeter **lokaler** Pfad (OSC 7) schlägt den gepollten
+/// Wert aus `Pty::currentWorkingDirectory()`. Fehlt die Meldung — oder gehört sie zu
+/// einem fremden Rechner —, bleibt es beim bisherigen Weg.
+/// 🔑 Warum die Meldung gewinnt: Der gepollte Wert ist bei PowerShell schlicht falsch
+/// (`Set-Location` lässt das Win32-Arbeitsverzeichnis stehen), und bei `ssh`/Containern
+/// beschreibt er den lokalen Client statt dessen, was der Anwender sieht.
+/// 🔑 Warum ein FREMDER Host hier nicht gewinnt: Dieser Wert wird weiterverwendet, um
+/// Sessions zu persistieren und das Verzeichnis an neue Shells zu vererben — ein Pfad
+/// von einer anderen Maschine existiert hier womöglich gar nicht.
+QString effectiveWorkingDirectory(const QString &reported, bool reportedIsLocal,
+                                  const QString &polled);
+
 /// Eine Terminal-Session: bündelt ein Backend (PTY/SSH/Serial/App) mit seinem
 /// VT-Screen und verdrahtet beide. Backend-agnostisch — die UI spricht nur mit Session.
 class Session : public QObject {
@@ -76,16 +89,24 @@ public:
     QString screenText() const;
     /// Gesamte Scrollback-Historie als Klartext (für externe Steuerung / MCP).
     QString scrollbackText() const;
-    /// Aktuelles Arbeitsverzeichnis des Backends (für Persistenz).
-    QString currentWorkingDirectory() const {
-        return m_backend ? m_backend->currentWorkingDirectory() : QString();
-    }
+    /// Aktuelles Arbeitsverzeichnis (für Persistenz und die Vererbung an neue Shells):
+    /// bevorzugt das von der Shell gemeldete lokale Verzeichnis (OSC 7, QTMUX-108),
+    /// sonst die Abfrage am Backend. Regel in effectiveWorkingDirectory().
+    QString currentWorkingDirectory() const;
     /// Gecachtes Arbeitsverzeichnis (siehe refreshWorkingDirectory). Leer bei
     /// Nicht-Shell-Sessions (SSH/Seriell/Plugin haben kein sinnvolles lokales CWD).
     QString workingDirectory() const { return m_workingDir; }
+    /// Rechnername aus der letzten OSC-7-Meldung, wenn das Verzeichnis auf einem
+    /// FREMDEN Rechner liegt (SSH, Container) — sonst leer. Rein informativ; der Pfad
+    /// steht dann trotzdem in workingDirectory(), taugt aber nicht als lokales Ziel.
+    QString workingDirectoryHost() const { return m_reportedLocal ? QString() : m_reportedHost; }
+    /// Liegt das angezeigte Arbeitsverzeichnis auf einem fremden Rechner?
+    bool workingDirectoryIsRemote() const { return m_cwdReported && !m_reportedLocal; }
     /// Fragt das Arbeitsverzeichnis live ab (nur Shell) und meldet bei Änderung
     /// workingDirectoryChanged. Vom SessionModel periodisch aufgerufen (CWD ändert
     /// sich nur gelegentlich → günstiges Polling statt teurer Abfrage je Repaint).
+    /// Meldet die Shell selbst (OSC 7, QTMUX-108), unterbleibt das Pollen ganz — die
+    /// Meldung ist genauer und würde sonst vom gepollten Wert wieder überschrieben.
     void refreshWorkingDirectory();
     /// PID des zugrundeliegenden Prozesses (Shell), oder -1 — für MCP-Zuordnung.
     qint64 processId() const { return m_backend ? m_backend->processId() : -1; }
@@ -238,12 +259,21 @@ private:
     void onProgress(int state, int value);      // OSC 9;4
     void onPromptMarker(char kind, int exitCode); // OSC 133
     void onAgentEvent(const QString &kind, const QString &text); // OSC 777;qtmux-event
+    /// OSC 7: von der Shell gemeldetes Arbeitsverzeichnis übernehmen (QTMUX-108).
+    void onWorkingDirectoryReported(const QString &path, const QString &host, bool local);
 
     std::unique_ptr<ITerminalBackend> m_backend;
     std::unique_ptr<VtScreen> m_screen;
     Type m_type = Type::Shell;
     QString m_title = QStringLiteral("Shell");
-    QString m_workingDir;      // gecachtes Arbeitsverzeichnis (nur Shell)
+    QString m_workingDir;      // gecachtes Arbeitsverzeichnis (Polling oder OSC 7)
+    // OSC 7 (QTMUX-108): hat die Shell ihr Verzeichnis je selbst gemeldet, und gehört
+    // die Meldung zu dieser Maschine? Ungemeldet heißt „unbekannt" — dann bleibt der
+    // bisherige Polling-Weg unverändert in Kraft.
+    bool m_cwdReported = false;
+    bool m_reportedLocal = true;
+    QString m_reportedDir;     // zuletzt gemeldeter Pfad (getrennt vom Anzeige-Cache)
+    QString m_reportedHost;
     QString m_agentId;
     QString m_agentCommand;    // zuletzt erkannte Agenten-Kommandozeile (QTMUX-85)
     QString m_agentSessionRef; // vom Agenten gemeldete Unterhaltungs-ID (QTMUX-98)

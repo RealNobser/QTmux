@@ -3,6 +3,8 @@
 
 #include <vterm.h>
 #include <QChar>
+#include <QSysInfo>
+#include <QUrl>
 
 namespace qtmux {
 
@@ -45,6 +47,51 @@ Cell toCell(VTermScreen *screen, const VTermScreenCell &vc) {
         std::swap(cell.fgDefault, cell.bgDefault);
     }
     return cell;
+}
+
+// OSC 7 (`file://<host>/<pfad>`) in Host und Pfad zerlegen; beide werden dabei
+// prozent-dekodiert (Leerzeichen, Umlaute, …). Rückgabe false = nichts Verwertbares;
+// dann bleibt der zuletzt bekannte Stand stehen, statt ihn mit Müll zu überschreiben.
+bool parseOsc7(const QByteArray &raw, QString &path, QString &host) {
+    const QByteArray s = raw.trimmed();
+    if (s.isEmpty()) return false;
+
+    QByteArray hostEnc, pathEnc;
+    if (s.startsWith("file://")) {
+        const QByteArray rest = s.mid(7);
+        const int slash = rest.indexOf('/');
+        if (slash < 0) return false;      // "file://host" ohne Pfad — kein Verzeichnis
+        hostEnc = rest.left(slash);
+        pathEnc = rest.mid(slash);        // führender '/' gehört zum Pfad
+    } else if (s.startsWith("/")) {
+        pathEnc = s;                      // schemalos — kommt in freier Wildbahn vor
+    } else {
+        return false;                     // fremdes Schema (http://…) ist nicht unsere Sache
+    }
+
+    host = QUrl::fromPercentEncoding(hostEnc);
+    path = QUrl::fromPercentEncoding(pathEnc);
+    if (path.isEmpty()) return false;
+    // Windows: `file:///C:/Users/…` ergibt „/C:/Users/…" — der führende Trenner gehört
+    // zur URL, nicht zum Pfad. (Die Shell kodiert den Doppelpunkt oft als %3A, er ist
+    // hier also schon zurückgewandelt.)
+    if (path.size() >= 3 && path.at(0) == QLatin1Char('/') && path.at(2) == QLatin1Char(':')
+        && path.at(1).isLetter())
+        path.remove(0, 1);
+    return true;
+}
+
+// Zählt der gemeldete Host als „diese Maschine"? Leer und `localhost` immer, sonst der
+// eigene Rechnername. FQDN und Kurzform gelten als gleich — welche Form die Shell meldet,
+// hängt an ihrer Konfiguration (bash nimmt $HOSTNAME, das mal so, mal so gefüllt ist).
+bool hostIsLocal(const QString &host) {
+    if (host.isEmpty()) return true;
+    const QString h = host.toLower();
+    if (h == QLatin1String("localhost") || h == QLatin1String("127.0.0.1")) return true;
+    const QString own = QSysInfo::machineHostName().toLower();
+    if (own.isEmpty()) return false;      // Rechnername unbekannt → lieber „fremd" annehmen
+    if (h == own) return true;
+    return h.section(QLatin1Char('.'), 0, 0) == own.section(QLatin1Char('.'), 0, 0);
 }
 
 // --- C-Callbacks (libvterm ruft mit user = VtScreen*) -----------------------
@@ -450,6 +497,23 @@ void VtScreen::cbOsc(int command, const char *str, int len, bool initial, bool f
             }
             emit agentEvent(kind, text);
         }
+        break;
+    }
+    case 7: {  // OSC 7 ; file://<host>/<pfad>  — die Shell meldet ihr Arbeitsverzeichnis
+        // Der einzige Weg, der auch dort trägt, wo das Prozess-Arbeitsverzeichnis nicht
+        // die Wahrheit sagt: PowerShell (`Set-Location` ist ein Provider-Begriff und ruft
+        // kein SetCurrentDirectory), `ssh` und Container (das Verzeichnis liegt auf einer
+        // anderen Maschine). QTmux leitet nichts ab — die Shell meldet, wir übernehmen.
+        QString path, host;
+        if (!parseOsc7(data, path, host)) break;
+        const bool local = hostIsLocal(host);
+        // OSC 7 kommt an JEDER Prompt; nur echte Änderungen weitermelden.
+        if (path == m_reportedDir && host == m_reportedHost && local == m_reportedLocal)
+            break;
+        m_reportedDir = path;
+        m_reportedHost = host;
+        m_reportedLocal = local;
+        emit workingDirectoryReported(path, host, local);
         break;
     }
     case 133: {  // OSC 133 ; A|B|C|D[;exit]   (Shell-Integration / FinalTerm)

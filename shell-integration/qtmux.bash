@@ -7,10 +7,39 @@
 # Installation: in ~/.bashrc ergänzen:
 #     source /pfad/zu/qtmux/shell-integration/qtmux.bash
 
+# Prozent-Kodierung für die OSC-7-URL. Läuft in einer Subshell, damit LC_ALL=C lokal
+# bleibt: nur so werden Nicht-ASCII-Zeichen BYTEWEISE kodiert ("ä" -> %C3%A4). Ohne
+# externe Werkzeuge, damit die Integration auch in kargen Umgebungen trägt.
+_qtmux_urlencode() (
+    LC_ALL=C
+    str="$1"
+    while [ -n "$str" ]; do
+        safe="${str%%[!a-zA-Z0-9/:_.~-]*}"   # längstes unbedenkliches Stück
+        printf '%s' "$safe"
+        str="${str#"$safe"}"
+        if [ -n "$str" ]; then
+            # Erstes Byte des Rests kodieren. Die Maske ist Pflicht: bash liefert für
+            # Bytes >= 0x80 eine NEGATIVE Zahl (signed char) und schriebe sonst
+            # "%FFFFFFFFFFFFFFC3" statt "%C3" — bei jedem Umlaut im Pfad.
+            byte=$(printf '%d' "'$str")
+            printf '%%%02X' "$((byte & 0xFF))"
+            str="${str#?}"
+        fi
+    done
+)
+
+# OSC 7: die Shell meldet ihr Arbeitsverzeichnis selbst (QTMUX-108). Der einzige Weg,
+# der auch über ssh und in Containern stimmt — dort kennt QTmux den Ort sonst nicht.
+_qtmux_cwd() {
+    printf '\e]7;file://%s%s\a' \
+        "${HOSTNAME:-$(hostname 2>/dev/null)}" "$(_qtmux_urlencode "$PWD")"
+}
+
 _qtmux_prompt() {
     local exit=$?
     printf '\e]133;D;%s\a' "$exit"   # vorheriger Befehl beendet (mit Exit-Code)
     printf '\e]133;A\a'              # neue Prompt beginnt
+    _qtmux_cwd                       # Arbeitsverzeichnis melden (OSC 7)
 }
 # precmd-Äquivalent über PROMPT_COMMAND (bestehendes erhalten):
 PROMPT_COMMAND="_qtmux_prompt${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
