@@ -29,6 +29,8 @@ private slots:
     void writeWithEnterKeepsOrderOnRapidCalls();
     void agentCommandLineIsRemembered();
     void restoredAgentSetsIdentityAndRunsCommand();
+    void osc7ReportedDirectoryWinsOverPolling();
+    void osc7RemoteDirectoryIsNotUsedAsLocalCwd();
 };
 
 static QString rowText(const VtScreen &vt, int row) {
@@ -418,6 +420,77 @@ void TestSession::activityIsOnlyTrustedOnceReported() {
     s.requestActivity(QStringLiteral("busy"));
     QVERIFY(s.activityReported());
     QCOMPARE(s.activityInt(), int(Session::Activity::Running));
+}
+
+// OSC 7 (QTMUX-108): Die Shell meldet ihr Arbeitsverzeichnis selbst — und diese Meldung
+// schlägt den gepollten Wert aus dem Backend. Geprüft wird die volle Kette
+// PTY -> libvterm -> VtScreen -> Session, nicht nur die Regel für sich.
+void TestSession::osc7ReportedDirectoryWinsOverPolling() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    // Bewusst ein Verzeichnis, in dem der Prozess NICHT steht (und das es nirgends
+    // gibt): Nur so kann der Wert überhaupt aus der Meldung stammen. Genau das ist der
+    // PowerShell-Fall — dort bleibt das Prozess-Arbeitsverzeichnis am Startort stehen.
+    const auto cmd = qtmux_test::emitRawThenWait(
+        QByteArrayLiteral("\033]7;file:///qtmux-osc7/gemeldet\007"), 5);
+    pty->setProgram(cmd.program);
+    pty->setArguments(cmd.args);
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.start(80, 24);
+
+    QTRY_VERIFY_WITH_TIMEOUT(
+        sess.workingDirectory() == QStringLiteral("/qtmux-osc7/gemeldet"), 5000);
+    QVERIFY(!sess.workingDirectoryIsRemote());
+    QVERIFY(sess.workingDirectoryHost().isEmpty());
+    // Auch der Weg, an dem Persistenz und die Vererbung an neue Shells hängen.
+    QCOMPARE(sess.currentWorkingDirectory(), QStringLiteral("/qtmux-osc7/gemeldet"));
+
+    // Das Polling darf die Meldung NICHT wieder überschreiben — sonst flackerte die
+    // Anzeige im 1500-ms-Takt des SessionModel zwischen beiden Werten hin und her.
+    sess.refreshWorkingDirectory();
+    QCOMPARE(sess.workingDirectory(), QStringLiteral("/qtmux-osc7/gemeldet"));
+
+    // Kontrolle: Ohne Meldung liefert derselbe Weg etwas anderes. (Weich geprüft — ob
+    // das Backend ein CWD ermitteln kann, hängt an der Plattform; auf Windows liest es
+    // den PEB eines fremden Prozesses. Leer ist kein Befund, ein GLEICHER Wert schon.)
+    Session plain;
+    auto *pty2 = new PtyBackend;
+    const auto idle = qtmux_test::emitRawThenWait(QByteArrayLiteral("x"), 5);
+    pty2->setProgram(idle.program);
+    pty2->setArguments(idle.args);
+    plain.attachBackend(pty2, Session::Type::Shell, 80, 24);
+    plain.start(80, 24);
+    QTest::qWait(500);
+    QVERIFY(plain.currentWorkingDirectory() != QStringLiteral("/qtmux-osc7/gemeldet"));
+}
+
+// Ein Verzeichnis auf einem FREMDEN Rechner (SSH, Container) wird angezeigt, darf aber
+// nicht als lokales Arbeitsverzeichnis weiterlaufen: Dieser Wert wird persistiert und
+// an neue Shells vererbt — der Pfad existiert hier womöglich gar nicht.
+void TestSession::osc7RemoteDirectoryIsNotUsedAsLocalCwd() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    const auto cmd = qtmux_test::emitRawThenWait(
+        QByteArrayLiteral("\033]7;file://qtmux-fremder-rechner/opt/build\007"), 5);
+    pty->setProgram(cmd.program);
+    pty->setArguments(cmd.args);
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.start(80, 24);
+
+    QTRY_VERIFY_WITH_TIMEOUT(
+        sess.workingDirectory() == QStringLiteral("/opt/build"), 5000);
+    QVERIFY(sess.workingDirectoryIsRemote());
+    QCOMPARE(sess.workingDirectoryHost(), QStringLiteral("qtmux-fremder-rechner"));
+    QVERIFY2(sess.currentWorkingDirectory() != QStringLiteral("/opt/build"),
+             "Pfad einer anderen Maschine darf nicht als lokales cwd durchgereicht werden");
+
+    // Und das Polling darf die Anzeige nicht durch das lokale Verzeichnis des
+    // ssh-Clients ersetzen — sonst stünde unter der Kachel der Ort des CLIENTS, während
+    // der Anwender auf der Gegenstelle arbeitet. Genau daran hängt das Gate in
+    // refreshWorkingDirectory(): Bei einer entfernten Meldung fällt currentWorkingDirectory()
+    // ja bewusst auf den gepollten Wert zurück, der hier NICHT gespeichert werden darf.
+    sess.refreshWorkingDirectory();
+    QCOMPARE(sess.workingDirectory(), QStringLiteral("/opt/build"));
 }
 
 QTEST_MAIN(TestSession)
