@@ -236,6 +236,42 @@ qt_add_translations(qtmux
     RESOURCE_PREFIX "/i18n"
 )
 
+# Qt-EIGENE Übersetzungen mitliefern (QTMUX-117) ------------------------------
+# Die Beschriftungen der Standardknöpfe ("OK", "Cancel", "Save"…) kommen NICHT aus
+# unseren .ts, sondern aus Qts eigener Übersetzung (Kontext QPlatformTheme). Ohne
+# sie heißt der Knopf eines AppDialog mit `standardButtons` auch auf Deutsch
+# "Cancel" — das betrifft jeden Dialog der App.
+#
+# 🔑 Eingebettet statt mitgeliefert: Ein Deployment-Werkzeug pro Plattform anders zu
+# konfigurieren (macdeployqt kopiert translations NICHT, windeployqt schon,
+# linuxdeploy je nach Plugin) wäre drei Fehlerquellen für dieselbe Datei — und die
+# Diagnose "Knopf ist englisch" träfe nur die gepackte App, nie den Entwickler-Build.
+# Als Ressource liegt die .qm überall gleich unter :/i18n/.
+if(NOT DEFINED QT_TRANSLATIONS_DIR)
+    get_target_property(_qtmux_qmake Qt6::qmake IMPORTED_LOCATION)
+    execute_process(COMMAND "${_qtmux_qmake}" -query QT_INSTALL_TRANSLATIONS
+                    OUTPUT_VARIABLE QT_TRANSLATIONS_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+endif()
+set(_qtmux_qtbase_qm "")
+foreach(_lang de en)
+    if(EXISTS "${QT_TRANSLATIONS_DIR}/qtbase_${_lang}.qm")
+        list(APPEND _qtmux_qtbase_qm "${QT_TRANSLATIONS_DIR}/qtbase_${_lang}.qm")
+    endif()
+endforeach()
+if(_qtmux_qtbase_qm)
+    # BASE schneidet den Installationspfad ab -> :/i18n/qtbase_de.qm
+    qt_add_resources(qtmux "qtmux_qt_translations"
+        PREFIX "/i18n"
+        BASE "${QT_TRANSLATIONS_DIR}"
+        FILES ${_qtmux_qtbase_qm}
+    )
+else()
+    # Kein Abbruch: eine Qt-Installation ohne Übersetzungen ist baubar, die
+    # Standardknöpfe bleiben dann eben englisch (bisheriges Verhalten).
+    message(WARNING "qtbase_<lang>.qm nicht gefunden in '${QT_TRANSLATIONS_DIR}' — "
+                    "Standardknöpfe (OK/Cancel) bleiben unübersetzt (QTMUX-117).")
+endif()
+
 # Deutsch ist die QUELLSPRACHE: nach jedem lupdate-Lauf neue Einträge in
 # qtmux_de.ts automatisch als finished (Übersetzung = Quelltext) markieren —
 # sonst warnt lrelease bei jedem Build über unfinished/ignorierte Strings.

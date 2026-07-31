@@ -68,7 +68,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37) |
-| `tests/` | 19 ctest-Tests: 18 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio) + `test_doc_duplicates` (reines CMake-Skript) |
+| `tests/` | 20 ctest-Tests: 19 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
 
@@ -326,7 +326,9 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   `cmake --build … --target update_translations` (lupdate scannt automatisch alle Targets
   inkl. `qtmux_core`); `cmake/FinishSourceLanguageTs.cmake` finalisiert die DE-Datei
   automatisch — **nur `i18n/qtmux_en.ts` braucht echte Übersetzungspflege**. Eigennamen
-  (PowerShell, Bash, …) bleiben unübersetzt.
+  (PowerShell, Bash, …) bleiben unübersetzt. Neben den eigenen `.qm` wird **`qtbase_<lang>`**
+  eingebettet und geladen (QTMUX-117) — sonst bleiben Qts eigene Texte englisch, allen voran
+  die Standardknöpfe; Mechanik in den QML-/Theming-Lektionen.
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
@@ -370,18 +372,18 @@ dual angelegt. Danach zwei Nachzügler von der Windows-Seite:
 Qt **6.10.3** lokal installiert und im `windows`-Preset vor 6.11.1 gezogen (`e1eef80`), und
 das Fenster startet nicht mehr **neben** dem Bildschirm (`1bb0ba1`, Anwenderbefund „App startet
 nicht, nichts zu sehen" — Mechanik in der Feature-Referenz).
-**Teststände (alle grün):** macOS **19/19** (`macos-release`), Windows **18/18**
-(Entwicklungsmaschine `30516935D11`, `windows` **und** `windows-release`), Linux **18/18**
-(rtzsvr02, **Container** — s. „Build & Test (Linux)").
+**Teststände:** macOS **20/20** grün (Debug `macos-test` **und** `macos-release`) — der 20. ist
+`test_i18n` aus QTMUX-117. Windows und Linux standen zuletzt auf **18/18** bzw. **19/19** und
+sind für QTMUX-88/117 **noch nicht nachgezogen**; dort werden 19 bzw. 20 erwartet (`test_pty`
+fällt umgebungsbedingt). Dass die neue Ressource dort überhaupt gefunden wird, ist geprüft:
+`qtbase_de.qm` liegt sowohl auf rtzbld01 als auch im Linux-`qtcache`.
 `test_pty` fällt auf Windows/Linux umgebungsbedingt (nicht-interaktive Shell/ConPTY); auf Windows
 braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
-**Nächster Punkt:** **QTMUX-38** (Shell-Helfer in MSI/ZIP), dann **QTMUX-117**
-(`qtbase_<lang>`-Translator — „OK"/„Cancel" bleiben sonst englisch; die Arbeit steckt im
-Mitliefern der `.qm` in alle drei Pakete), die fehlende **Rastergröße** im Statusleisten-Feld
-und der Air-Backlog 90/94/96. **QTMUX-108 (OSC 7)** ist der Ausreißer nach oben mit dem besten
+**Nächster Punkt:** **QTMUX-38** (Shell-Helfer in MSI/ZIP), dann die fehlende
+**Rastergröße** im Statusleisten-Feld und der Air-Backlog 90/94/96. **QTMUX-108 (OSC 7)** ist der Ausreißer nach oben mit dem besten
 Verhältnis — der einzige Weg zum CWD bei PowerShell/`ssh`/Containern, und damit die Grundlage
 der Verzeichniszeile in der Kachel. Parallel offen bleibt der **Owner-Durchklick** der GUI
 (Rezepte in der Abnahme-Tabelle unten) — dort warten **23 fertige Tickets** auf Abnahme.
@@ -470,16 +472,21 @@ die Zeile identisch war.
 
 ### Jira/Confluence-Stand (2026-07-31, dual synchron)
 
-Beide Systeme synchron bis **QTMUX-119**.
-**Am 2026-07-31 dazugekommen:** **97** (Emoji-Artefakte, Done — der Fix trug vorher irrtümlich
-die Nummer 88, die aber der AgentRegistry gehört), **98** (Fortsetzungs-Modi, In Progress),
-**118** (Chevron klappt wieder aus, In Progress) und **119** (Fenster neben dem Bildschirm — Fix `1bb0ba1` stand ohne Nummer in der Abnahme-Tabelle, nachgetragen); **85** bleibt In Progress, **88** ist nach
-der zweiten Hälfte **Done** (Lektion oben im Wiedereinstieg). Design 1a/2a je Stufe angelegt (Stufen 1–6 =
-QTMUX-109…114, Stufe 7 = **115**), dazu **116** (Umbenennen-Indikator, In Progress) und **117**
-(Qt-Standardknöpfe „OK"/„Cancel" unübersetzt — kein `qtbase_<lang>`-Translator, Backlog);
-QTMUX-2 ist Done. Verzeichniszeile (106), OSC 7 (108) und der `--screenshot`-Windows-Fix (107)
-waren bereits von der Windows-Session angelegt. Confluence-Entwicklerdoku-Seite „GUI-Auffrischung
-Design 1a/2a" dual angelegt (on-prem **212598811**, Cloud **233177089**).
+Beide Systeme synchron bis **QTMUX-119** und im Status **deckungsgleich** (gegengeprüft:
+identische Menge offener Keys in beiden Systemen).
+
+🔑 **Statuskonvention geschärft (2026-07-31) — vorher zeigte das Board ein falsches Bild.**
+„Fertig + verifiziert → Done" meint **selbst verifiziert** (Tests, E2E, in `main`), **nicht**
+„vom Owner abgenommen". Weil ich es anders gelesen hatte, standen **24 fertige Tickets auf
+In Progress** (und QTMUX-114 sogar auf Backlog): 56 offene Vorgänge, davon 24 scheinbar in
+Arbeit — tatsächlich war genau **eines** unfertig. Alle 24 sind mit Kommentar nachgezogen.
+**Die offene Owner-Abnahme wird bewusst NICHT über den Ticket-Status geführt**, sondern über
+die Abnahme-Tabelle unten (dort steht je Punkt ein Rezept); ein Befund bei der Abnahme öffnet
+das Ticket wieder oder erzeugt ein Folgeticket. Seither gilt: **in Arbeit ist nur, woran gerade
+jemand sitzt** — alles andere ist Backlog oder Done.
+
+Confluence-Entwicklerdoku-Seiten: „GUI-Auffrischung Design 1a/2a" (on-prem **212598811**,
+Cloud **233177089**) und „Agenten-Wiederherstellung" (**212598815** / **233439233**).
 🔑 Vor jedem neuen Ticket in **beiden** Systemen die höchste Nummer holen (`ORDER BY key DESC`) —
 die Windows-Session legt ebenfalls an (die alte „bis 103"-Notiz war prompt veraltet).
 **Noch nachzutragen (nur vom Mac):** ein Ticket für **Qt 6.10.3 lokal + Preset-Reihenfolge**
@@ -510,6 +517,7 @@ Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme
 | **119** | **Fenster neben dem Bildschirm** (`1bb0ba1`) | QTmux auf einem zweiten Monitor platzieren, beenden, Monitor abziehen, starten → Fenster muss zentriert auf dem verbleibenden Bildschirm erscheinen; danach eine normale Position **nicht** verschoben finden |
 | **118** | **Chevron klappt auch wieder aus** | Seitenleiste einklappen — oben muss ein `›` stehen, das sie wieder aufklappt; ToolTip und Richtung prüfen, in **beiden** Designs |
 | **114** | **Zurücksetzen / Import / Export** (Stufe 6) | „Diese Seite zurücksetzen" auf einer geänderten Seite (Werte springen sofort auf Standard, danach ist der Punkt ausgegraut) · „Alle Einstellungen zurücksetzen …" **abbrechen** und bestätigen · **Export in eine Datei und Import daraus** — das ist der Teil, den hier **kein Automat** prüfen konnte (native Dateidialoge, s. E2E-Fallen): danach muss der geänderte Wert live stehen, und die offenen Fenster/Sessions müssen unberührt sein |
+| **117** | **Standardknöpfe auf Deutsch** (`qtbase`-Translator) | einen beliebigen Dialog mit Standardknöpfen öffnen (z. B. „Alle Einstellungen zurücksetzen …" oder die Beenden-Rückfrage): der Knopf muss **„Abbrechen"** heißen, nicht „Cancel" — und in englischer Oberfläche weiterhin „Cancel". 🔑 Der letzte Millimeter ist hier **nicht** automatisierbar: Test und A/B belegen Einbettung, Laden und Kontext, aber kein Automat kann ohne Bedienungshilfen-Recht einen Dialog öffnen und ablesen |
 
 ⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
 Sessions **nicht** (Inhalt liegt im Scrollback) — betroffene Sessions neu starten.
@@ -1183,11 +1191,25 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   widerlegt, wieder entfernt). Lösung: `opacity: enabled ? 1.0 : 0.45` in
   [qml/Ui/ShortcutMenuItem.qml](qml/Ui/ShortcutMenuItem.qml) — dimmt die ganze Zeile inklusive
   Kürzel-Label. A/B am Screenshot belegt.
-  ⚠️ **Die Knöpfe eines `AppDialog` mit `standardButtons` heißen „OK"/„Cancel" — auch auf
-  Deutsch.** Nur der App-Translator wird installiert, **kein** `qtbase_<lang>`; die
-  Standardbeschriftungen kommen aber aus Qts eigener Übersetzung. Betrifft alle Dialoge mit
-  Standardknöpfen, nicht nur die aus Stufe 6 (per UIA belegt: `Buttons: … | OK | Cancel`).
-  Noch kein Ticket — Kandidat für den Backlog.
+  🔑 **Standardknöpfe brauchen einen ZWEITEN Translator (QTMUX-117, behoben 2026-07-31).**
+  Die Beschriftungen von `standardButtons` kommen nicht aus unseren `.ts`, sondern aus Qts
+  eigener Übersetzung im Kontext **`QPlatformTheme`** — vorher hieß der Knopf jedes
+  `AppDialog` auch auf Deutsch „Cancel" (per UIA belegt: `Buttons: … | OK | Cancel`).
+  `applyLanguage` in [main.cpp](src/app/main.cpp) tauscht deshalb über `swapTranslator`
+  **zwei** Translator: `qtmux_<lang>` und `qtbase_<lang>`.
+  🔑 **Die `.qm` wird EINGEBETTET, nicht mitgeliefert** (CMakeLists, `qt_add_resources` mit
+  `BASE ${QT_TRANSLATIONS_DIR}` aus `qmake -query`). Der naheliegende Weg — jedes der drei
+  Deployment-Werkzeuge die Datei kopieren lassen — wären drei Konfigurationen für dieselbe
+  Datei (macdeployqt kopiert `translations` **nicht**, windeployqt schon, linuxdeploy je nach
+  Plugin), und der Fehler träfe **nur die gepackte App**, nie den Entwickler-Build. Als
+  Ressource liegt sie überall unter `:/i18n/`. Fehlt sie in einer Qt-Installation, gibt es
+  eine CMake-**Warnung** und `test_i18n` wird gar nicht erst angelegt — ein roter Test wäre
+  hier ein Umgebungsproblem, keine Regression. Gegengeprüft: die aqt-Installationen auf
+  rtzbld01 (Windows) und im `qtcache` (Linux) führen `qtbase_de.qm` beide.
+  🔑 Messfalle: In einer `.qm` stehen die Texte **UTF-16BE**, ein ASCII-`grep -a` auf das
+  Binary findet sie also prinzipiell nicht. Ressourcen*namen* legt Qt dagegen unkomprimiert
+  als UTF-16BE ab — `"qtbase_de".encode("utf-16-be")` im Binary zählen ist damit der
+  belastbare A/B-Beleg für die Einbettung (vorher 0, nachher 1).
 - App-Icon: `resources/appicon/` (SVG → icns/ico/png via `generate.sh` + Qt-`svgrender`-
   Mini-Tool, da kein rsvg/inkscape auf den Maschinen).
 

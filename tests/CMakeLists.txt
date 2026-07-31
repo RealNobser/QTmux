@@ -23,6 +23,24 @@ qt_add_executable(test_agent tst_agent.cpp)
 target_link_libraries(test_agent PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_agent COMMAND test_agent)
 
+# QTMUX-117: Qt-eigene Uebersetzungen (Standardknoepfe). Der Test bekommt DIESELBE
+# Dateiliste eingebettet wie die App (`_qtmux_qtbase_qm` aus der Haupt-CMakeLists,
+# die hier im Subdirectory-Scope sichtbar ist) und prueft damit exakt die Kette aus
+# main.cpp: aus :/i18n laden -> installieren -> QPlatformTheme-Text.
+# Ohne gefundene .qm wird der Test gar nicht erst angelegt — dann meldet bereits die
+# Warnung beim Konfigurieren den Grund, statt dass ein roter Test ein
+# Umgebungsproblem als Regression ausgibt.
+if(_qtmux_qtbase_qm)
+    qt_add_executable(test_i18n tst_i18n.cpp)
+    target_link_libraries(test_i18n PRIVATE Qt6::Test)
+    qt_add_resources(test_i18n "test_qt_translations"
+        PREFIX "/i18n"
+        BASE "${QT_TRANSLATIONS_DIR}"
+        FILES ${_qtmux_qtbase_qm}
+    )
+    add_test(NAME test_i18n COMMAND test_i18n)
+endif()
+
 qt_add_executable(test_profiles tst_profiles.cpp)
 target_link_libraries(test_profiles PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_profiles COMMAND test_profiles)

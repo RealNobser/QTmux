@@ -37,22 +37,34 @@
 
 namespace {
 
-// Lädt die .qm-Übersetzung für `lang`, tauscht den installierten Translator aus
-// und stößt die Neuübersetzung aller QML-Bindings an.
-void applyLanguage(QGuiApplication &app, QQmlApplicationEngine &engine,
-                   QTranslator *&active, const QString &lang) {
+// Tauscht EINEN installierten Translator gegen die .qm `<basis>_<lang>` aus :/i18n.
+// Liegt keine vor (z. B. Quellsprache), wird der bisherige entfernt statt beibehalten —
+// sonst bliebe beim Wechsel de->en die deutsche Übersetzung aktiv.
+void swapTranslator(QGuiApplication &app, QTranslator *&active,
+                    const QString &base, const QString &lang) {
     auto *next = new QTranslator(&app);
-    if (next->load(QStringLiteral("qtmux_%1").arg(lang), QStringLiteral(":/i18n"))) {
+    if (next->load(QStringLiteral("%1_%2").arg(base, lang), QStringLiteral(":/i18n"))) {
         if (active) { app.removeTranslator(active); active->deleteLater(); }
         app.installTranslator(next);
         active = next;
-        engine.retranslate();
-    } else {
-        // Keine .qm (z. B. Quellsprache Deutsch) -> vorhandene Übersetzung entfernen.
-        next->deleteLater();
-        if (active) { app.removeTranslator(active); active->deleteLater(); active = nullptr; }
-        engine.retranslate();
+        return;
     }
+    next->deleteLater();
+    if (active) { app.removeTranslator(active); active->deleteLater(); active = nullptr; }
+}
+
+// Setzt die Sprache und stößt die Neuübersetzung aller QML-Bindings an.
+// 🔑 ZWEI Translator (QTMUX-117): `qtmux_<lang>` trägt unsere eigenen Texte,
+// `qtbase_<lang>` die von Qt selbst gestellten — vor allem die Beschriftungen der
+// Standardknöpfe (Kontext QPlatformTheme: "OK", "Cancel", "Save"…). Ohne den zweiten
+// heißt der Abbrechen-Knopf jedes AppDialog auch auf Deutsch "Cancel", egal wie
+// vollständig unsere .ts sind. Die Datei liegt eingebettet vor (s. CMakeLists),
+// damit sie in der gepackten App genauso da ist wie im Entwickler-Build.
+void applyLanguage(QGuiApplication &app, QQmlApplicationEngine &engine,
+                   QTranslator *&active, QTranslator *&activeQt, const QString &lang) {
+    swapTranslator(app, active, QStringLiteral("qtmux"), lang);
+    swapTranslator(app, activeQt, QStringLiteral("qtbase"), lang);
+    engine.retranslate();
 }
 
 #if !defined(Q_OS_WIN)
@@ -260,10 +272,11 @@ int main(int argc, char *argv[])
     // späteres engine.retranslate() aktualisiert gerade diese promoteten App-Menü-
     // Einträge nicht mehr (die regulären File/Edit/View-Menüs schon). singletonInstance
     // erzeugt den AppController-Singleton bereits vor dem Laden von Main.qml.
-    static QTranslator *active = nullptr;
+    static QTranslator *active = nullptr;    // eigene Texte (qtmux_<lang>)
+    static QTranslator *activeQt = nullptr;  // Qt-Standardtexte (qtbase_<lang>)
     auto *appc = engine.singletonInstance<qtmux::AppController *>("QTmux", "App");
     if (appc)
-        applyLanguage(app, engine, active, appc->language());
+        applyLanguage(app, engine, active, activeQt, appc->language());
 
     // Screenshot-Modus für QML sichtbar machen: dann darf aboutToQuit NICHT persistieren
     // (der stille Screenshot startet mit frischem Zustand und würde sonst beim exit() das
@@ -295,7 +308,7 @@ int main(int argc, char *argv[])
     if (appc) {
         QObject::connect(appc, &qtmux::AppController::languageChanged, &app,
                          [&app, &engine](const QString &lang) {
-                             applyLanguage(app, engine, active, lang);
+                             applyLanguage(app, engine, active, activeQt, lang);
                          });
     }
 
