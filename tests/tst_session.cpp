@@ -30,6 +30,10 @@ private slots:
     void agentCommandLineIsRemembered();
     void restoredAgentSetsIdentityAndRunsCommand();
     void gridSizeIsPublishedAndSignalled();
+    void gitBranchFollowsWorkingDirectory();
+    void gitBranchStaysEmptyForRemoteDirectory();
+    void queuedTextWaitsWhileBackendNeverSpoke();
+    void queuedTextIsDispatchedOnceQuiet();
     void osc7ReportedDirectoryWinsOverPolling();
     void osc7RemoteDirectoryIsNotUsedAsLocalCwd();
 };
@@ -520,6 +524,123 @@ void TestSession::osc7RemoteDirectoryIsNotUsedAsLocalCwd() {
     // ja bewusst auf den gepollten Wert zurück, der hier NICHT gespeichert werden darf.
     sess.refreshWorkingDirectory();
     QCOMPARE(sess.workingDirectory(), QStringLiteral("/opt/build"));
+}
+
+// QTMUX-58: Der Branch der Kachel haengt am Arbeitsverzeichnis der Session. Geprueft wird
+// an einem ECHTEN Repository-Verzeichnis (kein Mock) — GitInfo liest ja Dateien.
+void TestSession::gitBranchFollowsWorkingDirectory() {
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString repo = tmp.filePath(QStringLiteral("projekt"));
+    QVERIFY(QDir().mkpath(repo + QStringLiteral("/.git")));
+    QVERIFY(QDir().mkpath(repo + QStringLiteral("/unterordner")));
+    auto writeHead = [&](const QByteArray &content) {
+        QFile f(repo + QStringLiteral("/.git/HEAD"));
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write(content);
+    };
+    writeHead("ref: refs/heads/feature/xy\n");
+
+    Session s;
+    QVERIFY(s.gitBranch().isEmpty());               // ohne Verzeichnis: nichts
+
+    QSignalSpy spy(&s, &Session::gitBranchChanged);
+    // Verzeichnis ueber den echten Eingang setzen (OSC-7-Meldung, lokal).
+    s.onWorkingDirectoryReported(repo + QStringLiteral("/unterordner"), QString(), true);
+    s.refreshGitBranch();
+    QCOMPARE(s.gitBranch(), QStringLiteral("feature/xy"));
+    QVERIFY(!s.gitDetached());
+    QCOMPARE(spy.count(), 1);
+
+    // Zweiter Lauf ohne Aenderung: KEIN Signal — sonst repaintet die Sidebar im
+    // 1500-ms-Poll-Takt dauernd ohne Grund.
+    s.refreshGitBranch();
+    QCOMPARE(spy.count(), 1);
+
+    // 🔑 Der eigentliche Grund fuer den separaten Refresh: `git checkout` wechselt den
+    // Branch, OHNE dass sich das Arbeitsverzeichnis aendert.
+    writeHead("ref: refs/heads/main\n");
+    s.refreshGitBranch();
+    QCOMPARE(s.gitBranch(), QStringLiteral("main"));
+    QCOMPARE(spy.count(), 2);
+
+    // Detached HEAD -> kurzer SHA, Flag gesetzt.
+    writeHead("1234567890abcdef1234567890abcdef12345678\n");
+    s.refreshGitBranch();
+    QVERIFY(s.gitDetached());
+    QCOMPARE(s.gitBranch(), QStringLiteral("1234567"));
+}
+
+// 🔑 Ein per OSC 7 gemeldetes Verzeichnis auf einem FREMDEN Rechner darf keinen Branch
+// liefern: Existiert derselbe Pfad hier zufaellig auch, waere es ein ANDERES Repository —
+// die Kachel zeigte dann einen Branch, der mit der Sitzung nichts zu tun hat.
+void TestSession::gitBranchStaysEmptyForRemoteDirectory() {
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString repo = tmp.filePath(QStringLiteral("fremd"));
+    QVERIFY(QDir().mkpath(repo + QStringLiteral("/.git")));
+    { QFile f(repo + QStringLiteral("/.git/HEAD"));
+      QVERIFY(f.open(QIODevice::WriteOnly)); f.write("ref: refs/heads/main\n"); }
+
+    // Gegenprobe zuerst: lokal gemeldet -> Branch kommt an.
+    Session local;
+    local.onWorkingDirectoryReported(repo, QString(), true);
+    local.refreshGitBranch();
+    QCOMPARE(local.gitBranch(), QStringLiteral("main"));
+
+    // Derselbe Pfad, aber von einem fremden Host gemeldet -> leer.
+    Session remote;
+    remote.onWorkingDirectoryReported(repo, QStringLiteral("buildhost"), false);
+    QVERIFY(remote.workingDirectoryIsRemote());
+    remote.refreshGitBranch();
+    QVERIFY2(remote.gitBranch().isEmpty(),
+             "Branch eines fremden Rechners darf nicht auf der Kachel landen");
+}
+
+// QTMUX-90: Eine Session, die noch NIE etwas ausgegeben hat, ist nicht „ruhig", sondern
+// noch nicht bereit — der Eintrag muss warten. Ohne diese Sperre schriebe die
+// Warteschlange in eine Shell, deren Prompt erst noch kommt (dieselbe Falle wie beim
+// Login-Script, QTMUX-98).
+void TestSession::queuedTextWaitsWhileBackendNeverSpoke() {
+    Session s;                                   // kein Backend -> nie Ausgabe
+    QVERIFY(s.msSinceLastOutput() < 0);
+    QCOMPARE(s.queuedCount(), 0);
+
+    QSignalSpy spy(&s, &Session::queueChanged);
+    QVERIFY(s.queueText(QStringLiteral("erster")));
+    QVERIFY(s.queueText(QStringLiteral("zweiter")));
+    QCOMPARE(s.queuedCount(), 2);                // beide bleiben stehen
+    QVERIFY(spy.count() >= 2);
+
+    // Leerer/whitespace-Text wird abgewiesen: als blankes Enter waere er in einem
+    // Agenten-TUI eine HANDLUNG (bestaetigt die vorausgewaehlte Option).
+    QVERIFY(!s.queueText(QStringLiteral("   ")));
+    QCOMPARE(s.queuedCount(), 2);
+
+    // Reihenfolge bleibt FIFO.
+    QCOMPARE(s.promptQueue()->entries(),
+             QStringList({QStringLiteral("erster"), QStringLiteral("zweiter")}));
+}
+
+// Der Gegenbeweis mit echtem PTY: Sobald die Shell gesprochen hat und wieder still ist,
+// geht der eingereihte Text automatisch raus — ohne dass der Test ihn selbst schreibt.
+void TestSession::queuedTextIsDispatchedOnceQuiet() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    const auto sh = qtmux_test::interactiveShell();
+    pty->setProgram(sh.program);
+    pty->setArguments(sh.args);
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.start(80, 24);
+
+    QTest::qWait(800);                       // Prompt abwarten -> Uhr laeuft, dann Ruhe
+    QVERIFY2(sess.msSinceLastOutput() >= 0, "Shell hat nichts ausgegeben");
+
+    QVERIFY(sess.queueText(QStringLiteral("echo QUEUED_OK")));
+    // Kein write() durch den Test — die Abgabe muss von allein kommen.
+    QTRY_VERIFY_WITH_TIMEOUT(sess.screenText().contains(QStringLiteral("QUEUED_OK")), 8000);
+    QTRY_COMPARE_WITH_TIMEOUT(sess.queuedCount(), 0, 8000);
+    sess.write("\x03");
 }
 
 QTEST_MAIN(TestSession)

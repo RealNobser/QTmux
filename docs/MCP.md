@@ -40,6 +40,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `move_group` | `name`, `direction` | Ganze **Window-Gruppe** als Block in der Sidebar verschieben (`direction`: `up`/`down`) |
 | `focus_session` | `id` | **Window** aktivieren, in dem die Session als Pane liegt (Window-Modell) |
 | `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard 60), `broadcast?` | Text in die Session tippen; Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt) |
+| `queue_text` | `id`, `text?`, `clear?` | Text **einreihen** statt sofort senden: Er geht raus, sobald die Session frei ist (s. u.). Ohne `text` nur abfragen, mit `clear:true` leeren |
 | `read_screen` | `id`, `scrollback?` | Sichtbaren Bildschirm als Klartext lesen; mit `scrollback:true` zusätzlich die Historie davor |
 | `attach_controller` | `id` | Markiert die Session als steuernde **MCP-Controller**-Session (roter Tab) |
 | `set_theme` | `mode` ("system"/"light"/"dark") | App-Design umschalten |
@@ -127,6 +128,30 @@ Ohne Meldung ist das kein Fehler: Der Anwender kann stattdessen „jüngste Unte
 Verzeichnis" oder „Auswahl beim Start" wählen — dann startest du eben ohne diese Angabe.
 
 ## Sessions steuern: zwei Fallen, die Erfolg melden
+
+### `queue_text` — einreihen statt dazwischenfunken (QTMUX-90)
+
+`send_text` schreibt **sofort** ins PTY. Arbeitet dort gerade ein Agent, landet der Text
+mitten in dessen Ausgabe — oder die TUI verschluckt ihn. `queue_text` reiht stattdessen
+ein und gibt ab, sobald die Session frei ist.
+
+Wann „frei" gilt, hängt davon ab, ob die Session ihren Zustand **selbst meldet**:
+
+* **Meldet sie** (OSC 133 oder `set_activity`) → abgegeben wird bei allem außer `running`.
+  `waiting` ist dabei der wichtigste Fall: Der Agent fragt einen Menschen, und der
+  eingereihte Text ist meist genau die Antwort.
+* **Meldet sie nie** (gewöhnliche Shell ohne Shell-Integration) → der Aktivitätswert ist
+  bedeutungslos und wird ignoriert; entschieden wird über **Ruhe im Ausgabestrom**
+  (500 ms ohne Bytes). Gemessen wird nur, *ob* Bytes fließen, nie ihr Inhalt.
+
+Zwei Fälle blockieren immer: eine geschlossene Session, und eine, die **noch nie** etwas
+ausgegeben hat — die ist nicht ruhig, sondern noch nicht bereit.
+
+Leerer Text wird abgewiesen. Das ist kein Sonderfall, sondern Absicht: Ein blankes Enter
+wäre in einem Agenten-TUI eine **Handlung** (es bestätigt die vorausgewählte Option einer
+Rückfrage).
+
+Die Antwort enthält `queued`, `count`, `cleared` und die aktuellen `entries`.
 
 ### `send_text` — das Enter geht abgesetzt raus (QTMUX-31)
 

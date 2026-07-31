@@ -26,7 +26,13 @@ SessionModel::SessionModel(QObject *parent) : QAbstractListModel(parent) {
     m_cwdPoll = new QTimer(this);
     m_cwdPoll->setInterval(1500);
     connect(m_cwdPoll, &QTimer::timeout, this, [this]() {
-        for (Session *s : m_sessions) s->refreshWorkingDirectory();
+        for (Session *s : m_sessions) {
+            s->refreshWorkingDirectory();
+            // QTMUX-58: Branch im selben Takt. Eigener Aufruf, weil refreshWorkingDirectory()
+            // bei OSC-7-Sessions sofort aussteigt — und weil `git checkout` den Branch
+            // wechselt, ohne dass sich das Verzeichnis ändert.
+            s->refreshGitBranch();
+        }
     });
     m_cwdPoll->start();
 }
@@ -51,6 +57,9 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case ProgressStateRole: return s->progressState();
     case ProgressValueRole: return s->progressValue();
     case WorkingDirRole: return s->workingDirectory();
+    case GitBranchRole: return s->gitBranch();
+    case GitDetachedRole: return s->gitDetached();
+    case QueuedCountRole: return s->queuedCount();
     case GroupRole:   return s->group();
     case SessionRole: return QVariant::fromValue(static_cast<QObject *>(s));
     default:          return {};
@@ -71,6 +80,9 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
         {ProgressStateRole, "progressState"},
         {ProgressValueRole, "progressValue"},
         {WorkingDirRole, "workingDir"},
+        {GitBranchRole, "gitBranch"},
+        {GitDetachedRole, "gitDetached"},
+        {QueuedCountRole, "queuedCount"},
         {GroupRole, "group"},
         {SessionRole, "session"},
     };
@@ -85,7 +97,7 @@ void SessionModel::wireSession(Session *s, int row) {
             emit dataChanged(idx, idx,
                 {TitleRole, StateRole, AgentRole, AttentionRole, NotificationRole,
                  McpControllerRole, ProgressActiveRole, ProgressStateRole, ProgressValueRole,
-                 WorkingDirRole});
+                 WorkingDirRole, GitBranchRole, GitDetachedRole, QueuedCountRole});
         }
     };
     connect(s, &Session::titleChanged, this, refresh);
@@ -97,6 +109,8 @@ void SessionModel::wireSession(Session *s, int row) {
     connect(s, &Session::mcpControllerChanged, this, refresh);
     connect(s, &Session::progressChanged, this, refresh);
     connect(s, &Session::workingDirectoryChanged, this, refresh);
+    connect(s, &Session::gitBranchChanged, this, refresh);   // QTMUX-58
+    connect(s, &Session::queueChanged, this, refresh);      // QTMUX-90
 
     // Ruhezustands-Sperre an den Aktivitätszustand koppeln (QTMUX-89). Bewusst eine
     // eigene Verbindung statt eines Anhängsels an `refresh`: Die Sidebar-Aktualisierung
@@ -545,6 +559,40 @@ void SessionModel::sendText(int row, const QString &text, bool submit, int enter
         s->writeWithEnter(data, delay);          // QTMUX-31: Enter zeitlich abgesetzt
     else
         s->write(data);
+}
+
+// --- Prompt-Warteschlange (QTMUX-90) ---------------------------------------------
+// Reine Durchreiche an die Session; die Abgabe-Regel und der FIFO liegen Gui-frei in
+// PromptQueue/mayDispatchNext. Der Zaehler auf der Kachel kommt ueber QueuedCountRole.
+
+bool SessionModel::queueText(int row, const QString &text) {
+    if (row < 0 || row >= count()) return false;
+    Session *s = m_sessions.at(row);
+    return s ? s->queueText(text) : false;
+}
+
+int SessionModel::queuedCount(int row) const {
+    if (row < 0 || row >= count()) return 0;
+    Session *s = m_sessions.at(row);
+    return s ? s->queuedCount() : 0;
+}
+
+QStringList SessionModel::queuedEntries(int row) const {
+    if (row < 0 || row >= count()) return {};
+    Session *s = m_sessions.at(row);
+    return (s && s->promptQueue()) ? s->promptQueue()->entries() : QStringList{};
+}
+
+bool SessionModel::removeQueuedAt(int row, int index) {
+    if (row < 0 || row >= count()) return false;
+    Session *s = m_sessions.at(row);
+    return (s && s->promptQueue()) ? s->promptQueue()->removeAt(index) : false;
+}
+
+int SessionModel::clearQueue(int row) {
+    if (row < 0 || row >= count()) return 0;
+    Session *s = m_sessions.at(row);
+    return (s && s->promptQueue()) ? s->promptQueue()->clear() : 0;
 }
 
 QString SessionModel::historyDir() const {

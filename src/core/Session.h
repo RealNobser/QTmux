@@ -3,9 +3,14 @@
 #include <QObject>
 #include <QString>
 #include <QDateTime>
+#include <QElapsedTimer>
+
+#include "PromptQueue.h"
 #include <memory>
 
 #include "ITerminalBackend.h"
+
+QT_FORWARD_DECLARE_CLASS(QTimer)
 
 namespace qtmux {
 
@@ -68,6 +73,12 @@ class Session : public QObject {
     // genau das, was auch im PTY angekommen ist.
     Q_PROPERTY(int cols READ cols NOTIFY sizeChanged)
     Q_PROPERTY(int rows READ rows NOTIFY sizeChanged)
+    // Git-Branch des Arbeitsverzeichnisses (QTMUX-58). Leer = kein Repository, kein
+    // lokales Verzeichnis oder ein gemeldetes Verzeichnis auf einem FREMDEN Rechner.
+    Q_PROPERTY(QString gitBranch READ gitBranch NOTIFY gitBranchChanged)
+    Q_PROPERTY(bool gitDetached READ gitDetached NOTIFY gitBranchChanged)
+    // Anzahl eingereihter Prompts (QTMUX-90) — treibt das Zaehler-Abzeichen auf der Kachel.
+    Q_PROPERTY(int queuedCount READ queuedCount NOTIFY queueChanged)
 public:
     enum class Type { Shell, Ssh, Serial, App };
     Q_ENUM(Type)
@@ -108,6 +119,36 @@ public:
     /// Meldet die Shell selbst (OSC 7, QTMUX-108), unterbleibt das Pollen ganz — die
     /// Meldung ist genauer und würde sonst vom gepollten Wert wieder überschrieben.
     void refreshWorkingDirectory();
+
+    /// Git-Branch des Arbeitsverzeichnisses (QTMUX-58); bei detached HEAD der kurze SHA.
+    /// Leer, wenn dort kein Repository liegt.
+    QString gitBranch() const { return m_gitBranch; }
+    bool gitDetached() const { return m_gitDetached; }
+    /// Warteschlange der Eingaben (QTMUX-90). Gehoert der Session; die Abgabe-Regel
+    /// liegt Gui-frei in mayDispatchNext(), die Uhr fuer msSinceLastOutput fuehrt die
+    /// Session (sie sieht als Einzige den Backend-Output).
+    PromptQueue *promptQueue() const { return m_queue.get(); }
+    int queuedCount() const;
+    /// Reiht Text ein (oder schickt ihn sofort, wenn die Session gerade frei ist).
+    /// Liefert false, wenn der Text abgewiesen wurde (leer nach dem Trimmen).
+    Q_INVOKABLE bool queueText(const QString &text);
+    /// Millisekunden seit der letzten Backend-Ausgabe; < 0 = noch nie etwas empfangen.
+    qint64 msSinceLastOutput() const;
+
+    /// Führt den Branch nach; vom SessionModel im selben Takt wie das CWD gerufen.
+    ///
+    /// 🔑 Bewusst eine EIGENE Methode und nicht Teil von refreshWorkingDirectory():
+    /// Letzteres steigt bei OSC-7-Sessions sofort wieder aus (die Shell meldet ja selbst) —
+    /// der Branch würde dann genau dort nie aktualisiert. Und er muss ohnehin unabhängig
+    /// vom Verzeichnis geprüft werden: `git checkout` wechselt den Branch, OHNE dass sich
+    /// das Arbeitsverzeichnis ändert.
+    ///
+    /// ⚠️ Bei einem Verzeichnis auf einem FREMDEN Rechner (OSC 7 aus SSH/Container) bleibt
+    /// der Branch leer. Der gemeldete Pfad existiert hier womöglich auch — dann wäre es ein
+    /// ANDERES Repository, und die Kachel zeigte einen Branch, der mit der Sitzung nichts
+    /// zu tun hat. Leer ist die einzig ehrliche Antwort.
+    void refreshGitBranch();
+
     /// PID des zugrundeliegenden Prozesses (Shell), oder -1 — für MCP-Zuordnung.
     qint64 processId() const { return m_backend ? m_backend->processId() : -1; }
     QString agentId() const { return m_agentId; }
@@ -230,6 +271,13 @@ public:
     static constexpr int kDefaultEnterDelayMs = 60;
     void resize(int cols, int rows);
 
+public slots:
+    /// OSC 7: von der Shell gemeldetes Arbeitsverzeichnis übernehmen (QTMUX-108).
+    /// Öffentlich, weil es der reale Eingang für ein gemeldetes Verzeichnis ist — der
+    /// VtScreen verbindet sich darauf, und Tests speisen darüber echte Meldungen ein,
+    /// statt eine Test-only-Setter-Attrappe zu brauchen.
+    void onWorkingDirectoryReported(const QString &path, const QString &host, bool local);
+
 signals:
     void titleChanged(const QString &title);
     void stateChanged();
@@ -241,6 +289,8 @@ signals:
     void mcpControllerChanged();
     void progressChanged();
     void workingDirectoryChanged();
+    void gitBranchChanged();
+    void queueChanged();
     void groupChanged();
     void windowIdChanged();
     void sizeChanged();
@@ -259,14 +309,18 @@ private:
     void onProgress(int state, int value);      // OSC 9;4
     void onPromptMarker(char kind, int exitCode); // OSC 133
     void onAgentEvent(const QString &kind, const QString &text); // OSC 777;qtmux-event
-    /// OSC 7: von der Shell gemeldetes Arbeitsverzeichnis übernehmen (QTMUX-108).
-    void onWorkingDirectoryReported(const QString &path, const QString &host, bool local);
+    void tryDispatchQueued();                   // QTMUX-90: Abgabe pruefen
 
     std::unique_ptr<ITerminalBackend> m_backend;
     std::unique_ptr<VtScreen> m_screen;
     Type m_type = Type::Shell;
     QString m_title = QStringLiteral("Shell");
     QString m_workingDir;      // gecachtes Arbeitsverzeichnis (Polling oder OSC 7)
+    std::unique_ptr<PromptQueue> m_queue;      // QTMUX-90
+    QElapsedTimer m_lastOutput;               // Uhr fuer msSinceLastOutput
+    QTimer *m_dispatchTimer = nullptr;        // laeuft nur, solange etwas ansteht
+    QString m_gitBranch;       // QTMUX-58: Branch bzw. kurzer SHA (detached)
+    bool    m_gitDetached = false;
     // OSC 7 (QTMUX-108): hat die Shell ihr Verzeichnis je selbst gemeldet, und gehört
     // die Meldung zu dieser Maschine? Ungemeldet heißt „unbekannt" — dann bleibt der
     // bisherige Polling-Weg unverändert in Kraft.

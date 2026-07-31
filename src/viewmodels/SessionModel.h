@@ -45,6 +45,9 @@ public:
         ProgressStateRole,
         ProgressValueRole,
         WorkingDirRole,
+        GitBranchRole,      // QTMUX-58: Branch bzw. kurzer SHA
+        GitDetachedRole,
+        QueuedCountRole,    // QTMUX-90: Anzahl eingereihter Prompts
         GroupRole,
         SessionRole,
     };
@@ -94,6 +97,15 @@ public:
     Q_INVOKABLE void closeSession(int row);
     /// Schreibt `data` an ALLE Sessions (Broadcast-/Sync-Input). Genutzt vom
     /// Broadcast-Modus: einmal getippt → alle Sessions erhalten dieselbe Eingabe.
+    /// Reiht Text in die Warteschlange der Session ein (QTMUX-90). Ist sie gerade frei,
+    /// geht er sofort raus; sonst wartet er, bis der Agent fertig ist.
+    Q_INVOKABLE bool queueText(int row, const QString &text);
+    /// Anzahl wartender Eintraege bzw. deren Inhalte — fuer Zaehler und Bearbeiten-Popup.
+    Q_INVOKABLE int queuedCount(int row) const;
+    Q_INVOKABLE QStringList queuedEntries(int row) const;
+    Q_INVOKABLE bool removeQueuedAt(int row, int index);
+    Q_INVOKABLE int clearQueue(int row);
+
     Q_INVOKABLE void writeToAll(const QByteArray &data);
     /// Schickt `text` an EINE Session (QTMUX-96: der von der Palette ausgewählte
     /// Projekt-Befehl). Mit `submit` folgt ein Enter — und zwar **zeitlich abgesetzt**

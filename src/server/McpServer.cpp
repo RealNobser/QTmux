@@ -543,6 +543,17 @@ QJsonObject McpServer::toolsList() const {
                                   {"enterDelayMs", intProp("Verzögerung vor dem Enter in ms (Standard 60; 0 = sofort, im selben Block)")},
                                   {"broadcast", boolProp("an alle Sessions senden (Standard false)")}},
                       QJsonArray{"text"}));
+    tools.append(tool("queue_text",
+                      "Reiht Text in die Warteschlange einer Session ein (QTMUX-90) statt ihn "
+                      "sofort zu senden. Ist die Session gerade frei, geht er unmittelbar raus; "
+                      "arbeitet sie noch, wartet er, bis sie fertig ist — so landet ein Auftrag "
+                      "nicht mitten in der Ausgabe eines laufenden Agenten. Ohne `text` liefert "
+                      "der Aufruf nur den aktuellen Stand der Warteschlange; mit clear=true wird "
+                      "sie geleert.",
+                      QJsonObject{{"id", intProp("Session-ID")},
+                                  {"text", strProp("einzureihender Text (weglassen = nur abfragen)")},
+                                  {"clear", boolProp("Warteschlange vorher leeren (Standard false)")}},
+                      QJsonArray{"id"}));
     tools.append(tool("read_screen",
                       "Liest den Bildschirm einer Session als Text. Mit scrollback=true zusätzlich "
                       "die gesamte Historie (Scrollback) vor dem sichtbaren Bereich.",
@@ -1058,6 +1069,32 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             s->write(data);
         }
         text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "queue_text") {
+        if (!s) { isError = true; text = idProblem(); return {}; }
+        int removed = 0;
+        if (args.value("clear").toBool(false)) removed = s->promptQueue()->clear();
+        bool queued = false;
+        if (args.contains(QStringLiteral("text"))) {
+            const QString t = args.value("text").toString();
+            queued = s->queueText(t);
+            if (!queued) {
+                // Nur leerer/whitespace-Text wird abgewiesen. Das ist kein Randfall,
+                // sondern Absicht: ein blankes Enter ist in einem Agenten-TUI eine
+                // HANDLUNG (es bestätigt die vorausgewählte Option einer Rückfrage).
+                isError = true;
+                text = QStringLiteral("Leerer Text wird nicht eingereiht.");
+                return {};
+            }
+        }
+        QJsonObject r{{"queued", queued},
+                      {"count", s->queuedCount()},
+                      {"cleared", removed}};
+        QJsonArray entries;
+        for (const QString &e : s->promptQueue()->entries()) entries.append(e);
+        r.insert(QStringLiteral("entries"), entries);
+        text = QString::fromUtf8(QJsonDocument(r).toJson(QJsonDocument::Compact));
         return {};
     }
     if (name == "read_screen") {

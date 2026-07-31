@@ -1,6 +1,7 @@
 #include "Session.h"
 #include "VtScreen.h"
 #include "AgentRegistry.h"
+#include "GitInfo.h"
 #include "AgentEventHub.h"
 #include "ColorScheme.h"
 
@@ -77,8 +78,69 @@ QString effectiveWorkingDirectory(const QString &reported, bool reportedIsLocal,
     return polled;
 }
 
-Session::Session(QObject *parent) : QObject(parent) {}
+// QTMUX-90: `PromptQueue` spiegelt `Session::Activity` per ZAHL, damit der Kern die
+// Session nicht kennen muss. Hier — an der Anbindungsstelle, wo beide Seiten sichtbar
+// sind — wird die Spiegelung festgenagelt. Ohne diesen Wächter würde ein umsortiertes
+// oder erweitertes `Activity` lautlos durchrutschen: Aus „arbeitet gerade" würde
+// stillschweigend „ist frei", und die Warteschlange schriebe mitten in die laufende
+// Ausgabe — genau der Fehler, den QTMUX-90 beheben soll. Ein Verstoß bricht den BUILD,
+// nicht erst einen Testlauf.
+static_assert(int(Session::Activity::Idle)    == ActivityIdle);
+static_assert(int(Session::Activity::Running) == ActivityRunning);
+static_assert(int(Session::Activity::Waiting) == ActivityWaiting);
+static_assert(int(Session::Activity::Error)   == ActivityError);
+static_assert(int(Session::Activity::Closed)  == ActivityClosed);
+
+Session::Session(QObject *parent)
+    : QObject(parent), m_queue(std::make_unique<PromptQueue>()) {
+    // Der Abgabe-Versuch läuft getaktet, aber NUR solange etwas ansteht — sonst tickte
+    // je Session dauerhaft ein Timer, auch wenn niemand die Warteschlange benutzt.
+    m_dispatchTimer = new QTimer(this);
+    m_dispatchTimer->setInterval(150);
+    connect(m_dispatchTimer, &QTimer::timeout, this, &Session::tryDispatchQueued);
+    connect(m_queue.get(), &PromptQueue::changed, this, [this]() {
+        emit queueChanged();
+        if (m_queue->isEmpty()) m_dispatchTimer->stop();
+        else if (!m_dispatchTimer->isActive()) m_dispatchTimer->start();
+    });
+    // Meldet die Session ihren Zustand selbst, ist der Wechsel der schnellste Auslöser —
+    // dann muss nicht bis zum nächsten Timer-Tick gewartet werden.
+    connect(this, &Session::activityChanged, this, &Session::tryDispatchQueued);
+}
 Session::~Session() = default;
+
+int Session::queuedCount() const { return m_queue ? m_queue->count() : 0; }
+
+qint64 Session::msSinceLastOutput() const {
+    return m_lastOutput.isValid() ? m_lastOutput.elapsed() : -1;
+}
+
+bool Session::queueText(const QString &text) {
+    if (!m_queue || !m_queue->enqueue(text)) return false;
+    // Sofort versuchen: Ist die Session ohnehin frei, soll der Text ohne die
+    // Timer-Verzögerung rausgehen — sonst fühlte sich normales Tippen träge an.
+    tryDispatchQueued();
+    return true;
+}
+
+void Session::tryDispatchQueued() {
+    if (!m_queue || m_queue->isEmpty()) {
+        if (m_dispatchTimer) m_dispatchTimer->stop();
+        return;
+    }
+    const DispatchContext ctx{
+        .queueNotEmpty     = true,
+        .activityReported  = m_activityReported,
+        .activity          = activityInt(),
+        .msSinceLastOutput = msSinceLastOutput(),
+    };
+    if (!mayDispatchNext(ctx)) return;
+    const QString next = m_queue->takeNext();
+    // QTMUX-31: Das Enter MUSS zeitlich abgesetzt bleiben — ein Warteschlangen-Eintrag
+    // landet typischerweise in genau der Agenten-TUI, die einen Block mit \r als
+    // Einfügevorgang wertet.
+    if (!next.isEmpty()) writeWithEnter(next.toUtf8(), kDefaultEnterDelayMs);
+}
 
 int Session::nextId() {
     static int counter = 0;
@@ -109,7 +171,16 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
     // keine OSC-133-Shell-Integration vorhanden ist) und den Output auf eine SSH-
     // Passwort-Eingabeaufforderung hin abtasten (Vault-Auto-Fill).
     connect(m_backend.get(), &ITerminalBackend::dataReceived, this,
-            [this](const QByteArray &data) { scanForPasswordPrompt(data); armLoginScript(); });
+            [this](const QByteArray &data) {
+                // QTMUX-90: Uhr für `msSinceLastOutput`. Sie ist die EINZIGE Grundlage der
+                // Abgabe-Entscheidung bei Sessions, die ihren Zustand nie selbst melden
+                // (gewöhnliche Shell ohne Shell-Integration) — dort ist der Aktivitätswert
+                // bedeutungslos. Gemessen wird nur, OB Bytes fließen, nie ihr Inhalt
+                // (Projektlinie QTMUX-30).
+                m_lastOutput.restart();
+                scanForPasswordPrompt(data);
+                armLoginScript();
+            });
     connect(m_screen.get(), &VtScreen::outputToPty,
             m_backend.get(), &ITerminalBackend::write);
     connect(m_screen.get(), &VtScreen::titleChanged, this, &Session::setTitle);
@@ -197,6 +268,26 @@ void Session::refreshWorkingDirectory() {
         m_workingDir = dir;
         emit workingDirectoryChanged();
     }
+}
+
+void Session::refreshGitBranch() {
+    // Nur lokale Shell-Verzeichnisse. Bei SSH/Seriell/Plugin gibt es keines, und ein
+    // per OSC 7 gemeldetes Verzeichnis auf einem FREMDEN Rechner darf hier nicht
+    // ausgewertet werden: Existiert derselbe Pfad zufällig auch lokal, läse man den
+    // Branch eines völlig anderen Repositories und hängte ihn an diese Kachel.
+    QString branch;
+    bool detached = false;
+    if (m_type == Type::Shell && !workingDirectoryIsRemote() && !m_workingDir.isEmpty()) {
+        const GitInfo gi = GitInfo::forDirectory(m_workingDir);
+        if (gi.valid) {
+            detached = gi.detached;
+            branch = gi.detached ? gi.shortSha : gi.branch;
+        }
+    }
+    if (branch == m_gitBranch && detached == m_gitDetached) return;
+    m_gitBranch = branch;
+    m_gitDetached = detached;
+    emit gitBranchChanged();
 }
 
 void Session::shutdown() {

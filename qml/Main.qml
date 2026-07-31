@@ -899,6 +899,28 @@ ApplicationWindow {
     // Rastergröße des aktiven Panes als „80×24" (QTMUX-120). Leer, solange es keine
     // Session gibt. Die Werte kommen aus der Session, nicht aus dem TerminalItem —
     // Begründung an der Q_PROPERTY in Session.h (Entprellung, QTMUX-86).
+    // Git-Branch des aktiven Panes (QTMUX-58). Leer, wenn dort kein Repository liegt,
+    // die Session keine lokale Shell ist oder das Verzeichnis von einem fremden Rechner
+    // gemeldet wurde (Begruendung an Session::refreshGitBranch).
+    function windowGitBranch(w) {
+        const sid = window.windowActiveSessionId(w)
+        if (sid < 0) return ""
+        const s = window.sessionById(sid)
+        return s ? (s.gitBranch || "") : ""
+    }
+    // Anzahl eingereihter Prompts im aktiven Pane (QTMUX-90).
+    function windowQueuedCount(w) {
+        const sid = window.windowActiveSessionId(w)
+        if (sid < 0) return 0
+        const s = window.sessionById(sid)
+        return s ? (s.queuedCount || 0) : 0
+    }
+    function windowGitDetached(w) {
+        const sid = window.windowActiveSessionId(w)
+        if (sid < 0) return false
+        const s = window.sessionById(sid)
+        return s ? (s.gitDetached || false) : false
+    }
     function windowGridText(w) {
         const sid = window.windowActiveSessionId(w)
         if (sid < 0) return ""
@@ -2426,6 +2448,8 @@ ApplicationWindow {
                         var c = [
                             { title: qsTr("Neues Fenster"),              sub: hk("actNewInstance"), icon: "terminal-window", run: function(){ actNewInstance.trigger() } },
                             { title: qsTr("Neue Session"),               sub: hk("actNewSession"), icon: "plus",            run: function(){ window.newSession() } },
+                            { title: qsTr("In die Warteschlange einreihen …"), sub: "", icon: "plus", keywords: "queue prompt warteschlange einreihen",
+                              run: function(){ queueTextDialog.start() } },
                             { title: qsTr("Neue SSH-Verbindung …"),      sub: hk("actNewSsh"), icon: "plugs",           run: function(){ sshDialog.open() } },
                             { title: qsTr("Neue serielle Verbindung …"), sub: hk("actNewSerial"), icon: "usb",             run: function(){ serialDialog.openDialog() } },
                             { title: qsTr("Verbindungen verwalten …"),   sub: hk("actConnections"), icon: "bookmark",        run: function(){ prefs.open("verbindungen") } },
@@ -3139,6 +3163,11 @@ ApplicationWindow {
                         // Anker: SessionModel meldet die CWD-Änderung als dataChanged auf
                         // WorkingDirRole (Poll alle 1500 ms), und der Handler erhöht die Revision.
                         readonly property string dispDir: (window.sessionsRevision, window.windowsRevision, window.windowWorkingDir(wobj))
+                        // QTMUX-58: Branch des aktiven Panes. Gleicher Anker wie dispDir —
+                        // SessionModel meldet die Aenderung als dataChanged auf GitBranchRole.
+                        readonly property string dispBranch: (window.sessionsRevision, window.windowsRevision, window.windowGitBranch(wobj))
+                        readonly property bool dispDetached: (window.sessionsRevision, window.windowsRevision, window.windowGitDetached(wobj))
+                        readonly property int queuedN: (window.sessionsRevision, window.windowsRevision, window.windowQueuedCount(wobj))
                         readonly property int paneN: (window.windowsRevision, wobj ? wobj.sessionIds().length : 0)
                         readonly property int aggState: (window.sessionsRevision, window.windowRunState(wobj))
                         readonly property bool attention: (window.sessionsRevision, window.windowAttention(wobj))
@@ -3184,7 +3213,13 @@ ApplicationWindow {
                                 // und die Pluralformen der Quellsprache bleiben beim
                                 // automatischen Finalisieren leer (numerusform ohne Inhalt).
                                 if (tile.paneN > 1) t += "  (" + qsTr("%1 Panes").arg(tile.paneN) + ")"
-                                return dir.length > 0 ? t + "\n" + dir : t
+                                if (dir.length > 0) t += "\n" + dir
+                                // Branch ungekürzt (QTMUX-58) — auf der Kachel ist er auf die
+                                // halbe Zeile gedeckelt, hier steht er vollständig.
+                                if (tile.dispBranch.length > 0)
+                                    t += "\n" + (tile.dispDetached ? qsTr("Commit: %1") : qsTr("Branch: %1"))
+                                              .arg(tile.dispBranch)
+                                return t
                             }
                         }
                         // Rechtsklick: Window-Kontextmenü (umbenennen/Gruppe/schließen).
@@ -3326,6 +3361,24 @@ ApplicationWindow {
                                     // Window-ID — die ist ein internes, stetig wachsendes
                                     // Adress-Token und wirkte als Kachel-Nummer wie ein
                                     // durchlaufender Zähler (QTMUX-87).
+                                    // Warteschlange (QTMUX-90): Abzeichen mit der Anzahl
+                                    // wartender Eingaben. Nur sichtbar, wenn wirklich etwas
+                                    // ansteht — im Normalfall soll die Kachel ruhig bleiben.
+                                    Rectangle {
+                                        visible: tile.queuedN > 0
+                                        Layout.alignment: Qt.AlignVCenter
+                                        implicitWidth: qLabel.implicitWidth + 8
+                                        implicitHeight: 14
+                                        radius: 7
+                                        color: Theme.accent
+                                        Text {
+                                            id: qLabel
+                                            anchors.centerIn: parent
+                                            text: "⏱ " + tile.queuedN
+                                            color: Theme.accentText
+                                            font.pixelSize: 9
+                                        }
+                                    }
                                     Text {
                                         text: tile.activeSid >= 0 ? "#" + tile.activeSid : ""
                                         color: Theme.textDim
@@ -3341,13 +3394,31 @@ ApplicationWindow {
                                 // Kachel das Verzeichnis darum selbst.
                                 // ElideLeft, weil bei Pfaden das ENDE die Information trägt;
                                 // den vollen Pfad zeigt weiter der ToolTip (QTMUX-101).
-                                Text {
-                                    visible: tile.dispDir.length > 0
-                                    text: window.prettyDir(tile.dispDir)
-                                    color: Theme.textDim
-                                    font.pixelSize: 10
-                                    elide: Text.ElideLeft
+                                RowLayout {
                                     Layout.fillWidth: true
+                                    spacing: 5
+                                    // Git-Branch (QTMUX-58) VOR dem Verzeichnis: Laufen mehrere
+                                    // Agenten im selben Repo, sind Titel und Pfad identisch und
+                                    // der Branch ist das einzige Unterscheidungsmerkmal — er darf
+                                    // also nicht als Erstes wegelidiert werden.
+                                    // 🔑 Beide Texte brauchen elide UND eine Grenze; sonst quetscht
+                                    // einer den anderen auf null (Lektion aus QTMUX-96/-121).
+                                    Text {
+                                        visible: tile.dispBranch.length > 0
+                                        text: (tile.dispDetached ? "➟ " : "⎇ ") + tile.dispBranch
+                                        color: Theme.textDim
+                                        font.pixelSize: 10
+                                        elide: Text.ElideRight
+                                        Layout.maximumWidth: parent.width * 0.5
+                                    }
+                                    Text {
+                                        visible: tile.dispDir.length > 0
+                                        text: window.prettyDir(tile.dispDir)
+                                        color: Theme.textDim
+                                        font.pixelSize: 10
+                                        elide: Text.ElideLeft
+                                        Layout.fillWidth: true
+                                    }
                                 }
                             }
 
@@ -4372,6 +4443,42 @@ ApplicationWindow {
     }
 
     // Name für eine neue Gruppe bzw. für das Umbenennen einer bestehenden.
+    // Prompt einreihen (QTMUX-90). Der Weg für den Menschen: Was hier landet, geht erst
+    // raus, wenn die Session frei ist — statt mitten in die Ausgabe eines arbeitenden
+    // Agenten. Über MCP macht `queue_text` dasselbe.
+    AppDialog {
+        id: queueTextDialog
+        width: 460
+        title: qsTr("In die Warteschlange einreihen")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        function start() { queueField.text = ""; open() }
+
+        onOpened: queueField.forceActiveFocus()
+        onAccepted: {
+            const sid = window.windowActiveSessionId(windows.windowById(window.activeWindowId))
+            const row = sid >= 0 ? window.rowForSessionId(sid) : -1
+            if (row < 0 || queueField.text.trim().length === 0) return
+            sessions.queueText(row, queueField.text)
+        }
+        ColumnLayout {
+            spacing: 8
+            Label {
+                Layout.preferredWidth: 420
+                wrapMode: Text.WordWrap
+                color: Theme.textDim
+                font.pixelSize: 11
+                text: qsTr("Der Text wird abgeschickt, sobald die Session frei ist. Arbeitet dort gerade ein Agent, wartet er — so landet er nicht mitten in dessen Ausgabe.")
+            }
+            TextField {
+                id: queueField
+                Layout.preferredWidth: 420
+                placeholderText: qsTr("z. B. Danach bitte die Tests laufen lassen")
+                onAccepted: queueTextDialog.accept()
+            }
+        }
+    }
+
     AppDialog {
         id: groupNameDialog
         width: 380

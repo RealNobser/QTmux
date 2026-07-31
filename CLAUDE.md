@@ -61,14 +61,14 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
-| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (37 Tools); Doku `docs/MCP.md` |
+| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (38 Tools); Doku `docs/MCP.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
-| `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + Abgabe-Regel. **Angebunden ist nur QTMUX-96** (Palette); Kachel-Branch und Warteschlangen-Verdrahtung stehen aus |
+| `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
 | `tests/` | 24 ctest-Tests: 23 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
@@ -364,7 +364,7 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 
 **Ausgeliefert: v1.7.1** (Tag `v1.7.1`, alle 4 Installer: DMG/MSI+ZIP/AppImage). Phasen 0–6
 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Plugins +
-MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **37 MCP-Tools**
+MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **38 MCP-Tools**
 (GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert. **GUI-Auffrischung
 Design 1a/2a** (einklappbare Seitenleiste + Flyout, Statusleiste, sechs Menüs, neugestaltetes
 Einstellungsfenster, Reset/Import/Export) komplett, 3/3 Plattformen grün — Details im
@@ -409,13 +409,10 @@ braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
-**Nächster Punkt: die fehlenden zweiten Hälften.** **QTMUX-108** und **QTMUX-96** sind
-komplett (Parser + Skripte bzw. Kern + Palette), **QTMUX-58** und **QTMUX-90** liegen nur als
-Gui-freier Kern vor: **58** → Rollen in `SessionModel` + Sidebar-Kachel · **90** → Uhr für
-`msSinceLastOutput`, Abgabe über `writeWithEnter` (QTMUX-31!), Zähler auf der Kachel, MCP-Tool
-`queue_text`. Details je Ticket im Jira-Kommentar.
-Danach der Rest des Air-Backlogs (94) und der **Owner-Durchklick** der GUI (Rezepte in der
-Abnahme-Tabelle unten) — dort warten **23 fertige Tickets** auf Abnahme.
+**Nächster Punkt:** der Rest des Air-Backlogs (**94**, Terminal-Ausgabe als Agenten-Kontext)
+und der **Owner-Durchklick** der GUI (Rezepte in der Abnahme-Tabelle unten) — dort warten
+**23 fertige Tickets** auf Abnahme, neu dazu **Branch und Warteschlangen-Abzeichen auf der
+Kachel** (QTMUX-58/-90).
 🔑 **Die Palette-Darstellung (QTMUX-96) ist am 2026-07-31 abgenommen** — und der Weg dorthin
 ist der wiederverwendbare Teil: eine **laufende** isolierte Instanz starten
 (`QTMUX_PROFILE=<name> QTMUX_MCP_PORT=<frei>`, Binary aus `build/macos-release`), per MCP auf
@@ -1234,6 +1231,34 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Startverzeichnis — nicht die Anzeige ist schuld, sondern `Set-Location` (Begründung im
   ConPTY-Abschnitt). Mit der Integration meldet die Shell ihr Verzeichnis per OSC 7 (QTMUX-108)
   und die Zeile folgt.
+- **Git-Branch auf der Kachel (QTMUX-58):** `Session::refreshGitBranch()` führt ihn im
+  1500-ms-Takt des `SessionModel` nach (Rollen `gitBranch`/`gitDetached`), die Kachel zeigt ihn
+  **vor** dem Verzeichnis (`⎇ main …/projekt`; bei detached `➟ <shortSha>`), der ToolTip
+  ungekürzt. 🔑 **Eigene Methode, nicht Teil von `refreshWorkingDirectory()`:** Letzteres
+  steigt bei OSC-7-Sessions sofort aus (die Shell meldet ja selbst) — der Branch würde dort nie
+  aktualisiert. Und `git checkout` wechselt den Branch, **ohne** dass sich das Verzeichnis
+  ändert; die Prüfung darf also nicht am Verzeichnis-Vergleich hängen.
+  🔑 **Bei einem Verzeichnis auf einem FREMDEN Rechner bleibt der Branch leer** (QTMUX-108):
+  Existiert der gemeldete Pfad hier zufällig auch, läse man den Branch eines **anderen**
+  Repositories und hängte ihn an diese Kachel. Test `gitBranchStaysEmptyForRemoteDirectory`
+  (Gegentest ohne die Sperre: FAIL).
+- **Prompt-Warteschlange (QTMUX-90):** `Session` hält eine `PromptQueue`, stempelt bei jeder
+  Backend-Ausgabe eine `QElapsedTimer` (das ist `msSinceLastOutput`) und versucht die Abgabe
+  über einen Timer, der **nur läuft, solange etwas ansteht**; abgegeben wird über
+  `writeWithEnter` (QTMUX-31 — ein Eintrag landet typischerweise in genau der TUI, die einen
+  Block mit `\r` als Einfügen wertet). Erreichbar über Palette („In die Warteschlange
+  einreihen …"), `sessions.queueText()` und MCP **`queue_text`**; Zähler als Abzeichen auf der
+  Kachel. Ein `static_assert` in [Session.cpp](src/core/Session.cpp) nagelt die
+  Zahlen-Spiegelung `ActivityCode` ↔ `Session::Activity` fest — ein Verstoß bricht den
+  **Build** (gegengetestet: `Waiting`/`Error` vertauscht → Compile-Fehler).
+  ⚠️ **Bekannte Grenze, am laufenden Programm gemessen:** Meldet die Session ihren Zustand
+  nicht, entscheidet die **Ruhe im Ausgabestrom** (500 ms) — ein *stiller* Langläufer wie
+  `sleep 6` oder ein Build ohne Ausgabe gilt damit als „frei", und der Eintrag geht zu früh
+  raus. Das ist bewusst so belassen: Der naheliegende Zusatz „hat die Shell einen
+  Kindprozess?" (`ProcessInfo::descendantPids`) würde bei einem laufenden **Agenten-TUI** die
+  Warteschlange dauerhaft blockieren — und Agenten sind der Hauptanwendungsfall. Für sie
+  greift ohnehin der gemeldete Zweig (OSC 133 / `set_activity`), und sie geben während der
+  Arbeit Ausgabe aus. In einer Shell ist der Schaden gering, weil sie die Eingabe puffert.
 - **Arbeitsverzeichnis per OSC 7 (QTMUX-108):** `VtScreen` wertet `ESC ] 7 ; file://host/pfad`
   aus (`case 7` im OSC-Fallback — libvterm behandelt nur 0/1/2/52 selbst), dekodiert die
   Prozent-Kodierung und trennt den Host ab; `Session` nimmt die Meldung an, sie hat **Vorrang**
@@ -1407,7 +1432,7 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (37 Tools)
+### MCP-Server (38 Tools)
 `src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC auf `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
 - **Controller-Auto-Erkennung** beim `initialize`: TCP-Port → PID → **Prozess-Vorfahren-
