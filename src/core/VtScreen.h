@@ -121,6 +121,20 @@ public:
     void mouseButton(int button, bool pressed, int row, int col,
                      Qt::KeyboardModifiers mods);
 
+    /// Zuletzt von der Shell SELBST gemeldetes Arbeitsverzeichnis (OSC 7, QTMUX-108),
+    /// bereits prozent-dekodiert und ohne den URL-Anteil. Leer, wenn nie gemeldet.
+    /// 🔑 Für PowerShell, `ssh` und Container ist das der EINZIGE belastbare Weg: dort
+    /// steht das Win32-/Prozess-Arbeitsverzeichnis nicht für das, was der Anwender sieht
+    /// (`Set-Location` ruft kein `SetCurrentDirectory`) — oder es gehört einer ganz
+    /// anderen Maschine.
+    QString reportedWorkingDirectory() const { return m_reportedDir; }
+    /// Host-Teil der letzten OSC-7-Meldung, roh wie gemeldet (leer = kein Host angegeben).
+    QString reportedWorkingDirectoryHost() const { return m_reportedHost; }
+    /// Gehört das gemeldete Verzeichnis zu DIESER Maschine (leerer Host, `localhost`
+    /// oder der eigene Rechnername)? Bei false ist der Pfad zwar gültig, aber auf einem
+    /// fremden Rechner — er darf also nicht als lokales Verzeichnis weiterverwendet werden.
+    bool reportedWorkingDirectoryIsLocal() const { return m_reportedLocal; }
+
     /// Setzt die libvterm-Palette (16 ANSI-Farben + Default-fg/bg) aus einem Schema
     /// und stößt eine vollständige Neuzeichnung an. Default-fg/bg rendert das
     /// TerminalItem über das Theme; hier v. a. für korrekte ANSI-/Reverse-Farben.
@@ -145,6 +159,10 @@ signals:
     /// Strukturiertes Agenten-Ereignis (OSC 777 ; qtmux-event ; <kind> ; <text>):
     /// kind = done/question/error/info. Für die Inter-Agenten-Benachrichtigung.
     void agentEvent(const QString &kind, const QString &text);
+    /// Die Shell hat ihr Arbeitsverzeichnis gemeldet (OSC 7, QTMUX-108). `path` ist
+    /// dekodiert, `host` roh wie gemeldet, `local` = gehört zu dieser Maschine.
+    /// Feuert nur bei echten Änderungen — die Shell sendet OSC 7 an JEDER Prompt.
+    void workingDirectoryReported(const QString &path, const QString &host, bool local);
 
 public:
     // Interne Handler — von den C-Callbacks in VtScreen.cpp aufgerufen.
@@ -183,6 +201,10 @@ private:
 
     int m_oscCommand = -1;     // aktuell gesammelte OSC-Nummer
     QByteArray m_oscBuffer;    // akkumulierte OSC-Fragmente bis 'final'
+
+    QString m_reportedDir;        // OSC 7: gemeldetes Arbeitsverzeichnis (dekodiert)
+    QString m_reportedHost;       // OSC 7: Host-Teil, roh wie gemeldet
+    bool m_reportedLocal = true;  // OSC 7: gehört der Pfad zu dieser Maschine?
 };
 
 } // namespace qtmux

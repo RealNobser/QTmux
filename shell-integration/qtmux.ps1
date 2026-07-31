@@ -29,11 +29,29 @@ function global:__qtmux_osc([string]$body) {
 if (-not (Test-Path variable:global:__qtmux_prevPrompt)) {
     $global:__qtmux_prevPrompt = $function:prompt
 }
+# OSC 7: das Arbeitsverzeichnis selbst melden (QTMUX-108).
+# 🔑 Auf Windows ist das der EINZIGE Weg: 'Set-Location' ist ein PowerShell-*Provider*-
+# Begriff und ruft kein SetCurrentDirectory — das Win32-Arbeitsverzeichnis des Prozesses
+# bleibt dort stehen, wo die Shell gestartet ist. Jedes Werkzeug, das es ausliest (auch
+# QTmux), sieht deshalb dauerhaft das Startverzeichnis.
+function global:__qtmux_cwd {
+    $loc = Get-Location
+    # Nur echte Dateisystem-Pfade melden — in 'HKLM:\...' gibt es kein Verzeichnis.
+    if ($loc.Provider.Name -ne 'FileSystem') { return }
+    $p = $loc.ProviderPath -replace '\\', '/'
+    # Segmentweise kodieren, damit die '/'-Trenner erhalten bleiben; der Doppelpunkt des
+    # Laufwerks wird dabei zu %3A und von QTmux zurückgewandelt.
+    $enc = ($p -split '/' | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/'
+    if (-not $enc.StartsWith('/')) { $enc = '/' + $enc }   # Windows: /C%3A/Users/...
+    __qtmux_osc "7;file://$([Environment]::MachineName)$enc"
+}
+
 function global:prompt {
     $ec = if ($?) { 0 } else { 1 }
     if ($null -ne $LASTEXITCODE) { $ec = $LASTEXITCODE }
     __qtmux_osc "133;D;$ec"   # vorheriger Befehl beendet (mit Exit-Code)
     __qtmux_osc "133;A"       # neue Prompt beginnt
+    __qtmux_cwd               # Arbeitsverzeichnis melden (OSC 7)
     if ($global:__qtmux_prevPrompt) { & $global:__qtmux_prevPrompt }
     else { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " }
 }

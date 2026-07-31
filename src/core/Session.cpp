@@ -71,6 +71,12 @@ QString prettifyTitle(const QString &raw) {
 
 } // namespace
 
+QString effectiveWorkingDirectory(const QString &reported, bool reportedIsLocal,
+                                  const QString &polled) {
+    if (reportedIsLocal && !reported.isEmpty()) return reported;
+    return polled;
+}
+
 Session::Session(QObject *parent) : QObject(parent) {}
 Session::~Session() = default;
 
@@ -112,6 +118,8 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
     connect(m_screen.get(), &VtScreen::progress, this, &Session::onProgress);
     connect(m_screen.get(), &VtScreen::promptMarker, this, &Session::onPromptMarker);
     connect(m_screen.get(), &VtScreen::agentEvent, this, &Session::onAgentEvent);
+    connect(m_screen.get(), &VtScreen::workingDirectoryReported,
+            this, &Session::onWorkingDirectoryReported);
 
     // Der Typ steht erst hier fest (nicht im Konstruktor) — die Oberfläche wählt daraus
     // ihr Backend-Icon in der eingeklappten Seitenleiste.
@@ -154,7 +162,32 @@ void Session::setGroup(const QString &g) {
     emit groupChanged();
 }
 
+QString Session::currentWorkingDirectory() const {
+    const QString polled = m_backend ? m_backend->currentWorkingDirectory() : QString();
+    if (!m_cwdReported) return polled;
+    return effectiveWorkingDirectory(m_reportedDir, m_reportedLocal, polled);
+}
+
+void Session::onWorkingDirectoryReported(const QString &path, const QString &host, bool local) {
+    // Die Shell hat gemeldet (OSC 7) — ab jetzt ist sie die Quelle, das Polling schweigt.
+    // Bewusst OHNE Typprüfung: Genau bei SSH und in Containern ist die Meldung das
+    // Einzige, was den Ort überhaupt kennt; ein fremder Host wird dabei vermerkt,
+    // damit niemand den Pfad für ein lokales Verzeichnis hält.
+    if (path.isEmpty()) return;
+    m_cwdReported = true;
+    m_reportedLocal = local;
+    m_reportedDir = path;
+    m_reportedHost = host;
+    if (path == m_workingDir) return;
+    m_workingDir = path;
+    emit workingDirectoryChanged();
+}
+
 void Session::refreshWorkingDirectory() {
+    // Meldet die Shell selbst (OSC 7), ist hier nichts zu tun — der gepollte Wert wäre
+    // schlechter (PowerShell) oder schlicht der falsche Rechner (SSH/Container) und
+    // würde die Meldung bei jedem Durchlauf überschreiben.
+    if (m_cwdReported) return;
     // Nur Shell-Sessions haben ein sinnvolles lokales Arbeitsverzeichnis. Bei SSH
     // wäre es das CWD des lokalen ssh-Clients (irreführend), bei Seriell/Plugin gibt
     // es keins — daher dort nicht abfragen und leer halten.
