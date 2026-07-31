@@ -68,7 +68,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `installer/build-{dmg.sh,msi.ps1,appimage.sh}` | Installer aller 3 Plattformen (hand-gerollt, bewusst kein CPack) |
 | `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37) |
-| `tests/` | 18 ctest-Tests: 17 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid) + `test_doc_duplicates` (reines CMake-Skript) |
+| `tests/` | 19 ctest-Tests: 18 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio) + `test_doc_duplicates` (reines CMake-Skript) |
 
 ## Build & Test (macOS)
 
@@ -356,11 +356,16 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-31** · `main` = `origin/main` (**`af32cea`**, QTMUX-88 gepusht) ·
-Version **1.7.1**.
+Stand **2026-07-31** · **⚠️ NICHT auf `main`**: Der Mac steht auf Branch
+**`ci/node24-windows-tests`** = `fa09bfb`, **3 Commits voraus und ungepusht**
+(`db52b41` CI-Node-24, `108e52f` Chevron/QTMUX-118, `fa09bfb` Merge von `origin/main`).
+`origin/main` = `af32cea`. Version **1.7.1**. Jira dual synchron bis **QTMUX-119**.
+🔑 **Im Arbeitsbaum liegt zusätzlich eine FREMDE, uncommittete Änderung** an
+`.github/workflows/ci.yml` (Windows-Session: `setup-msvc-dev` auf Commit-SHA statt Tag
+gepinnt) — beim Committen **nicht** mitnehmen, gezielt stagen.
 Zuletzt: Design-1a/2a-Umbau abgeschlossen (Stufen 1–7), Umbenennen erhält den Aktivitäts-Indikator
 der aktiven Session (`2e151b9`), Confluence-Entwicklerdoku-Seite „GUI-Auffrischung Design 1a/2a"
-dual angelegt, Jira bis **QTMUX-117** synchron. Danach zwei Nachzügler von der Windows-Seite:
+dual angelegt. Danach zwei Nachzügler von der Windows-Seite:
 Qt **6.10.3** lokal installiert und im `windows`-Preset vor 6.11.1 gezogen (`e1eef80`), und
 das Fenster startet nicht mehr **neben** dem Bildschirm (`1bb0ba1`, Anwenderbefund „App startet
 nicht, nichts zu sehen" — Mechanik in der Feature-Referenz).
@@ -372,14 +377,25 @@ braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
 `tools/cmake-vsdev.cmd` zeigen (Begründung im QTMUX-79-Kasten).
 
-**Nächster Punkt: QTMUX-38** (Shell-Helfer in MSI/ZIP ausliefern) — danach CI-Action-Versionen
-(Node-20-Abkündigung ab September 2026), dann Air-Backlog 90/94/96. Parallel offen bleibt der
+**Nächster Punkt: die 3 Commits nach `main` bringen** (Chevron gehört thematisch nicht auf
+den CI-Branch — entweder cherry-picken oder den CI-Branch abschließen), dann **QTMUX-88
+fertigstellen** (Delta unten), danach **QTMUX-38** (Shell-Helfer in MSI/ZIP), CI-Action-Versionen
+(Node-20-Abkündigung ab September 2026), Air-Backlog 90/94/96. Parallel offen bleibt der
 **Owner-Durchklick** der GUI (Rezepte in der Abnahme-Tabelle unten).
-Zuvor erledigt: **QTMUX-88** (AgentRegistry — Mechanik in der Feature-Referenz).
-⚠️ Beim Weiterarbeiten an QTMUX-88 galt: die ausführliche Arbeitsanweisung steht **im Ticket**
-und ist vom Windows-Rechner nicht lesbar (`CLAUDE.local.md` nur auf dem Mac). Gearbeitet wurde
-nach der Kurzfassung; **der Mac muss die Agentenliste gegen die Ticket-Recherche abgleichen**
-(dort steht auch, warum `air`/`q`/`warp` nicht hineingehören).
+
+⚠️ **QTMUX-88 ist NICHT fertig — Abgleich Mac↔Ticket am 2026-07-31 nachgeholt.** Das Ticket war
+kurzzeitig auf Done gesetzt, ist aber wieder „In Progress": Erledigt sind der Bestandsfehler
+(`cursor` → `cursor-agent`), der **Alias-Mechanismus** und fünf Einträge (hermes, copilot,
+crush, goose, amp). **Offen: neun geforderte Agenten** — junie, grok, droid, kilo, kiro,
+augment, openclaw, kimi-code-cli, iflow — **plus die konkreten Aliase** gemini/`gemini-cli`,
+qwen/`qwen-code`, iflow/`iflow-cli` (der Mechanismus trägt, nur die Werte fehlen).
+Die Arbeitsanweisung mit Herstellern und Begründungen steht **im Ticket** und ist vom
+Windows-Rechner nicht lesbar (`CLAUDE.local.md` nur auf dem Mac) — dort steht auch, warum
+`air`/`q`/`warp` **nicht** hineingehören (eingehalten).
+🔑 Zusätzlich in der Registry, aber **nicht** aus der Recherche: Alias **`agent`** für
+`cursor-agent` (Quelle cursor.com/docs, 2026-07-31). Generisch — nennt jemand ein eigenes
+Skript so, trägt dessen Session das Cursor-Etikett; Folgen auf Titel/Icon begrenzt, weil die
+Fortsetzungs-Vorlagen leer sind. Owner-Entscheidung beim Durchklick.
 
 ### Design 1a/2a (GUI-Umbau) — abgeschlossen
 
@@ -447,7 +463,11 @@ die Zeile identisch war.
 
 ### Jira/Confluence-Stand (2026-07-31, dual synchron)
 
-Beide Systeme synchron bis **QTMUX-117**. Design 1a/2a je Stufe angelegt (Stufen 1–6 =
+Beide Systeme synchron bis **QTMUX-119**.
+**Am 2026-07-31 dazugekommen:** **97** (Emoji-Artefakte, Done — der Fix trug vorher irrtümlich
+die Nummer 88, die aber der AgentRegistry gehört), **98** (Fortsetzungs-Modi, In Progress),
+**118** (Chevron klappt wieder aus, In Progress) und **119** (Fenster neben dem Bildschirm — Fix `1bb0ba1` stand ohne Nummer in der Abnahme-Tabelle, nachgetragen); **85** bleibt In Progress, **88** wurde nach
+dem Abgleich von Done auf In Progress **zurückgesetzt** (Delta oben im Wiedereinstieg). Design 1a/2a je Stufe angelegt (Stufen 1–6 =
 QTMUX-109…114, Stufe 7 = **115**), dazu **116** (Umbenennen-Indikator, In Progress) und **117**
 (Qt-Standardknöpfe „OK"/„Cancel" unübersetzt — kein `qtbase_<lang>`-Translator, Backlog);
 QTMUX-2 ist Done. Verzeichniszeile (106), OSC 7 (108) und der `--screenshot`-Windows-Fix (107)
@@ -483,7 +503,8 @@ Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme
 | **106/109/110/111** | Verzeichnis als zweite Kachelzeile, Seitenleiste + Flyout, Statusleiste (Design 1a/2a, Stufen 1–3) | durchklicken |
 | **112** | **sechs Menüs** (Stufe 4) | jedes Menü öffnen; kein Eintrag schaltet mehr eine Einstellung außer Seitenleiste/Statusleiste/Broadcast; alles Verschobene über Einstellungen UND Palette erreichbar |
 | **113** | **Einstellungsfenster** (Stufe 5) | Rail-Gruppen, Zeilen mit Beschreibung, Segment-Umschalter, Schalter in Akzentfarbe — in **beiden** Designs |
-| — (Ticket fehlt) | **Fenster neben dem Bildschirm** (`1bb0ba1`) | QTmux auf einem zweiten Monitor platzieren, beenden, Monitor abziehen, starten → Fenster muss zentriert auf dem verbleibenden Bildschirm erscheinen; danach eine normale Position **nicht** verschoben finden |
+| **119** | **Fenster neben dem Bildschirm** (`1bb0ba1`) | QTmux auf einem zweiten Monitor platzieren, beenden, Monitor abziehen, starten → Fenster muss zentriert auf dem verbleibenden Bildschirm erscheinen; danach eine normale Position **nicht** verschoben finden |
+| **118** | **Chevron klappt auch wieder aus** | Seitenleiste einklappen — oben muss ein `›` stehen, das sie wieder aufklappt; ToolTip und Richtung prüfen, in **beiden** Designs |
 | **114** | **Zurücksetzen / Import / Export** (Stufe 6) | „Diese Seite zurücksetzen" auf einer geänderten Seite (Werte springen sofort auf Standard, danach ist der Punkt ausgegraut) · „Alle Einstellungen zurücksetzen …" **abbrechen** und bestätigen · **Export in eine Datei und Import daraus** — das ist der Teil, den hier **kein Automat** prüfen konnte (native Dateidialoge, s. E2E-Fallen): danach muss der geänderte Wert live stehen, und die offenen Fenster/Sessions müssen unberührt sein |
 
 ⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
