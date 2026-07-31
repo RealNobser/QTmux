@@ -80,16 +80,23 @@ int runInstallShellIntegration(int argc, char *argv[], const QString &target) {
 #if defined(Q_OS_WIN)
     // 🔑 Der Grund, warum dieser Befehl unter Windows sonst „kaputt" wirkt: qtmux MUSS
     // WIN32_EXECUTABLE sein (eine Konsolen-App vererbt ihre Konsole an die ConPTY-
-    // Kindshells → Terminal stumm). Eine GUI-App hat aber kein stdout — die Ausgabe ginge
-    // an niemanden. AttachConsole hängt uns an die Konsole des Aufrufers; nur wenn es die
-    // gar nicht gibt (Start aus dem Explorer), bleibt die Ausgabe zwangsläufig stumm, und
-    // dann hat der Aufrufer auch keine Argumente übergeben können.
-    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+    // Kindshells → Terminal stumm). Eine GUI-App bekommt aber von sich aus keine Konsole,
+    // die Ausgabe ginge also an niemanden.
+    //
+    // ⚠️ Nur anhängen, wenn stdout **gar kein** Handle hat. Wer den Aufruf umleitet
+    // (`> datei.txt`) oder durch eine Pipe schickt (PowerShell `| Out-String`), hat ein
+    // gültiges, geerbtes Handle — ein `freopen("CONOUT$")` würde es überschreiben und die
+    // Ausgabe am Ziel des Aufrufers **vorbei** ins Konsolenfenster schreiben. Genau so
+    // gemessen: Dateien korrekt geschrieben, Exit 0, Ausgabe spurlos verschwunden.
+    const HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    const bool haveStdout = (hOut != nullptr && hOut != INVALID_HANDLE_VALUE);
+    if (!haveStdout && AttachConsole(ATTACH_PARENT_PROCESS)) {
         FILE *dummy = nullptr;
         freopen_s(&dummy, "CONOUT$", "w", stdout);
         freopen_s(&dummy, "CONOUT$", "w", stderr);
-        SetConsoleOutputCP(CP_UTF8);   // sonst Mojibake bei Umlauten
     }
+    if (haveStdout || GetConsoleWindow())
+        SetConsoleOutputCP(CP_UTF8);   // sonst Mojibake bei Umlauten
 #endif
     QCoreApplication app(argc, argv);
     QTextStream out(stdout);
