@@ -15,6 +15,10 @@ qt_add_executable(test_terminalgrid tst_terminalgrid.cpp)
 target_link_libraries(test_terminalgrid PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_terminalgrid COMMAND test_terminalgrid)
 
+qt_add_executable(test_gitinfo tst_gitinfo.cpp)
+target_link_libraries(test_gitinfo PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_gitinfo COMMAND test_gitinfo)
+
 qt_add_executable(test_terminalsearch tst_terminalsearch.cpp)
 target_link_libraries(test_terminalsearch PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_terminalsearch COMMAND test_terminalsearch)

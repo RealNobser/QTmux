@@ -57,6 +57,8 @@ add_library(qtmux_core STATIC
     src/core/KeyEncoding.cpp
     src/core/TerminalGrid.h
     src/core/TerminalGrid.cpp
+    src/core/GitInfo.h
+    src/core/GitInfo.cpp
     src/core/RestoreMode.h
     src/core/ShellIntegration.h
     src/core/ShellIntegration.cpp
