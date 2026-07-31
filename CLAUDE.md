@@ -415,9 +415,14 @@ Gui-freier Kern vor: **58** → Rollen in `SessionModel` + Sidebar-Kachel · **9
 `msSinceLastOutput`, Abgabe über `writeWithEnter` (QTMUX-31!), Zähler auf der Kachel, MCP-Tool
 `queue_text`. Details je Ticket im Jira-Kommentar.
 Danach der Rest des Air-Backlogs (94) und der **Owner-Durchklick** der GUI (Rezepte in der
-Abnahme-Tabelle unten) — dort warten **23 fertige Tickets** auf Abnahme, neu dazu die
-**Palette-Darstellung** aus QTMUX-96 (die Kette ist belegt, die Anzeige nicht — kein
-Bedienungshilfen-Recht auf dieser Maschine).
+Abnahme-Tabelle unten) — dort warten **23 fertige Tickets** auf Abnahme.
+🔑 **Die Palette-Darstellung (QTMUX-96) ist am 2026-07-31 abgenommen** — und der Weg dorthin
+ist der wiederverwendbare Teil: eine **laufende** isolierte Instanz starten
+(`QTMUX_PROFILE=<name> QTMUX_MCP_PORT=<frei>`, Binary aus `build/macos-release`), per MCP auf
+**diesem** Port ein vorbereitetes Verzeichnis als Session anlegen und fokussieren, dann den
+Owner schauen lassen. Das ersetzt genau das, was hier prinzipiell fehlt (kein
+Bedienungshilfen-Recht → keine synthetische Bedienung). Aufräumen nicht vergessen: Prozess
+beenden, `defaults delete com.qtmux.QTmux-<name>`, Testdaten löschen.
 🔑 **Parallelarbeit mit Worker-Sessions: Worktrees, nicht ein gemeinsamer Baum.** Vier Worker
 in derselben Arbeitskopie kollidieren zwangsläufig, weil fast jede Aufgabe in `qml/Main.qml`
 und den beiden `CMakeLists.txt` endet. Bewährtes Muster (2026-07-31): je Worker ein
