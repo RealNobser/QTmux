@@ -43,6 +43,14 @@ Version passende Fassung zurückgesetzt.
 > dorthin zeigt, überlebt keinen Neustart. Der Weg über das Programm gilt deshalb auf allen
 > drei Plattformen gleich.
 
+> **Windows: Die Ausgabe kommt asynchron.** QTmux ist ein GUI-Programm (zwingend, sonst
+> erben die Terminal-Sitzungen die Konsole) — die Shell wartet deshalb nicht auf das
+> Prozessende, und der Prompt ist sofort zurück. Die Dateien werden trotzdem vollständig
+> geschrieben, die Ausgabe erscheint Sekundenbruchteile später. Wer sie sicher einfangen
+> will, nimmt `cmd`: `cmd /c "qtmux.exe --install-shell-integration > ausgabe.txt 2>&1"`.
+> PowerShells `>` schließt seine Datei zu früh und bleibt leer — die Skripte landen aber
+> auch dann korrekt am Ziel.
+
 **Als Entwickler** liegen dieselben Dateien hier im Repo; sie sind zugleich die Quelle der
 eingebetteten Ressource, es gibt also keine zweite Fassung, die veralten könnte.
 

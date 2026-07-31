@@ -1064,11 +1064,22 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   🔑 **`GenericDataLocation`, NICHT `AppDataLocation`:** Letzteres trägt den `applicationName`,
   und der bekommt bei `--profile`/`QTMUX_PROFILE` ein Suffix — das Ziel wanderte je Instanz,
   obwohl ein Hook-Eintrag für alle Profile gilt. Test `defaultTargetIsProfileIndependent`.
-  🔑 **Windows: GUI-App ohne stdout.** `qtmux` MUSS `WIN32_EXECUTABLE` sein (ConPTY, s. o.), hat
-  damit aber keine Ausgabe. `runInstallShellIntegration` ruft deshalb
-  `AttachConsole(ATTACH_PARENT_PROCESS)` + `freopen_s("CONOUT$")` + `SetConsoleOutputCP(CP_UTF8)`
-  (ohne das Letzte Mojibake bei Umlauten). Aus `cmd`/PowerShell erscheint die Ausgabe normal;
-  per Doppelklick gäbe es weder Ausgabe noch Argumente.
+  🔑 **Windows: GUI-App ohne stdout — und zwei Fallen, beide gemessen.** `qtmux` MUSS
+  `WIN32_EXECUTABLE` sein (ConPTY, s. o.) und hat damit keine eigene Ausgabe.
+  `runInstallShellIntegration` hängt sich per `AttachConsole(ATTACH_PARENT_PROCESS)` +
+  `freopen_s("CONOUT$")` an — **aber nur, wenn `GetStdHandle(STD_OUTPUT_HANDLE)` kein gültiges
+  Handle liefert.** Ohne diese Bedingung schreibt `freopen` an einer bestehenden Umleitung
+  (`> datei`, PowerShell-Pipe) **vorbei** ins Konsolenfenster: erste Messung am portablen ZIP
+  = Dateien korrekt geschrieben, Exit 0, Ausgabe spurlos weg — exakt das „wirkt kaputt", das
+  das Ticket vorhergesagt hatte. `SetConsoleOutputCP(CP_UTF8)` nur, wenn es eine Konsole gibt
+  (sonst Mojibake bei Umlauten).
+  ⚠️ **Bleibt bewusst ungelöst:** Die Shell **wartet nicht** auf ein GUI-Programm. Der Prompt
+  ist sofort zurück, die Ausgabe erscheint gleich danach (die Dateien werden vollständig
+  geschrieben — nach 3 s gemessen: 11/11). PowerShells `>` schließt seine Zieldatei dabei zu
+  früh und bleibt **0 Bytes**; `cmd /c "… > datei"` trägt (763 Bytes gemessen), weil cmd das
+  Handle vererbt statt selbst zu lesen. Ein Konsolen-Subsystem ist keine Option, ein zweites
+  `qtmux-cli.exe` wäre genau das Extra-Artefakt in allen Paketen, das dieses Ticket vermeiden
+  wollte. Steht so in der Doku.
   🔑 Der Befehl läuft **vor** der `QGuiApplication` mit eigener `QCoreApplication` und beendet
   den Prozess selbst — sonst blitzt auf macOS ein Dock-Icon auf und Qt fährt eine GUI-Umgebung
   hoch, die niemand braucht. Eigene Argument-Schleife, weil das Ziel **optional** ist (die
@@ -1077,6 +1088,13 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   **statischen** `qtmux_core` überhaupt im Programm landet (ein Linker darf Objektdateien
   verwerfen, auf die niemand verweist), Ausführbar-Bit nur für `.sh`, Idempotenz, und dass eine
   veränderte Datei wieder auf die mitgelieferte Fassung zurückgesetzt wird.
+  **Am Artefakt abgenommen, alle drei Pakete** (2026-07-31): DMG gemountet und die App daraus
+  gestartet · portables ZIP auf rtzbld01 entpackt · AppImage aus dem CI-Lauf `30641780941` auf
+  rtzsvr02 — je 11/11 Dateien. Dazu E2E: das **installierte** `qtmux-emit.sh` stellte einer
+  isolierten Instanz ein Ereignis zu (`seq 1`, `sourceSessionId 2`).
+  🔑 Das AppImage lässt sich auf rtzsvr02 **nur im Container** starten (`libOpenGL.so.0` fehlt
+  auf dem aufgeräumten Host) — die Meldung sieht nach einem kaputten Paket aus, ist aber die
+  Umgebung. Mit `sudo /opt/docker/buildenv/buildenv.sh` + `APPIMAGE_EXTRACT_AND_RUN=1` läuft es.
 - **AgentEventHub** (Gui-frei, Ringpuffer 256, monotone `seq`): Inter-Agenten-Ereignisse
   `done|question|error|info` via OSC `777;qtmux-event` oder MCP `post_event`; Zustellung
   über MCP-Long-Poll `wait_for_events`. **⚠️ Hook-stdout wird vom Agenten gekapselt** —

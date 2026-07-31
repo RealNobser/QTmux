@@ -321,9 +321,13 @@ keine Oberfläche. Standardziel:
 > geschrieben, liegen die Dateien überall an einem Ort, der bleibt — und passen zwangsläufig
 > zur laufenden Version.
 
-Unter Windows hängt sich der Befehl an die Konsole des Aufrufers (QTmux ist eine GUI-Anwendung
-und hat von sich aus kein stdout). Aus `cmd`/PowerShell gestartet erscheint die Ausgabe also
-normal; per Doppelklick aus dem Explorer gäbe es weder Ausgabe noch Argumente.
+**Windows:** QTmux ist zwingend eine GUI-Anwendung (sonst erben die Terminal-Sitzungen die
+Konsole) und hat von sich aus kein stdout. Der Befehl hängt sich deshalb an die Konsole des
+Aufrufers, sofern dort keine Umleitung vorliegt. Zwei Folgen, beide gemessen: Die Shell
+**wartet nicht** auf das Prozessende — der Prompt ist sofort zurück, die Ausgabe erscheint
+gleich danach, die Dateien werden vollständig geschrieben. Und PowerShells `>` schließt seine
+Zieldatei zu früh (bleibt leer); zum Mitschneiden `cmd /c "… > ausgabe.txt 2>&1"` verwenden,
+eine Pipe (`| Out-String`) funktioniert ebenfalls.
 
 Im Repo liegen dieselben Dateien unter `shell-integration/` — für Entwickler ändert sich nichts.
 
