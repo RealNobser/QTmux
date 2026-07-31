@@ -356,8 +356,9 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-07-31** · letzter **Code**-Commit auf `main` = **`1bb0ba1`** (alles danach ist
-Doku), `main` = `origin/main`, Working Tree sauber · Version **1.7.1**.
+Stand **2026-07-31** · letzter **Code**-Commit auf `main` = **`14a6763`** (QTMUX-88,
+**noch nicht gepusht** — der Mac braucht ihn für die Drei-Plattform-Verifikation),
+Working Tree sauber · Version **1.7.1**.
 Zuletzt: Design-1a/2a-Umbau abgeschlossen (Stufen 1–7), Umbenennen erhält den Aktivitäts-Indikator
 der aktiven Session (`2e151b9`), Confluence-Entwicklerdoku-Seite „GUI-Auffrischung Design 1a/2a"
 dual angelegt, Jira bis **QTMUX-117** synchron. Danach zwei Nachzügler von der Windows-Seite:
