@@ -1508,8 +1508,45 @@ ApplicationWindow {
         if (target >= 0 && src >= 0 && target !== src) swapPanes(src, target)
     }
 
+    // --- Wiederhergestellte Fenstergeometrie auf einen VORHANDENEN Bildschirm holen ---
+    // Ohne das startet QTmux unsichtbar, sobald der Monitor fehlt, auf dem es zuletzt
+    // stand: der Prozess läuft, das Fenster existiert, gemalt wird daneben. Am 2026-07-31
+    // genau so passiert — gespeichert war `window/x = 2881`, angeschlossen war nur ein
+    // Bildschirm mit 2560 px Breite; gemessenes Fensterrechteck X = 2873…3847.
+    // Nimmt das Fenster als Argument, weil das Einstellungsfenster dieselbe Prüfung
+    // braucht (es persistiert `ui/prefsX|Y` genauso) und über `host.app` hier hereinruft.
+    // Liefert true, wenn korrigiert wurde.
+    function ensureWindowOnScreen(win) {
+        const screens = Qt.application.screens
+        if (!win || !screens || screens.length === 0) return false
+        // „Sichtbar" heißt: ein nennenswertes Stück liegt auf einem Bildschirm. Ein paar
+        // Pixel Überlappung reichen NICHT — ein Fenster, das mit 5 px am Rand klebt, ist
+        // genauso unbedienbar wie ein ganz verschwundenes.
+        const minVis = 120
+        for (let i = 0; i < screens.length; ++i) {
+            const s = screens[i]
+            const ox = Math.min(win.x + win.width,  s.virtualX + s.width)  - Math.max(win.x, s.virtualX)
+            const oy = Math.min(win.y + win.height, s.virtualY + s.height) - Math.max(win.y, s.virtualY)
+            if (ox >= Math.min(minVis, win.width) && oy >= Math.min(minVis, win.height))
+                return false
+        }
+        // Nicht sichtbar → auf den Bildschirm holen, dem Qt das Fenster zuordnet (bei
+        // fehlendem Monitor der primäre). Vorher notfalls die Größe einpassen, sonst hängt
+        // ein zu großes Fenster gleich wieder halb heraus.
+        const s = win.screen ? win.screen : screens[0]
+        const maxW = s.width - 80, maxH = s.height - 80
+        if (win.width  > maxW) win.width  = maxW
+        if (win.height > maxH) win.height = maxH
+        win.x = s.virtualX + Math.round((s.width  - win.width)  / 2)
+        win.y = s.virtualY + Math.round((s.height - win.height) / 2)
+        return true
+    }
+
     // Beim Start die persistierten Sessions wiederherstellen; sonst eine neue öffnen.
     Component.onCompleted: {
+        // ZUERST: sonst restauriert der Rest in ein unsichtbares Fenster hinein.
+        if (window.ensureWindowOnScreen(window))
+            console.log("QTmux: Fensterposition lag außerhalb aller Bildschirme — zurückgeholt.")
         if (terminalFontFamily === "") terminalFontFamily = App.defaultMonospaceFont()
         if (quakeMode) QuakeHotkey.setEnabled(true)
         // Eingeklappte Gruppen (QTMUX-42) aus den Einstellungen holen. Als JSON-Text

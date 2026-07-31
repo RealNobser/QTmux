@@ -78,6 +78,11 @@ Window {
             // Beim ersten Öffnen versetzt zum Hauptfenster platzieren, damit die Sidebar
             // sichtbar bleibt (Teil B). Nur wenn keine gespeicherte Position vorliegt.
             if (x <= 0 && y <= 0) { x = 120; y = 90 }
+            // Dieses Fenster persistiert seine Position genauso wie das Hauptfenster
+            // (`ui/prefsX|Y`) — und wäre nach einem Monitorwechsel genauso unsichtbar.
+            // Prüfung VOR dem Anzeigen, damit es gar nicht erst daneben aufblitzt.
+            if (app && app.ensureWindowOnScreen(root))
+                console.log("QTmux: Einstellungsfenster lag außerhalb aller Bildschirme — zurückgeholt.")
             show()
         }
         raise()

@@ -754,6 +754,22 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   man die Session per MCP anspricht (`send_text`, `set_session_group` …). Model-Rolle
   `IdRole`/`"sessionId"`; im Delegate `required property int sessionId`. Bewusst NICHT der
   Zeilenindex (der wandert beim Umsortieren/Gruppieren).
+- **Fenster darf nicht neben dem Bildschirm starten (2026-07-31):** `window.ensureWindowOnScreen(win)`
+  in [qml/Main.qml](qml/Main.qml), gerufen als **erstes** in `Component.onCompleted` und aus
+  `PrefsWindow.open()` (über `host.app`, **vor** `show()`). Prüft, ob das Fensterrechteck
+  mindestens 120 × 120 px mit *irgendeinem* Bildschirm überlappt; sonst wird die Größe in den
+  Bildschirm eingepasst und das Fenster **zentriert**.
+  🔑 **Warum:** Die Geometrie wird persistiert (`window/x|y|width|height`, für den Dialog
+  `ui/prefsX|Y`), der Monitor aber nicht. Fehlt er beim nächsten Start, läuft QTmux korrekt und
+  ist trotzdem **unsichtbar** — für den Anwender „die App startet nicht". Genau so passiert:
+  gespeichert `x = 2881`, angeschlossen ein Bildschirm mit 2560 px; gemessenes Fensterrechteck
+  X = 2873…3847. Ein paar Pixel Überlappung reichen als Kriterium NICHT (ein Fenster, das mit
+  5 px am Rand klebt, ist genauso unbedienbar) — daher die 120-px-Schwelle.
+  🔑 **Messfalle beim Prüfen:** `GetWindowRect` liefert den **Rahmen**, QML `window.x/y` die
+  Client-Position — auf dieser Maschine 8 px seitlich und 31 px oben Unterschied. Ein
+  Pixelvergleich meldet damit einen Fehlalarm; belastbar ist der **persistierte Wert** nach dem
+  Lauf. A/B: on-screen `300/150` → unverändert, off-screen `2881/32` → `780/400` (= exakt
+  zentriert auf 2560 × 1600).
 - **Beenden mit Rückfrage (QTMUX-41):** Dialog listet die offenen Sitzungen auf, bevor
   alles geschlossen wird; abschaltbar (`window/confirmQuit`, **Vorgabe an**; Einstellungen →
   **Allgemein**, Abschnitt „Fenster" — dazu Datei-Menü und Palette, QTMUX-46).
