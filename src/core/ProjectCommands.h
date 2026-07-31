@@ -60,6 +60,21 @@ public:
     /// damit die Palette nicht bei jedem Oeffnen die Reihenfolge wechselt.
     static QList<ProjectCommand> scan(const QString &workingDir);
 
+    /// Waehlt aus `all` die Befehle, die zu einer Session mit dem Agenten `agentId`
+    /// passen (QTMUX-96, Palette-Anbindung).
+    ///
+    /// 🔑 Die Regel steht bewusst HIER und nicht im QML: sie ist die eine Stelle, an der
+    /// entschieden wird, was der Anwender ueberhaupt abschicken kann, und sie ist damit
+    /// testbar. Zwei Faelle:
+    /// - **Agent erkannt** (z. B. `claude`): dessen eigene Befehle plus die
+    ///   agentenneutral geteilten aus `.agents/skills`. Ein `.gemini`-Befehl an Claude
+    ///   Code zu schicken erzeugt nur eine Fehlermeldung im Agenten.
+    /// - **Kein Agent erkannt** (leere `agentId`, also eine nackte Shell): **alles**.
+    ///   Der Anwender tippt den Agenten ja oft erst noch; QTmux leitet hier nichts ab
+    ///   (dieselbe Linie wie QTMUX-30/37) und verbirgt darum nichts.
+    static QList<ProjectCommand> filterForAgent(const QList<ProjectCommand> &all,
+                                                const QString &agentId);
+
     /// Grenzen — bewusst oeffentlich, damit der Test sie kennt statt sie zu raten.
     /// Sie schuetzen davor, dass ein fremdes Projekt den Scanner beschaeftigt haelt.
     static constexpr int maxDepth = 6;          ///< Verzeichnistiefe unter dem Fundort

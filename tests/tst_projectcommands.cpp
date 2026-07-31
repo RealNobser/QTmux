@@ -305,6 +305,43 @@ private slots:
         QCOMPARE(names(b), names(a));
     }
 
+    /// Auswahl fuer die Palette: laeuft in der Session ein erkannter Agent, sieht der
+    /// Anwender nur dessen eigene Befehle plus die agentenneutralen aus `.agents/skills`.
+    /// Ein `.gemini`-Befehl an Claude Code zu schicken erzeugt nur eine Fehlermeldung.
+    void filterForAgentKeepsOwnAndShared()
+    {
+        QList<ProjectCommand> all;
+        for (const auto &p : { std::pair{QStringLiteral("c"), QStringLiteral("claude")},
+                               std::pair{QStringLiteral("g"), QStringLiteral("gemini")},
+                               std::pair{QStringLiteral("j"), QStringLiteral("junie")},
+                               std::pair{QStringLiteral("s"), QString()} }) {
+            ProjectCommand c;
+            c.name = p.first;
+            c.agentId = p.second;
+            all << c;
+        }
+
+        const auto claude = ProjectCommands::filterForAgent(all, QStringLiteral("claude"));
+        QCOMPARE(names(claude), QStringList({ QStringLiteral("c"), QStringLiteral("s") }));
+        const auto gemini = ProjectCommands::filterForAgent(all, QStringLiteral("gemini"));
+        QCOMPARE(names(gemini), QStringList({ QStringLiteral("g"), QStringLiteral("s") }));
+        // Ein Agent ohne eigene Befehle behaelt wenigstens die geteilten.
+        QCOMPARE(names(ProjectCommands::filterForAgent(all, QStringLiteral("codex"))),
+                 QStringList({ QStringLiteral("s") }));
+    }
+
+    /// Kein erkannter Agent (nackte Shell) → **alles** bleibt sichtbar. QTmux leitet
+    /// hier nichts ab (Linie aus QTMUX-30/37): der Anwender tippt den Agenten oft erst
+    /// noch, und ein verborgener Befehl sieht aus wie ein fehlender.
+    void filterForAgentWithoutAgentKeepsEverything()
+    {
+        QList<ProjectCommand> all;
+        ProjectCommand a; a.name = QStringLiteral("a"); a.agentId = QStringLiteral("claude");
+        ProjectCommand b; b.name = QStringLiteral("b"); b.agentId = QStringLiteral("gemini");
+        all << a << b;
+        QCOMPARE(ProjectCommands::filterForAgent(all, QString()).size(), 2);
+    }
+
     /// Alle fuenf Orte zusammen in EINEM Verzeichnis: jeder liefert seinen Beitrag, und
     /// gleichnamige Eintraege aus verschiedenen Quellen bleiben beide erhalten (die
     /// Palette unterscheidet sie ueber `source`/`agentId`).

@@ -863,6 +863,23 @@ ApplicationWindow {
     function currentWorkingDir() {
         return window.windowWorkingDir(windows.windowById(window.activeWindowId))
     }
+    // Session des gerade aktiven Panes (oder null) — Bezugspunkt für alles, was die
+    // Palette an die laufende Session schickt.
+    function currentSession() {
+        const sid = window.windowActiveSessionId(windows.windowById(window.activeWindowId))
+        return sid >= 0 ? window.sessionById(sid) : null
+    }
+    // QTMUX-96: einen Projekt-Befehl als `/<name>` an die aktive Session schicken.
+    // 🔑 Das Enter geht über `sessions.sendText` zeitlich abgesetzt raus (QTMUX-31) —
+    // ein Agenten-TUI würde einen Block samt `\r` sonst als Einfügevorgang werten und
+    // den Befehl nur in sein Eingabefeld schreiben, ohne ihn abzuschicken.
+    function runProjectCommand(name) {
+        const s = window.currentSession()
+        if (!s) { window.notifyToast(qsTr("Keine aktive Session.")); return }
+        const row = window.rowForSessionId(s.sessionId)
+        if (row < 0) return
+        sessions.sendText(row, "/" + name, true)
+    }
     // Verzeichnis im Dateimanager öffnen (QTMUX-103). Schlägt das fehl, sagen wir es —
     // ein stumm wirkungsloser Menüpunkt ist schlimmer als eine Fehlermeldung.
     function openWorkingDir(dir) {
@@ -2532,14 +2549,45 @@ ApplicationWindow {
                                      icon: "terminal-window",
                                      run: (function(id){ return function(){ window.loadWindow(id) } })(w.windowId) })
                         }
+                        // QTMUX-96: was das PROJEKT im Arbeitsverzeichnis der aktiven
+                        // Session mitbringt — `.claude/commands`, `.claude/skills`,
+                        // `.gemini/commands`, `.junie/commands`, `.agents/skills`.
+                        // Ans Ende, weil die Liste projektabhängig lang wird; gefunden
+                        // wird sie über den Titel `/name` (ein getipptes „/" zeigt sie).
+                        // Läuft in der Session ein erkannter Agent, kommen nur dessen
+                        // eigene und die agentenneutralen zurück (Regel in C++).
+                        const pcDir = window.currentWorkingDir()
+                        if (pcDir.length > 0) {
+                            const pcSess = window.currentSession()
+                            const pcs = App.projectCommands(pcDir, pcSess ? (pcSess.agentId || "") : "")
+                            for (var pi = 0; pi < pcs.length; ++pi) {
+                                c.push({ title: "/" + pcs[pi].name,
+                                         // Ohne Beschreibung sagt wenigstens der Fundort,
+                                         // woher der Befehl kommt — erfunden wird nichts.
+                                         sub: pcs[pi].description.length > 0 ? pcs[pi].description
+                                                                             : pcs[pi].source,
+                                         icon: "command",
+                                         // Beschreibung mitsuchen: „test" soll den Befehl
+                                         // auch finden, wenn nur seine Beschreibung es sagt.
+                                         keywords: pcs[pi].description,
+                                         run: (function(n){ return function(){ window.runProjectCommand(n) } })(pcs[pi].name) })
+                            }
+                        }
                         return c
                     }
 
+                    // Gesucht wird im Titel und — falls der Eintrag eines mitbringt — in
+                    // seinen `keywords` (QTMUX-96: die Beschreibung eines Projekt-Befehls).
+                    // Bewusst NICHT in `sub` aller Einträge: dort stehen Kürzel und
+                    // Sammelbegriffe wie „Fenster", die sonst massenhaft mitträfen.
                     function applyFilter(text) {
                         var q = text.trim().toLowerCase()
                         filtered = (q.length === 0)
                             ? allCommands
-                            : allCommands.filter(function(cmd){ return cmd.title.toLowerCase().indexOf(q) >= 0 })
+                            : allCommands.filter(function(cmd){
+                                  if (cmd.title.toLowerCase().indexOf(q) >= 0) return true
+                                  return cmd.keywords !== undefined
+                                         && cmd.keywords.toLowerCase().indexOf(q) >= 0 })
                         cmdList.currentIndex = filtered.length > 0 ? 0 : -1
                     }
 

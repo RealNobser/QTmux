@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "ProjectCommands.h"
 #include <QSettings>
 #include <QLocale>
 #include <QFontDatabase>
@@ -131,6 +132,25 @@ QString AppController::shortcutText(const QVariant &seq) const {
     if (ks.isEmpty()) return QString();
     // NativeText: plattformüblich (Windows/Linux "Ctrl+…", macOS ⌘/⌥/⇧-Symbole).
     return ks.toString(QKeySequence::NativeText);
+}
+
+QVariantList AppController::projectCommands(const QString &workingDir,
+                                            const QString &agentId) const {
+    QVariantList out;
+    if (workingDir.isEmpty())
+        return out;
+    const auto found = ProjectCommands::filterForAgent(ProjectCommands::scan(workingDir), agentId);
+    out.reserve(found.size());
+    for (const ProjectCommand &c : found) {
+        out.append(QVariantMap{
+            {QStringLiteral("name"), c.name},
+            {QStringLiteral("description"), c.description},
+            {QStringLiteral("source"), c.source},
+            {QStringLiteral("agentId"), c.agentId},
+            {QStringLiteral("filePath"), c.filePath},
+        });
+    }
+    return out;
 }
 
 QStringList AppController::monospaceFonts() const {

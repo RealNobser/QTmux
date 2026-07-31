@@ -297,4 +297,16 @@ QList<ProjectCommand> ProjectCommands::scan(const QString &workingDir)
     return out;
 }
 
+QList<ProjectCommand> ProjectCommands::filterForAgent(const QList<ProjectCommand> &all,
+                                                      const QString &agentId)
+{
+    if (agentId.isEmpty())
+        return all; // keine Kenntnis → nichts verbergen
+    QList<ProjectCommand> out;
+    for (const ProjectCommand &c : all)
+        if (c.agentId.isEmpty() || c.agentId == agentId)
+            out << c;
+    return out;
+}
+
 } // namespace qtmux
