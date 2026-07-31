@@ -258,9 +258,20 @@ C CXX)` ist Pflicht (ohne `C` → leere `vterm.lib` → Linkfehler).
 
 `.github/workflows/ci.yml`: Build + headless-Tests (`QT_QPA_PLATFORM=offscreen`) auf
 macOS/Windows/Linux; Qt via `jurplel/install-qt-action` (Module **qtserialport** +
-**qtshadertools**); Windows-Tests informativ (`continue-on-error`, ConPTY-Konsolen-
-Anbindung). Linux-Job baut zusätzlich das AppImage (Artefakt `QTmux-AppImage`).
-Actions warnen über Node-20-Deprecation (ab Sept. 2026) — bei Gelegenheit anheben.
+**qtshadertools**). Linux-Job baut zusätzlich das AppImage (Artefakt `QTmux-AppImage`).
+**Windows-Tests sind seit `db52b41` blockierend** — vorher lief der Schritt mit
+`continue-on-error`, weil `test_pty` dort umgebungsbedingt fällt; damit waren aber auch alle
+übrigen Tests wirkungslos, eine echte Regression hätte den Job nie rot gemacht. Jetzt wird nur
+`test_pty` per `-E` ausgenommen. Node-20-Abkündigung ist abgearbeitet (checkout v5,
+upload-artifact v6, `setup-msvc-dev` statt `ilammy`, Ninja kommt vom Image) — offen ist nur
+noch `jurplel/install-qt-action@v4`.
+> ⚠️ **Sporadisch: `test_doc_duplicates` fällt auf Windows mit `0xc0000142`**
+> (STATUS_DLL_INIT_FAILED). Das ist **kein** Prüfbefund — der Prozess (`cmake -P`) startet gar
+> nicht erst, die Doku wird nie gelesen. Einmal gesehen (Lauf `30635817273`), im nächsten Lauf
+> **derselben** Datei grün. Fällt erst seit der Blockier-Umstellung überhaupt auf. Also: nicht
+> als Regression lesen und nicht in der CheckDocDuplicates.cmake suchen — **erst wiederholen**.
+> Bleibt es reproduzierbar, ist die Spur Ressourcenerschöpfung durch die davor laufenden
+> `run_detached.ps1`-Tests, nicht der Doku-Wächter selbst.
 
 > **⚠️ `env.QT_VERSION` (6.10.3) ist bewusst gewählt — nicht blind hochziehen.**
 > **Nicht 6.8.x:** dessen CMake-Config verlinkt das aus dem macOS-SDK entfernte
@@ -372,11 +383,9 @@ dual angelegt. Danach zwei Nachzügler von der Windows-Seite:
 Qt **6.10.3** lokal installiert und im `windows`-Preset vor 6.11.1 gezogen (`e1eef80`), und
 das Fenster startet nicht mehr **neben** dem Bildschirm (`1bb0ba1`, Anwenderbefund „App startet
 nicht, nichts zu sehen" — Mechanik in der Feature-Referenz).
-**Teststände:** macOS **20/20** grün (Debug `macos-test` **und** `macos-release`) — der 20. ist
-`test_i18n` aus QTMUX-117. Windows und Linux standen zuletzt auf **18/18** bzw. **19/19** und
-sind für QTMUX-88/117 **noch nicht nachgezogen**; dort werden 19 bzw. 20 erwartet (`test_pty`
-fällt umgebungsbedingt). Dass die neue Ressource dort überhaupt gefunden wird, ist geprüft:
-`qtbase_de.qm` liegt sowohl auf rtzbld01 als auch im Linux-`qtcache`.
+**Teststände — alle drei Plattformen grün** (CI-Lauf `30640022530` gegen `6c3da0a`):
+macOS **20/20**, Linux **20/20**, Windows **19/19** (ohne `test_pty`); `test_i18n` lief überall
+mit. Lokal zusätzlich macOS Debug (`macos-test`) und Release je **20/20**.
 `test_pty` fällt auf Windows/Linux umgebungsbedingt (nicht-interaktive Shell/ConPTY); auf Windows
 braucht `ctest` Qt-`bin` im PATH (sonst `0xc0000135`).
 🔑 Windows: `"cmake.cmakePath"` muss in den **Benutzer**-Einstellungen auf
