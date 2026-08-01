@@ -105,7 +105,15 @@ Session::Session(QObject *parent)
     });
     // Meldet die Session ihren Zustand selbst, ist der Wechsel der schnellste Auslöser —
     // dann muss nicht bis zum nächsten Timer-Tick gewartet werden.
-    connect(this, &Session::activityChanged, this, &Session::tryDispatchQueued);
+    // 🔑 **QueuedConnection ist hier Pflicht, nicht Geschmack (QTMUX-124).** `activityChanged`
+    // kommt unter anderem aus `onPromptMarker`, und das läuft **innerhalb eines
+    // libvterm-Callbacks** — also mitten in `VtScreen::inputWrite`, während der Parser seine
+    // Zustände (u. a. den Scrollback als QList) in der Hand hat. Direkt verbunden würde von
+    // dort aus synchron `writeWithEnter` laufen und in den laufenden Parser zurückgreifen.
+    // Verzögert zugestellt läuft die Abgabe erst, wenn der Callback vollständig
+    // zurückgekehrt ist.
+    connect(this, &Session::activityChanged, this, &Session::tryDispatchQueued,
+            Qt::QueuedConnection);
 }
 Session::~Session() = default;
 
