@@ -65,7 +65,12 @@ jobs:
       #   qtserialport  -> SerialBackend
       #   qtshadertools -> qsb / qt_add_shaders (GPU-Glyph-Atlas, QTMUX-6)
       - name: Qt installieren
-        uses: jurplel/install-qt-action@v4
+        # Auf den Commit-SHA gepinnt (gleiche Begründung wie bei setup-msvc-dev oben) —
+        # dieser Schritt installiert die komplette Qt-Toolchain, die Angriffsfläche ist
+        # also noch größer. `@v4` ist bei dieser Action ein *Branch*, keine feste Marke.
+        # Beim Anheben: `gh api repos/jurplel/install-qt-action/tags` und den SHA des
+        # gewünschten v4.x-Tags eintragen.
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: ${{ env.QT_VERSION }}
           host: ${{ matrix.host }}
