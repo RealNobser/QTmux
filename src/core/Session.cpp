@@ -108,10 +108,15 @@ Session::Session(QObject *parent)
     // 🔑 **QueuedConnection ist hier Pflicht, nicht Geschmack (QTMUX-124).** `activityChanged`
     // kommt unter anderem aus `onPromptMarker`, und das läuft **innerhalb eines
     // libvterm-Callbacks** — also mitten in `VtScreen::inputWrite`, während der Parser seine
-    // Zustände (u. a. den Scrollback als QList) in der Hand hat. Direkt verbunden würde von
-    // dort aus synchron `writeWithEnter` laufen und in den laufenden Parser zurückgreifen.
-    // Verzögert zugestellt läuft die Abgabe erst, wenn der Callback vollständig
-    // zurückgekehrt ist.
+    // Zustände in der Hand hat. Direkt verbunden würde von dort aus synchron
+    // `writeWithEnter` laufen und in den laufenden Parser zurückgreifen. Verzögert
+    // zugestellt läuft die Abgabe erst, wenn der Callback vollständig zurückgekehrt ist.
+    // ⚠️ Zum Windows-Assert (`qlist.h`, "size_t(d.size) <= MaxSize"): Der Scrollback ist
+    // ein std::deque (VtScreen.h) und scheidet als Quelle aus. Bleibt der Absturz trotz
+    // dieser Umstellung, sind die verbleibenden synchronen Pfade aus dem Callback die
+    // Verdächtigen: runLoginScript() (schreibt direkt ans Backend), die direkt verbundenen
+    // dataChanged-Ketten in SessionModel::wireSession (QML-Bindings laufen synchron mit)
+    // und AgentEventHub::postEvent.
     connect(this, &Session::activityChanged, this, &Session::tryDispatchQueued,
             Qt::QueuedConnection);
 }
