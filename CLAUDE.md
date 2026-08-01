@@ -386,7 +386,7 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 
 ## Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-01** · Version **1.7.1** · `main` = `cfa2906`, gepusht. Jira dual synchron
+Stand **2026-08-01** · Version **1.7.1** · `main` gepusht und CI-grün. Jira dual synchron
 bis **QTMUX-124**, **28 offen (alle Backlog, nichts in Arbeit)**.
 ⚠️ **Offener Befund der Windows-Seite: QTMUX-124.** Auf `f9c712e` stürzen dort `test_session`
 und `test_sessiongroups` ab (Exit `0xC0000409`, `ASSERT "size_t(d.size) <= MaxSize"` in
