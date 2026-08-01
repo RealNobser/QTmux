@@ -249,7 +249,7 @@ CatPage {
                                         anchors.centerIn: parent
                                         visible: parent.on
                                         text: "✓"
-                                        color: "#ffffff"
+                                        color: Theme.accentText
                                         font.pixelSize: 12
                                     }
                                     TapHandler {
@@ -283,7 +283,7 @@ CatPage {
                                         id: chipText
                                         anchors.centerIn: parent
                                         text: chip.modelData.label
-                                        color: chip.on ? "#ffffff" : Theme.textDim
+                                        color: chip.on ? Theme.accentText : Theme.textDim
                                         font.pixelSize: 11
                                     }
                                     TapHandler {

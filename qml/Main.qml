@@ -24,7 +24,9 @@ ApplicationWindow {
     palette.button: Theme.bgElevated
     palette.buttonText: Theme.textBright
     palette.highlight: Theme.accent
-    palette.highlightedText: "#ffffff"
+    // accentText statt hartem Weiß: ein Schema mit hellem ANSI-Blau zeichnete sonst
+    // weiß auf hell (dieselbe Luminanz-Regel wie überall auf Akzentflächen).
+    palette.highlightedText: Theme.accentText
     palette.mid: Theme.border
     palette.dark: Theme.border
     palette.placeholderText: Theme.textDim
@@ -3741,7 +3743,7 @@ ApplicationWindow {
                 Text {
                     anchors.centerIn: parent
                     text: qsTr("⟫ Eingabe geht an ALLE Sessions — Strg/Cmd+Umschalt+B zum Beenden")
-                    color: "#ffffff"
+                    color: Theme.accentText
                     font.pixelSize: 12
                     font.bold: true
                     elide: Text.ElideRight

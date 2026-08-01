@@ -166,7 +166,7 @@ Item {
                                 model: 6
                                 delegate: Rectangle {
                                     width: 2; height: 2; radius: 1
-                                    color: dragGrip.active ? "#ffffff" : Theme.textDim
+                                    color: dragGrip.active ? Theme.accentText : Theme.textDim
                                 }
                             }
                         }

@@ -34,7 +34,7 @@ Window {
     palette.button: Theme.bgElevated
     palette.buttonText: Theme.textBright
     palette.highlight: Theme.accent
-    palette.highlightedText: "#ffffff"
+    palette.highlightedText: Theme.accentText
     palette.mid: Theme.border
     palette.dark: Theme.border
     palette.placeholderText: Theme.textDim
