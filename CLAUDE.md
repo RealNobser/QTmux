@@ -392,8 +392,8 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in der
 > Tabelle unten.
 
-Version **1.7.1** · `main` gepusht und CI-grün · Jira dual synchron bis **QTMUX-124**,
-**28 offen (alle Backlog, nichts in Arbeit)**.
+Version **1.7.1** · `main` gepusht und CI-grün · Jira dual synchron bis **QTMUX-125**,
+**29 offen (alle Backlog, nichts in Arbeit)**.
 **Teststände:** macOS Debug (`macos-test`) und Release je **24/24**; CI Linux 24/24,
 Windows 23/23 (ohne `test_pty` — fällt dort umgebungsbedingt: nicht-interaktive
 Shell/ConPTY; auf Windows braucht `ctest` Qt-`bin` im PATH, sonst `0xc0000135`).
@@ -477,7 +477,10 @@ neu angelegt: 55/69/72/73/75/76. 🔑 **Bewusst nicht übernommen:** alles Edito
 (Symbols, Go-to-Definition, Datei-Baum, projektweite Suche, Commit-Erzeugung,
 Diff-Kommentare) und die Cloud-Hälfte — QTmux ist ein Terminal-Manager, kein IDE-Ersatz;
 diese Linie beim nächsten Feature-Vergleich wiederverwenden.
-**Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) ·
+**Backlog (nicht beauftragt):** **QTMUX-125** Online-Update — neue Version erkennen,
+Release-Notes zeigen, mit Nutzer-Interaktion herunterladen (DMG/MSI+ZIP/AppImage; keine
+stille Installation, keine Selbst-Ersetzung in v1; Details im Ticket) ·
+SFTP-MCP-Tools (Companion-Prio 2) ·
 Signierung/Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff
 (CAN-FD, ID-Filter, Konfig-Dialog, DBC-Decoding) · optional CPack-Distro-Pakete
 (.deb/.rpm) · **LGPL-Beilagen** fürs gebündelte Qt (Lizenztext + Quellen-Hinweis).
