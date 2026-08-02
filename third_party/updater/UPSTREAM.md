@@ -9,9 +9,9 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `dee821469da6939a56e9c305adc974ef050e6d15` |
+| Commit | `d0ed07b41a712b9e7af8123376c1ca9bb3e865b9` |
 | Datum | 2026-08-02 |
-| Betreff | `feat(update): production signing key + real end-to-end interop, and the astrocan-* path convention` |
+| Betreff | `fix(update): close the read-back handle before deleting a bad download` |
 
 Enthält den **Produktions-Public-Key** (`update/UpdateKeys.hpp`, Ed25519, 32 Byte,
 Owner-Schlüssel vom 2026-08-02) — kein Platzhalter mehr.

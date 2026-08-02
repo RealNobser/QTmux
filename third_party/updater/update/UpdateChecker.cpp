@@ -176,14 +176,29 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
         // Verify the manifest's SHA-256 against what actually landed on
         // disk. A mismatch deletes the file — a corrupt installer must not
         // survive to be double-clicked later.
-        QFile readBack(localPath);
-        QCryptographicHash hash(QCryptographicHash::Sha256);
-        if (!readBack.open(QIODevice::ReadOnly) || !hash.addData(&readBack)) {
+        //
+        // The read-back handle is CLOSED before any remove(): Windows refuses
+        // to unlink a file that is still open, so leaving the QFile alive
+        // until the end of the lambda made the deletion a silent no-op there —
+        // the caller got "file deleted" while the corrupt installer sat in
+        // Downloads. Found by QTmux's Windows build (its vendored copy of this
+        // file); POSIX hid it because unlinking an open file works.
+        bool hashed = false;
+        QByteArray digest;
+        {
+            QFile readBack(localPath);
+            QCryptographicHash hash(QCryptographicHash::Sha256);
+            hashed = readBack.open(QIODevice::ReadOnly) && hash.addData(&readBack);
+            if (hashed) {
+                digest = hash.result().toHex();
+            }
+        }
+        if (!hashed) {
             QFile::remove(localPath);
             callback(QString(), QStringLiteral("cannot hash %1").arg(localPath));
             return;
         }
-        const QString actual = QString::fromLatin1(hash.result().toHex());
+        const QString actual = QString::fromLatin1(digest);
         if (actual.compare(expectedSha, Qt::CaseInsensitive) != 0) {
             QFile::remove(localPath);
             callback(QString(),
