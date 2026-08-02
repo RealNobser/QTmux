@@ -220,7 +220,7 @@ Window {
             { cat: "agenten",          key: "agenten.restore",       label: qsTr("Agenten beim Start wiederherstellen"), keywords: "agent wiederherstellen neustart restore claude codex starten sitzung" },
             { cat: "agenten",          key: "agenten.restore",       label: qsTr("Unterhaltung fortsetzen"),           keywords: "fortsetzen continue resume unterhaltung konversation agent auswahl gemeldet juengste" },
             { cat: "agenten",          key: "agenten.notifications", label: qsTr("Benachrichtigungen"),                keywords: "agent benachrichtigung abo matrix ereignis subscribe" },
-            { cat: "agenten",          key: "agenten.mcp",           label: qsTr("MCP-Server"),                        keywords: "mcp server port agenten steuerung 127.0.0.1" },
+            { cat: "agenten",          key: "agenten.mcp",           label: qsTr("MCP-Server"),                        keywords: "mcp server port agenten steuerung 127.0.0.1 netzwerk lan bind adresse token bearer fernsteuerung 0.0.0.0" },
             { cat: "verbindungen",     key: "verbindungen.list",     label: qsTr("Verbindungsprofile"),                keywords: "verbindung profil ssh seriell sftp profile" },
             { cat: "vault",            key: "vault.section",         label: qsTr("Secrets-Vault"),                     keywords: "vault secret passwort geheimnis master token" },
             { cat: "erweiterungen",    key: "erweiterungen.list",    label: qsTr("Erweiterungen"),                     keywords: "plugin erweiterung backend echo macpcan can" }

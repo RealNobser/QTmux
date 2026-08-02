@@ -61,7 +61,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
-| `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (38 Tools); Doku `docs/MCP.md` |
+| `src/server/McpServer.{h,cpp}` + `McpAccess.{h,cpp}` | Eingebetteter MCP-Server (39 Tools; Doku `docs/MCP.md`) + dessen Gui-freie **Zugriffsregeln** (Bind-Adresse, Token-Pflicht, QTMUX-127) |
 | `third_party/updater/update/` + `src/viewmodels/UpdateViewModel.{h,cpp}` + `qml/dialogs/UpdateDialog.qml` | Online-Update (QTMUX-125): byte-identisch aus MacPCAN vendierter Kern (`appupdate`, Target `qtmux_updater`) + QTmux-Persistenz/Dialog; Abgleich `tools/check-updater-sync.sh`, Herkunft `third_party/updater/UPSTREAM.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
@@ -384,7 +384,7 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 **Ausgeliefert: v1.8.0** (Tag `v1.8.0`, alle 4 Installer: DMG/MSI+ZIP/AppImage) — die
 erste Version mit **Online-Update** (QTMUX-125). Phasen 0–6
 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Plugins +
-MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **38 MCP-Tools**
+MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **39 MCP-Tools**
 (GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert. **GUI-Auffrischung
 Design 1a/2a** (einklappbare Seitenleiste + Flyout, Statusleiste, sechs Menüs, neugestaltetes
 Einstellungsfenster, Reset/Import/Export) komplett, 3/3 Plattformen grün — Details im
@@ -410,10 +410,11 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in der
 > Tabelle unten.
 
-Version **1.8.0** · `main` gepusht · Jira dual synchron bis **QTMUX-126**.
+Version **1.8.0** · `main` gepusht · Jira dual synchron bis **QTMUX-127**.
 **Teststände (2026-08-02, alle drei Plattformen selbst gemessen):** macOS Debug
-(`macos-test`) und Release je **26/26**; Linux (rtzsvr02-Container) **25/25**;
-Windows (rtzbld01) Release **25/25** UND Debug **25/25** — jeweils ohne `test_pty`
+(`macos-test`) und Release je **27/27**; Linux (rtzsvr02-Container) **26/26**;
+Windows (rtzbld01) **26/26** (Debug; Release davor 25/25 ohne den neuen
+`test_mcpaccess`) — jeweils ohne `test_pty`
 (fällt dort umgebungsbedingt: nicht-interaktive Shell/ConPTY; auf Windows braucht
 `ctest` Qt-`bin` im PATH, sonst `0xc0000135`).
 `tst_session` ist mit **24 Fällen** das größte Binary.
@@ -424,6 +425,18 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
 `-DQT_FORCE_ASSERTS` trägt nicht (wirkt nur in den *Headern*, nicht in der vorgebauten
 `libQt6Core`).
 
+- ✅ **QTMUX-127 (MCP im LAN erreichbar) ist umgesetzt und selbst verifiziert**
+  (2026-08-02, beauftragt): Bind-Adresse konfigurierbar (Oberfläche zuerst, Env als
+  Vorrang), Token-Pflicht sobald die Bindung nicht Loopback ist, Startverweigerung ohne
+  Token, Peer-Zuordnung nur noch bei Loopback-Peer, Portprobe auf derselben Adresse,
+  Request-Deckel, Tool `get_server_info` (nur lesend). Mechanik in der Feature-Referenz,
+  Netzebene in [tools/pf/](tools/pf/).
+  🔑 **Zwei Dinge stehen noch aus** (in der Abnahme-Tabelle): die Sichtprüfung der
+  Einstellungsseite in beiden Designs — das Prefs-Fenster ist auf macOS mit
+  `--screenshot` prinzipiell nicht greifbar (eigenes `Window`) — und die
+  **pf-Installation auf dem Zielrechner**: `sudo` verlangt hier ein Passwort, das
+  Skript ist fertig und trocken geprüft (`pfctl -n -f` sauber), aber nicht geladen.
+  Die Application Firewall ist auf dieser Maschine aus (`State = 0`).
 - ✅ **QTMUX-124 (Windows-Absturz) ist erledigt — am 2026-08-02 gegengeprüft.** Der
   Windows-**Debug**-Build auf rtzbld01 läuft **25/25**, `test_session` und
   `test_sessiongroups` inklusive; der `0xC0000409`/`qlist.h`-Assert bei
@@ -507,7 +520,7 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   Aggregationslogik als ungetestetes JS, zwei divergierende Layout-Serialisierer).
   Empfohlener Abbaupfad: (1) Sidebar (~735 LOC) + Inline-Dialoge (~945 LOC) in eigene
   QML-Dateien, (2) Layout-Baum + Persistenz als testbare C++-Klasse in `core`, (3) damit
-  entfällt die QML-Brücke — **13 der 38 MCP-Tools brauchen heute die geladene UI**, der
+  entfällt die QML-Brücke — **13 der 39 MCP-Tools brauchen heute die geladene UI**, der
   McpServer hat deshalb keinen einzigen Test (25 Tools wären schon jetzt testbar).
   Weitere Punkte: `Session` ist ein God-Object (~40 Member; Extraktionskandidaten
   AgentDetection/LoginAutomation/CwdTracker) · 22 attached `ToolTip` über
@@ -629,10 +642,11 @@ fehl (kein Issuer im Store) — ADF-Rumpf mit Python **bauen**, aber mit
 **Bewusst NICHT als Ticket angelegt:** Qt 6.10.3 lokal + Preset-Reihenfolge — steht
 vollständig im Windows-Preset-Kasten oben; ein sofort geschlossenes Ticket ohne eigenen
 Inhalt wäre nur Rauschen im Board.
-Confluence-Entwicklerdoku-Unterseiten: „GUI-Auffrischung Design 1a/2a" und
-„Agenten-Wiederherstellung" (Seiten-IDs in `CLAUDE.local.md`).
+Confluence-Entwicklerdoku-Unterseiten: „GUI-Auffrischung Design 1a/2a",
+„Agenten-Wiederherstellung" und „MCP im Netzwerk: Bind-Adresse, Token, pf (QTMUX-127)"
+(Seiten-IDs in `CLAUDE.local.md`).
 
-### Owner-Abnahmen offen (26 Tickets, je umgesetzt + selbst verifiziert)
+### Owner-Abnahmen offen (27 Tickets, je umgesetzt + selbst verifiziert)
 
 Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme-Rezept:
 
@@ -660,6 +674,7 @@ Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme
 | **90** | **Prompt-Warteschlange** | in einer Session mit **echtem** Agenten einreihen (Palette → „In die Warteschlange einreihen …"), während er arbeitet: Abzeichen zeigt die Anzahl, der Text geht erst nach seiner Fertigmeldung raus. ⚠️ Bei einer gewöhnlichen Shell mit **stillem** Langläufer (`sleep 6`) geht er zu früh raus — bekannte Grenze, Begründung in der Feature-Referenz |
 | **125** | **Online-Update** (Hilfe-Menue, Dialog, Einstellung) | Hilfe -> „Nach Updates suchen …“: ohne veroeffentlichtes Manifest muss **„QTmux 1.7.1 ist aktuell“** kommen — kein Fehler, kein Haenger. Dann Einstellungen -> Allgemein -> Aktualisierung: Schalter aus, QTmux neu starten -> beim Start passiert nichts. Der Server ist seit 2026-08-02 scharf, die Meldung „aktuell“ ist also der ECHTE Fall. ⚠️ Der **vollstaendige** Durchlauf (Update finden, laden, installieren) wird erst mit **1.8.0** pruefbar; bis dahin ist er gegen einen lokalen HTTP-Server mit produktiv signiertem Manifest gelaufen |
 
+| **127** | **MCP im Netzwerk erreichbar** (Bind-Adresse, Token, pf) | Einstellungen → Agenten & MCP: „Im Netzwerk erreichbar" **an** — es muss sofort ein Token erscheinen (Anzeigen/Kopieren/Neu erzeugen), die Statusleiste unten rechts muss auf **„MCP LAN :7345" in Amber** wechseln, und ein `curl` von einem anderen Rechner muss **ohne** Kopfzeile 401 und **mit** `Authorization: Bearer <token>` eine Antwort liefern. Danach wieder **aus** → Statusfeld zurück auf „MCP :7345", `curl` von außen läuft ins Leere. Beides in **beiden Designs** ansehen (die Sichtprüfung der Seite ist auf macOS nicht automatisierbar — eigenes `Window`). ⚠️ Getrennt davon die **pf-Regel**: `sudo tools/pf/install-pf-anchor.sh --net 192.168.0.0/24` (braucht ein Passwort, deshalb hier nicht ausgeführt), dann `sudo pfctl -s rules | grep com.qtmux` — und der einzige echte Beleg ist die Gegenprobe von **außerhalb** des Netzes: **Timeout**, nicht „connection refused" |
 ⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
 Sessions **nicht** (Inhalt liegt im Scrollback) — betroffene Sessions neu starten.
 🔑 **Rezept für eine Abnahme am laufenden Programm** (seit QTMUX-96 erprobt): isolierte
@@ -1565,12 +1580,41 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (38 Tools)
-`src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC auf `127.0.0.1:7345`; Tool-Referenz in
+### MCP-Server (39 Tools)
+`src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC, **Vorgabe** `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
+- **Netzzugang ist eine WAHL, und sie kostet ein Token (QTMUX-127).** Bind-Adresse:
+  `QTMUX_MCP_BIND` > Einstellung `mcp/bindAddress` > `127.0.0.1`; Regeln Gui-frei in
+  [src/server/McpAccess.h](src/server/McpAccess.h) (Test `test_mcpaccess`, 12 Fälle),
+  bedient über Einstellungen → Agenten & MCP (Schalter „Im Netzwerk erreichbar",
+  Adressfeld, Token anzeigen/kopieren/neu erzeugen) und die Palette.
+  🔑 **Ungültige Adresse fällt auf Loopback zurück, nie auf `Any`** — ein Tippfehler in
+  der Einstellung darf den Server nicht ins Netz stellen; kein DNS (blockierte den Start
+  und ein Name kann auf eine fremde Adresse zeigen). Gegentest: mit `Any` als Fallback
+  fällt `invalidAddressFallsBackToLoopbackWithReason`.
+  🔑 **Nicht-Loopback ⇒ Token-Pflicht für ALLE Anfragen**, auch die lokalen: `send_text`
+  ist Befehlsausführung unter unserer UID. Ohne Token **startet der Server nicht**
+  (`mcp.lastError` + qWarning) statt „unsicher, aber es läuft". Loopback bleibt
+  tokenfrei — bestehende lokale Clients laufen unverändert.
+  🔑 **Auto-Erzeugung nur, wenn die Öffnung aus der EINSTELLUNG kommt**: dann gibt es
+  eine Oberfläche, die das Token anzeigt. Kommt sie aus `QTMUX_MCP_BIND` (Skript, CI),
+  bekäme es niemand zu sehen → Startverweigerung ist die ehrlichere Antwort.
+  🔑 Vergleich zeitkonstant, leeres erwartetes Token passt **nie**; 401 antwortet **vor**
+  dem Ansehen des Rumpfes, dazu ein Deckel von 4 MiB je Request (vorher wuchs der Puffer
+  unbegrenzt). `mcp/token` steht bewusst **nicht** in der Export-Allowlist (`SettingsIo`),
+  `mcp/bindAddress` schon. Zweite Schicht auf Netzebene: [tools/pf/](tools/pf/) (macOS).
 - **Controller-Auto-Erkennung** beim `initialize`: TCP-Port → PID → **Prozess-Vorfahren-
   kette** bis zur Session-Shell-PID (macOS gibt Environments fremder Prozesse nicht mehr
   heraus — daher Hierarchie statt `QTMUX_SESSION_ID`-Lesen); Fallback `attach_controller`.
+  🔑 **Nur bei Loopback-Peer** (QTMUX-127): Die Heuristik sucht einen Prozess auf DIESER
+  Maschine; bei einer Verbindung aus dem Netz gibt es ihn nicht, und ein lokaler Prozess
+  mit zufällig gleichem Quellport würde fälschlich zur Controller-Session erklärt. Aus
+  dem Netz gilt darum „unbekannt" (-1) → solche Clients müssen `sessionId` mitgeben.
+  Positivkontrolle beim Prüfen ist Pflicht (sonst „behebt" man es durch Abschalten):
+  LAN-Aufruf → `mcpController:false`, Aufruf **aus** einer Session → `true`.
+- **Die Zugriffseinstellungen sind über MCP bewusst NICHT änderbar** — nur lesbar über
+  `get_server_info` (ohne Token-Wert). Ein Fernsteuerungs-Endpunkt, der seine eigene
+  Zugriffskontrolle umkonfigurieren kann, hat keine; dieselbe Linie wie beim Vault.
 - **Long-Poll `wait_for_events`**: vor `callTool` abgezweigt, Socket bleibt offen
   (`PendingPoll` + QTimer, Default 25 s); `disconnected`-Handler räumt Polls ab.
 - **Layout/Profile-Tools (QTMUX-29):** Layout und Windows leben in QML → diese Tools laufen

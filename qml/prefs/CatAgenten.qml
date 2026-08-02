@@ -313,8 +313,12 @@ CatPage {
         title: qsTr("Agenten-Steuerung (MCP)")
         PrefRow {
             title: qsTr("MCP-Server aktiv")
-            description: qsTr("Hört ausschließlich auf 127.0.0.1; der Secrets-Vault ist über MCP "
-                            + "bewusst NICHT erreichbar.")
+            description: page.host.mcp.lastError.length > 0
+                         ? page.host.mcp.lastError
+                         : qsTr("Erreichbar unter %1:%2. Der Secrets-Vault ist über MCP "
+                              + "bewusst NICHT erreichbar, und die Einstellungen dieser "
+                              + "Gruppe lassen sich über MCP nicht ändern.")
+                           .arg(page.host.mcp.effectiveBindAddress).arg(page.host.mcp.port)
             AppSwitch {
                 checked: page.host.mcp.listening
                 onToggled: checked ? page.host.mcp.start() : page.host.mcp.stop()
@@ -343,6 +347,93 @@ CatPage {
                 onClicked: page.applyMcpPort(mcpPortField)
             }
         }
+        // --- Netzzugang (QTMUX-127) ---
+        // Der Schalter ist die eigentliche Entscheidung; das Adressfeld darunter ist für
+        // den selteneren Fall „nur an dieser einen Schnittstelle". Beide schreiben
+        // DIESELBE Einstellung (mcp.bindAddress), es gibt also keine zweite Wahrheit.
+        PrefRow {
+            title: qsTr("Im Netzwerk erreichbar")
+            description: page.host.mcp.bindFromEnvironment
+                         ? qsTr("Vorgegeben durch QTMUX_MCP_BIND — diese Einstellung wirkt "
+                              + "gerade nicht.")
+                         : (page.host.mcp.networkAccess
+                            ? qsTr("Andere Rechner können QTmux fernsteuern. Über MCP lässt "
+                                 + "sich beliebiger Text in laufende Terminals schreiben, "
+                                 + "deshalb ist das Token Pflicht. Zusätzlich auf Netzebene "
+                                 + "einschränken (macOS: pf, s. tools/pf/).")
+                            : qsTr("Aus: nur Programme auf diesem Rechner (127.0.0.1) — das "
+                                 + "ist die Vorgabe und braucht kein Token."))
+            AppSwitch {
+                enabled: !page.host.mcp.bindFromEnvironment
+                checked: page.host.mcp.networkAccess
+                onToggled: page.applyNetworkAccess(checked)
+            }
+        }
+        PrefRow {
+            title: qsTr("Bind-Adresse")
+            description: page.mcpBindError.length > 0
+                         ? page.mcpBindError
+                         : qsTr("127.0.0.1 = nur dieser Rechner · 0.0.0.0 = alle "
+                              + "Schnittstellen · oder eine bestimmte Adresse wie "
+                              + "192.168.0.10. QTMUX_MCP_BIND hat Vorrang.")
+            TextField {
+                id: mcpBindField
+                Layout.preferredWidth: 150
+                enabled: !page.host.mcp.bindFromEnvironment
+                text: page.host.mcp.effectiveBindAddress
+                onAccepted: page.applyMcpBind(mcpBindField.text)
+            }
+            Button {
+                text: qsTr("Übernehmen")
+                font.pixelSize: 12
+                enabled: !page.host.mcp.bindFromEnvironment
+                         && mcpBindField.text != page.host.mcp.effectiveBindAddress
+                onClicked: page.applyMcpBind(mcpBindField.text)
+            }
+        }
+        PrefRow {
+            title: qsTr("Zugriffs-Token")
+            description: page.host.mcp.tokenFromEnvironment
+                         ? qsTr("Kommt aus QTMUX_MCP_TOKEN — hier nicht änderbar.")
+                         : (page.host.mcp.networkAccess
+                            ? qsTr("Clients schicken es als Kopfzeile "
+                                 + "„Authorization: Bearer <token>“; ohne gültiges Token "
+                                 + "antwortet der Server mit 401.")
+                            : qsTr("Wird erst geprüft, wenn der Server im Netzwerk "
+                                 + "erreichbar ist. Lokale Clients brauchen keins."))
+            TextField {
+                id: mcpTokenField
+                Layout.preferredWidth: 260
+                readOnly: true
+                // Sichtbar erst auf Klick: Das Fenster steht oft offen, während jemand
+                // zusieht oder den Bildschirm teilt.
+                echoMode: page.tokenVisible ? TextInput.Normal : TextInput.Password
+                text: page.host.mcp.token
+                placeholderText: qsTr("kein Token")
+                font.family: "monospace"
+            }
+            Button {
+                text: page.tokenVisible ? qsTr("Verbergen") : qsTr("Anzeigen")
+                font.pixelSize: 12
+                enabled: page.host.mcp.token.length > 0
+                onClicked: page.tokenVisible = !page.tokenVisible
+            }
+            Button {
+                text: qsTr("Kopieren")
+                font.pixelSize: 12
+                enabled: page.host.mcp.token.length > 0
+                onClicked: App.copyToClipboard(page.host.mcp.token)
+            }
+            Button {
+                text: qsTr("Neu erzeugen")
+                font.pixelSize: 12
+                enabled: !page.host.mcp.tokenFromEnvironment
+                onClicked: {
+                    page.host.mcp.generateToken()
+                    page.tokenVisible = true   // frisch erzeugt = jetzt zum Übertragen da
+                }
+            }
+        }
     }
     }
 
@@ -357,5 +448,29 @@ CatPage {
         page.host.mcp.port = p
         if (wasListening && !page.host.mcp.start())
             mcpPortError = qsTr("Port %1 ließ sich nicht öffnen (belegt?). Server ist aus.").arg(p)
+    }
+
+    // Netzzugang (QTMUX-127). Wie beim Port gilt: neu binden heißt stoppen und starten —
+    // eine laufende Bindung lässt sich nicht umhängen. Scheitert der Start (kein Token,
+    // Adresse ungültig, Port belegt), steht der Grund in mcp.lastError und der Server
+    // bleibt aus, statt still auf der alten Adresse weiterzuhören.
+    property string mcpBindError: ""
+    property bool tokenVisible: false
+    function applyMcpBind(text) {
+        mcpBindError = ""
+        const wasListening = page.host.mcp.listening
+        if (wasListening) page.host.mcp.stop()
+        page.host.mcp.bindAddress = text
+        if (wasListening && !page.host.mcp.start())
+            mcpBindError = page.host.mcp.lastError
+    }
+    function applyNetworkAccess(on) {
+        mcpBindError = ""
+        const wasListening = page.host.mcp.listening
+        if (wasListening) page.host.mcp.stop()
+        page.host.mcp.setNetworkAccess(on)
+        if (on) page.tokenVisible = true    // das erzeugte Token muss man ablesen können
+        if (wasListening && !page.host.mcp.start())
+            mcpBindError = page.host.mcp.lastError
     }
 }

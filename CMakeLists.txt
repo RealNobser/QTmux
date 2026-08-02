@@ -245,6 +245,8 @@ qt_add_qml_module(qtmux
         src/viewmodels/UpdateViewModel.cpp
         src/server/McpServer.h
         src/server/McpServer.cpp
+        src/server/McpAccess.h
+        src/server/McpAccess.cpp
 )
 target_include_directories(qtmux PRIVATE src/terminal src/viewmodels src/server
                                         "${CMAKE_CURRENT_BINARY_DIR}/generated")

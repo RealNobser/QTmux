@@ -1,4 +1,5 @@
 #include "McpServer.h"
+#include "McpAccess.h"
 #include "SessionModel.h"
 #include "Session.h"
 #include "ProcessInfo.h"
@@ -8,6 +9,7 @@
 
 #include "qtmux_version.h"   // generiert aus cmake/Version.h.in (PROJECT_VERSION)
 
+#include <QDebug>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QHostAddress>
@@ -46,7 +48,14 @@ int McpServer::defaultPort() {
     return 7345;
 }
 
-McpServer::McpServer(QObject *parent) : QObject(parent), m_port(defaultPort()) {
+// Obergrenze für einen einzelnen Request (Kopf + Rumpf). Ein MCP-Aufruf ist ein paar
+// Kilobyte groß; alles darüber ist ein Fehler oder ein Versuch, uns Speicher zu füllen.
+// Wichtig, seit die Bindung nicht mehr zwingend Loopback ist (QTMUX-127).
+static constexpr int kMaxRequestBytes = 4 * 1024 * 1024;
+
+McpServer::McpServer(QObject *parent)
+    : QObject(parent), m_port(defaultPort()),
+      m_bindAddress(mcpaccess::configuredBindText()) {
     // Auf neue Agenten-Ereignisse horchen → wartende Long-Polls wecken.
     connect(AgentEventHub::instance(), &AgentEventHub::eventPosted,
             this, &McpServer::onHubEvent);
@@ -91,8 +100,101 @@ void McpServer::reloadPort() {
     if (wasListening) start();
 }
 
+// --- Netzzugang (QTMUX-127) -------------------------------------------------
+
+QString McpServer::effectiveBindAddress() const {
+    return mcpaccess::resolveBind(mcpaccess::configuredBindText()).text();
+}
+
+bool McpServer::networkAccess() const {
+    return !mcpaccess::resolveBind(mcpaccess::configuredBindText()).isLoopback();
+}
+
+bool McpServer::bindFromEnvironment() const {
+    bool fromEnv = false;
+    mcpaccess::configuredBindText(&fromEnv);
+    return fromEnv;
+}
+
+void McpServer::setBindAddress(const QString &a) {
+    const QString t = a.trimmed();
+    if (t == m_bindAddress) return;
+    m_bindAddress = t;
+    QSettings().setValue(QStringLiteral("mcp/bindAddress"), t);
+    emit bindChanged();
+}
+
+QString McpServer::token() const { return mcpaccess::resolveToken(); }
+
+void McpServer::setToken(const QString &t) {
+    const QString v = t.trimmed();
+    if (v == QSettings().value(QStringLiteral("mcp/token"), QString()).toString()) return;
+    QSettings().setValue(QStringLiteral("mcp/token"), v);
+    emit tokenChanged();
+}
+
+bool McpServer::tokenFromEnvironment() const { return mcpaccess::tokenFromEnvironment(); }
+
+QString McpServer::generateToken() {
+    const QString t = mcpaccess::generateToken();
+    setToken(t);
+    return t;
+}
+
+void McpServer::setNetworkAccess(bool on) {
+    if (on) {
+        // Eine bereits eingetragene, konkrete Adresse (z. B. 192.168.0.10) NICHT
+        // überschreiben — der Schalter soll nur den Normalfall „alle Schnittstellen"
+        // herstellen, nicht eine bewusst engere Wahl aufheben.
+        if (!networkAccess()) setBindAddress(QStringLiteral("0.0.0.0"));
+        if (token().isEmpty()) generateToken();
+    } else {
+        setBindAddress(QStringLiteral("127.0.0.1"));
+    }
+}
+
+void McpServer::reloadNetworkConfig() {
+    const QString before = m_bindAddress;
+    m_bindAddress = mcpaccess::configuredBindText();
+    emit bindChanged();
+    emit tokenChanged();
+    if (before == m_bindAddress) return;
+    if (listening()) { stop(); start(); }
+}
+
 bool McpServer::start() {
     if (listening()) return true;
+    if (!m_lastError.isEmpty()) { m_lastError.clear(); emit lastErrorChanged(); }
+
+    // Zugriffsregeln VOR dem Binden auswerten (McpAccess.h): ungültige Adresse fällt
+    // auf Loopback zurück, und ohne Token wird gar nicht erst ins Netz gebunden.
+    mcpaccess::Bind bind = mcpaccess::defaultBind();
+    if (!bind.error.isEmpty()) {
+        qWarning().noquote() << "[MCP]" << bind.error;
+        m_lastError = bind.error;
+        emit lastErrorChanged();
+    }
+    QString tok = mcpaccess::resolveToken();
+    if (mcpaccess::shouldAutoGenerateToken(bind, tok)) {
+        tok = mcpaccess::generateToken();
+        QSettings().setValue(QStringLiteral("mcp/token"), tok);
+        emit tokenChanged();
+        // Absichtlich OHNE das Token im Log: dort landet es in Systemprotokollen und
+        // wandert in jedes Support-Paket. Die Oberfläche zeigt es an.
+        qInfo("[MCP] Netzzugang aktiv, aber kein Token gesetzt — es wurde eines "
+              "erzeugt (Einstellungen → Agenten → MCP-Server).");
+    }
+    const mcpaccess::StartCheck chk = mcpaccess::checkStart(bind, tok);
+    if (!chk.allowed) {
+        qWarning().noquote() << "[MCP]" << chk.reason;
+        m_lastError = chk.reason;
+        emit lastErrorChanged();
+        emit listeningChanged();
+        return false;
+    }
+    m_activeAuthRequired = chk.authRequired;
+    m_activeToken = tok.toUtf8();
+
     if (!m_server) {
         m_server = new QTcpServer(this);
         connect(m_server, &QTcpServer::newConnection, this, [this]() {
@@ -107,9 +209,21 @@ bool McpServer::start() {
             }
         });
     }
-    // Bewusst nur localhost — das ist die Sicherheitsgrenze.
-    const bool ok = m_server->listen(QHostAddress::LocalHost, static_cast<quint16>(m_port));
+    // Vorgabe ist localhost — das bleibt die Sicherheitsgrenze. Jede andere Adresse
+    // ist ein bewusstes Opt-in und kommt nur mit Token bis hierher (checkStart oben).
+    const bool ok = m_server->listen(bind.address, static_cast<quint16>(m_port));
+    if (!ok) {
+        m_lastError = tr("Port %1 auf %2 ließ sich nicht öffnen: %3")
+                          .arg(m_port).arg(bind.text(), m_server->errorString());
+        qWarning().noquote() << "[MCP]" << m_lastError;
+        emit lastErrorChanged();
+    } else if (m_activeAuthRequired) {
+        qInfo().noquote() << "[MCP]" << tr("Erreichbar auf %1:%2 — Anfragen brauchen "
+                                           "einen Authorization: Bearer <token>-Kopf.")
+                                            .arg(bind.text()).arg(m_port);
+    }
     emit listeningChanged();
+    emit bindChanged();
     return ok;
 }
 
@@ -125,10 +239,22 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
     buf += sock->readAll();
 
     const int headerEnd = buf.indexOf("\r\n\r\n");
-    if (headerEnd < 0) return;  // Header noch unvollständig
+    if (headerEnd < 0) {
+        // Kein Kopfende in Sicht und schon zu viel Material: abbrechen, statt weiter
+        // zu puffern (QTMUX-127 — vorher wuchs der Puffer unbegrenzt).
+        if (buf.size() > kMaxRequestBytes) {
+            sendHttpJson(sock, R"({"error":"Request too large"})", 413);
+            buf.clear();
+        }
+        return;
+    }
 
     const QByteArray header = buf.left(headerEnd);
     const bool isPost = header.startsWith("POST");
+
+    // Token-Prüfung VOR allem anderen: Fehlt oder stimmt es nicht, wird der Rumpf
+    // gar nicht erst angesehen. authorize() hat dann schon mit 401 geantwortet.
+    if (!authorize(sock, header)) { buf.clear(); return; }
 
     // Content-Length ermitteln.
     int contentLength = 0;
@@ -139,6 +265,11 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
             break;
         }
     }
+    if (contentLength < 0 || contentLength > kMaxRequestBytes) {
+        sendHttpJson(sock, R"({"error":"Request too large"})", 413);
+        buf.clear();
+        return;
+    }
 
     const int bodyStart = headerEnd + 4;
     if (buf.size() - bodyStart < contentLength) return;  // Body noch unvollständig
@@ -147,7 +278,10 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
     buf.clear();
 
     if (!isPost) {
-        sendHttpJson(sock, R"({"server":"QTmux MCP","transport":"streamable-http"})");
+        // Schlichter Status-Endpunkt (GET) — dieselben Angaben wie das Tool
+        // `get_server_info`, nur ohne MCP-Handshake. Das Token steht hier NICHT drin;
+        // bei Netz-Bindung liegt ohnehin schon die 401-Prüfung davor.
+        sendHttpJson(sock, QJsonDocument(serverInfo()).toJson(QJsonDocument::Compact));
         return;
     }
 
@@ -161,7 +295,7 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
         // Fallback für post_event/subscribe_events ohne explizites sessionId-Argument.
         m_callerSessionId = -1;
         if (m == QLatin1String("initialize") || m == QLatin1String("tools/call")) {
-            m_callerSessionId = sessionIdForClientPort(static_cast<quint16>(sock->peerPort()));
+            m_callerSessionId = sessionIdForClient(sock);
             if (m_callerSessionId >= 0 && m_sessions)
                 if (Session *s = m_sessions->sessionById(m_callerSessionId))
                     s->setMcpController(true);
@@ -197,8 +331,15 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
     }
 }
 
-int McpServer::sessionIdForClientPort(quint16 clientPort) const {
-    if (!m_sessions) return -1;
+int McpServer::sessionIdForClient(const QTcpSocket *sock) const {
+    if (!m_sessions || !sock) return -1;
+    // 🔑 Nur bei lokalem Peer. Die Zuordnung „Client-Port → PID" sucht einen Prozess
+    // AUF DIESER MASCHINE; kommt die Verbindung aus dem Netz, gibt es ihn hier nicht,
+    // und ein lokaler Prozess mit zufällig gleichem Quellport würde fälschlich zur
+    // Controller-Session erklärt (roter Tab, falscher Ereignis-Empfänger). „Unbekannt"
+    // (-1) ist der einzig ehrliche Wert — den Rückgabeweg gibt es ohnehin schon.
+    if (!sock->peerAddress().isLoopback()) return -1;
+    const quint16 clientPort = static_cast<quint16>(sock->peerPort());
     // Welcher lokale Prozess hält die Verbindung zu unserem Port?
     const qint64 pid = procinfo::pidOfTcpClient(clientPort, static_cast<quint16>(m_port));
     if (pid <= 0) return -1;
@@ -214,12 +355,14 @@ int McpServer::sessionIdForClientPort(quint16 clientPort) const {
 
 // --- Inter-Agenten-Benachrichtigung: Long-Poll ------------------------------
 
-int McpServer::subscriberSessionId(const QJsonObject &args, quint16 clientPort) const {
+int McpServer::subscriberSessionId(const QJsonObject &args, const QTcpSocket *sock) const {
     // Primär: explizites sessionId-Argument (Agent liest $QTMUX_SESSION_ID).
     const int explicitId = args.value("sessionId").toInt(0);
     if (explicitId > 0) return explicitId;
     // Fallback: Vorfahrenketten-Heuristik über den verbindenden Client-Prozess.
-    return sessionIdForClientPort(clientPort);
+    // Bei einem Peer aus dem Netz liefert sie -1 → der Aufrufer muss `sessionId`
+    // mitgeben (die Antwort sagt das auch, s. beginLongPoll).
+    return sessionIdForClient(sock);
 }
 
 QJsonObject McpServer::pollResult(int subscriberSessionId, quint64 afterSeq) const {
@@ -273,7 +416,7 @@ int McpServer::eventCapableSources(int subscriberSessionId) const {
 void McpServer::beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId,
                               const QJsonObject &args) {
     auto *hub = AgentEventHub::instance();
-    const int subId = subscriberSessionId(args, static_cast<quint16>(sock->peerPort()));
+    const int subId = subscriberSessionId(args, sock);
 
     // afterSeq: expliziter Cursor, sonst „ab jetzt" (nur künftige Ereignisse).
     const bool hasCursor = args.contains(QStringLiteral("afterSeq"));
@@ -370,11 +513,44 @@ void McpServer::removePollsForSocket(QTcpSocket *sock) {
     }
 }
 
-void McpServer::sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status) {
-    const QByteArray reason = (status == 200) ? "OK" : (status == 202) ? "Accepted" : "Bad Request";
+QJsonObject McpServer::serverInfo() const {
+    const mcpaccess::Bind bind = mcpaccess::resolveBind(mcpaccess::configuredBindText());
+    return QJsonObject{
+        {"server", "QTmux MCP"},
+        {"transport", "streamable-http"},
+        {"version", QTMUX_VERSION_STRING},
+        {"bindAddress", bind.text()},
+        {"port", m_port},
+        {"listening", listening()},
+        {"networkAccess", !bind.isLoopback()},
+        {"authRequired", mcpaccess::authRequiredFor(bind)},
+        {"tokenConfigured", !mcpaccess::resolveToken().isEmpty()},
+    };
+}
+
+bool McpServer::authorize(QTcpSocket *sock, const QByteArray &headerBlock) {
+    if (!m_activeAuthRequired) return true;   // Loopback: Prozessgrenze genügt
+    const QByteArray presented = mcpaccess::bearerToken(headerBlock);
+    if (mcpaccess::tokenAccepted(presented, m_activeToken)) return true;
+    // Kein Hinweis darauf, ob das Token fehlte oder falsch war — das ist für den
+    // legitimen Client irrelevant und für einen Ratenden eine Auskunft.
+    sendHttpJson(sock,
+                 R"({"error":"unauthorized","hinweis":"Authorization: Bearer <token> erforderlich."})",
+                 401, "WWW-Authenticate: Bearer realm=\"QTmux MCP\"\r\n");
+    return false;
+}
+
+void McpServer::sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status,
+                             const QByteArray &extraHeaders) {
+    const QByteArray reason = (status == 200) ? "OK"
+                            : (status == 202) ? "Accepted"
+                            : (status == 401) ? "Unauthorized"
+                            : (status == 413) ? "Payload Too Large"
+                                              : "Bad Request";
     QByteArray resp = "HTTP/1.1 " + QByteArray::number(status) + " " + reason + "\r\n";
     resp += "Content-Type: application/json\r\n";
     resp += "Content-Length: " + QByteArray::number(json.size()) + "\r\n";
+    resp += extraHeaders;
     resp += "Connection: close\r\n\r\n";
     resp += json;
     sock->write(resp);
@@ -574,6 +750,16 @@ QJsonObject McpServer::toolsList() const {
                       "für create_session type=shell.", {}, {}));
     tools.append(tool("list_serial_ports",
                       "Listet die verfügbaren seriellen Ports für create_session type=serial.",
+                      {}, {}));
+    // QTMUX-127: Wie ist dieser Server erreichbar? Bewusst nur LESEND — die Bindung
+    // und das Token sind die Zugriffskontrolle dieses Endpunkts, und ein Endpunkt,
+    // der seine eigene Kontrolle umkonfigurieren kann, hat keine. Beides ändert man
+    // am Gerät (Einstellungen → Agenten → MCP-Server) — dieselbe Linie wie beim Vault.
+    tools.append(tool("get_server_info",
+                      "Meldet, wie dieser MCP-Server erreichbar ist: version, bindAddress, "
+                      "port, listening, networkAccess, authRequired, tokenConfigured. "
+                      "Das Token selbst wird NICHT herausgegeben, und die Einstellungen "
+                      "lassen sich über MCP absichtlich nicht ändern.",
                       {}, {}));
     tools.append(tool("list_plugins",
                       "Listet die von geladenen Plugins angebotenen Backend-Typen "
@@ -900,6 +1086,10 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
     if (name == "list_shells") {
         text = QString::fromUtf8(QJsonDocument(
             QJsonArray::fromVariantList(m_sessions->availableShells())).toJson(QJsonDocument::Compact));
+        return {};
+    }
+    if (name == "get_server_info") {
+        text = QString::fromUtf8(QJsonDocument(serverInfo()).toJson(QJsonDocument::Compact));
         return {};
     }
     if (name == "list_serial_ports") {

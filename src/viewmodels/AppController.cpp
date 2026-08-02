@@ -1,5 +1,6 @@
 #include "AppController.h"
 #include "ProjectCommands.h"
+#include "McpAccess.h"   // QTMUX-127: Portprobe auf derselben Adresse wie der Server
 #include <QSettings>
 #include <QLocale>
 #include <QFontDatabase>
@@ -177,10 +178,16 @@ int AppController::openNewInstance() const {
     // Probe-listen übersprungen. Der gefundene Port ist beim Start des Kindes zwar
     // theoretisch schon wieder frei (TOCTOU), das ist für eine manuelle Aktion aber
     // unkritisch — schlägt das Binden dennoch fehl, läuft die Instanz nur ohne MCP.
+    // 🔑 Probiert wird auf DERSELBEN Adresse, an die der Server danach bindet
+    // (QTMUX-127): Ein Port kann auf 127.0.0.1 frei und auf 0.0.0.0 belegt sein
+    // (fremder Dienst auf einer LAN-Schnittstelle) — die Probe hätte sonst die
+    // falsche Schnittstelle geprüft und einen belegten Port als frei gemeldet.
+    const QHostAddress probeAddr =
+        mcpaccess::resolveBind(mcpaccess::configuredBindText()).address;
     int port = -1;
     for (int p = 7346; p <= 7399; ++p) {
         QTcpServer probe;
-        if (probe.listen(QHostAddress::LocalHost, static_cast<quint16>(p))) {
+        if (probe.listen(probeAddr, static_cast<quint16>(p))) {
             probe.close();
             port = p;
             break;

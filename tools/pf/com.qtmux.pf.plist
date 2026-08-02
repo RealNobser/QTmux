@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- QTmux — lädt die pf-Regeln für den MCP-Port beim Systemstart (QTMUX-127).
+
+     Nötig, weil ein per `pfctl -a` geladenes Anchor einen Neustart NICHT übersteht:
+     pf liest beim Booten allein /etc/pf.conf. Diese Datei wird bewusst nicht
+     angefasst (macOS-Updates ersetzen sie kommentarlos) — stattdessen lädt dieser
+     Daemon eine eigene Hauptkonfiguration, die install-pf-anchor.sh aus der
+     jeweils aktuellen /etc/pf.conf plus unserem Anchor erzeugt.
+
+     RunAtLoad + KeepAlive:false = einmal beim Boot, dann fertig. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.qtmux.pf</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/sbin/pfctl</string>
+        <string>-E</string>
+        <string>-f</string>
+        <string>/usr/local/etc/qtmux/pf.conf</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/var/log/qtmux-pf.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/qtmux-pf.log</string>
+</dict>
+</plist>

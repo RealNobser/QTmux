@@ -1720,6 +1720,11 @@ ApplicationWindow {
         case "ui/language":  App.reloadLanguage(); break
         case "ui/themeMode": Theme.reload(); break
         case "mcp/port":     mcp.reloadPort(); break
+        // QTMUX-127: Bind-Adresse liegt ebenfalls in C++ (Env vor Einstellung).
+        // `mcp/token` steht bewusst NICHT in der Export-Allowlist (SettingsIo) — ein
+        // Geheimnis gehört nicht in eine Datei, die weitergegeben wird — und kann
+        // deshalb auch hier nicht ankommen.
+        case "mcp/bindAddress": mcp.reloadNetworkConfig(); break
 
         case "window/confirmQuit":          window.confirmQuit = b(true); break
         case "window/restoreSessionMode":   window.restoreSessionMode = i(2); break
@@ -1997,7 +2002,7 @@ ApplicationWindow {
     Action {
         id: actMcpToggle
         // Befehl, kein Zustand (Regel aus Teil A): der Text sagt, was der Klick TUT.
-        text: mcp.listening ? qsTr("MCP-Server stoppen (127.0.0.1:%1)").arg(mcp.port)
+        text: mcp.listening ? qsTr("MCP-Server stoppen (%1:%2)").arg(mcp.effectiveBindAddress).arg(mcp.port)
                             : qsTr("MCP-Server starten")
         shortcut: Hotkeys.bindings["actMcpToggle"]
         enabled: !prefs.capturing
@@ -2237,10 +2242,22 @@ ApplicationWindow {
 
             // 5) MCP-Server
             StatusField {
-                label: mcp.listening ? qsTr("MCP :%1").arg(mcp.port) : qsTr("MCP aus")
-                labelColor: mcp.listening ? Theme.accent : Theme.textDim
-                tip: mcp.listening ? qsTr("Klick: MCP-Server stoppen · Rechtsklick: Einstellungen")
-                                   : qsTr("Klick: MCP-Server starten · Rechtsklick: Einstellungen")
+                // Ein im Netz erreichbarer Server MUSS im Normalbild sichtbar sein
+                // (QTMUX-127) — sonst merkt niemand, dass die Fernsteuerung offensteht.
+                label: !mcp.listening ? qsTr("MCP aus")
+                     : mcp.networkAccess ? qsTr("MCP LAN :%1").arg(mcp.port)
+                                         : qsTr("MCP :%1").arg(mcp.port)
+                // Amber wie „wartet" in Feld 2 — Statusfarben sind die bewusste
+                // Ausnahme von der Regel „Chrome-Farben nur über Theme.*".
+                labelColor: !mcp.listening ? Theme.textDim
+                          : mcp.networkAccess ? "#f5c451" : Theme.accent
+                tip: !mcp.listening
+                     ? qsTr("Klick: MCP-Server starten · Rechtsklick: Einstellungen")
+                     : (mcp.networkAccess
+                        ? qsTr("Erreichbar auf %1:%2 — Anfragen brauchen ein Token.\n"
+                             + "Klick: MCP-Server stoppen · Rechtsklick: Einstellungen")
+                          .arg(mcp.effectiveBindAddress).arg(mcp.port)
+                        : qsTr("Klick: MCP-Server stoppen · Rechtsklick: Einstellungen"))
                 onClicked: mcp.listening ? mcp.stop() : mcp.start()
                 onRightClicked: prefs.open("agenten")
             }
@@ -2489,6 +2506,14 @@ ApplicationWindow {
                               run: function(){ window.statusBarVisible = !window.statusBarVisible } },
                             { title: qsTr("Einstellungen …"),            sub: hk("actSettings"), icon: "gear",            run: function(){ prefs.open() } },
                             { title: qsTr("MCP-Server umschalten"),      sub: hk("actMcpToggle"), icon: "broadcast",       run: function(){ mcp.listening ? mcp.stop() : mcp.start() } },
+                            // QTMUX-127: Der Netzzugang ist eine Sicherheitsentscheidung
+                            // und gehört deshalb NICHT als Ein-Klick-Schalter hierher —
+                            // die Palette führt zur Seite, entschieden wird dort (mit
+                            // Erklärtext und sichtbarem Token).
+                            { title: mcp.networkAccess ? qsTr("MCP-Netzzugang: eingeschaltet (%1) …").arg(mcp.effectiveBindAddress)
+                                                       : qsTr("MCP im Netzwerk erreichbar machen …"),
+                              sub: "", icon: "broadcast",
+                              run: function(){ prefs.open("agenten", "agenten.mcp") } },
                             { title: qsTr("Kopieren"),                   sub: App.shortcutText("Ctrl+C"), icon: "copy",            run: function(){ if (window.activeTerminal) window.activeTerminal.copy() } },
                             { title: qsTr("Einfügen"),                   sub: App.shortcutText("Ctrl+V"), icon: "clipboard",       run: function(){ if (window.activeTerminal) window.activeTerminal.paste() } },
                             { title: qsTr("Suchen (Scrollback)"),        sub: hk("actFind"), icon: "eye",             run: function(){ if (window.activeTerminal) window.activeTerminal.beginSearch() } },
@@ -2781,7 +2806,7 @@ ApplicationWindow {
             IconToolButton {
                 icon.source: window.icon("broadcast")
                 active: mcp.listening
-                tip: mcp.listening ? qsTr("MCP-Server: an (127.0.0.1:%1)").arg(mcp.port)
+                tip: mcp.listening ? qsTr("MCP-Server: an (%1:%2)").arg(mcp.effectiveBindAddress).arg(mcp.port)
                                    : qsTr("MCP-Server: aus")
                 onClicked: mcp.listening ? mcp.stop() : mcp.start()
             }

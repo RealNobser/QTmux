@@ -6,8 +6,47 @@ externer KI-Agent die Anwendung fernsteuern kann — inklusive der einzelnen Ses
 ## Transport & Sicherheit
 
 - **HTTP / JSON-RPC 2.0** (MCP „Streamable HTTP"), Endpoint: `http://127.0.0.1:7345/mcp`
-- Bindet **ausschließlich an `127.0.0.1`** (nur lokale Prozesse) — das ist die Sicherheitsgrenze.
+- Bindet **standardmäßig an `127.0.0.1`** (nur lokale Prozesse) — dort ist die
+  Prozessgrenze die Zugriffskontrolle, und lokale Clients brauchen **kein** Token.
 - An/aus über das Menü **Agent-Steuerung → MCP-Server**. Standard: an, Port 7345.
+- Der Vault ist über MCP **nie** erreichbar, und die Zugriffseinstellungen dieses
+  Servers lassen sich über MCP **nicht ändern** (nur lesen: `get_server_info`).
+
+### Im Netzwerk erreichbar machen (QTMUX-127)
+
+Einstellungen → **Agenten & MCP** → „Im Netzwerk erreichbar". Der Schalter bindet an
+`0.0.0.0`; wer nur eine bestimmte Schnittstelle will, trägt sie darunter als
+**Bind-Adresse** ein (`192.168.0.10`). Umgebungsvariable **`QTMUX_MCP_BIND`** hat
+Vorrang vor der Einstellung `mcp/bindAddress`, Vorgabe ist `127.0.0.1`.
+
+> ⚠️ **Sobald die Bindung nicht mehr Loopback ist, ist ein Token Pflicht** — für
+> **alle** Anfragen, auch die von diesem Rechner. Grund: `send_text` schreibt
+> beliebigen Text in laufende Terminals, das ist faktisch Befehlsausführung unter der
+> UID des QTmux-Prozesses. Ohne Token **startet der Server nicht** und nennt den Grund
+> (Einstellungsseite und Log) — einen „unsicher, aber es läuft"-Zustand gibt es nicht.
+
+- **Token:** `QTMUX_MCP_TOKEN` vor der Einstellung `mcp/token`. Schaltet man den
+  Netzzugang in der Oberfläche ein, wird eines erzeugt (32 Byte, base64url) und
+  angezeigt. Kommt die Öffnung dagegen aus `QTMUX_MCP_BIND`, wird **nichts** erzeugt —
+  ein Token, das niemand zu sehen bekommt, wäre wertlos.
+- **Clients** schicken es als Kopfzeile: `Authorization: Bearer <token>`.
+  Fehlt oder stimmt es nicht, antwortet der Server **401** und sieht sich den Rumpf
+  gar nicht erst an. Der Vergleich läuft zeitkonstant.
+- **Das Token wird nie ausgegeben** — weder über `get_server_info` noch über den
+  GET-Endpunkt; und es steht bewusst **nicht** im Einstellungs-Export.
+- **Zweite Schicht auf Netzebene** (ersetzt das Token nicht, ergänzt es): macOS-`pf`,
+  fertig in [tools/pf/](../tools/pf/) — `sudo tools/pf/install-pf-anchor.sh --net
+  192.168.0.0/24`.
+- **Peer-Erkennung:** Die Zuordnung „welche Session steuert gerade?" (roter
+  Controller-Tab, Fallback für `post_event`/`subscribe_events` ohne `sessionId`) läuft
+  über den lokalen Client-Prozess und gilt nur für Loopback-Verbindungen. Aus dem Netz
+  verbundene Clients gelten als **unbekannt** — sie müssen `sessionId` mitgeben.
+
+```bash
+# Status abfragen (bei Netzzugang mit Token, sonst ohne)
+curl -s http://192.168.0.10:7345/ -H "Authorization: Bearer $QTMUX_MCP_TOKEN"
+# {"authRequired":true,"bindAddress":"0.0.0.0","listening":true,…}
+```
 
 ### Port und zweite Instanz
 
@@ -67,6 +106,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `rename_window` | `windowId`, `name?` | Window umbenennen (leerer `name` = automatischer Titel) |
 | `close_window` | `windowId` | Window **samt aller** seiner Sessions/Panes schließen |
 | `assign_session` | `id`, `paneId?` | **VERALTET** (Window-Modell): kein „Session in Pane laden" mehr → nutze `focus_session`/`focus_window` |
+| `get_server_info` | – | Wie ist dieser Server erreichbar: `version`, `bindAddress`, `port`, `listening`, `networkAccess`, `authRequired`, `tokenConfigured` — **ohne** das Token; **nur lesend** (s. Sicherheit) |
 | `list_profiles` | – | Gespeicherte Verbindungsprofile; **ohne Geheimniswerte** (nur `hasPasswordSecret`/`hasLoginScript`-Flags) |
 | `connect_profile` | `name` | Profil verbinden — ein Vault-Passwort wird **intern** aufgelöst (nie über MCP ausgegeben) → neue **Session-id** |
 

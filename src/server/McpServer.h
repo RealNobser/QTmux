@@ -17,9 +17,15 @@ class QJsonObject;
 
 namespace qtmux {
 
-/// Eingebetteter MCP-Server (Model Context Protocol) über HTTP/JSON-RPC 2.0,
-/// gebunden an 127.0.0.1 — ein externer Agent kann QTmux fernsteuern, inkl.
-/// einzelner Sessions (auflisten, erstellen, schließen, Eingaben senden, Schirm lesen).
+/// Eingebetteter MCP-Server (Model Context Protocol) über HTTP/JSON-RPC 2.0 —
+/// ein externer Agent kann QTmux fernsteuern, inkl. einzelner Sessions (auflisten,
+/// erstellen, schließen, Eingaben senden, Schirm lesen).
+///
+/// Bindet **standardmäßig an 127.0.0.1**; nur lokale Prozesse kommen dann heran, und
+/// die Prozessgrenze IST die Zugriffskontrolle. Wer ihn ins Netz öffnet
+/// (Einstellung `mcp/bindAddress` bzw. `QTMUX_MCP_BIND`, QTMUX-127), bekommt
+/// zwingend eine Token-Pflicht dazu: `send_text` ist faktisch Befehlsausführung
+/// unter der UID dieses Prozesses. Regeln dazu Gui-frei in `McpAccess.h`.
 ///
 /// Transport: MCP "Streamable HTTP" (POST /mcp mit JSON-RPC; Antwort als application/json).
 /// Läuft im GUI-Thread → Session-Aufrufe sind thread-sicher.
@@ -30,6 +36,21 @@ class McpServer : public QObject {
     Q_PROPERTY(qtmux::WindowModel *windows READ windows WRITE setWindows NOTIFY windowsChanged)
     Q_PROPERTY(int port READ port WRITE setPort NOTIFY portChanged)
     Q_PROPERTY(bool listening READ listening NOTIFY listeningChanged)
+    // --- Netzzugang (QTMUX-127) ---
+    /// Konfigurierte Bind-Adresse als Text (leer = 127.0.0.1). Schreiben persistiert.
+    Q_PROPERTY(QString bindAddress READ bindAddress WRITE setBindAddress NOTIFY bindChanged)
+    /// Effektive Adresse, an die zuletzt gebunden wurde bzw. gebunden würde.
+    Q_PROPERTY(QString effectiveBindAddress READ effectiveBindAddress NOTIFY bindChanged)
+    /// true, sobald die Bindung NICHT mehr Loopback ist (dann gilt Token-Pflicht).
+    Q_PROPERTY(bool networkAccess READ networkAccess NOTIFY bindChanged)
+    Q_PROPERTY(bool authRequired READ authRequired NOTIFY bindChanged)
+    /// Bindung kommt aus QTMUX_MCP_BIND — die Einstellung ist dann wirkungslos.
+    Q_PROPERTY(bool bindFromEnvironment READ bindFromEnvironment NOTIFY bindChanged)
+    /// Zugriffs-Token (leer = keins). Schreiben persistiert nach `mcp/token`.
+    Q_PROPERTY(QString token READ token WRITE setToken NOTIFY tokenChanged)
+    Q_PROPERTY(bool tokenFromEnvironment READ tokenFromEnvironment NOTIFY tokenChanged)
+    /// Grund, warum der letzte start() scheiterte (leer = kein Fehler).
+    Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
 public:
     explicit McpServer(QObject *parent = nullptr);
     ~McpServer() override;
@@ -47,6 +68,26 @@ public:
     /// produktive zu stören (s. auch `QTMUX_PROFILE` für getrennte Einstellungen).
     static int defaultPort();
 
+    // --- Netzzugang (QTMUX-127) ---
+    QString bindAddress() const { return m_bindAddress; }
+    void setBindAddress(const QString &a);
+    QString effectiveBindAddress() const;
+    bool networkAccess() const;
+    bool authRequired() const { return networkAccess(); }
+    bool bindFromEnvironment() const;
+    QString token() const;
+    void setToken(const QString &t);
+    bool tokenFromEnvironment() const;
+    QString lastError() const { return m_lastError; }
+
+    /// Erzeugt ein neues Zugriffs-Token, speichert es und meldet es zurück (die
+    /// Oberfläche zeigt es an — ins Log gehört es nicht).
+    Q_INVOKABLE QString generateToken();
+    /// Komfortweg für den Schalter „Im Netzwerk erreichbar": true bindet an 0.0.0.0
+    /// (und erzeugt dabei ein Token, falls keins existiert), false zurück auf
+    /// 127.0.0.1. Eine bereits eingetragene, konkrete LAN-Adresse bleibt erhalten.
+    Q_INVOKABLE void setNetworkAccess(bool on);
+
     Q_INVOKABLE bool start();
     Q_INVOKABLE void stop();
 
@@ -55,6 +96,8 @@ public:
     /// dem neuen Port neu gebunden; sonst bliebe die Anzeige stehen und der Server
     /// hörte weiter auf dem alten Port.
     Q_INVOKABLE void reloadPort();
+    /// Dasselbe für Bind-Adresse und Token (nach Reset/Import).
+    Q_INVOKABLE void reloadNetworkConfig();
 
     /// Ergebnis-Brücke für die Layout-/Profil-Signale (QTMUX-29): Der QML-Handler
     /// eines *Requested-Signals läuft SYNCHRON (gleicher Thread, Direct-Connection)
@@ -69,6 +112,9 @@ signals:
     void windowsChanged();
     void portChanged();
     void listeningChanged();
+    void bindChanged();
+    void tokenChanged();
+    void lastErrorChanged();
     /// Vom MCP angeforderter Fokuswechsel auf eine Sidebar-Zeile (QML setzt currentRow).
     void focusRequested(int row);
     /// Vom MCP angeforderter Theme-Wechsel (0=System, 1=Hell, 2=Dunkel).
@@ -103,10 +149,15 @@ signals:
 
 private:
     void onReadyRead(QTcpSocket *sock);
-    void sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status = 200);
+    void sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status = 200,
+                      const QByteArray &extraHeaders = {});
     /// Ermittelt aus dem verbindenden Client-Prozess (TCP-Port → PID → Vorfahrenkette)
     /// die QTmux-Session, in deren Shell der Client läuft (sonst -1).
-    int sessionIdForClientPort(quint16 clientPort) const;
+    /// 🔑 Nur für **lokale** Peers: Die Heuristik sucht einen Prozess, dessen Socket
+    /// `clientPort` belegt — bei einer Verbindung aus dem Netz gibt es den hier gar
+    /// nicht, ein zufällig passender lokaler Port ergäbe eine falsche Zuordnung
+    /// (QTMUX-127). Deshalb geht der Socket mit, nicht nur die Portnummer.
+    int sessionIdForClient(const QTcpSocket *sock) const;
 
     // JSON-RPC / MCP
     QJsonObject handleRpc(const QJsonObject &req, bool &isNotification);
@@ -125,7 +176,16 @@ private:
     QJsonObject pollResult(int subscriberSessionId, quint64 afterSeq) const;
     /// Zahl der Abo-Quellen, die bislang je ein Ereignis gemeldet haben (QTMUX-30).
     int eventCapableSources(int subscriberSessionId) const;
-    int subscriberSessionId(const QJsonObject &args, quint16 clientPort) const;
+    int subscriberSessionId(const QJsonObject &args, const QTcpSocket *sock) const;
+
+    /// Status des Servers als JSON (Adresse, Port, ob ein Token verlangt wird) —
+    /// Grundlage für den GET-Endpunkt UND das Tool `get_server_info`. Enthält das
+    /// Token bewusst NICHT: Wer fragen darf, kennt es bereits.
+    QJsonObject serverInfo() const;
+
+    /// Prüft den `Authorization: Bearer`-Kopf, sofern die aktuelle Bindung ihn
+    /// verlangt. Bei false wurde bereits mit 401 geantwortet und der Socket geschlossen.
+    bool authorize(QTcpSocket *sock, const QByteArray &headerBlock);
 
     struct PendingPoll {
         QTcpSocket *sock = nullptr;
@@ -160,6 +220,13 @@ private:
     bool m_bridgeOk = false;
     QString m_bridgeText;
     int m_port = 7345;
+    // Netzzugang (QTMUX-127). `m_activeToken` ist der Stand, gegen den GEPRÜFT wird —
+    // beim Binden eingefroren, damit ein Tokenwechsel mitten im Betrieb nicht die
+    // gerade laufenden Verbindungen zerreißt; er wirkt beim nächsten start().
+    QString m_bindAddress;
+    QByteArray m_activeToken;
+    bool m_activeAuthRequired = false;
+    QString m_lastError;
     // Session-ID des aktuell verarbeiteten Aufrufers (für tools/call synchron gesetzt;
     // Fallback für post_event/subscribe_events ohne explizites sessionId-Argument).
     int m_callerSessionId = -1;

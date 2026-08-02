@@ -115,7 +115,10 @@ arbeitenden Instanz in die Quere zu kommen:
 QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./build/macos/qtmux.app/Contents/MacOS/qtmux
 ```
 
-**Sicherheitsgrenze:** Der Server lauscht ausschließlich auf `127.0.0.1`. Die Verwaltung
+**Sicherheitsgrenze:** Der Server lauscht standardmäßig ausschließlich auf `127.0.0.1`.
+Wer ihn im Netzwerk erreichbar machen will (Einstellungen → Agenten & MCP), bekommt
+zwingend eine **Token-Pflicht** dazu: Ohne `Authorization: Bearer <token>` antwortet er
+mit 401, und ohne gesetztes Token startet er gar nicht erst. Die Verwaltung
 des Secrets-Vaults ist bewusst **nicht** über MCP erreichbar; `connect_profile` löst ein
 hinterlegtes Passwort intern auf, ohne es je herauszugeben.
 
@@ -308,7 +311,10 @@ someone is working in:
 QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./build/macos/qtmux.app/Contents/MacOS/qtmux
 ```
 
-**Security boundary:** the server binds to `127.0.0.1` only. Managing the secrets vault is
+**Security boundary:** by default the server binds to `127.0.0.1` only. Making it
+reachable over the network (Settings → Agents & MCP) always comes with a **mandatory
+token**: without `Authorization: Bearer <token>` it replies 401, and with no token set it
+refuses to start at all. Managing the secrets vault is
 deliberately **not** exposed over MCP; `connect_profile` resolves a stored password
 internally and never hands it out.
 

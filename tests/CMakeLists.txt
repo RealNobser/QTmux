@@ -23,6 +23,16 @@ qt_add_executable(test_terminalsearch tst_terminalsearch.cpp)
 target_link_libraries(test_terminalsearch PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_terminalsearch COMMAND test_terminalsearch)
 
+# QTMUX-126: Zugriffsregeln des MCP-Servers (Bind-Adresse, Token-Pflicht). Die Einheit
+# liegt bei ihrem einzigen Nutzer in src/server (qtmux_core bleibt Qt6::Core-only, hier
+# braucht es QHostAddress) -> die .cpp direkt mitkompilieren, wie bei test_settingsio.
+qt_add_executable(test_mcpaccess tst_mcpaccess.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpAccess.cpp)
+target_include_directories(test_mcpaccess PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server)
+target_link_libraries(test_mcpaccess PRIVATE Qt6::Test Qt6::Network)
+add_test(NAME test_mcpaccess COMMAND test_mcpaccess)
+
 # QTMUX-96: Scanner fuer Projekt-Befehle/Skills — arbeitet auf echten QTemporaryDirs.
 qt_add_executable(test_projectcommands tst_projectcommands.cpp)
 target_link_libraries(test_projectcommands PRIVATE qtmux_core Qt6::Test)
@@ -160,7 +170,7 @@ add_test(NAME test_updateviewmodel COMMAND test_updateviewmodel)
 # WIN32_EXECUTABLE (Konsolen-Vererbung an Kindshells) gilt hier nicht — beide
 # Tests starten keine Prozesse.
 if(WIN32)
-    set_target_properties(test_updater test_updateviewmodel
+    set_target_properties(test_updater test_updateviewmodel test_mcpaccess
                           PROPERTIES WIN32_EXECUTABLE FALSE)
 endif()
 
