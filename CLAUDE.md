@@ -404,17 +404,17 @@ Standardweg für visuelle Abnahmen. ⚠️ Er setzt `QTMUX_NO_GPU=1` und fotogra
 **QPainter-Fallback**: Fehler im Glyph-Atlas (QTMUX-97) sind darauf **prinzipiell unsichtbar**.
 Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fallen, nicht hier.
 
-## Arbeitsstand & Wiedereinstieg (2026-08-01)
+## Arbeitsstand & Wiedereinstieg (2026-08-03)
 
 > Die EINE Stelle für den aktuellen Stand (Pflegeregeln 2–4 oben). Verlauf steht in
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in der
 > Tabelle unten.
 
 Version **1.8.0** · `main` gepusht · Jira dual synchron bis **QTMUX-127**.
-**Teststände (2026-08-02, alle drei Plattformen selbst gemessen):** macOS Debug
-(`macos-test`) und Release je **27/27**; Linux (rtzsvr02-Container) **26/26**;
-Windows (rtzbld01) **26/26** (Debug; Release davor 25/25 ohne den neuen
-`test_mcpaccess`) — jeweils ohne `test_pty`
+**Teststände (Stand 2026-08-03, Commit `788e8aa`):** macOS Debug (`macos-test`) und
+Release je **27/27** (selbst gemessen); Linux (rtzsvr02-Container) **26/26** und
+Windows (rtzbld01) **26/26** (von der Windows-Session gemessen) — jeweils ohne
+`test_pty`; die **CI bestätigt alle drei** auf genau diesem Commit.
 (fällt dort umgebungsbedingt: nicht-interaktive Shell/ConPTY; auf Windows braucht
 `ctest` Qt-`bin` im PATH, sonst `0xc0000135`).
 `tst_session` ist mit **24 Fällen** das größte Binary.
@@ -478,13 +478,16 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   wie das `-NoFetch` von `_build.cmd`). Der Wrapper nimmt die Version jetzt als
   **Argument** und bricht ohne ab. **Nach jedem Bump am Artefakt gegenprüfen**, nicht
   am Build-Log: hier DMG/EXE/AppImage je auf `1.8.0`-Treffer und **0** `1.7.1`-Reste.
-- Offen bleibt sonst nur die **Infrastruktur**: auf `https://nobser.de/updates/qtmux/`
-  liegt noch kein Manifest; die Confluence-Benutzerdoku bekommt den Abschnitt
-  sinnvollerweise erst dann (vorher beschriebe sie eine Funktion, die ins Leere greift).
+- ⚠️ **Was am Update-Weg NOCH NICHT am lebenden Objekt belegt ist:** Nur der
+  **macOS**-Zweig wurde real ausgelöst (DMG gemountet). `msiexec /i` (Windows) und der
+  **AppImage-Selbsttausch** (Linux) sind bisher ausschließlich als *Start-Plan*
+  geprüft — die Zeichenkette stimmt, ausgeführt hat sie niemand. Wer das nachholt:
+  auf rtzbld01 bzw. im Linux-Container eine Instanz mit älterer Version gegen die
+  Produktions-URL fahren (Rezept wie beim macOS-Zyklus, s. Feature-Referenz).
 - **Nächster Punkt:** **QTMUX-94** (Terminal-Ausgabe als Agenten-Kontext) hat das beste
   Verhältnis — die Daten liegen bereits in `VtScreen`, es fehlt nur der Weg für den
   Menschen (Auswahl/Bildschirm an eine andere Session geben). Parallel offen: der
-  **Owner-Durchklick** — **25 fertige Tickets** warten auf Abnahme (Tabelle unten).
+  **Owner-Durchklick** — **27 fertige Tickets** warten auf Abnahme (Tabelle unten).
 - **Offener Code-Faden „Modul B":** `WindowModel` aggregiert noch nicht über die Panes
   (TODO in [WindowModel.cpp](src/viewmodels/WindowModel.cpp) + neutrale Stubs in
   `tst_windowmodel.cpp`); die Aggregat-Zähler liegen deshalb bewusst in `SessionModel`
@@ -527,7 +530,7 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   [IconToolButton.qml](qml/Ui/IconToolButton.qml) statt `AppToolTip` (Widerspruch zur
   Popup-Palette-Regel) · Statusfarben-Literale ~10× dupliziert (Kandidat:
   StatusColors-Singleton) · `SessionModel::sessionById` fehlt `Q_INVOKABLE` (QML-Nachbau
-  in Main.qml) · MCP-Server ohne Puffer-Deckel; `assign_session` nur noch
+  in Main.qml) · `assign_session` nur noch
   Deprecation-Stub im Schema. **Umgesetzt aus der Analyse:** `Theme.accentText` statt
   hartem Weiß (6 Stellen) — die **Sichtprüfung in beiden Designs steht als
   Owner-Abnahme aus** (sichtbar wird der Unterschied erst bei Schemata mit hellem
@@ -672,7 +675,7 @@ Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme
 | **121** | **Statusleiste läuft nicht mehr über** | Session in ein tief verschachteltes Verzeichnis legen — der Pfad wird mit „…" gekürzt, die Felder rechts davon bleiben lesbar |
 | **58** | **Git-Branch auf der Kachel** | zwei Sessions im **selben** Repo auf **verschiedenen** Branches öffnen — genau der Fall, für den das Ticket existiert. `git checkout` in einer davon: die Kachel folgt binnen ~1,5 s, ohne dass sich das Verzeichnis ändert |
 | **90** | **Prompt-Warteschlange** | in einer Session mit **echtem** Agenten einreihen (Palette → „In die Warteschlange einreihen …"), während er arbeitet: Abzeichen zeigt die Anzahl, der Text geht erst nach seiner Fertigmeldung raus. ⚠️ Bei einer gewöhnlichen Shell mit **stillem** Langläufer (`sleep 6`) geht er zu früh raus — bekannte Grenze, Begründung in der Feature-Referenz |
-| **125** | **Online-Update** (Hilfe-Menue, Dialog, Einstellung) | Hilfe -> „Nach Updates suchen …“: ohne veroeffentlichtes Manifest muss **„QTmux 1.7.1 ist aktuell“** kommen — kein Fehler, kein Haenger. Dann Einstellungen -> Allgemein -> Aktualisierung: Schalter aus, QTmux neu starten -> beim Start passiert nichts. Der Server ist seit 2026-08-02 scharf, die Meldung „aktuell“ ist also der ECHTE Fall. ⚠️ Der **vollstaendige** Durchlauf (Update finden, laden, installieren) wird erst mit **1.8.0** pruefbar; bis dahin ist er gegen einen lokalen HTTP-Server mit produktiv signiertem Manifest gelaufen |
+| **125** | **Online-Update** (Hilfe-Menue, Dialog, Einstellung) | Hilfe -> „Nach Updates suchen …“ auf einem **1.8.0**-Build muss **„QTmux 1.8.0 ist aktuell“** melden — kein Fehler, kein Haenger. Dann Einstellungen -> Allgemein -> Aktualisierung: Schalter aus, QTmux neu starten -> beim Start passiert nichts. Der Server ist scharf, die Meldung „aktuell“ ist also der ECHTE Fall. Der **vollstaendige** Durchlauf ist auf **macOS** am lebenden Objekt belegt (1.7.1-Instanz findet 1.8.0, laedt, mountet das DMG); ⚠️ **Windows und Linux fehlen dort noch** (nur Start-Plan geprueft) |
 
 | **127** | **MCP im Netzwerk erreichbar** (Bind-Adresse, Token, pf) | Einstellungen → Agenten & MCP: „Im Netzwerk erreichbar" **an** — es muss sofort ein Token erscheinen (Anzeigen/Kopieren/Neu erzeugen), die Statusleiste unten rechts muss auf **„MCP LAN :7345" in Amber** wechseln, und ein `curl` von einem anderen Rechner muss **ohne** Kopfzeile 401 und **mit** `Authorization: Bearer <token>` eine Antwort liefern. Danach wieder **aus** → Statusfeld zurück auf „MCP :7345", `curl` von außen läuft ins Leere. Beides in **beiden Designs** ansehen (die Sichtprüfung der Seite ist auf macOS nicht automatisierbar — eigenes `Window`). ⚠️ Getrennt davon die **pf-Regel**: `sudo tools/pf/install-pf-anchor.sh --net 192.168.0.0/24` (braucht ein Passwort, deshalb hier nicht ausgeführt), dann `sudo pfctl -s rules | grep com.qtmux` — und der einzige echte Beleg ist die Gegenprobe von **außerhalb** des Netzes: **Timeout**, nicht „connection refused" |
 ⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
@@ -1469,6 +1472,32 @@ Cache-Bust-Abfrage `?ts=<epoch>` (der Kern hängt sie nur an http(s) an — an e
 Datei-URL zerstörte sie die Pfadauflösung) und ein Download, der in Häppchen ankommt und
 darum überhaupt Fortschritt meldet. Deshalb hat `tst_updateviewmodel` einen eigenen
 In-Process-HTTP-Server; genau dort ist der `busy()`-Fehler oben aufgeschlagen.
+
+**Nächste Version veröffentlichen — das Rezept** (einmal komplett gefahren für 1.8.0):
+1. Bump an den Stellen aus den Konventionen; `qtmux_version.h` danach **gegenlesen**.
+2. Alle drei Plattformen bauen + testen, committen, pushen, CI abwarten.
+3. Installer: `installer/build-dmg.sh <ver>` lokal · auf rtzbld01
+   `C:\Tools\qtmux-build\build_msi.cmd <ver>` (Version ist **Argument** — s. Falle im
+   Arbeitsstand) · AppImage aus dem **CI-Lauf desselben Commits**
+   (`gh run download <id> -n QTmux-AppImage`).
+4. **Am Artefakt gegenprüfen, nicht am Build-Log:** je Binary Treffer auf die neue
+   Nummer **und 0 Reste der alten**. DMG mounten, ZIP entpacken, AppImage mit
+   `--appimage-extract` auspacken (squashfs — ein `grep` aufs AppImage selbst findet nie
+   etwas und sähe wie ein Fehler aus).
+5. Tag + `gh release create` (voller SHA!), dann
+   `UPDATES_SFTP_HOST=… python3 ../MacPCAN/tools/updates/publish.py --product qtmux
+   --version <ver> --notes-de … --notes-en … --artifact <key>=<datei>,kind=<art> …
+   --upload --verify`. Schlüssel und Zielpfad kennt `publish.py` als Vorgabe
+   (`~/.ssh/updates_publish_ed25519`, `public_html/updates`).
+6. Gegenprobe: `curl` + `openssl pkeyutl -verify` auf die Live-Bytes und ein manueller
+   Check aus der App.
+
+🔑 **Der Zyklus-Nachweis braucht eine ÄLTERE Instanz MIT Feature** — dafür ein
+`git worktree` auf den Vor-Bump-Commit, dort ein temporäres Gerüst in `main.cpp`, das
+`checkForUpdates` → `download()` → `launchInstaller()` durchruft und mitloggt. Der
+Hauptbaum bleibt sauber, das Gerüst wird danach mit dem Worktree entfernt.
+🔑 **Beleg für „kein stiller Selbsttausch":** SHA-256 **und** mtime des laufenden
+Binaries vor und nach `launchInstaller()` vergleichen — beides unverändert.
 
 **Tests:** `test_updater` (13 Fälle, Kern; Fixtures zur Laufzeit erzeugt und mit dem
 mitkompilierten Monocypher signiert, dazu ein **RFC-8032-Vektor** als Gegenprobe gegen eine
