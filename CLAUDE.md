@@ -62,6 +62,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
 | `src/server/McpServer.{h,cpp}` | Eingebetteter MCP-Server (38 Tools); Doku `docs/MCP.md` |
+| `third_party/updater/update/` + `src/viewmodels/UpdateViewModel.{h,cpp}` + `qml/dialogs/UpdateDialog.qml` | Online-Update (QTMUX-125): byte-identisch aus MacPCAN vendierter Kern (`appupdate`, Target `qtmux_updater`) + QTmux-Persistenz/Dialog; Abgleich `tools/check-updater-sync.sh`, Herkunft `third_party/updater/UPSTREAM.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
 | `plugins/echo/`, `plugins/macpcan/` | Demo-Plugin (Kopiervorlage) + CAN-Bus-Plugin |
@@ -69,7 +70,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | 24 ctest-Tests: 23 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 23 |
+| `tests/` | 26 ctest-Tests: 25 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, **updater**, **updateviewmodel**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 25 |
 
 ## Build & Test (macOS)
 
@@ -328,6 +329,12 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 - **Deutsche** Kommentare/Kommunikation; Code-Referenzen als Markdown-Links;
   Commit-Trailer `Co-Authored-By: Claude …`. Committen/pushen nur auf Auftrag.
 - `qtmux_core` bleibt **Gui-frei** (nur Qt6::Core) → Farben als `quint32` 0xRRGGBB.
+  Alles, was Qt6::Network braucht, bekommt ein **eigenes** Target (so entstand
+  `qtmux_updater`, QTMUX-125).
+- **Vendierter Fremdcode wird nie lokal editiert** (`third_party/libvterm` mit
+  `QTMUX:`-Markern, `third_party/updater` mit `tools/check-updater-sync.sh`). Beim
+  Updater ist die kanonische Quelle MacPCAN: Fehler dort beheben, pushen,
+  `--update` nachziehen, Pin in `UPSTREAM.md` setzen.
   Gui-freie Singletons als **Context-Properties** in `main.cpp` registrieren (KEIN
   `qmlRegisterSingletonInstance` in die URI „QTmux" — kollidiert mit der Modul-
   Typregistrierung; Symptom „TerminalItem is not a type").
@@ -335,9 +342,12 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   sind Debug) — Release-only-Probleme (Optimierung, Asserts, RHI/Shader) fallen sonst
   nicht auf.
 - **Versions-Bump-Stellen** (alle zusammen): `CMakeLists.txt` (project VERSION),
-  `src/app/main.cpp`, `src/server/McpServer.cpp` (serverInfo), `installer/build-dmg.sh`,
-  `installer/build-appimage.sh`, `.github/workflows/ci.yml` (AppImage-Schritt),
-  `installer/QTmux.wxs`, `README.md` (DE **und** EN).
+  `installer/build-dmg.sh`, `installer/build-appimage.sh`, `.github/workflows/ci.yml`
+  (AppImage-Schritt), `installer/QTmux.wxs`, `README.md` (DE **und** EN).
+  🔑 `src/app/main.cpp` und `src/server/McpServer.cpp` stehen seit QTMUX-125 **nicht mehr**
+  in der Liste: beide lesen `QTMUX_VERSION_STRING` aus dem generierten `qtmux_version.h`
+  (`cmake/Version.h.in` ← `PROJECT_VERSION`). Die übrigen Stellen laufen ohne
+  CMake-Konfiguration und bleiben darum manuell.
 - **i18n:** Quellsprache Deutsch; QML `qsTr`, C++ `QCoreApplication::translate("<Kontext>",…)`.
   `cmake --build … --target update_translations`; gescannt werden **genau `qtmux` und
   `qtmux_core`** (`SOURCE_TARGETS` an `qt_add_translations`);
@@ -392,11 +402,12 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in der
 > Tabelle unten.
 
-Version **1.7.1** · `main` gepusht und CI-grün · Jira dual synchron bis **QTMUX-125**,
-**29 offen (alle Backlog, nichts in Arbeit)**.
-**Teststände:** macOS Debug (`macos-test`) und Release je **24/24**; CI Linux 24/24,
-Windows 23/23 (ohne `test_pty` — fällt dort umgebungsbedingt: nicht-interaktive
-Shell/ConPTY; auf Windows braucht `ctest` Qt-`bin` im PATH, sonst `0xc0000135`).
+Version **1.7.1** · `main` gepusht · Jira dual synchron bis **QTMUX-126**.
+**Teststände (2026-08-02, alle drei Plattformen selbst gemessen):** macOS Debug
+(`macos-test`) und Release je **26/26**; Linux (rtzsvr02-Container) **25/25**;
+Windows (rtzbld01) Release **25/25** UND Debug **25/25** — jeweils ohne `test_pty`
+(fällt dort umgebungsbedingt: nicht-interaktive Shell/ConPTY; auf Windows braucht
+`ctest` Qt-`bin` im PATH, sonst `0xc0000135`).
 `tst_session` ist mit **24 Fällen** das größte Binary.
 🔑 **„CI grün auf allen drei Plattformen" ist KEIN Vollständigkeitsbeleg** (Lektion aus
 QTMUX-124): Die CI baut **Release**, ebenso Homebrew-Qt und der Linux-Container —
@@ -405,27 +416,24 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
 `-DQT_FORCE_ASSERTS` trägt nicht (wirkt nur in den *Headern*, nicht in der vorgebauten
 `libQt6Core`).
 
-- ⚠️ **OFFENE SPUR QTMUX-124 (Windows-Absturz, höchste Priorität).** `test_session` und
-  `test_sessiongroups` stürzen im **Windows-Debug**-Build ab (`0xC0000409`,
-  `ASSERT "size_t(d.size) <= MaxSize"` in `qlist.h`), deterministisch bei
-  `osc133NonZeroExitSetsError`; eingetragen zwischen `a8e2595` und `f9c712e`. Von den vier
-  Commits in dem Fenster hängt nur **QTMUX-90** neuen Code an den OSC-133-Pfad
-  (`onPromptMarker` → `markActivityReported`/`setActivity` → `activityChanged` →
-  `tryDispatchQueued`) — und der läuft **innerhalb eines libvterm-Callbacks**, also mitten
-  in `VtScreen::inputWrite`. `cfa2906` stellt die Verbindung auf `Qt::QueuedConnection` um —
-  **nicht verifiziert**. 🔑 **Nächste Windows-Sitzung: als Erstes gegenprüfen**; bleibt der
-  Absturz aus, ist die Sache erledigt, sonst den Jira-Kommentar korrigieren.
-  ⚠️ **Analyse-Präzisierung (2026-08-01):** Der Scrollback ist ein **`std::deque`**
-  ([VtScreen.h](src/core/VtScreen.h)), **kein QList** — er scheidet als Quelle des Asserts
-  aus. Bleibt der Absturz trotz `cfa2906`, sind die verbleibenden **synchronen** Pfade aus
-  dem Callback die Verdächtigen: `runLoginScript()` (schreibt direkt ans Backend), die
-  direkt verbundenen `dataChanged`-Ketten in `SessionModel::wireSession` (13 Rollen,
-  QML-Bindings laufen synchron mit) und `AgentEventHub::postEvent` — s. Kommentar am
-  `activityChanged`-connect in [Session.cpp](src/core/Session.cpp).
+- ✅ **QTMUX-124 (Windows-Absturz) ist erledigt — am 2026-08-02 gegengeprüft.** Der
+  Windows-**Debug**-Build auf rtzbld01 läuft **25/25**, `test_session` und
+  `test_sessiongroups` inklusive; der `0xC0000409`/`qlist.h`-Assert bei
+  `osc133NonZeroExitSetsError` reproduziert sich nicht mehr. Damit hat `cfa2906`
+  getragen (`activityChanged` auf `Qt::QueuedConnection` — der Pfad lief vorher
+  **innerhalb** eines libvterm-Callbacks, also mitten in `VtScreen::inputWrite`).
+  🔑 Die Lektion bleibt gültig und ist der Grund, warum das überhaupt so lange offen war:
+  **CI-grün ist kein Vollständigkeitsbeleg** (Kasten oben) — nur der Windows-**Debug**-Build
+  sieht Debug-Asserts in Qts vorgebauter Bibliothek.
 - 🔑 **Uncommittete Änderungen in `.github/workflows/ci.yml`** — beim Committen gezielt
   stagen: (1) **fremd** (Windows-Session): `setup-msvc-dev` auf Commit-SHA gepinnt;
   (2) eigene Ergänzung (2026-08-01): `jurplel/install-qt-action` ebenso SHA-gepinnt
   (v4.3.1; `@v4` ist dort ein *Branch*, keine feste Marke).
+- **QTMUX-125 (Online-Update) ist umgesetzt** — Mechanik in der Feature-Referenz,
+  Owner-Abnahme in der Tabelle unten. Offen bleibt die **Infrastruktur**: Auf
+  `https://nobser.de/updates/qtmux/` liegt noch kein echtes Manifest, und die
+  Confluence-Benutzerdoku bekommt den Abschnitt sinnvollerweise erst dann (vorher
+  beschriebe sie eine Funktion, die ins Leere greift).
 - **Nächster Punkt:** **QTMUX-94** (Terminal-Ausgabe als Agenten-Kontext) hat das beste
   Verhältnis — die Daten liegen bereits in `VtScreen`, es fehlt nur der Weg für den
   Menschen (Auswahl/Bildschirm an eine andere Session geben). Parallel offen: der
@@ -496,14 +504,11 @@ neu angelegt: 55/69/72/73/75/76. 🔑 **Bewusst nicht übernommen:** alles Edito
 (Symbols, Go-to-Definition, Datei-Baum, projektweite Suche, Commit-Erzeugung,
 Diff-Kommentare) und die Cloud-Hälfte — QTmux ist ein Terminal-Manager, kein IDE-Ersatz;
 diese Linie beim nächsten Feature-Vergleich wiederverwenden.
-**QTMUX-125 Online-Update — beauftragt als Epic-Anteil (2026-08-02):** Eine
-Orchestrator-Session hat eine **Workorder** hinterlegt —
-[docs/workorder-online-update.md](docs/workorder-online-update.md) (liegt bewusst
-**untracked** im Baum; maßgeblich ist der dort verlinkte Masterplan in
-`_ClaudeWorkspace`). Kern: Update-Core wird **byte-identisch aus MacPCAN vendiert**
-(`third_party/updater/`, eigenes STATIC-Target `qtmux_updater`, NICHT in `qtmux_core`),
-dazu `UpdateViewModel` + `UpdateDialog` + `update/*`-Settings.
-⚠️ **Blocker: erst starten, wenn der MacPCAN-Update-Core existiert und gepusht ist.**
+**QTMUX-125 Online-Update — umgesetzt (2026-08-02), Owner-Abnahme offen.** Auftrag:
+[docs/workorder-online-update.md](docs/workorder-online-update.md) (jetzt eingecheckt;
+maßgeblich bleibt der dort verlinkte Masterplan in `_ClaudeWorkspace`). Mechanik in der
+Feature-Referenz. **Neu angelegt: QTMUX-126** (Marken-Badge „Q"/Violett in der
+Menüleiste + App-Icon-Grundfarbe, Backlog; Spec `_ClaudeWorkspace/brand-badge-spec.md`).
 
 **Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) ·
 Signierung/Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff
@@ -593,7 +598,7 @@ Inhalt wäre nur Rauschen im Board.
 Confluence-Entwicklerdoku-Unterseiten: „GUI-Auffrischung Design 1a/2a" und
 „Agenten-Wiederherstellung" (Seiten-IDs in `CLAUDE.local.md`).
 
-### Owner-Abnahmen offen (25 Tickets, je umgesetzt + selbst verifiziert)
+### Owner-Abnahmen offen (26 Tickets, je umgesetzt + selbst verifiziert)
 
 Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme-Rezept:
 
@@ -619,6 +624,7 @@ Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme
 | **121** | **Statusleiste läuft nicht mehr über** | Session in ein tief verschachteltes Verzeichnis legen — der Pfad wird mit „…" gekürzt, die Felder rechts davon bleiben lesbar |
 | **58** | **Git-Branch auf der Kachel** | zwei Sessions im **selben** Repo auf **verschiedenen** Branches öffnen — genau der Fall, für den das Ticket existiert. `git checkout` in einer davon: die Kachel folgt binnen ~1,5 s, ohne dass sich das Verzeichnis ändert |
 | **90** | **Prompt-Warteschlange** | in einer Session mit **echtem** Agenten einreihen (Palette → „In die Warteschlange einreihen …"), während er arbeitet: Abzeichen zeigt die Anzahl, der Text geht erst nach seiner Fertigmeldung raus. ⚠️ Bei einer gewöhnlichen Shell mit **stillem** Langläufer (`sleep 6`) geht er zu früh raus — bekannte Grenze, Begründung in der Feature-Referenz |
+| **125** | **Online-Update** (Hilfe-Menue, Dialog, Einstellung) | Hilfe -> „Nach Updates suchen …“: ohne veroeffentlichtes Manifest muss **„QTmux 1.7.1 ist aktuell“** kommen — kein Fehler, kein Haenger. Dann Einstellungen -> Allgemein -> Aktualisierung: Schalter aus, QTmux neu starten -> beim Start passiert nichts. ⚠️ Der **vollstaendige** Durchlauf (Update finden, laden, installieren) ist erst pruefbar, wenn ein echtes Paket auf `nobser.de/updates/qtmux/` liegt; bis dahin ist er nur gegen einen `file://`-Fixturebaum gelaufen (`update/baseUrl`) |
 
 ⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
 Sessions **nicht** (Inhalt liegt im Scrollback) — betroffene Sessions neu starten.
@@ -1345,6 +1351,64 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 - **Backend-Ownership:** Backend gehört NUR dem `unique_ptr` (kein `setParent`);
   stateChanged-Handler nimmt den State aus dem **Signal-Argument** (feuert während der
   Backend-Zerstörung).
+
+### Online-Update (QTMUX-125)
+
+Kern **byte-identisch aus MacPCAN vendiert** (`third_party/updater/update/`, Namespace
+`appupdate`, Target **`qtmux_updater`** = STATIC + Qt6::Core/Network). Bewusst **nicht** in
+`qtmux_core` — der bleibt Qt6::Core-only. Abgleich `tools/check-updater-sync.sh`
+(`--update` zieht nach), Herkunft/Pin in
+[third_party/updater/UPSTREAM.md](third_party/updater/UPSTREAM.md).
+🔑 **Die Kopie liegt in einem Verzeichnis namens `update`**, weil sich der Kern selbst mit
+dem Präfix `update/` inkludiert; flach vendiert müsste man jede `#include`-Zeile ändern und
+gäbe die Byte-Identität — und damit den Sync-Wächter — auf.
+⚠️ **Einbahnstraße:** nie lokal editieren. Erlebt und bewährt: Der Windows-Build fand einen
+Fehler IM KERN (s. u.); der Fix ging nach MacPCAN, wurde dort gepusht und kam per
+`--update` zurück.
+
+**App-Seite:** [`UpdateViewModel`](src/viewmodels/UpdateViewModel.h) (Context-Property
+`Updates`, Zustandsautomat Idle/Checking/UpToDate/Available/Downloading/Ready/Failed,
+QSettings `update/autoCheck|lastCheck|skippedVersion|baseUrl`) +
+[`qml/dialogs/UpdateDialog.qml`](qml/dialogs/UpdateDialog.qml) + Hilfe-Menü + zwei
+Palette-Einträge + Einstellungen → Allgemein → „Aktualisierung". Start-Hook in `main.cpp`
+(3 s nach dem Start; im Screenshot-Modus nie). Basis-URL `https://nobser.de/updates`,
+Produkt `qtmux` → `…/qtmux/manifest.json`.
+
+**Owner-Regeln, die im Code hängen** (jede hat einen Grund, keine ist Geschmack):
+- Start-Check **höchstens 1×/Tag, abschaltbar, Fehler bleiben STILL** — ein Rechner ohne
+  Netz darf nicht jeden Morgen mit einem Fehlerdialog begrüßen.
+- Der Zeitstempel wird **auch nach einem Fehlschlag** geschrieben; sonst wird aus
+  „1×/Tag" bei unerreichbarem Server „bei jedem Start".
+- **„Version überspringen" bindet nur den stillen Check.** Von Hand sieht man sie weiter —
+  sonst wäre ein Fehlklick unwiderruflich.
+- **Downgrade** erlaubt (Owner), aber nur auf ausdrückliche Anforderung und mit Warnung;
+  der Start-Check bietet ihn nie an, sonst fragte er jeden Entwickler-Build täglich.
+- **Kein Silent-Self-Replace:** QTmux startet den Installer und bleibt stehen.
+
+🔑 **Linux ohne `$APPIMAGE` hat keinen Start-Plan** — die AppImage-„Installation" IST die
+Selbstersetzung von `$APPIMAGE`; läuft QTmux aus einem Distributionspaket oder einem
+Entwickler-Build, gibt es nichts zu ersetzen. Der Dialog blendet „Installieren …" dann aus
+und nennt stattdessen den Pfad der geprüften Datei (`canLaunchInstaller()`). Aufgefallen ist
+das erst am **Linux-Build** — auf macOS/Windows gibt es den Fall nicht.
+
+🔑 **Signierte Fixtures brauchen `-text` in `.gitattributes`.** Auf der Windows-Maschine
+(`core.autocrlf=true`) machte git aus 935 Byte `manifest.json` 966 Byte — 31 eingefügte CR.
+Die Ed25519-Signatur steht über die **exakten** Bytes, also fiel `test_updateviewmodel` mit
+6 von 11 Fällen und sah dabei nach einem Fehler im Update-Code aus. Gilt für jedes signierte
+Artefakt im Ökosystem.
+
+🔑 **Auf Windows muss ein Datei-Handle VOR dem Löschen zu sein.** Bei SHA-Mismatch löscht der
+Kern den Download — mit noch offenem Read-Back-Handle ist das dort ein stilles No-op: Der
+Aufrufer bekam „file deleted", der beschädigte Installer blieb in Downloads liegen. Unter
+POSIX unsichtbar (offene Dateien lassen sich entlinken). Fix in MacPCAN `d0ed07b`.
+
+**Tests:** `test_updater` (13 Fälle, Kern; Fixtures zur Laufzeit erzeugt und mit dem
+mitkompilierten Monocypher signiert, dazu ein **RFC-8032-Vektor** als Gegenprobe gegen eine
+nur zu sich selbst passende Krypto) und `test_updateviewmodel` (11 Fälle, App-Seite gegen
+committete, mit dem **Produktionsschlüssel** signierte Fixtures unter
+`tests/fixtures/update/`). 🔑 Letzteres ist zugleich der Interop-Nachweis der
+ausgelieferten App (openssl signiert, das vendierte Monocypher verifiziert) — ein
+Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
 
 ### QML-/Theming-Lektionen
 - Popups/Menüs erben die Window-`palette` NICHT → `ThemedMenu`/`AppPopupBg` mit eigener

@@ -58,6 +58,11 @@ Secrets-Vault, konfigurierbare Tastenkürzel, importierbare Color-Schemes
 Terminal-Backend beisteuern. Mitgeliefert: **MacPCAN**, das einen CAN-Bus als Terminal
 anbindet (gegen echte PCAN-USB-Hardware verifiziert).
 
+**Bleibt aktuell** — QTmux sucht beim Start (höchstens einmal am Tag, still und
+abschaltbar) sowie auf Wunsch über *Hilfe → Nach Updates suchen …* nach neuen Versionen.
+Manifest und Paket werden mit **Ed25519** und **SHA-256** geprüft, bevor irgendetwas
+startet; installiert wird **geführt** — QTmux ersetzt sich nie unbemerkt selbst.
+
 **Ohne Fremdabhängigkeiten** — kein vcpkg, kein OpenSSL/libssh2. libvterm liegt im Repo,
 alles andere kommt von Qt oder dem System.
 
@@ -246,6 +251,11 @@ importable color schemes (iTerm/Xresources/Ghostty).
 **Extensible** — a plugin SDK with a `QPluginLoader` host: a plugin can contribute its own
 terminal backend. Shipped example: **MacPCAN**, which attaches a CAN bus as a terminal
 (verified against real PCAN-USB hardware).
+
+**Stays current** — QTmux checks for new versions at startup (at most once a day,
+silently, and switchable) and on demand via *Help → Check for Updates …*. Manifest and
+package are verified with **Ed25519** and **SHA-256** before anything is launched, and
+installation is **guided** — QTmux never silently replaces itself.
 
 **No third-party dependencies** — no vcpkg, no OpenSSL/libssh2. libvterm lives in the repo,
 everything else comes from Qt or the system.
