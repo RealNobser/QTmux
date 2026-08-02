@@ -271,6 +271,13 @@ macOS/Windows/Linux; Qt via `jurplel/install-qt-action` (Module **qtserialport**
 upload-artifact v6, `setup-msvc-dev` statt `ilammy`, Ninja kommt vom Image); die beiden
 Dritt-Actions (`setup-msvc-dev`, `install-qt-action`) sind auf **Commit-SHAs gepinnt** —
 Tags/Branches sind verschiebbar; das Anhebe-Rezept steht als Kommentar in der `ci.yml`.
+> ⚠️ **Zweiter beobachteter Flake (2026-08-02): macOS-Build bricht bei
+> `qmltyperegistrar` mit `qt6qtmux_metatypes.json:: Failed to parse JSON: 7 illegal
+> number`.** Die Datei ist **generiert** — derselbe Commit-Inhalt baut im Folgelauf
+> sauber, lokal ist die JSON jederzeit parsebar. Also dieselbe Regel wie unten: nicht
+> als Regression lesen, **erst wiederholen**. (Wäre es echt, zeigte es sich lokal
+> reproduzierbar an einer moc-JSON.)
+
 > ⚠️ **Sporadisch: `test_doc_duplicates` fällt auf Windows mit `0xc0000142`**
 > (STATUS_DLL_INIT_FAILED). Das ist **kein** Prüfbefund — der Prozess (`cmake -P`) startet gar
 > nicht erst, die Doku wird nie gelesen. Einmal gesehen (Lauf `30635817273`), im nächsten Lauf
@@ -1565,6 +1572,12 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   Exit 3. Ergebnisse mit `-o <datei>,txt` in eine Datei schreiben und die lesen; nur so sieht
   man, **welche** Fälle fielen. (PowerShell verschluckt zusätzlich die Ausgabe, wenn der
   Exit-Code ≠ 0 ist.)
+  🔑 **In der CI kann man `-o` nicht nachschieben** — dort meldet `--output-on-failure` nur
+  „***Failed" ohne den Fall (genau so bei `test_updateviewmodel` erlebt). Abhilfe für Tests,
+  die **keine Prozesse starten**: `set_target_properties(<t> PROPERTIES WIN32_EXECUTABLE FALSE)`
+  (seit 2026-08-02 für `test_updater`/`test_updateviewmodel`). Für `test_pty`/`test_session`/
+  `test_sessiongroups` gilt das NICHT — die brauchen das GUI-Subsystem wegen der
+  ConPTY-Konsolenvererbung.
 - **Nach einem Rebuild `open qtmux.app` NICHT auf eine laufende Instanz** — `open`
   aktiviert nur; das alte Binary antwortet dann (z. B. „Unbekanntes Tool"). Erst beenden,
   dann starten.
