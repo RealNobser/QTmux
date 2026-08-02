@@ -149,7 +149,7 @@ target_include_directories(test_updateviewmodel PRIVATE
     ${CMAKE_BINARY_DIR}/generated)
 target_compile_definitions(test_updateviewmodel PRIVATE
     QTMUX_UPDATE_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update")
-target_link_libraries(test_updateviewmodel PRIVATE qtmux_updater Qt6::Test)
+target_link_libraries(test_updateviewmodel PRIVATE qtmux_updater Qt6::Test Qt6::Network)
 add_test(NAME test_updateviewmodel COMMAND test_updateviewmodel)
 
 # 🔑 Diese beiden Tests auf Windows als KONSOLEN-Programme bauen.

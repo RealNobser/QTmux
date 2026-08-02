@@ -17,6 +17,8 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
@@ -42,6 +44,57 @@ void spinUntil(bool &done, int guardMs = 5000) {
     while (!done && guard.isActive())
         loop.processEvents(QEventLoop::AllEvents, 20);
 }
+
+// Winziger HTTP/1.0-Server über dem Fixture-Baum. Zweck: der ECHTE Transportweg.
+// `file://` lässt zwei Dinge prinzipiell ungeprüft, die im Betrieb zählen — die
+// Cache-Bust-Abfrage `?ts=<epoch>`, die der Kern nur an http(s) anhängt (an einer
+// file://-URL würde sie die Pfadauflösung zerstören), und dass ein Download über
+// einen Socket in Häppchen ankommt, also überhaupt Fortschritt meldet.
+class FixtureHttpServer : public QTcpServer {
+public:
+    explicit FixtureHttpServer(QString root) : m_root(std::move(root)) {}
+
+    QString base() const {
+        return QStringLiteral("http://127.0.0.1:%1").arg(serverPort());
+    }
+
+protected:
+    void incomingConnection(qintptr handle) override {
+        auto *sock = new QTcpSocket(this);
+        sock->setSocketDescriptor(handle);
+        connect(sock, &QTcpSocket::readyRead, this, [this, sock] {
+            const QByteArray req = sock->readAll();
+            const QList<QByteArray> parts = req.split(' ');
+            if (parts.size() < 2) { sock->disconnectFromHost(); return; }
+            QString path = QString::fromUtf8(parts.at(1));
+            // Die Cache-Bust-Abfrage abschneiden — genau die, um die es hier geht.
+            const int q = path.indexOf(QLatin1Char('?'));
+            if (q >= 0) {
+                m_sawQuery = true;
+                path.truncate(q);
+            }
+            QFile f(m_root + QUrl::fromPercentEncoding(path.toUtf8()));
+            if (!f.open(QIODevice::ReadOnly)) {
+                sock->write("HTTP/1.0 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+            } else {
+                const QByteArray body = f.readAll();
+                sock->write("HTTP/1.0 200 OK\r\nContent-Type: application/octet-stream\r\n"
+                            "Content-Length: " + QByteArray::number(body.size()) + "\r\n\r\n");
+                sock->write(body);
+            }
+            sock->flush();
+            sock->disconnectFromHost();
+        });
+        connect(sock, &QTcpSocket::disconnected, sock, &QObject::deleteLater);
+    }
+
+public:
+    bool sawQuery() const { return m_sawQuery; }
+
+private:
+    QString m_root;
+    bool m_sawQuery = false;
+};
 
 } // namespace
 
@@ -305,6 +358,93 @@ private slots:
         QVERIFY(!silent.updateAvailable());
         QCOMPARE(silent.state(), int(UpdateViewModel::UpToDate));
         QCOMPARE(found.count(), 0);
+    }
+
+
+    // --- Der volle Weg ueber HTTP -------------------------------------------
+    // Das ist der Transport, den die ausgelieferte App benutzt. `file://` prueft
+    // ihn NICHT: der Kern haengt `?ts=<epoch>` nur an http(s) an, und ein
+    // Datei-URL liefert den Inhalt in einem Stueck (also ohne Fortschritt).
+    void httpEndToEndWithProgressAndPlan() {
+        FixtureHttpServer srv(m_fixtures + QStringLiteral("/good"));
+        QVERIFY(srv.listen(QHostAddress::LocalHost));
+
+        UpdateViewModel vm;
+        vm.setBaseUrl(srv.base());
+        QVERIFY(runCheck(vm, /*manual=*/true));
+        QVERIFY2(vm.lastError().isEmpty(), qPrintable(vm.lastError()));
+        QCOMPARE(vm.state(), int(UpdateViewModel::Available));
+        QCOMPARE(vm.remoteVersion(), QStringLiteral("9.9.9"));
+        // Cache-Busting hat stattgefunden — sonst koennte ein Proxy ein altes
+        // Manifest ausliefern, und genau die eine Datei ist die veraenderliche.
+        QVERIFY(srv.sawQuery());
+
+        // Anmerkungen folgen der Oberflaechensprache.
+        vm.setLanguage(QStringLiteral("de"));
+        const QString de = vm.notes();
+        vm.setLanguage(QStringLiteral("en"));
+        const QString en = vm.notes();
+        QVERIFY(!de.isEmpty());
+        QVERIFY(de != en);
+
+        QSignalSpy progress(&vm, &UpdateViewModel::downloadProgressChanged);
+        bool settled = false;
+        auto c = connect(&vm, &UpdateViewModel::stateChanged, [&] {
+            if (vm.state() == UpdateViewModel::Ready
+                || vm.state() == UpdateViewModel::Failed) settled = true;
+        });
+        vm.download();
+        spinUntil(settled);
+        disconnect(c);
+        QVERIFY2(vm.state() == UpdateViewModel::Ready, qPrintable(vm.lastError()));
+        QVERIFY(progress.count() > 0);
+        QCOMPARE(vm.downloadProgress(), 1.0);
+        QVERIFY(QFile::exists(vm.downloadedPath()));
+
+        // Das Kommando, das eine Installation AUSLOESEN wuerde — nur berechnet,
+        // nicht ausgefuehrt. Auf Linux braucht der Plan ein laufendes AppImage.
+#if defined(Q_OS_LINUX)
+        const QByteArray saved = qgetenv("APPIMAGE");
+        qputenv("APPIMAGE", QFile::encodeName(vm.downloadedPath()));
+#endif
+        const QString plan = vm.launchPlanDescription();
+        qInfo("Start-Plan dieser Plattform: %s", qPrintable(plan));
+        QVERIFY(!plan.isEmpty());
+#if defined(Q_OS_WIN)
+        QVERIFY(plan.startsWith(QStringLiteral("msiexec /i")));
+#elif defined(Q_OS_MACOS)
+        QVERIFY(plan.startsWith(QStringLiteral("open ")));
+        QVERIFY(plan.contains(QStringLiteral(".dmg")));
+#else
+        QVERIFY(plan.contains(QStringLiteral("replace AppImage")));
+        if (saved.isEmpty()) qunsetenv("APPIMAGE"); else qputenv("APPIMAGE", saved);
+#endif
+        QFile::remove(vm.downloadedPath());
+    }
+
+    // Falscher SHA-256 im Manifest: der Download wird GELOESCHT. Ein beschaedigter
+    // Installer darf nicht liegen bleiben, um spaeter doppelgeklickt zu werden.
+    // (Der Kern-Test prueft dasselbe eine Ebene tiefer; hier zaehlt, dass das
+    // ViewModel daraus einen sichtbaren Fehlerzustand macht statt „fertig".)
+    void shaMismatchDeletesTheFileAndFailsVisibly() {
+        UpdateViewModel vm;
+        vm.setBaseUrl(baseFor(QStringLiteral("shamismatch")));
+        QVERIFY(runCheck(vm, true));
+        QCOMPARE(vm.state(), int(UpdateViewModel::Available));   // Manifest ist echt signiert
+
+        bool settled = false;
+        auto c = connect(&vm, &UpdateViewModel::stateChanged, [&] {
+            if (vm.state() == UpdateViewModel::Ready
+                || vm.state() == UpdateViewModel::Failed) settled = true;
+        });
+        vm.download();
+        spinUntil(settled);
+        disconnect(c);
+        QCOMPARE(vm.state(), int(UpdateViewModel::Failed));
+        QVERIFY(vm.lastError().contains(QStringLiteral("sha256")));
+        QVERIFY(vm.downloadedPath().isEmpty());
+        // Nichts liegen geblieben.
+        QCOMPARE(QDir(vm.downloadDir()).entryList(QDir::Files).size(), 0);
     }
 
     // Der Download landet in einem eigenen Unterordner, nicht lose in Downloads.

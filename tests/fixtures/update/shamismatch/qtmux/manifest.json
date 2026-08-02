@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "product": "qtmux",
+  "channel": "stable",
+  "version": "9.9.9",
+  "published": "2026-08-02",
+  "notes": {
+    "de": "Fixture mit FALSCHEM SHA-256 (QTMUX-125).",
+    "en": "Fixture with a WRONG SHA-256 (QTMUX-125)."
+  },
+  "artifacts": {
+    "macos-universal": {
+      "url": "9.9.9/QTmux-9.9.9-macos.dmg",
+      "size": 24,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "dmg"
+    },
+    "win-x86_64": {
+      "url": "9.9.9/QTmux-9.9.9-win64.msi",
+      "size": 24,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "msi"
+    },
+    "linux-x86_64": {
+      "url": "9.9.9/QTmux-9.9.9-x86_64.AppImage",
+      "size": 29,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "appimage"
+    }
+  }
+}
