@@ -381,7 +381,8 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 
 ## Status (2026-08-01)
 
-**Ausgeliefert: v1.7.1** (Tag `v1.7.1`, alle 4 Installer: DMG/MSI+ZIP/AppImage). Phasen 0–6
+**Ausgeliefert: v1.8.0** (Tag `v1.8.0`, alle 4 Installer: DMG/MSI+ZIP/AppImage) — die
+erste Version mit **Online-Update** (QTMUX-125). Phasen 0–6
 komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Plugins +
 MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **38 MCP-Tools**
 (GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert. **GUI-Auffrischung
@@ -409,7 +410,7 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in der
 > Tabelle unten.
 
-Version **1.7.1** · `main` gepusht · Jira dual synchron bis **QTMUX-126**.
+Version **1.8.0** · `main` gepusht · Jira dual synchron bis **QTMUX-126**.
 **Teststände (2026-08-02, alle drei Plattformen selbst gemessen):** macOS Debug
 (`macos-test`) und Release je **26/26**; Linux (rtzsvr02-Container) **25/25**;
 Windows (rtzbld01) Release **25/25** UND Debug **25/25** — jeweils ohne `test_pty`
