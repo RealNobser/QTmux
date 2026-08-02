@@ -1,0 +1,20 @@
+# Signierte Update-Fixtures BYTEGENAU auschecken (QTMUX-125).
+#
+# 🔑 Teuer erkauft im Windows-Build: `core.autocrlf=true` (Vorgabe auf der
+# Windows-Maschine) machte aus 935 Byte manifest.json 966 Byte — 31 eingefügte
+# CR. Die Ed25519-Signatur steht über die EXAKTEN Bytes, also schlug die Prüfung
+# fehl und `test_updateviewmodel` fiel mit 6 von 11 Fällen. Das sah nach einem
+# Fehler im Update-Code aus und war eine Auscheck-Konvertierung.
+#
+# Gilt für JEDES signierte Artefakt in diesem Ökosystem: Ein Manifest, dessen
+# Signatur über die Dateibytes geht, darf nie durch eine Zeilenenden-Umwandlung
+# laufen.
+tests/fixtures/update/** -text
+
+# Signaturen und Binärartefakte ohnehin nie anfassen.
+*.sig binary
+
+# ⚠️ Gegenrichtung, ebenfalls teuer erkauft (CLAUDE.md, Windows-Abschnitt):
+# Batch-Dateien MÜSSEN CRLF haben — bei LF führt cmd.exe Kommentarzeilen aus.
+*.cmd text eol=crlf
+*.bat text eol=crlf
