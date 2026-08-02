@@ -62,6 +62,9 @@ signals:
 
 private:
     QNetworkReply* get(const QUrl& url);
+    // Clears the in-flight marker and schedules the reply for deletion. Call
+    // this BEFORE invoking a user callback — see the definition for why.
+    void finishActive(QNetworkReply* reply);
     [[nodiscard]] QUrl productUrl(const QString& fileName) const;
 
     QNetworkAccessManager m_nam;

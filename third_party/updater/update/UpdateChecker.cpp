@@ -65,6 +65,20 @@ QNetworkReply* UpdateChecker::get(const QUrl& url)
     return reply;
 }
 
+// Marks the in-flight request as finished. MUST run before any callback: the
+// reply is only deleteLater()'d, so the QPointer stays non-null until the next
+// event-loop turn — and busy() would still say "yes" while the caller is being
+// told "done". A caller that starts the next request straight from the callback
+// (check -> download is the obvious one, and the update dialog appears at
+// exactly that moment) would be refused with "a request is already running".
+void UpdateChecker::finishActive(QNetworkReply* reply)
+{
+    reply->deleteLater();
+    if (m_activeReply == reply) {
+        m_activeReply.clear();
+    }
+}
+
 void UpdateChecker::checkForUpdate(CheckCallback callback)
 {
     if (busy()) {
@@ -76,7 +90,7 @@ void UpdateChecker::checkForUpdate(CheckCallback callback)
     QNetworkReply* sigReply = get(productUrl(QStringLiteral("manifest.json.sig")));
     connect(sigReply, &QNetworkReply::finished, this,
             [this, sigReply, callback = std::move(callback)]() mutable {
-        sigReply->deleteLater();
+        finishActive(sigReply);
         if (sigReply->error() != QNetworkReply::NoError) {
             callback(std::nullopt, QStringLiteral("signature fetch failed: %1")
                                        .arg(sigReply->errorString()));
@@ -95,7 +109,7 @@ void UpdateChecker::checkForUpdate(CheckCallback callback)
         QNetworkReply* manReply = get(productUrl(QStringLiteral("manifest.json")));
         connect(manReply, &QNetworkReply::finished, this,
                 [this, manReply, sig, callback = std::move(callback)]() {
-            manReply->deleteLater();
+            finishActive(manReply);
             if (manReply->error() != QNetworkReply::NoError) {
                 callback(std::nullopt,
                          QStringLiteral("manifest fetch failed: %1")
@@ -160,9 +174,9 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
     connect(reply, &QNetworkReply::readyRead, this,
             [reply, file]() { file->write(reply->readAll()); });
     connect(reply, &QNetworkReply::finished, this,
-            [reply, file, localPath, expectedSha = artifact.sha256,
+            [this, reply, file, localPath, expectedSha = artifact.sha256,
              callback = std::move(callback)]() {
-        reply->deleteLater();
+        finishActive(reply);
         file->write(reply->readAll());
         file->close();
 

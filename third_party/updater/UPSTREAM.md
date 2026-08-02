@@ -9,9 +9,9 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `d0ed07b41a712b9e7af8123376c1ca9bb3e865b9` |
+| Commit | `59a9e3531ca4d97848e7bb0913bbcb7d26d97b4f` |
 | Datum | 2026-08-02 |
-| Betreff | `fix(update): close the read-back handle before deleting a bad download` |
+| Betreff | `fix(update): clear the in-flight marker before invoking a callback` |
 
 Enthält den **Produktions-Public-Key** (`update/UpdateKeys.hpp`, Ed25519, 32 Byte,
 Owner-Schlüssel vom 2026-08-02) — kein Platzhalter mehr.
