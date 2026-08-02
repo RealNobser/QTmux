@@ -425,10 +425,14 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   🔑 Die Lektion bleibt gültig und ist der Grund, warum das überhaupt so lange offen war:
   **CI-grün ist kein Vollständigkeitsbeleg** (Kasten oben) — nur der Windows-**Debug**-Build
   sieht Debug-Asserts in Qts vorgebauter Bibliothek.
-- 🔑 **Uncommittete Änderungen in `.github/workflows/ci.yml`** — beim Committen gezielt
-  stagen: (1) **fremd** (Windows-Session): `setup-msvc-dev` auf Commit-SHA gepinnt;
-  (2) eigene Ergänzung (2026-08-01): `jurplel/install-qt-action` ebenso SHA-gepinnt
-  (v4.3.1; `@v4` ist dort ein *Branch*, keine feste Marke).
+- ✅ **`.github/workflows/ci.yml` ist committet** (2026-08-02): Beide Dritt-Actions sind
+  jetzt auf **Commit-SHAs** gepinnt — `install-qt-action` mit `73e4306`, `setup-msvc-dev`
+  (aus der Windows-Session) mit `632d5a7`.
+  ⚠️ **Der SHA-Pin ist dabei versehentlich mitgerutscht**: `git add -u` nahm die fremde,
+  unstaged Änderung mit, obwohl die Regel „gezielt stagen, nie `git add -A/-u`" lautet
+  ([[zwei-sessions-eine-arbeitskopie]]). Inhaltlich war sie gewollt, die Commit-Nachricht
+  erwähnt sie aber nicht. **Merke:** `git add -u` ist bei geteilter Arbeitskopie genauso
+  gefährlich wie `git add -A` — Pfade aufzählen.
 - **QTMUX-125 (Online-Update) ist umgesetzt** — Mechanik in der Feature-Referenz,
   Owner-Abnahme in der Tabelle unten. Offen bleibt die **Infrastruktur**: Auf
   `https://nobser.de/updates/qtmux/` liegt noch kein echtes Manifest, und die
