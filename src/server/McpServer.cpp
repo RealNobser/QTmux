@@ -6,6 +6,8 @@
 #include "AgentEventHub.h"
 #include "ConnectionProfile.h"
 
+#include "qtmux_version.h"   // generiert aus cmake/Version.h.in (PROJECT_VERSION)
+
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QHostAddress>
@@ -410,7 +412,10 @@ QJsonObject McpServer::dispatchMethod(const QString &method, const QJsonObject &
         return QJsonObject{
             {"protocolVersion", kProtocolVersion},
             {"capabilities", QJsonObject{{"tools", QJsonObject{}}}},
-            {"serverInfo", QJsonObject{{"name", "QTmux"}, {"version", "1.7.1"}}},
+            // Version generiert aus PROJECT_VERSION (cmake/Version.h.in): genau
+            // dieses Feld liest ein Agent aus, ein vergessener Bump log ihn an.
+            {"serverInfo", QJsonObject{{"name", "QTmux"},
+                                       {"version", QTMUX_VERSION_STRING}}},
         };
     }
     if (method == "tools/list") {

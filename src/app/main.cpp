@@ -27,6 +27,8 @@
 
 #include <QTextStream>
 
+#include "qtmux_version.h"   // generiert aus cmake/Version.h.in (PROJECT_VERSION)
+
 #include "AppController.h"
 #include "AgentEventHub.h"
 #include "ShellIntegration.h"
@@ -253,7 +255,9 @@ int main(int argc, char *argv[])
                                             ? QStringLiteral("QTmux")
                                             : QStringLiteral("QTmux-%1").arg(profile));
     QGuiApplication::setOrganizationName("QTmux");
-    QGuiApplication::setApplicationVersion("1.7.1");
+    // Version kommt generiert aus `project(QTmux VERSION …)` (cmake/Version.h.in) —
+    // nicht mehr als Literal, das beim Bump vergessen werden kann.
+    QGuiApplication::setApplicationVersion(QStringLiteral(QTMUX_VERSION_STRING));
 
 #if defined(Q_OS_MACOS)
     // Die nativen App-Menü-Standarditems (Über/Einstellungen/Dienste/Ausblenden/

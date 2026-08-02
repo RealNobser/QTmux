@@ -135,6 +135,44 @@ if(APPLE)
     target_link_libraries(qtmux_core PRIVATE "-framework Carbon" "-framework IOKit")
 endif()
 
+# Versions-Header (generiert) ------------------------------------------------
+# EINE Quelle für die zur Laufzeit angezeigte Version: `project(... VERSION ...)`.
+# Ersetzt die Hardcodes in main.cpp (setApplicationVersion) und McpServer.cpp
+# (serverInfo) — beide liefen zwangsläufig irgendwann auseinander, und die
+# MCP-Antwort ist genau das, woran ein Agent die Version abliest.
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Version.h.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/generated/qtmux_version.h" @ONLY)
+
+# Update-Kern (QTMUX-125) -----------------------------------------------------
+# `third_party/updater/update/` ist eine BYTE-IDENTISCHE Kopie von
+# MacPCANs `src/update/` (Namespace `appupdate`) — QTmux teilt mit MacPCAN/RAFTNG
+# keine Submodule, also derselbe Vendoring-Weg wie bei libvterm. Herkunft,
+# gepinnter Commit und die Einbahnstraßen-Regel: third_party/updater/UPSTREAM.md,
+# Abgleich per tools/check-updater-sync.sh.
+#
+# 🔑 Eigenes Target, NICHT Teil von qtmux_core: der Kern bleibt Qt6::Core-only
+# (Projektregel), `UpdateChecker` braucht aber QNetworkAccessManager.
+# 🔑 Der Include-Pfad zeigt auf `third_party/updater`, weil sich der Kern selbst
+# mit dem Präfix `update/` inkludiert — das gehört zur Byte-Identität.
+add_library(qtmux_updater STATIC
+    third_party/updater/update/UpdateManifest.hpp
+    third_party/updater/update/UpdateManifest.cpp
+    third_party/updater/update/UpdateChecker.hpp
+    third_party/updater/update/UpdateChecker.cpp
+    third_party/updater/update/UpdatePolicy.hpp
+    third_party/updater/update/InstallerLauncher.hpp
+    third_party/updater/update/InstallerLauncher.cpp
+    third_party/updater/update/UpdateKeys.hpp
+    third_party/updater/update/Ed25519Verify.hpp
+    third_party/updater/update/Ed25519Verify.cpp
+    third_party/updater/update/ed25519/monocypher.h
+    third_party/updater/update/ed25519/monocypher.c
+    third_party/updater/update/ed25519/monocypher-ed25519.h
+    third_party/updater/update/ed25519/monocypher-ed25519.c
+)
+target_include_directories(qtmux_updater PUBLIC third_party/updater)
+target_link_libraries(qtmux_updater PUBLIC Qt6::Core Qt6::Network)
+
 # Anwendungs-Target ----------------------------------------------------------
 # App-Icon je Plattform: macOS bekommt das .icns ins Bundle (s. set_source_files_
 # properties + MACOSX_BUNDLE_ICON_FILE weiter unten), Windows kompiliert das .rc
@@ -205,8 +243,9 @@ qt_add_qml_module(qtmux
         src/server/McpServer.h
         src/server/McpServer.cpp
 )
-target_include_directories(qtmux PRIVATE src/terminal src/viewmodels src/server)
-target_link_libraries(qtmux PRIVATE Qt6::Network Qt6::Svg)
+target_include_directories(qtmux PRIVATE src/terminal src/viewmodels src/server
+                                        "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_link_libraries(qtmux PRIVATE Qt6::Network Qt6::Svg qtmux_updater)
 
 # GPU-Glyph-Atlas (QTMUX-6): RHI-Shader für das Glyph-Material in .qsb kompilieren
 # und unter qrc:/shaders/ einbetten. BATCHABLE, damit das Material in der

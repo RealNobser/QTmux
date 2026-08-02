@@ -1,0 +1,16 @@
+#pragma once
+
+// GENERIERT aus cmake/Version.h.in — nicht von Hand bearbeiten.
+// Einzige Quelle ist `project(QTmux VERSION …)` in der Haupt-CMakeLists.txt.
+//
+// Damit entfallen zwei Stellen aus der Versions-Bump-Liste (CLAUDE.md): die
+// `setApplicationVersion` in src/app/main.cpp und die `serverInfo` des
+// MCP-Servers. Beide zeigten den Wert HART und liefen zwangsläufig irgendwann
+// auseinander — und die MCP-Antwort ist genau das, woran ein Agent die Version
+// abliest. Die übrigen Stellen (Installer-Skripte, WiX, README, CI) bleiben
+// bewusst manuell: sie laufen ohne CMake-Konfiguration.
+
+#define QTMUX_VERSION_STRING "@PROJECT_VERSION@"
+#define QTMUX_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define QTMUX_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define QTMUX_VERSION_PATCH @PROJECT_VERSION_PATCH@

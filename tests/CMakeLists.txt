@@ -125,6 +125,15 @@ target_include_directories(test_settingsio PRIVATE
 target_link_libraries(test_settingsio PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_settingsio COMMAND test_settingsio)
 
+# QTMUX-125: der vendierte Update-Kern (third_party/updater, Target qtmux_updater).
+# Die Fixtures entstehen zur Laufzeit in einem QTemporaryDir und werden mit dem
+# mitkompilierten Monocypher signiert — kein openssl, keine committeten Binaerdateien,
+# laeuft damit auf allen drei Plattformen gleich. Gegenprobe gegen eine „nur zu sich
+# selbst passende" Krypto ist der RFC-8032-Vektor im Test.
+qt_add_executable(test_updater tst_updater.cpp)
+target_link_libraries(test_updater PRIVATE qtmux_updater Qt6::Test)
+add_test(NAME test_updater COMMAND test_updater)
+
 # --- PTY-/ConPTY-E2E-Tests (starten echte Shells) ---------------------------
 qt_add_executable(test_pty tst_pty.cpp)
 target_link_libraries(test_pty PRIVATE qtmux_core Qt6::Test)
