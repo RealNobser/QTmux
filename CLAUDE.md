@@ -496,10 +496,16 @@ neu angelegt: 55/69/72/73/75/76. 🔑 **Bewusst nicht übernommen:** alles Edito
 (Symbols, Go-to-Definition, Datei-Baum, projektweite Suche, Commit-Erzeugung,
 Diff-Kommentare) und die Cloud-Hälfte — QTmux ist ein Terminal-Manager, kein IDE-Ersatz;
 diese Linie beim nächsten Feature-Vergleich wiederverwenden.
-**Backlog (nicht beauftragt):** **QTMUX-125** Online-Update — neue Version erkennen,
-Release-Notes zeigen, mit Nutzer-Interaktion herunterladen (DMG/MSI+ZIP/AppImage; keine
-stille Installation, keine Selbst-Ersetzung in v1; Details im Ticket) ·
-SFTP-MCP-Tools (Companion-Prio 2) ·
+**QTMUX-125 Online-Update — beauftragt als Epic-Anteil (2026-08-02):** Eine
+Orchestrator-Session hat eine **Workorder** hinterlegt —
+[docs/workorder-online-update.md](docs/workorder-online-update.md) (liegt bewusst
+**untracked** im Baum; maßgeblich ist der dort verlinkte Masterplan in
+`_ClaudeWorkspace`). Kern: Update-Core wird **byte-identisch aus MacPCAN vendiert**
+(`third_party/updater/`, eigenes STATIC-Target `qtmux_updater`, NICHT in `qtmux_core`),
+dazu `UpdateViewModel` + `UpdateDialog` + `update/*`-Settings.
+⚠️ **Blocker: erst starten, wenn der MacPCAN-Update-Core existiert und gepusht ist.**
+
+**Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) ·
 Signierung/Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff
 (CAN-FD, ID-Filter, Konfig-Dialog, DBC-Decoding) · optional CPack-Distro-Pakete
 (.deb/.rpm) · **LGPL-Beilagen** fürs gebündelte Qt (Lizenztext + Quellen-Hinweis).
