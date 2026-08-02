@@ -646,8 +646,10 @@ fehl (kein Issuer im Store) — ADF-Rumpf mit Python **bauen**, aber mit
 vollständig im Windows-Preset-Kasten oben; ein sofort geschlossenes Ticket ohne eigenen
 Inhalt wäre nur Rauschen im Board.
 Confluence-Entwicklerdoku-Unterseiten: „GUI-Auffrischung Design 1a/2a",
-„Agenten-Wiederherstellung" und „MCP im Netzwerk: Bind-Adresse, Token, pf (QTMUX-127)"
-(Seiten-IDs in `CLAUDE.local.md`).
+„Agenten-Wiederherstellung", „MCP im Netzwerk: Bind-Adresse, Token, pf (QTMUX-127)"
+und **„Online-Update (QTMUX-125)"** (Seiten-IDs in `CLAUDE.local.md`). Die
+**Benutzerdoku** trägt seit 2026-08-03 zusätzlich den Abschnitt „Aktuell bleiben
+(Online-Update)" — beide Systeme gepflegt.
 
 ### Owner-Abnahmen offen (27 Tickets, je umgesetzt + selbst verifiziert)
 
