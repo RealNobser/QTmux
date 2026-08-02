@@ -162,6 +162,19 @@ AppDialog {
             }
         }
 
+        // Kein Start-Plan: der Download ist gültig, QTmux kann ihn nur nicht selbst
+        // starten. Das muss dastehen, sonst wirkt der fehlende Knopf wie ein Fehler.
+        Label {
+            Layout.fillWidth: true
+            visible: Updates.state === dlg.stReady && !Updates.canLaunchInstaller()
+            wrapMode: Text.WordWrap
+            color: Theme.textDim
+            font.pixelSize: 12
+            text: qsTr("QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht "
+                     + "selbst ersetzen. Die Datei oben ist geprüft und kann von Hand "
+                     + "installiert werden.")
+        }
+
         // --- Fehler --------------------------------------------------------------
         Label {
             Layout.fillWidth: true
@@ -207,7 +220,9 @@ AppDialog {
             }
             Button {
                 text: qsTr("Installieren …")
-                visible: Updates.state === dlg.stReady
+                // Ohne Start-Plan gibt es nichts zu klicken (Linux ohne $APPIMAGE) —
+                // dann steht stattdessen der Hinweis mit dem Dateipfad da.
+                visible: Updates.state === dlg.stReady && Updates.canLaunchInstaller()
                 palette.buttonText: Theme.textBright
                 onClicked: {
                     // Geführte Installation: QTmux übergibt an den Installer und

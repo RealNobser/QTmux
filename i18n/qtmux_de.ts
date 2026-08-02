@@ -3136,52 +3136,57 @@ Nicht angetastet werden: die offenen Fenster und Sessions sowie der Secrets-Vaul
         <translation>%1 %</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="183"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="173"/>
+        <source>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die Datei oben ist geprüft und kann von Hand installiert werden.</source>
+        <translation>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die Datei oben ist geprüft und kann von Hand installiert werden.</translation>
+    </message>
+    <message>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="196"/>
         <source>Hinweis: Das Paket ist nicht signiert. Windows SmartScreen meldet beim Start „Der Computer wurde geschützt“ — über „Weitere Informationen“ → „Trotzdem ausführen“ fortfahren. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</source>
         <translation>Hinweis: Das Paket ist nicht signiert. Windows SmartScreen meldet beim Start „Der Computer wurde geschützt“ — über „Weitere Informationen“ → „Trotzdem ausführen“ fortfahren. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="188"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="201"/>
         <source>Hinweis: Das Paket ist nicht notariell beglaubigt. macOS Gatekeeper verweigert den ersten Start — die App im Finder mit Rechtsklick → „Öffnen“ starten. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</source>
         <translation>Hinweis: Das Paket ist nicht notariell beglaubigt. macOS Gatekeeper verweigert den ersten Start — die App im Finder mit Rechtsklick → „Öffnen“ starten. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="192"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="205"/>
         <source>Hinweis: Das Paket ist nicht signiert. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</source>
         <translation>Hinweis: Das Paket ist nicht signiert. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="203"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="216"/>
         <source>Herunterladen</source>
         <translation>Herunterladen</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="209"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="222"/>
         <source>Installieren …</source>
         <translation>Installieren …</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="221"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="236"/>
         <source>Erneut versuchen</source>
         <translation>Erneut versuchen</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="228"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="243"/>
         <source>Abbrechen</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="234"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="249"/>
         <source>Version überspringen</source>
         <translation>Version überspringen</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="241"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="256"/>
         <source>Später</source>
         <translation>Später</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="241"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="256"/>
         <source>Schließen</source>
         <translation>Schließen</translation>
     </message>
@@ -3308,9 +3313,16 @@ Nicht angetastet werden: die offenen Fenster und Sessions sowie der Secrets-Vaul
 <context>
     <name>qtmux::UpdateViewModel</name>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="233"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="237"/>
         <source>Für dieses Betriebssystem liegt kein Paket bereit.</source>
         <translation>Für dieses Betriebssystem liegt kein Paket bereit.</translation>
+    </message>
+    <message>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="273"/>
+        <source>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die geprüfte Datei liegt hier — bitte von Hand installieren:
+%1</source>
+        <translation>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die geprüfte Datei liegt hier — bitte von Hand installieren:
+%1</translation>
     </message>
 </context>
 </TS>

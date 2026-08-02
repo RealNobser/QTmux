@@ -137,8 +137,32 @@ private slots:
         QVERIFY2(vm.state() == UpdateViewModel::Ready, qPrintable(vm.lastError()));
         QVERIFY(QFile::exists(vm.downloadedPath()));
         QCOMPARE(vm.downloadProgress(), 1.0);
+
         // Der Start-Plan muss zur Paketart dieser Plattform passen.
+        // 🔑 Auf Linux ist das Paket ein AppImage, und dessen Plan ist die
+        // SELBSTERSETZUNG von `$APPIMAGE` — laeuft QTmux nicht aus einem
+        // AppImage (Entwickler-Build, Distributionspaket, CI), gibt es nichts
+        // zu ersetzen und damit keinen Plan. Genau daran ist der erste
+        // Linux-Lauf haengengeblieben. Also beide Faelle pruefen statt den
+        // Test auf die eigene Plattform zu verengen.
+#if defined(Q_OS_LINUX)
+        const QByteArray savedAppImage = qgetenv("APPIMAGE");
+        qunsetenv("APPIMAGE");
+        QVERIFY(!vm.canLaunchInstaller());
+        QVERIFY(!vm.launchInstaller());
+        // Die Meldung muss den PFAD nennen — „no launch plan for kind appimage"
+        // hilft niemandem weiter.
+        QVERIFY(vm.lastError().contains(vm.downloadedPath()));
+
+        qputenv("APPIMAGE", QFile::encodeName(vm.downloadedPath()));
+        QVERIFY(vm.canLaunchInstaller());
+        QVERIFY(vm.launchPlanDescription().contains(QStringLiteral("AppImage")));
+        if (savedAppImage.isEmpty()) qunsetenv("APPIMAGE");
+        else qputenv("APPIMAGE", savedAppImage);
+#else
+        QVERIFY(vm.canLaunchInstaller());
         QVERIFY(!vm.launchPlanDescription().isEmpty());
+#endif
         QFile::remove(vm.downloadedPath());
     }
 

@@ -3123,52 +3123,57 @@ Left untouched: the open windows and sessions, and the secrets vault (which is s
         <translation>%1 %</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="183"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="173"/>
+        <source>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die Datei oben ist geprüft und kann von Hand installiert werden.</source>
+        <translation>QTmux is not running from an AppImage and therefore cannot replace itself. The file above has been verified and can be installed manually.</translation>
+    </message>
+    <message>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="196"/>
         <source>Hinweis: Das Paket ist nicht signiert. Windows SmartScreen meldet beim Start „Der Computer wurde geschützt“ — über „Weitere Informationen“ → „Trotzdem ausführen“ fortfahren. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</source>
         <translation>Note: the package is not signed. Windows SmartScreen will report “Windows protected your PC” — continue via “More info” → “Run anyway”. QTmux verifies the download itself with an Ed25519 signature and a SHA-256 checksum.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="188"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="201"/>
         <source>Hinweis: Das Paket ist nicht notariell beglaubigt. macOS Gatekeeper verweigert den ersten Start — die App im Finder mit Rechtsklick → „Öffnen“ starten. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</source>
         <translation>Note: the package is not notarised. macOS Gatekeeper will refuse the first launch — right-click the app in Finder and choose “Open”. QTmux verifies the download itself with an Ed25519 signature and a SHA-256 checksum.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="192"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="205"/>
         <source>Hinweis: Das Paket ist nicht signiert. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</source>
         <translation>Note: the package is not signed. QTmux verifies the download itself with an Ed25519 signature and a SHA-256 checksum.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="203"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="216"/>
         <source>Herunterladen</source>
         <translation>Download</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="209"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="222"/>
         <source>Installieren …</source>
         <translation>Install …</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="221"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="236"/>
         <source>Erneut versuchen</source>
         <translation>Try again</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="228"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="243"/>
         <source>Abbrechen</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="234"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="249"/>
         <source>Version überspringen</source>
         <translation>Skip this version</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="241"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="256"/>
         <source>Später</source>
         <translation>Later</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="241"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="256"/>
         <source>Schließen</source>
         <translation>Close</translation>
     </message>
@@ -3295,9 +3300,16 @@ Left untouched: the open windows and sessions, and the secrets vault (which is s
 <context>
     <name>qtmux::UpdateViewModel</name>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="233"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="237"/>
         <source>Für dieses Betriebssystem liegt kein Paket bereit.</source>
         <translation>No package is available for this operating system.</translation>
+    </message>
+    <message>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="273"/>
+        <source>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die geprüfte Datei liegt hier — bitte von Hand installieren:
+%1</source>
+        <translation>QTmux is not running from an AppImage and therefore cannot replace itself. The verified file is here — please install it manually:
+%1</translation>
     </message>
 </context>
 </TS>

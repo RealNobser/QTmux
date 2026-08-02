@@ -131,6 +131,14 @@ public:
     /// Was `launchInstaller()` TÄTE, als Text — für Dry-Runs und Fehlermeldungen.
     Q_INVOKABLE QString launchPlanDescription() const;
 
+    /// Kann QTmux den Download überhaupt selbst starten?
+    /// 🔑 Auf Linux ist die Antwort NEIN, wenn QTmux nicht aus einem AppImage
+    /// läuft (Paketverwaltung, Entwickler-Build): Die Selbstersetzung braucht
+    /// `$APPIMAGE` als Ziel, und es gibt nichts zu ersetzen. Der Dialog muss das
+    /// SAGEN statt einen Knopf anzubieten, der nichts tut — genau so ist der Fall
+    /// beim Linux-Build aufgefallen.
+    Q_INVOKABLE bool canLaunchInstaller() const;
+
 signals:
     void stateChanged();
     void resultChanged();

@@ -56,8 +56,11 @@ jobs:
       # ilammy/msvc-dev-cmd ist bis heute Node 20 (auch auf master) → Node-24-Ersatz.
       - name: MSVC-Umgebung (Windows)
         if: matrix.host == 'windows'
-        # Kein bewegliches v4-Tag vorhanden → exakte Version pinnen.
-        uses: TheMrMilchmann/setup-msvc-dev@v4.1.0
+        # Auf den Commit-SHA gepinnt, nicht auf den Tag: Tags sind verschiebbar, ein
+        # übernommenes Konto könnte v4.1.0 auf fremden Code umhängen — und dieser
+        # Schritt richtet die Compilerumgebung ein. Beim Anheben den neuen SHA aus
+        # `gh api repos/TheMrMilchmann/setup-msvc-dev/git/refs/tags/<tag>` holen.
+        uses: TheMrMilchmann/setup-msvc-dev@368ef7d1ee4d1171b31d4a7f67f4d954f903f5a9 # v4.1.0
         with:
           arch: x64
 

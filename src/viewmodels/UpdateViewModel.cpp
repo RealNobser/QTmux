@@ -128,6 +128,10 @@ QString UpdateViewModel::launchPlanDescription() const {
     return plan ? plan->description : QString();
 }
 
+bool UpdateViewModel::canLaunchInstaller() const {
+    return !launchPlanDescription().isEmpty();
+}
+
 // --- Zustandsführung ---------------------------------------------------------
 void UpdateViewModel::setState(State s) {
     if (m_state == s) return;
@@ -261,6 +265,17 @@ bool UpdateViewModel::launchInstaller() {
     if (m_downloadedPath.isEmpty() || !m_manifest) return false;
     const auto art = m_manifest->currentArtifact();
     if (!art) return false;
+    if (!canLaunchInstaller()) {
+        // Der einzige reale Fall: Linux-AppImage, aber QTmux läuft nicht aus
+        // einem ($APPIMAGE leer) — es gibt nichts zu ersetzen. Die interne
+        // Meldung des Kerns („no launch plan for kind 'appimage'") hilft dem
+        // Anwender nicht; er braucht den Pfad und den nächsten Schritt.
+        setError(tr("QTmux läuft nicht aus einem AppImage und kann sich deshalb "
+                    "nicht selbst ersetzen. Die geprüfte Datei liegt hier — bitte "
+                    "von Hand installieren:\n%1").arg(m_downloadedPath));
+        setState(Failed);
+        return false;
+    }
     QString err;
     if (appupdate::launchInstaller(m_downloadedPath, art->kind, &err)) return true;
     setError(err);
