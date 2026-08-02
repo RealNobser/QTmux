@@ -118,7 +118,10 @@ jobs:
 
       - name: AppImage-Artefakt hochladen (Linux)
         if: matrix.host == 'linux'
-        uses: actions/upload-artifact@v6
+        # Auf den Commit-SHA gepinnt wie die uebrigen Dritt-Actions (Tags sind
+        # verschiebbar). v7 statt v6: v6 laeuft noch auf Node 20, das GitHub
+        # abkuendigt. Anheben: `gh api repos/actions/upload-artifact/git/refs/tags/<tag>`.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: QTmux-AppImage
           path: dist/QTmux-*-x86_64.AppImage
