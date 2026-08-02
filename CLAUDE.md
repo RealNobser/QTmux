@@ -445,24 +445,26 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   Dry-Run gegen einen echten `python3 -m http.server` mit produktiv signiertem
   Manifest, Dialog in DE **und** EN, Drosselung und Offline-Stille am laufenden
   Programm gemessen. Mechanik in der Feature-Referenz, Owner-Abnahme in der Tabelle.
-- ✅ **ERSTER PUBLISH IST DRAUSSEN (2026-08-02):** `https://nobser.de/updates/qtmux/`
-  trägt Manifest **1.7.1** (Weg A: die **veröffentlichten** v1.7.1-Bytes, nicht der
-  heutige Build) + `manifest.json.sig` + die drei Artefakte. Live gegengeprüft:
-  Signatur mit `openssl` gegen den Produktions-Key ✅, alle drei SHA-256 nach
-  Rück-Download ✅, und QTmux selbst meldet über *Hilfe → Nach Updates suchen …*
-  **„Kein Update verfügbar — QTmux 1.7.1 ist aktuell"**.
-  🔑 **Warum die veröffentlichten Bytes und nicht der frische Build:** Das
-  GitHub-Release v1.7.1 hat das Online-Update **nicht** (am Artefakt belegt:
-  `Nach Updates suchen` 2 Treffer im neuen DMG, 0 im veröffentlichten). Frisch
-  gebaute 1.7.1-Installer zu publizieren hieße, zwei verschiedene Binärdateien unter
-  derselben Nummer zu führen. Der heutige Stand wird deshalb **1.8.0** — und das ist
-  dann der erste echte Update-Durchlauf.
-  ⚠️ **`publish.py --verify` meldet hier IMMER „not fetchable"** — es lädt per
-  Python-`urllib`, und das scheitert auf dieser Maschine an
-  `CERTIFICATE_VERIFY_FAILED` (dieselbe dokumentierte Falle wie bei Jira-Cloud). Der
-  Upload war trotzdem in Ordnung; **mit `curl` gegenprüfen**, nicht dem `--verify`
-  glauben.
-  Artefakte beider Sätze + Größen/Hashes: `dist/publish/` (git-ignoriert).
+- ✅ **v1.8.0 IST LIVE — voller Update-Zyklus am lebenden Objekt verifiziert (2026-08-02).**
+  Tag `v1.8.0` auf `4f10eb8`, GitHub-Release mit 4 Assets, Webspace
+  `https://nobser.de/updates/qtmux/` trägt Manifest **1.8.0** (alle drei OS-Keys).
+  `publish.py --verify` ist seit MacPCAN `80cf1f4` (curl statt urllib) **grün**:
+  „verify OK: manifest bytes + signature + 3 artifact HEADs".
+  **Der Zyklus wurde mit einer 1.7.1-Instanz MIT Update-Feature gegen den echten
+  Server gefahren** (Worktree auf dem Vor-Bump-Commit, temporäres Gerüst, danach
+  entfernt): findet 1.8.0 · Notes DE **und** EN korrekt · Download mit Fortschritt ·
+  SHA-256 identisch zum Manifest · `launchInstaller()` → DMG real gemountet
+  (`/Volumes/QTmux 1.8.0`) · **das laufende Binary blieb bit-identisch** (gleicher
+  SHA, gleiche mtime) — der Beleg für „kein stiller Selbsttausch".
+  🔑 **Der erste Publish (1.7.1) trug bewusst die veröffentlichten v1.7.1-Bytes**,
+  damit die Nummer eindeutig bleibt; das veröffentlichte v1.7.1 hat das
+  Online-Update nicht (am Artefakt belegt).
+  ⚠️ **Falle beim Release, zum zweiten Mal erlebt:** `C:\Tools\qtmux-build\build_msi.cmd`
+  hatte `-Version 1.7.1` **fest verdrahtet** und baute nach dem Bump klaglos ein
+  1.8.0-Paket mit alter Nummer — aufgefallen nur am **Dateinamen** (dieselbe Klasse
+  wie das `-NoFetch` von `_build.cmd`). Der Wrapper nimmt die Version jetzt als
+  **Argument** und bricht ohne ab. **Nach jedem Bump am Artefakt gegenprüfen**, nicht
+  am Build-Log: hier DMG/EXE/AppImage je auf `1.8.0`-Treffer und **0** `1.7.1`-Reste.
 - Offen bleibt sonst nur die **Infrastruktur**: auf `https://nobser.de/updates/qtmux/`
   liegt noch kein Manifest; die Confluence-Benutzerdoku bekommt den Abschnitt
   sinnvollerweise erst dann (vorher beschriebe sie eine Funktion, die ins Leere greift).
