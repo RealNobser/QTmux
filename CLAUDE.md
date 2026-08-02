@@ -458,6 +458,25 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   offen bleiben gemini/aider/cursor/qwen und die 13 Nachtrags-Einträge — dort sind die
   Vorlagen bewusst leer, weil die CLIs hier nicht installiert sind (ein ungeprüftes Flag
   sähe für den Anwender wie ein QTmux-Fehler aus).
+- **Architektur-Befunde der Vollanalyse (2026-08-01, drei parallele Prüfungen; nicht
+  beauftragt, hier als dauerhafte Landkarte):** Die C++-Seite ist sauber (Gui-freier Core
+  bestätigt, keine Include-Zyklen, keine Lifetime-Probleme); die Schulden konzentrieren
+  sich in **`qml/Main.qml`** (~4.700 LOC, 136 Funktionen: Split-Baum, Layout-Persistenz,
+  Aggregationslogik als ungetestetes JS, zwei divergierende Layout-Serialisierer).
+  Empfohlener Abbaupfad: (1) Sidebar (~735 LOC) + Inline-Dialoge (~945 LOC) in eigene
+  QML-Dateien, (2) Layout-Baum + Persistenz als testbare C++-Klasse in `core`, (3) damit
+  entfällt die QML-Brücke — **13 der 38 MCP-Tools brauchen heute die geladene UI**, der
+  McpServer hat deshalb keinen einzigen Test (25 Tools wären schon jetzt testbar).
+  Weitere Punkte: `Session` ist ein God-Object (~40 Member; Extraktionskandidaten
+  AgentDetection/LoginAutomation/CwdTracker) · 22 attached `ToolTip` über
+  [IconToolButton.qml](qml/Ui/IconToolButton.qml) statt `AppToolTip` (Widerspruch zur
+  Popup-Palette-Regel) · Statusfarben-Literale ~10× dupliziert (Kandidat:
+  StatusColors-Singleton) · `SessionModel::sessionById` fehlt `Q_INVOKABLE` (QML-Nachbau
+  in Main.qml) · MCP-Server ohne Puffer-Deckel; `assign_session` nur noch
+  Deprecation-Stub im Schema. **Umgesetzt aus der Analyse:** `Theme.accentText` statt
+  hartem Weiß (6 Stellen) — die **Sichtprüfung in beiden Designs steht als
+  Owner-Abnahme aus** (sichtbar wird der Unterschied erst bei Schemata mit hellem
+  ANSI-Blau).
 
 **Offene Jira (geführt wird in Jira, hier nur Zeiger):**
 **122** (**OSC 52**: Zwischenablage aus dem Terminal füllen. Anwenderbefund — aus einem
