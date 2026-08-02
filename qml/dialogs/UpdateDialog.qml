@@ -80,7 +80,10 @@ AppDialog {
             visible: Updates.published !== "" && Updates.remoteVersion !== ""
             color: Theme.textDim
             font.pixelSize: 11
-            text: Updates.downloadSize > 0
+            // Die Paketgröße gehört nur dorthin, wo sie eine Entscheidung stützt:
+            // vor dem Herunterladen. Im Zustand „aktuell" beschreibt sie ein Paket,
+            // das niemand holen wird — am Live-Bild als Rauschen aufgefallen.
+            text: (Updates.downloadSize > 0 && Updates.state !== dlg.stUpToDate)
                   ? qsTr("Veröffentlicht am %1 · %2")
                     .arg(Updates.published).arg(dlg.prettySize(Updates.downloadSize))
                   : qsTr("Veröffentlicht am %1").arg(Updates.published)

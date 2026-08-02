@@ -3088,92 +3088,92 @@ Left untouched: the open windows and sessions, and the secrets vault (which is s
         <translation>QTmux %1 is available — you have %2.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="84"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="87"/>
         <source>Veröffentlicht am %1 · %2</source>
         <translation>Published %1 · %2</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="86"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="89"/>
         <source>Veröffentlicht am %1</source>
         <translation>Published %1</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="106"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="109"/>
         <source>Achtung: Das ist eine ÄLTERE Version als die installierte. Eine Rückstufung kann Einstellungen und gespeicherte Sitzungen betreffen, die eine neuere Fassung geschrieben hat.</source>
         <translation>Careful: this is an OLDER version than the one installed. Downgrading can affect settings and saved sessions that a newer release has written.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="119"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="122"/>
         <source>Für dieses Betriebssystem liegt in dieser Veröffentlichung kein Paket bereit.</source>
         <translation>This release carries no package for your operating system.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="125"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="128"/>
         <source>Was ist neu</source>
         <translation>What&apos;s new</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="158"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="161"/>
         <source>Heruntergeladen und geprüft: %1</source>
         <translation>Downloaded and verified: %1</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="159"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="162"/>
         <source>%1 %</source>
         <translation>%1 %</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="173"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="176"/>
         <source>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die Datei oben ist geprüft und kann von Hand installiert werden.</source>
         <translation>QTmux is not running from an AppImage and therefore cannot replace itself. The file above has been verified and can be installed manually.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="196"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="199"/>
         <source>Hinweis: Das Paket ist nicht signiert. Windows SmartScreen meldet beim Start „Der Computer wurde geschützt“ — über „Weitere Informationen“ → „Trotzdem ausführen“ fortfahren. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</source>
         <translation>Note: the package is not signed. Windows SmartScreen will report “Windows protected your PC” — continue via “More info” → “Run anyway”. QTmux verifies the download itself with an Ed25519 signature and a SHA-256 checksum.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="201"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="204"/>
         <source>Hinweis: Das Paket ist nicht notariell beglaubigt. macOS Gatekeeper verweigert den ersten Start — die App im Finder mit Rechtsklick → „Öffnen“ starten. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</source>
         <translation>Note: the package is not notarised. macOS Gatekeeper will refuse the first launch — right-click the app in Finder and choose “Open”. QTmux verifies the download itself with an Ed25519 signature and a SHA-256 checksum.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="205"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="208"/>
         <source>Hinweis: Das Paket ist nicht signiert. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</source>
         <translation>Note: the package is not signed. QTmux verifies the download itself with an Ed25519 signature and a SHA-256 checksum.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="216"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="219"/>
         <source>Herunterladen</source>
         <translation>Download</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="222"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="225"/>
         <source>Installieren …</source>
         <translation>Install …</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="236"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="239"/>
         <source>Erneut versuchen</source>
         <translation>Try again</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="243"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="246"/>
         <source>Abbrechen</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="249"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="252"/>
         <source>Version überspringen</source>
         <translation>Skip this version</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="256"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="259"/>
         <source>Später</source>
         <translation>Later</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="256"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="259"/>
         <source>Schließen</source>
         <translation>Close</translation>
     </message>
