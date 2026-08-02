@@ -134,6 +134,24 @@ qt_add_executable(test_updater tst_updater.cpp)
 target_link_libraries(test_updater PRIVATE qtmux_updater Qt6::Test)
 add_test(NAME test_updater COMMAND test_updater)
 
+# QTMUX-125: die APP-Seite (UpdateViewModel) gegen committete, mit dem
+# PRODUKTIONSSCHLUESSEL signierte Fixtures. Das ViewModel liegt wie SettingsIo im
+# QML-Modul -> .cpp direkt mitkompilieren; der generierte qtmux_version.h kommt
+# aus dem Binaerverzeichnis der Haupt-CMakeLists.
+# 🔑 Der Fixture-Baum ist absichtlich echt signiert: das ViewModel baut seinen
+# Checker OHNE Schluessel-Parameter, prueft also mit den eingebauten Bytes aus
+# UpdateKeys.hpp. Ein Schluesselwechsel macht diesen Test rot — genau der
+# gewuenschte Alarm (Begruendung in tests/fixtures/update/README.md).
+qt_add_executable(test_updateviewmodel tst_updateviewmodel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/UpdateViewModel.cpp)
+target_include_directories(test_updateviewmodel PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels
+    ${CMAKE_BINARY_DIR}/generated)
+target_compile_definitions(test_updateviewmodel PRIVATE
+    QTMUX_UPDATE_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update")
+target_link_libraries(test_updateviewmodel PRIVATE qtmux_updater Qt6::Test)
+add_test(NAME test_updateviewmodel COMMAND test_updateviewmodel)
+
 # --- PTY-/ConPTY-E2E-Tests (starten echte Shells) ---------------------------
 qt_add_executable(test_pty tst_pty.cpp)
 target_link_libraries(test_pty PRIVATE qtmux_core Qt6::Test)

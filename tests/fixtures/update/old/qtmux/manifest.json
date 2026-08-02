@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "product": "qtmux",
+  "channel": "stable",
+  "version": "0.0.1",
+  "published": "2026-08-02",
+  "notes": {
+    "de": "Aeltere Fixture-Veroeffentlichung — prueft die Downgrade-Warnung (QTMUX-125).",
+    "en": "Fixture release 0.0.1 for tst_updateviewmodel."
+  },
+  "artifacts": {
+    "macos-universal": {
+      "url": "0.0.1/QTmux-0.0.1-macos.dmg",
+      "size": 24,
+      "sha256": "57073fbfbaeb2670b1faa729e9331438ad3384756c5913753957c786f3e59864",
+      "kind": "dmg"
+    },
+    "win-x86_64": {
+      "url": "0.0.1/QTmux-0.0.1-win64.msi",
+      "size": 24,
+      "sha256": "e08f3b72b4e2df6b31ac26190c7fc414cd1fff40e06448bbdcb3642f124f6b78",
+      "kind": "msi"
+    },
+    "linux-x86_64": {
+      "url": "0.0.1/QTmux-0.0.1-x86_64.AppImage",
+      "size": 29,
+      "sha256": "ca66095801a64362579ce60041433240cac7fad54f6b5e977070cdc415991bbe",
+      "kind": "appimage"
+    }
+  }
+}

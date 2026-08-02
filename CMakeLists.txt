@@ -197,6 +197,7 @@ qt_add_qml_module(qtmux
         qml/Main.qml
         qml/SplitNode.qml
         qml/PrefsWindow.qml
+        qml/dialogs/UpdateDialog.qml
         qml/Ui/IconToolButton.qml
         qml/Ui/ShortcutMenuItem.qml
         qml/Ui/AppMenuItem.qml
@@ -240,6 +241,8 @@ qt_add_qml_module(qtmux
         src/viewmodels/AppController.cpp
         src/viewmodels/SettingsIo.h
         src/viewmodels/SettingsIo.cpp
+        src/viewmodels/UpdateViewModel.h
+        src/viewmodels/UpdateViewModel.cpp
         src/server/McpServer.h
         src/server/McpServer.cpp
 )

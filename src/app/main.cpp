@@ -38,6 +38,7 @@
 #include "PluginHost.h"
 #include "SecretsVault.h"
 #include "SettingsIo.h"
+#include "UpdateViewModel.h"
 #include "GlobalHotkey.h"
 
 namespace {
@@ -325,6 +326,12 @@ int main(int argc, char *argv[])
     static qtmux::SettingsIo settingsIo;
     engine.rootContext()->setContextProperty(QStringLiteral("SettingsIo"), &settingsIo);
 
+    // Online-Update (QTMUX-125): ViewModel über dem vendierten Kern. Gleiche
+    // Context-Property-Brücke wie oben — bewusst KEIN qmlRegisterSingletonInstance
+    // in die URI „QTmux". Der Start-Check hängt weiter unten am Timer.
+    static qtmux::UpdateViewModel updates;
+    engine.rootContext()->setContextProperty(QStringLiteral("Updates"), &updates);
+
     // Globaler Quake-Hotkey (Ctrl+`) als Context-Property; QML schaltet ihn je nach
     // Einstellung und reagiert auf `activated` (Fenster ein-/ausblenden).
     qtmux::GlobalHotkey quakeHotkey;
@@ -378,6 +385,18 @@ int main(int argc, char *argv[])
             }
             QCoreApplication::exit(rc);
         });
+    }
+
+    // Stiller Start-Check auf Updates (QTMUX-125). Die Drosselung (höchstens
+    // 1×/Tag) und der Ein/Aus-Schalter stecken in `checkOnStartup()` — hier steht
+    // nur der Auslöser.
+    // 🔑 Verzögert um 3 s: Beim Start baut QML das Layout auf, stellt Sessions
+    // wieder her und startet Shells. Eine Netzanfrage in derselben Sekunde träfe
+    // genau das Zeitfenster, in dem der Anwender auf sein Terminal wartet.
+    // 🔑 Im Screenshot-Modus NIE — der Lauf soll ein Bild machen und sich beenden,
+    // nicht ins Netz gehen (und ein aufpoppender Update-Dialog stünde im Bild).
+    if (shotPath.isEmpty()) {
+        QTimer::singleShot(3000, &updates, []() { updates.checkOnStartup(); });
     }
 
     // Laufzeitwechsel über das Sprachmenü neu laden.

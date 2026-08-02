@@ -99,7 +99,14 @@ QStringList SettingsIo::patternsFor(const QString &category) {
                  QStringLiteral("window/confirmQuit"),
                  QStringLiteral("window/restoreSessionMode"),
                  QStringLiteral("window/quakeMode"),
-                 QStringLiteral("window/preventSleep") };
+                 QStringLiteral("window/preventSleep"),
+                 // Online-Update (QTMUX-125). `update/lastCheck` ist bewusst NICHT
+                 // dabei: das ist Laufzeitzustand (wann zuletzt geprüft wurde), keine
+                 // Einstellung — exportiert und woanders importiert würde er die
+                 // Tagesdrosselung einer fremden Maschine erben.
+                 QStringLiteral("update/autoCheck"),
+                 QStringLiteral("update/skippedVersion"),
+                 QStringLiteral("update/baseUrl") };
     if (category == QLatin1String("erscheinungsbild"))
         return { QStringLiteral("colorSchemes/") };
     if (category == QLatin1String("terminal"))

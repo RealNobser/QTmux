@@ -2003,6 +2003,16 @@ ApplicationWindow {
         enabled: !prefs.capturing
         onTriggered: mcp.listening ? mcp.stop() : mcp.start()
     }
+    // Online-Update (QTMUX-125). Der Menüpunkt prüft IMMER — ohne Tagesdrosselung
+    // und ohne Rücksicht auf eine übersprungene Version: wer von Hand nachsieht,
+    // will das Ergebnis sehen. Der Dialog geht sofort auf und zeigt den Fortschritt,
+    // sonst wirkt der Klick wie ein Klick ins Leere.
+    Action {
+        id: actCheckUpdates
+        text: qsTr("Nach Updates suchen …")
+        enabled: !prefs.capturing
+        onTriggered: { updateDialog.open(); Updates.checkNow() }
+    }
     Action {
         id: actAbout
         text: qsTr("Über QTmux")
@@ -2523,6 +2533,8 @@ ApplicationWindow {
                             { title: qsTr("Agent-Ereignisse …"),         sub: "",             icon: "broadcast",       run: function(){ prefs.open("agenten", "agenten.notifications") } },
                             { title: qsTr("Dokumentation"),              sub: "",             icon: "info",            run: function(){ actDocs.trigger() } },
                             { title: qsTr("Tastenkürzel-Übersicht"),     sub: "",             icon: "command",         run: function(){ prefs.open("hotkeys") } },
+                            { title: qsTr("Nach Updates suchen …"),      sub: "",             icon: "info",            run: function(){ actCheckUpdates.trigger() } },
+                            { title: qsTr("Beim Start automatisch nach Updates suchen"), sub: "", icon: "gear",     run: function(){ Updates.autoCheck = !Updates.autoCheck } },
                             { title: qsTr("Über QTmux"),                 sub: hk("actAbout"), icon: "info",            run: function(){ aboutDialog.open() } },
                             { title: qsTr("Beenden"),                    sub: hk("actQuit"), icon: "x",               run: function(){ window.requestQuit() } },
                         ]
@@ -2955,6 +2967,7 @@ ApplicationWindow {
             ShortcutMenuItem { action: actDocs; icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actHotkeyList; icon.source: window.icon("command"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             MenuSeparator {}
+            ShortcutMenuItem { action: actCheckUpdates; icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
             ShortcutMenuItem { action: actAbout; icon.source: window.icon("info"); icon.color: Theme.menuIcon; icon.width: 16; icon.height: 16 }
         }
     }
@@ -4271,6 +4284,19 @@ ApplicationWindow {
             // nicht die Qt-Bibliotheksversion; Label entsprechend "Version".
             text: qsTr("QTmux — plattformübergreifender Multi-KI-Agenten-Terminal.\nVersion %1").arg(Qt.application.version || "1.0")
         }
+    }
+
+    // --- Online-Update (QTMUX-125) ------------------------------------------
+    // Der stille Start-Check (main.cpp, 3 s nach dem Start) meldet sich über
+    // `updateFound` — nur DANN geht der Dialog von selbst auf. Ist nichts zu
+    // holen oder der Server unerreichbar, bleibt es beim Schweigen.
+    UpdateDialog { id: updateDialog }
+    // Einstiegspunkt für das Einstellungsfenster (eigenes Window, sieht die IDs aus
+    // Main.qml nicht — es kommt über `host.app` hierher, s. PrefsWindow-Brücke).
+    function checkForUpdates() { actCheckUpdates.trigger() }
+    Connections {
+        target: Updates
+        function onUpdateFound() { updateDialog.open() }
     }
 
     // --- Farbschema importieren (iTerm .itermcolors / Xresources / Ghostty) -

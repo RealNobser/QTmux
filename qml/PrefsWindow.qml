@@ -206,6 +206,7 @@ Window {
             { cat: "allgemein",        key: "allgemein.window",      label: qsTr("Sessions beim Start wiederherstellen"), keywords: "sessions sitzungen wiederherstellen restore start neustart layout fenster panes verlauf scrollback leer" },
             { cat: "allgemein",        key: "allgemein.window",      label: qsTr("Quake-Modus"),                       keywords: "quake hotkey einblenden ausblenden global" },
             { cat: "allgemein",        key: "allgemein.energie",     label: qsTr("Ruhezustand verhindern"),            keywords: "ruhezustand schlaf sleep energie akku wach standby agenten arbeiten" },
+            { cat: "allgemein",        key: "allgemein.updates",     label: qsTr("Automatisch nach Updates suchen"),   keywords: "update updates aktualisierung version neu download herunterladen installer prüfen" },
             { cat: "erscheinungsbild", key: "erscheinung.schemes",   label: qsTr("Farbschema (Dunkel)"),               keywords: "farbschema schema dunkel ansi farben iterm ghostty xresources import" },
             { cat: "erscheinungsbild", key: "erscheinung.schemes",   label: qsTr("Farbschema (Hell)"),                 keywords: "farbschema schema hell ansi farben import" },
             { cat: "terminal",         key: "terminal.options",      label: qsTr("Schriftart"),                        keywords: "schrift font monospace terminal" },

@@ -106,6 +106,38 @@ CatPage {
         }
     }
 
+    // --- Aktualisierung (QTMUX-125) ---
+    PrefAnchor {
+        settingKey: "allgemein.updates"
+        page: page
+        PrefGroup {
+            title: qsTr("Aktualisierung")
+            PrefRow {
+                title: qsTr("Beim Start automatisch nach Updates suchen")
+                description: qsTr("Höchstens einmal am Tag und still: Gibt es nichts Neues "
+                                + "oder ist der Server nicht erreichbar, passiert gar nichts. "
+                                + "Über das Hilfe-Menü lässt sich jederzeit von Hand suchen.")
+                AppSwitch {
+                    objectName: "swUpdateAutoCheck"
+                    checked: Updates.autoCheck
+                    onToggled: Updates.autoCheck = checked
+                }
+            }
+            PrefRow {
+                title: qsTr("Jetzt suchen")
+                description: Updates.currentVersion !== ""
+                             ? qsTr("Installiert ist Version %1.").arg(Updates.currentVersion)
+                             : ""
+                Button {
+                    text: qsTr("Jetzt nach Updates suchen")
+                    enabled: !Updates.busy
+                    palette.buttonText: Theme.textBright
+                    onClicked: page.host.app.checkForUpdates()
+                }
+            }
+        }
+    }
+
     // --- Energie (QTMUX-89) ---
     PrefAnchor {
         settingKey: "allgemein.energie"

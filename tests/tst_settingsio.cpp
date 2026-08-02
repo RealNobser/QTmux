@@ -72,6 +72,8 @@ void tst_settingsio::seedSettings() {
     s.setValue(QStringLiteral("window/copyOnSelect"), true);
     s.setValue(QStringLiteral("window/resumeAgentMode"), 3);
     s.setValue(QStringLiteral("mcp/port"), 7346);
+    s.setValue(QStringLiteral("update/autoCheck"), false);
+    s.setValue(QStringLiteral("update/skippedVersion"), QStringLiteral("9.9.9"));
     s.setValue(QStringLiteral("colorSchemes/dark"), QStringLiteral("Nord"));
     s.setValue(QStringLiteral("hotkeys/toggleSidebar"), QStringLiteral("Ctrl+Shift+L"));
     // Zustand — Fenster-/Pane-Layout, Session-Liste, Geometrie, Ansichtszustand
@@ -84,6 +86,8 @@ void tst_settingsio::seedSettings() {
     s.setValue(QStringLiteral("window/collapsedGroups"), QStringLiteral("[\"A\"]"));
     s.setValue(QStringLiteral("ui/sidebarWidth"), 300);
     s.setValue(QStringLiteral("ui/prefsCategory"), QStringLiteral("agenten"));
+    // Wann zuletzt geprueft wurde, ist Laufzeitzustand — kein Export (QTMUX-125).
+    s.setValue(QStringLiteral("update/lastCheck"), QStringLiteral("2026-08-02T10:00:00"));
     s.sync();
 }
 
@@ -102,6 +106,8 @@ void tst_settingsio::allowlistCoversSettingsAndExcludesState() {
         QStringLiteral("window/pasteWarnMultiline"),
         QStringLiteral("window/restoreAgents"), QStringLiteral("window/resumeAgentMode"),
         QStringLiteral("mcp/port"),
+        QStringLiteral("update/autoCheck"), QStringLiteral("update/skippedVersion"),
+        QStringLiteral("update/baseUrl"),
         QStringLiteral("colorSchemes/dark"), QStringLiteral("colorSchemes/light"),
         QStringLiteral("colorSchemes/imported"),
         QStringLiteral("hotkeys/actFind"), QStringLiteral("profiles/size"),
@@ -123,6 +129,10 @@ void tst_settingsio::allowlistCoversSettingsAndExcludesState() {
         QStringLiteral("ui/sidebarWidth"), QStringLiteral("ui/sidebarCollapsed"),
         QStringLiteral("ui/statusBarVisible"), QStringLiteral("ui/prefsCategory"),
         QStringLiteral("ui/prefsX"), QStringLiteral("ui/prefsWidth"),
+        // Zeitpunkt der letzten Update-Pruefung: Zustand, keine Einstellung —
+        // exportiert und woanders importiert erbte die Maschine eine fremde
+        // Tagesdrosselung (QTMUX-125).
+        QStringLiteral("update/lastCheck"),
         // Der Vault liegt als Datei außerhalb von QSettings; selbst ein Schlüssel
         // unter vault/ dürfte nie exportiert werden.
         QStringLiteral("vault/hint")

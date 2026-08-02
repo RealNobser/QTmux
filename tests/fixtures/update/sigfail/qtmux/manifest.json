@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "product": "qtmux",
+  "channel": "stable",
+  "version": "9.9.9",
+  "published": "2026-08-02",
+  "notes": {
+    "de": "Fixture mit Signatur ueber ANDERE Bytes (QTMUX-125).",
+    "en": "Fixture release 9.9.9 for tst_updateviewmodel."
+  },
+  "artifacts": {
+    "macos-universal": {
+      "url": "9.9.9/QTmux-9.9.9-macos.dmg",
+      "size": 24,
+      "sha256": "33e2de2d5d39f106d156b5e2785771349310a2ac6019b5c6b3ca64a53e942a78",
+      "kind": "dmg"
+    },
+    "win-x86_64": {
+      "url": "9.9.9/QTmux-9.9.9-win64.msi",
+      "size": 24,
+      "sha256": "ba336e0c791a845b36f71c7a96a6a142c6fdf3073c52304f70105720a9bdffd9",
+      "kind": "msi"
+    },
+    "linux-x86_64": {
+      "url": "9.9.9/QTmux-9.9.9-x86_64.AppImage",
+      "size": 29,
+      "sha256": "54a262e79ec85a4b2f46e1e318237b78eed39b119d2a65b3de70286ab91452f3",
+      "kind": "appimage"
+    }
+  }
+}
