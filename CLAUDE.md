@@ -440,11 +440,23 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   ([[zwei-sessions-eine-arbeitskopie]]). Inhaltlich war sie gewollt, die Commit-Nachricht
   erwähnt sie aber nicht. **Merke:** `git add -u` ist bei geteilter Arbeitskopie genauso
   gefährlich wie `git add -A` — Pfade aufzählen.
-- **QTMUX-125 (Online-Update) ist umgesetzt** — Mechanik in der Feature-Referenz,
-  Owner-Abnahme in der Tabelle unten. Offen bleibt die **Infrastruktur**: Auf
-  `https://nobser.de/updates/qtmux/` liegt noch kein echtes Manifest, und die
-  Confluence-Benutzerdoku bekommt den Abschnitt sinnvollerweise erst dann (vorher
-  beschriebe sie eine Funktion, die ins Leere greift).
+- **QTMUX-125 (Online-Update) ist umgesetzt und E2E abgenommen** (2026-08-02):
+  Dry-Run gegen einen echten `python3 -m http.server` mit produktiv signiertem
+  Manifest, Dialog in DE **und** EN, Drosselung und Offline-Stille am laufenden
+  Programm gemessen. Mechanik in der Feature-Referenz, Owner-Abnahme in der Tabelle.
+- **Erster Publish vorbereitet, Entscheidung beim Owner:** Installer aller drei
+  Plattformen sind gebaut (DMG lokal · MSI+ZIP rtzbld01 · AppImage aus dem CI-Lauf
+  desselben Commits) und liegen samt Größen, SHA-256 und fertigem
+  `publish.py`-Aufruf unter **`dist/publish/MANIFEST-DATEN.md`** (git-ignoriert).
+  ⚠️ **1.7.1 gibt es zweimal:** Das veröffentlichte Release v1.7.1 hat das
+  Online-Update **nicht** (am Artefakt belegt: `Nach Updates suchen` 2 Treffer im
+  neuen DMG, 0 im veröffentlichten). Empfehlung darum **Weg A** — 1.7.1 mit den
+  **veröffentlichten** Bytes publizieren (dann bleibt die Versionsnummer eindeutig
+  und niemand bekommt eine Aufforderung), und der heutige Stand wird **1.8.0**, der
+  erste echte Update-Durchlauf.
+- Offen bleibt sonst nur die **Infrastruktur**: auf `https://nobser.de/updates/qtmux/`
+  liegt noch kein Manifest; die Confluence-Benutzerdoku bekommt den Abschnitt
+  sinnvollerweise erst dann (vorher beschriebe sie eine Funktion, die ins Leere greift).
 - **Nächster Punkt:** **QTMUX-94** (Terminal-Ausgabe als Agenten-Kontext) hat das beste
   Verhältnis — die Daten liegen bereits in `VtScreen`, es fehlt nur der Weg für den
   Menschen (Auswahl/Bildschirm an eine andere Session geben). Parallel offen: der
@@ -1408,10 +1420,29 @@ Die Ed25519-Signatur steht über die **exakten** Bytes, also fiel `test_updatevi
 6 von 11 Fällen und sah dabei nach einem Fehler im Update-Code aus. Gilt für jedes signierte
 Artefakt im Ökosystem.
 
+🔑 **`busy()` darf im Abschluss-Callback nicht mehr wahr sein.** Der Kern hielt seine
+`QPointer` auf die Reply bis zur nächsten Event-Loop-Runde (nur `deleteLater()`), also
+meldete `busy()` „ja", während der Aufrufer schon „fertig" hörte. Wer daraus die nächste
+Anfrage startet — Check → Download, also genau die GUI, weil erst dieser Callback den
+Dialog aufgehen lässt — bekam `a request is already running`: **Der Dialog ging auf und
+sein erster Knopf tat nichts.** Fix in MacPCAN `59a9e35` (`finishActive()`).
+🔑 **Die Lehre daneben ist wertvoller als der Fix:** Das sah zwei Läufe lang wie ein
+**Flake** aus (einmal rtzbld01, einmal CI-Windows) und verschwand beim Wiederholen. Es
+trat nur über **HTTP** auf, weil `file://` anders verschränkt. **Ein sporadischer
+Fehlschlag, der nur auf EINEM Transportweg auftritt, ist ein Timing-Fehler, kein
+Rauschen.** Sichtbar wurde er erst, nachdem die Windows-Testbinaries auf das
+Konsolen-Subsystem umgestellt waren — vorher meldete die CI nur „***Failed" ohne Fall.
+
 🔑 **Auf Windows muss ein Datei-Handle VOR dem Löschen zu sein.** Bei SHA-Mismatch löscht der
 Kern den Download — mit noch offenem Read-Back-Handle ist das dort ein stilles No-op: Der
 Aufrufer bekam „file deleted", der beschädigte Installer blieb in Downloads liegen. Unter
 POSIX unsichtbar (offene Dateien lassen sich entlinken). Fix in MacPCAN `d0ed07b`.
+
+🔑 **`file://` prüft den echten Transportweg NICHT.** Zwei Dinge gehen daran vorbei: die
+Cache-Bust-Abfrage `?ts=<epoch>` (der Kern hängt sie nur an http(s) an — an einem
+Datei-URL zerstörte sie die Pfadauflösung) und ein Download, der in Häppchen ankommt und
+darum überhaupt Fortschritt meldet. Deshalb hat `tst_updateviewmodel` einen eigenen
+In-Process-HTTP-Server; genau dort ist der `busy()`-Fehler oben aufgeschlagen.
 
 **Tests:** `test_updater` (13 Fälle, Kern; Fixtures zur Laufzeit erzeugt und mit dem
 mitkompilierten Monocypher signiert, dazu ein **RFC-8032-Vektor** als Gegenprobe gegen eine
