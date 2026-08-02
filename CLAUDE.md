@@ -444,16 +444,24 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   Dry-Run gegen einen echten `python3 -m http.server` mit produktiv signiertem
   Manifest, Dialog in DE **und** EN, Drosselung und Offline-Stille am laufenden
   Programm gemessen. Mechanik in der Feature-Referenz, Owner-Abnahme in der Tabelle.
-- **Erster Publish vorbereitet, Entscheidung beim Owner:** Installer aller drei
-  Plattformen sind gebaut (DMG lokal · MSI+ZIP rtzbld01 · AppImage aus dem CI-Lauf
-  desselben Commits) und liegen samt Größen, SHA-256 und fertigem
-  `publish.py`-Aufruf unter **`dist/publish/MANIFEST-DATEN.md`** (git-ignoriert).
-  ⚠️ **1.7.1 gibt es zweimal:** Das veröffentlichte Release v1.7.1 hat das
-  Online-Update **nicht** (am Artefakt belegt: `Nach Updates suchen` 2 Treffer im
-  neuen DMG, 0 im veröffentlichten). Empfehlung darum **Weg A** — 1.7.1 mit den
-  **veröffentlichten** Bytes publizieren (dann bleibt die Versionsnummer eindeutig
-  und niemand bekommt eine Aufforderung), und der heutige Stand wird **1.8.0**, der
-  erste echte Update-Durchlauf.
+- ✅ **ERSTER PUBLISH IST DRAUSSEN (2026-08-02):** `https://nobser.de/updates/qtmux/`
+  trägt Manifest **1.7.1** (Weg A: die **veröffentlichten** v1.7.1-Bytes, nicht der
+  heutige Build) + `manifest.json.sig` + die drei Artefakte. Live gegengeprüft:
+  Signatur mit `openssl` gegen den Produktions-Key ✅, alle drei SHA-256 nach
+  Rück-Download ✅, und QTmux selbst meldet über *Hilfe → Nach Updates suchen …*
+  **„Kein Update verfügbar — QTmux 1.7.1 ist aktuell"**.
+  🔑 **Warum die veröffentlichten Bytes und nicht der frische Build:** Das
+  GitHub-Release v1.7.1 hat das Online-Update **nicht** (am Artefakt belegt:
+  `Nach Updates suchen` 2 Treffer im neuen DMG, 0 im veröffentlichten). Frisch
+  gebaute 1.7.1-Installer zu publizieren hieße, zwei verschiedene Binärdateien unter
+  derselben Nummer zu führen. Der heutige Stand wird deshalb **1.8.0** — und das ist
+  dann der erste echte Update-Durchlauf.
+  ⚠️ **`publish.py --verify` meldet hier IMMER „not fetchable"** — es lädt per
+  Python-`urllib`, und das scheitert auf dieser Maschine an
+  `CERTIFICATE_VERIFY_FAILED` (dieselbe dokumentierte Falle wie bei Jira-Cloud). Der
+  Upload war trotzdem in Ordnung; **mit `curl` gegenprüfen**, nicht dem `--verify`
+  glauben.
+  Artefakte beider Sätze + Größen/Hashes: `dist/publish/` (git-ignoriert).
 - Offen bleibt sonst nur die **Infrastruktur**: auf `https://nobser.de/updates/qtmux/`
   liegt noch kein Manifest; die Confluence-Benutzerdoku bekommt den Abschnitt
   sinnvollerweise erst dann (vorher beschriebe sie eine Funktion, die ins Leere greift).
@@ -647,7 +655,7 @@ Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme
 | **121** | **Statusleiste läuft nicht mehr über** | Session in ein tief verschachteltes Verzeichnis legen — der Pfad wird mit „…" gekürzt, die Felder rechts davon bleiben lesbar |
 | **58** | **Git-Branch auf der Kachel** | zwei Sessions im **selben** Repo auf **verschiedenen** Branches öffnen — genau der Fall, für den das Ticket existiert. `git checkout` in einer davon: die Kachel folgt binnen ~1,5 s, ohne dass sich das Verzeichnis ändert |
 | **90** | **Prompt-Warteschlange** | in einer Session mit **echtem** Agenten einreihen (Palette → „In die Warteschlange einreihen …"), während er arbeitet: Abzeichen zeigt die Anzahl, der Text geht erst nach seiner Fertigmeldung raus. ⚠️ Bei einer gewöhnlichen Shell mit **stillem** Langläufer (`sleep 6`) geht er zu früh raus — bekannte Grenze, Begründung in der Feature-Referenz |
-| **125** | **Online-Update** (Hilfe-Menue, Dialog, Einstellung) | Hilfe -> „Nach Updates suchen …“: ohne veroeffentlichtes Manifest muss **„QTmux 1.7.1 ist aktuell“** kommen — kein Fehler, kein Haenger. Dann Einstellungen -> Allgemein -> Aktualisierung: Schalter aus, QTmux neu starten -> beim Start passiert nichts. ⚠️ Der **vollstaendige** Durchlauf (Update finden, laden, installieren) ist erst pruefbar, wenn ein echtes Paket auf `nobser.de/updates/qtmux/` liegt; bis dahin ist er nur gegen einen `file://`-Fixturebaum gelaufen (`update/baseUrl`) |
+| **125** | **Online-Update** (Hilfe-Menue, Dialog, Einstellung) | Hilfe -> „Nach Updates suchen …“: ohne veroeffentlichtes Manifest muss **„QTmux 1.7.1 ist aktuell“** kommen — kein Fehler, kein Haenger. Dann Einstellungen -> Allgemein -> Aktualisierung: Schalter aus, QTmux neu starten -> beim Start passiert nichts. Der Server ist seit 2026-08-02 scharf, die Meldung „aktuell“ ist also der ECHTE Fall. ⚠️ Der **vollstaendige** Durchlauf (Update finden, laden, installieren) wird erst mit **1.8.0** pruefbar; bis dahin ist er gegen einen lokalen HTTP-Server mit produktiv signiertem Manifest gelaufen |
 
 ⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
 Sessions **nicht** (Inhalt liegt im Scrollback) — betroffene Sessions neu starten.
