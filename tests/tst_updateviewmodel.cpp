@@ -62,7 +62,16 @@ private:
     // Zeitstempel schreibt (er hat ja gerade geprueft) — ohne das kaeme der stille
     // Check in denselben Test nie zum Zug.
     static void clearThrottle() {
-        QSettings().remove(QStringLiteral("update/lastCheck"));
+        QSettings s;
+        s.remove(QStringLiteral("update/lastCheck"));
+        // 🔑 `sync()` ist hier nicht Kosmetik: Der naechste `QSettings()` liest im
+        // INI-Backend ggf. neu von der Platte, und ohne Flush kann die Entfernung
+        // dabei verlorengehen — dann greift die Tagesdrosselung, der stille Check
+        // laeuft nie an und der Test faellt SPORADISCH. Genau so gesehen: einmal
+        // auf rtzbld01, einmal im CI-Windows-Job, beide Male beim naechsten Lauf
+        // gruen. Die Windows-Dateizeitstempel-Granularitaet macht das dort
+        // wahrscheinlicher als unter POSIX.
+        s.sync();
     }
 
     // Führt einen Check aus und wartet auf `checkFinished`.
@@ -94,6 +103,13 @@ private slots:
     void cleanup() {
         QSettings s;
         s.clear();
+        s.sync();
+    }
+
+    // Der Wert muss auch fuer den NAECHSTEN QSettings-Zugriff sichtbar sein.
+    static void setThrottleStamp(const QString &iso) {
+        QSettings s;
+        s.setValue(QStringLiteral("update/lastCheck"), iso);
         s.sync();
     }
 
@@ -221,8 +237,7 @@ private slots:
         QCOMPARE(vm2.state(), int(UpdateViewModel::Idle));
 
         // Gestern geprüft -> wieder fällig.
-        QSettings().setValue(QStringLiteral("update/lastCheck"),
-                             QDateTime::currentDateTime().addDays(-1).toString(Qt::ISODate));
+        setThrottleStamp(QDateTime::currentDateTime().addDays(-1).toString(Qt::ISODate));
         UpdateViewModel vm3;
         QVERIFY(runCheck(vm3, false));
         QVERIFY(vm3.updateAvailable());

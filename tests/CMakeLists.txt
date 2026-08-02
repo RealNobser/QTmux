@@ -152,6 +152,18 @@ target_compile_definitions(test_updateviewmodel PRIVATE
 target_link_libraries(test_updateviewmodel PRIVATE qtmux_updater Qt6::Test)
 add_test(NAME test_updateviewmodel COMMAND test_updateviewmodel)
 
+# 🔑 Diese beiden Tests auf Windows als KONSOLEN-Programme bauen.
+# `qt_add_executable` macht dort standardmaessig GUI-Programme — die schreiben
+# nichts auf die Konsole, und `ctest --output-on-failure` zeigt dann NUR
+# „***Failed", nicht WELCHER Fall fiel. Genau das ist im CI-Windows-Job passiert:
+# ein sporadischer Fehlschlag ohne jede Diagnose. Die ConPTY-Begruendung fuer
+# WIN32_EXECUTABLE (Konsolen-Vererbung an Kindshells) gilt hier nicht — beide
+# Tests starten keine Prozesse.
+if(WIN32)
+    set_target_properties(test_updater test_updateviewmodel
+                          PROPERTIES WIN32_EXECUTABLE FALSE)
+endif()
+
 # --- PTY-/ConPTY-E2E-Tests (starten echte Shells) ---------------------------
 qt_add_executable(test_pty tst_pty.cpp)
 target_link_libraries(test_pty PRIVATE qtmux_core Qt6::Test)
