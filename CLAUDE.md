@@ -478,6 +478,15 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   wie das `-NoFetch` von `_build.cmd`). Der Wrapper nimmt die Version jetzt als
   **Argument** und bricht ohne ab. **Nach jedem Bump am Artefakt gegenprüfen**, nicht
   am Build-Log: hier DMG/EXE/AppImage je auf `1.8.0`-Treffer und **0** `1.7.1`-Reste.
+- 📋 **Neue Owner-Anforderung (2026-08-03): Proxy-Unterstützung fürs Firmenumfeld** —
+  eingetragen in [docs/workorder-online-update.md](docs/workorder-online-update.md),
+  **nicht begonnen**. ⛔ **Keine eigene Implementierung**: Der Mechanismus entsteht
+  kanonisch in der Shared-Lib `appupdate` (MacPCAN ist der Hub); QTmux **erbt ihn über das
+  Vendoring** — also nachvendieren, `tools/check-updater-sync.sh` muss danach wieder grün
+  sein, `UPSTREAM.md` nachziehen. QTmux-Anteil ist nur die App-Hälfte (Settings-Keys
+  `update/proxy*`, Prefs-Abschnitt, Auth-Abfrage im Dialog, ViewModel-Properties, i18n),
+  weil die Lib GUI- und QSettings-frei bleibt. CI unverändert; v1.8.0 bleibt live
+  verifiziert — das ist eine Erweiterung, kein Defekt.
 - ⚠️ **Was am Update-Weg NOCH NICHT am lebenden Objekt belegt ist:** Nur der
   **macOS**-Zweig wurde real ausgelöst (DMG gemountet). `msiexec /i` (Windows) und der
   **AppImage-Selbsttausch** (Linux) sind bisher ausschließlich als *Start-Plan*

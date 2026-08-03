@@ -24,6 +24,43 @@ QTmux ist reiner Desktop-Update-Konsument. Es teilt KEINEN Code über Submodule 
 | ⬅ EINGEHEND | **Owner** | Ed25519-Produktions-Public-Key (kommt über MacPCANs `UpdateKeys.hpp`) — bis dahin Test-Key |
 | ➡ AUSGEHEND | — | Einbahnstraße: `third_party/updater/` NIE lokal editieren (sonst Drift); QTmux-spezifische Logik gehört ins ViewModel/QML |
 
+## Nachgemeldete Anforderungen (eingetragen, NICHT begonnen)
+
+### Proxy-Unterstützung (Owner, 2026-08-03)
+
+**Anforderung:** „Im Firmenumfeld müssen auch Netzwerk-Proxies unterstützt werden, was eine
+Konfiguration erfordert."
+
+**Proxy-Unterstützung: appupdate-Proxy-Konfiguration nachvendieren, sobald MacPCAN sie
+liefert** (SHA-256-Abgleich via `check-updater-sync.sh`, `UPSTREAM.md` nachziehen).
+**QTmux-Anteil:** Settings-Keys `update/proxy*` in `SettingsIo.cpp` + `tst_settingsio`,
+Proxy-Abschnitt in `qml/prefs/CatAllgemein.qml`, Auth-Abfrage im `UpdateDialog.qml`,
+`UpdateViewModel`-Properties, i18n DE→EN + `tst_i18n`.
+
+⛔ **Keine eigene Proxy-Implementierung anfangen.** Der Mechanismus wird kanonisch in der
+Shared-Lib **MacPCANUpdater (`appupdate`)** gebaut — MacPCAN ist der Hub und liefert das
+Konzept. Drei Apps mit drei verschiedenen Proxy-Wegen sind genau das, was damit vermieden
+wird.
+
+**Warum diese Schnittlinie:** Die Lib bleibt **GUI- und QSettings-frei** (bestehender
+Vertrag). Dialog und Persistenz gehören deshalb in die App, das **Netzwerkverhalten** in die
+Lib.
+
+🔑 **QTmux-Besonderheit gegenüber RAFTNG (dort Submodul): wir erben über VENDORING.** Beim
+Nachziehen gilt deshalb zusätzlich — `third_party/updater/` bleibt **byte-identisch** zur
+MacPCAN-Quelle (nie lokal editieren, Einbahnstraße s. o.), **`tools/check-updater-sync.sh`
+muss danach wieder grün sein**, und der gepinnte MacPCAN-Commit in
+`third_party/updater/UPSTREAM.md` wird nachgezogen. Ein Proxy-Fix gehört also nach MacPCAN,
+nicht hierher.
+
+**Nicht betroffen:** Die **CI ändert sich nicht** (github-hosted; QTmux ist als einziges
+Repo der Familie public). Der Update-Zyklus ist mit **v1.8.0 live verifiziert** — Proxy ist
+eine **Erweiterung, kein Defekt**.
+
+**Reihenfolge:** eingehender Blocker wie bei Paket 1 — erst wenn MacPCAN die
+Proxy-Konfiguration gepusht hat, wird re-vendiert; der QTmux-Anteil hängt an den dann
+vorhandenen Lib-Schnittstellen.
+
 ## Infrastruktur-Fakten
 
 - Update-Basis-URL: **`https://nobser.de/updates/qtmux/manifest.json`** (statisch, T-Online). Assets liegen zusätzlich auf GitHub Releases (`RealNobser/QTmux`) — Manifest kann auf beides zeigen (Owner-Entscheidung bei Umsetzung; Default T-Online-Webspace).
