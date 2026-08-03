@@ -487,6 +487,13 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   `update/proxy*`, Prefs-Abschnitt, Auth-Abfrage im Dialog, ViewModel-Properties, i18n),
   weil die Lib GUI- und QSettings-frei bleibt. CI unverändert; v1.8.0 bleibt live
   verifiziert — das ist eine Erweiterung, kein Defekt.
+  🔑 **Die Zuarbeit an MacPCAN ist geliefert** (2026-08-03, Abschnitt „Zuarbeit an MacPCAN"
+  in derselben Datei) — Settings-Keys, der zweistufige Auth-Weg (`proxyAuthenticationRequired`
+  ist **synchron** und damit als QML-Rückfrage untauglich → Anmelde-Lieferant + typisierter
+  Fehler + **genau ein** Versuch wegen AD-Kontosperre), Anmeldedaten im **Sitzungsspeicher**
+  (Keychain abgelehnt, Vault startet gesperrt), und: `check-updater-sync.sh` nimmt neue
+  Dateien **selbst** mit — die Handpflege sitzt in `CMakeLists.txt:157–172`, das jede
+  Updater-Quelldatei einzeln listet. Nicht erneut erarbeiten.
 - ⚠️ **Was am Update-Weg NOCH NICHT am lebenden Objekt belegt ist:** Nur der
   **macOS**-Zweig wurde real ausgelöst (DMG gemountet). `msiexec /i` (Windows) und der
   **AppImage-Selbsttausch** (Linux) sind bisher ausschließlich als *Start-Plan*
