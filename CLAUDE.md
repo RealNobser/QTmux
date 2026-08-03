@@ -70,7 +70,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `tools/vsdev-build.cmd` | Windows-Build in der **VS-2022**-Umgebung (vswhere-begrenzt); von der VSCode-Task genutzt, s. Build-Abschnitt (QTMUX-79) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | 26 ctest-Tests: 25 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, **updater**, **updateviewmodel**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 25 |
+| `tests/` | **27** ctest-Tests: 26 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, **mcpaccess**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 26. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -379,16 +379,14 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 - README.md ist **zweisprachig** (DE/EN, Anker `#-deutsch`/`#-english`) — beide Hälften
   pflegen.
 
-## Status (2026-08-01)
+## Reifegrad (dauerhaft — der Zahlenstand steht NUR im „Arbeitsstand")
 
-**Ausgeliefert: v1.8.0** (Tag `v1.8.0`, alle 4 Installer: DMG/MSI+ZIP/AppImage) — die
-erste Version mit **Online-Update** (QTMUX-125). Phasen 0–6
-komplett (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP, Plugins +
-MacPCAN, Installer). CI grün auf macOS/Windows/Linux (Qt 6.10.3). **39 MCP-Tools**
-(GUI-MCP-Parität für den geplanten AI-Companion). i18n finalisiert. **GUI-Auffrischung
+**Phasen 0–6 komplett** (Terminal-Kern, Sessions/Sidebar, Agent-Awareness, SSH/Seriell/SFTP,
+Plugins + MacPCAN, Installer), dazu **Online-Update** (QTMUX-125) und die **GUI-Auffrischung
 Design 1a/2a** (einklappbare Seitenleiste + Flyout, Statusleiste, sechs Menüs, neugestaltetes
-Einstellungsfenster, Reset/Import/Export) komplett, 3/3 Plattformen grün — Details im
-Abschnitt „Design 1a/2a" unten.
+Einstellungsfenster, Reset/Import/Export — Details im Abschnitt „Design 1a/2a" unten).
+**39 MCP-Tools** (GUI-MCP-Parität für den geplanten AI-Companion), i18n finalisiert,
+Installer für alle drei Plattformen (DMG/MSI+ZIP/AppImage).
 
 **Window-Modell (QTMUX-83, seit v1.7.0):** Kein globales Split-Layout mehr, sondern das
 tmux-Modell — Sidebar = **Windows** (Tabs), jedes Window hat sein eigenes Split-Layout,
@@ -407,16 +405,17 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 ## Arbeitsstand & Wiedereinstieg (2026-08-03)
 
 > Die EINE Stelle für den aktuellen Stand (Pflegeregeln 2–4 oben). Verlauf steht in
-> Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in der
-> Tabelle unten.
+> Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
+> [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-Version **1.8.0** · `main` gepusht · Jira dual synchron bis **QTMUX-127**.
-**Teststände (Stand 2026-08-03, Commit `788e8aa`):** macOS Debug (`macos-test`) und
-Release je **27/27** (selbst gemessen); Linux (rtzsvr02-Container) **26/26** und
-Windows (rtzbld01) **26/26** (von der Windows-Session gemessen) — jeweils ohne
-`test_pty`; die **CI bestätigt alle drei** auf genau diesem Commit.
-(fällt dort umgebungsbedingt: nicht-interaktive Shell/ConPTY; auf Windows braucht
-`ctest` Qt-`bin` im PATH, sonst `0xc0000135`).
+**Ausgeliefert: v1.8.0** (Tag `v1.8.0`, alle 4 Installer) · `main` gepusht ·
+Jira dual synchron bis **QTMUX-127**.
+**Teststände (Stand 2026-08-03, Commit `788e8aa`):** Es gibt **27** Tests (s.
+Dateitabelle). macOS Debug (`macos-test`) und Release je **27/27** — dort läuft
+`test_pty` **mit** und besteht. Linux (rtzsvr02-Container) und Windows (rtzbld01) je
+**26/26**, dort ist `test_pty` per `-E` ausgenommen (fällt umgebungsbedingt:
+nicht-interaktive Shell/ConPTY; auf Windows braucht `ctest` zusätzlich Qt-`bin` im PATH,
+sonst `0xc0000135`). Die **CI bestätigt alle drei** auf genau diesem Commit.
 `tst_session` ist mit **24 Fällen** das größte Binary.
 🔑 **„CI grün auf allen drei Plattformen" ist KEIN Vollständigkeitsbeleg** (Lektion aus
 QTMUX-124): Die CI baut **Release**, ebenso Homebrew-Qt und der Linux-Container —
@@ -431,14 +430,14 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   Token, Peer-Zuordnung nur noch bei Loopback-Peer, Portprobe auf derselben Adresse,
   Request-Deckel, Tool `get_server_info` (nur lesend). Mechanik in der Feature-Referenz,
   Netzebene in [tools/pf/](tools/pf/).
-  🔑 **Zwei Dinge stehen noch aus** (in der Abnahme-Tabelle): die Sichtprüfung der
-  Einstellungsseite in beiden Designs — das Prefs-Fenster ist auf macOS mit
-  `--screenshot` prinzipiell nicht greifbar (eigenes `Window`) — und die
+  🔑 **Zwei Dinge stehen noch aus** (Rezepte in [docs/owner-abnahmen.md](docs/owner-abnahmen.md)):
+  die Sichtprüfung der Einstellungsseite in beiden Designs — das Prefs-Fenster ist auf macOS
+  mit `--screenshot` prinzipiell nicht greifbar (eigenes `Window`) — und die
   **pf-Installation auf dem Zielrechner**: `sudo` verlangt hier ein Passwort, das
   Skript ist fertig und trocken geprüft (`pfctl -n -f` sauber), aber nicht geladen.
   Die Application Firewall ist auf dieser Maschine aus (`State = 0`).
 - ✅ **QTMUX-124 (Windows-Absturz) ist erledigt — am 2026-08-02 gegengeprüft.** Der
-  Windows-**Debug**-Build auf rtzbld01 läuft **25/25**, `test_session` und
+  Windows-**Debug**-Build auf rtzbld01 lief vollständig grün, `test_session` und
   `test_sessiongroups` inklusive; der `0xC0000409`/`qlist.h`-Assert bei
   `osc133NonZeroExitSetsError` reproduziert sich nicht mehr. Damit hat `cfa2906`
   getragen (`activityChanged` auf `Qt::QueuedConnection` — der Pfad lief vorher
@@ -457,7 +456,8 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
 - **QTMUX-125 (Online-Update) ist umgesetzt und E2E abgenommen** (2026-08-02):
   Dry-Run gegen einen echten `python3 -m http.server` mit produktiv signiertem
   Manifest, Dialog in DE **und** EN, Drosselung und Offline-Stille am laufenden
-  Programm gemessen. Mechanik in der Feature-Referenz, Owner-Abnahme in der Tabelle.
+  Programm gemessen. Mechanik in der Feature-Referenz, Owner-Abnahme in
+  [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 - ✅ **v1.8.0 IST LIVE — voller Update-Zyklus am lebenden Objekt verifiziert (2026-08-02).**
   Tag `v1.8.0` auf `4f10eb8`, GitHub-Release mit 4 Assets, Webspace
   `https://nobser.de/updates/qtmux/` trägt Manifest **1.8.0** (alle drei OS-Keys).
@@ -487,7 +487,8 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
 - **Nächster Punkt:** **QTMUX-94** (Terminal-Ausgabe als Agenten-Kontext) hat das beste
   Verhältnis — die Daten liegen bereits in `VtScreen`, es fehlt nur der Weg für den
   Menschen (Auswahl/Bildschirm an eine andere Session geben). Parallel offen: der
-  **Owner-Durchklick** — **27 fertige Tickets** warten auf Abnahme (Tabelle unten).
+  **Owner-Durchklick** — **27 fertige Tickets** warten auf Abnahme
+  ([docs/owner-abnahmen.md](docs/owner-abnahmen.md)).
 - **Offener Code-Faden „Modul B":** `WindowModel` aggregiert noch nicht über die Panes
   (TODO in [WindowModel.cpp](src/viewmodels/WindowModel.cpp) + neutrale Stubs in
   `tst_windowmodel.cpp`); die Aggregat-Zähler liegen deshalb bewusst in `SessionModel`
@@ -532,9 +533,8 @@ Windows-Entwicklerbuild ist dafür das einzige taugliche Messmittel. Ein Nachste
   StatusColors-Singleton) · `SessionModel::sessionById` fehlt `Q_INVOKABLE` (QML-Nachbau
   in Main.qml) · `assign_session` nur noch
   Deprecation-Stub im Schema. **Umgesetzt aus der Analyse:** `Theme.accentText` statt
-  hartem Weiß (6 Stellen) — die **Sichtprüfung in beiden Designs steht als
-  Owner-Abnahme aus** (sichtbar wird der Unterschied erst bei Schemata mit hellem
-  ANSI-Blau).
+  hartem Weiß (6 Stellen) — Sichtprüfung offen, s.
+  [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
 **Offene Jira (geführt wird in Jira, hier nur Zeiger):**
 **122** (**OSC 52**: Zwischenablage aus dem Terminal füllen. Anwenderbefund — aus einem
@@ -554,11 +554,10 @@ neu angelegt: 55/69/72/73/75/76. 🔑 **Bewusst nicht übernommen:** alles Edito
 (Symbols, Go-to-Definition, Datei-Baum, projektweite Suche, Commit-Erzeugung,
 Diff-Kommentare) und die Cloud-Hälfte — QTmux ist ein Terminal-Manager, kein IDE-Ersatz;
 diese Linie beim nächsten Feature-Vergleich wiederverwenden.
-**QTMUX-125 Online-Update — umgesetzt (2026-08-02), Owner-Abnahme offen.** Auftrag:
-[docs/workorder-online-update.md](docs/workorder-online-update.md) (jetzt eingecheckt;
-maßgeblich bleibt der dort verlinkte Masterplan in `_ClaudeWorkspace`). Mechanik in der
-Feature-Referenz. **Neu angelegt: QTMUX-126** (Marken-Badge „Q"/Violett in der
-Menüleiste + App-Icon-Grundfarbe, Backlog; Spec `_ClaudeWorkspace/brand-badge-spec.md`).
+**126** (Marken-Badge „Q"/Violett in der Menüleiste + App-Icon-Grundfarbe, Backlog; Spec
+`_ClaudeWorkspace/brand-badge-spec.md`). — Der Auftrag zum Online-Update steht in
+[docs/workorder-online-update.md](docs/workorder-online-update.md); maßgeblich bleibt der
+dort verlinkte Masterplan in `_ClaudeWorkspace`.
 
 **Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) ·
 Signierung/Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff
@@ -599,14 +598,11 @@ nicht im Fenster-Grab); das separate Einstellungsfenster via QML-`grabToImage` d
 Die **Rastergröße** ist seit QTMUX-120 nachgeliefert (`Session::cols/rows` +
 `window.windowGridText`, s. Feature-Referenz).
 
-**Offen (bewusst nicht behauptet):**
-**Export/Import durch die echten Dateidialoge** ist auf keiner Maschine automatisierbar (Logik im
-Unit-Test bewiesen, Dialog-Öffnen per Screenshot) · **Owner-Durchklick** der GUI offen, v. a. die
-macOS-**nativen Menüs** (Fenster-Menü Minimieren/Zoomen ohne Cocoa-Dublette; sechs Menüs mit
-„Einstellungen …" im Datei-Menü; Kürzel Cmd+B Seitenleiste, Cmd+A=Alles auswählen darf das
-Terminal nicht kapern und `tst_hotkeys::defaultsAreConflictFree` grün halten) sowie Flyout,
-Statusleiste, Einstellungsfenster und `App.reduceMotion` in **beiden** Designs. Menü-Icons fehlen
-nativ = QTMUX-13 (deferred), kein neuer Fehler. Abnahme-Rezepte in der Tabelle unten.
+**Offen (bewusst nicht behauptet):** der **Owner-Durchklick** der GUI — die nativen
+macOS-Menüs, Flyout, Statusleiste, Einstellungsfenster und `App.reduceMotion` in beiden
+Designs, dazu Export/Import durch die **echten** Dateidialoge (auf keiner Maschine
+automatisierbar). Vollständige Liste mit Rezept:
+[docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
 ### Zusammenarbeit Windows ↔ macOS
 
@@ -630,7 +626,7 @@ die Zeile identisch war.
 Der aktuelle Zahlenstand steht NUR im Abschnitt „Arbeitsstand & Wiedereinstieg" oben.
 🔑 **Statuskonvention:** „Fertig + verifiziert → Done" meint **selbst verifiziert** (Tests,
 E2E, in `main`), **nicht** „vom Owner abgenommen". Die offene Owner-Abnahme wird bewusst
-NICHT über den Ticket-Status geführt, sondern über die Abnahme-Tabelle unten (je Punkt ein
+NICHT über den Ticket-Status geführt, sondern über [docs/owner-abnahmen.md](docs/owner-abnahmen.md) (je Punkt ein
 Rezept); ein Befund bei der Abnahme öffnet das Ticket wieder oder erzeugt ein Folgeticket.
 **In Arbeit ist nur, woran gerade jemand sitzt** — alles andere ist Backlog oder Done.
 (Anders gelesen zeigte das Board 24 fertige Tickets als „in Arbeit" — ein falsches Bild.)
@@ -651,46 +647,16 @@ und **„Online-Update (QTMUX-125)"** (Seiten-IDs in `CLAUDE.local.md`). Die
 **Benutzerdoku** trägt seit 2026-08-03 zusätzlich den Abschnitt „Aktuell bleiben
 (Online-Update)" — beide Systeme gepflegt.
 
-### Owner-Abnahmen offen (27 Tickets, je umgesetzt + selbst verifiziert)
+### Owner-Abnahmen offen — **27 Tickets**, je umgesetzt + selbst verifiziert
 
-Mechanik und Fallen je Ticket in der Feature-Referenz, hier nur Zeiger + Abnahme-Rezept:
+**Die Liste samt Abnahme-Rezept je Ticket steht in
+[docs/owner-abnahmen.md](docs/owner-abnahmen.md)** — sie ist Arbeitsvorrat und gehört
+nicht in jede Session. Hier bleiben nur die zwei Regeln, die man beim Planen kennen muss:
 
-| Ticket | Was | Abnahme |
-|---|---|---|
-| **86** | leeres Pane beim Window-Wechsel | mehrfach zwischen Splitscreen und Einzel-Window wechseln, Prompt bleibt stehen |
-| **85** | Agenten beim Start wiederherstellen (Vorgabe AUS) | Schalter an, mit echtem `claude` arbeiten, beenden, neu starten |
-| **98** | Unterhaltung fortsetzen, 4 Modi (Vorgabe: gar nicht) | vier Modi durchspielen; Modus 3 braucht vorher `set_agent_session` |
-| **99** | Umfang der Wiederherstellung, 3 Modi (Vorgabe: alles) | Modus 0 setzen, beenden, neu starten — gespeicherter Stand **unberührt** |
-| **100** | Sidebar-Drag ließ die Kacheln weglaufen | Kachel ziehen (auch die letzte), Reihenfolge muss stimmen |
-| **101/102/103** | ToolTip · geklemmter Drag · „Arbeitsverzeichnis öffnen"/„Pfad kopieren" | ToolTip in beiden Designs; Kachel bleibt im Bild; Menüpunkte an serieller Session ausgegraut |
-| **61** | Bildschirm leeren, Verlauf behalten (`Ctrl/Cmd+Shift+K`) | in einem laufenden Agenten leeren — Prompt oben, Verlauf im Scrollback |
-| **89** | Ruhezustand verhindern, solange Agenten arbeiten | Schalter an, Agent arbeiten lassen (macOS `pmset -g assertions`, Windows `powercfg /requests`) |
-| **106/109/110/111** | Verzeichnis als zweite Kachelzeile, Seitenleiste + Flyout, Statusleiste (Design 1a/2a, Stufen 1–3) | durchklicken |
-| **112** | **sechs Menüs** (Stufe 4) | jedes Menü öffnen; kein Eintrag schaltet mehr eine Einstellung außer Seitenleiste/Statusleiste/Broadcast; alles Verschobene über Einstellungen UND Palette erreichbar |
-| **113** | **Einstellungsfenster** (Stufe 5) | Rail-Gruppen, Zeilen mit Beschreibung, Segment-Umschalter, Schalter in Akzentfarbe — in **beiden** Designs |
-| **119** | **Fenster neben dem Bildschirm** (`1bb0ba1`) | QTmux auf einem zweiten Monitor platzieren, beenden, Monitor abziehen, starten → Fenster muss zentriert auf dem verbleibenden Bildschirm erscheinen; danach eine normale Position **nicht** verschoben finden |
-| **118** | **Chevron klappt auch wieder aus** | Seitenleiste einklappen — oben muss ein `›` stehen, das sie wieder aufklappt; ToolTip und Richtung prüfen, in **beiden** Designs |
-| **114** | **Zurücksetzen / Import / Export** (Stufe 6) | „Diese Seite zurücksetzen" auf einer geänderten Seite (Werte springen sofort auf Standard, danach ist der Punkt ausgegraut) · „Alle Einstellungen zurücksetzen …" **abbrechen** und bestätigen · **Export in eine Datei und Import daraus** — das ist der Teil, den hier **kein Automat** prüfen konnte (native Dateidialoge, s. E2E-Fallen): danach muss der geänderte Wert live stehen, und die offenen Fenster/Sessions müssen unberührt sein |
-| **117** | **Standardknöpfe auf Deutsch** (`qtbase`-Translator) | einen beliebigen Dialog mit Standardknöpfen öffnen (z. B. „Alle Einstellungen zurücksetzen …" oder die Beenden-Rückfrage): der Knopf muss **„Abbrechen"** heißen, nicht „Cancel" — und in englischer Oberfläche weiterhin „Cancel". 🔑 Der letzte Millimeter ist hier **nicht** automatisierbar: Test und A/B belegen Einbettung, Laden und Kontext, aber kein Automat kann ohne Bedienungshilfen-Recht einen Dialog öffnen und ablesen |
-| **108** | **Arbeitsverzeichnis via OSC 7** | Shell-Integration sourcen (`qtmux --install-shell-integration`), dann in **PowerShell** `Set-Location` — die Verzeichniszeile der Kachel muss folgen (ohne Integration bleibt sie stehen, das ist kein Fehler). Bei `ssh` zeigt sie den Pfad der **Gegenstelle** |
-| **120** | **Rastergröße in der Statusleiste** | Fenster größer ziehen, Panes teilen, zwischen Windows wechseln: die Anzeige folgt und zeigt **nie** einen Zwischenwert wie 80×2 |
-| **121** | **Statusleiste läuft nicht mehr über** | Session in ein tief verschachteltes Verzeichnis legen — der Pfad wird mit „…" gekürzt, die Felder rechts davon bleiben lesbar |
-| **58** | **Git-Branch auf der Kachel** | zwei Sessions im **selben** Repo auf **verschiedenen** Branches öffnen — genau der Fall, für den das Ticket existiert. `git checkout` in einer davon: die Kachel folgt binnen ~1,5 s, ohne dass sich das Verzeichnis ändert |
-| **90** | **Prompt-Warteschlange** | in einer Session mit **echtem** Agenten einreihen (Palette → „In die Warteschlange einreihen …"), während er arbeitet: Abzeichen zeigt die Anzahl, der Text geht erst nach seiner Fertigmeldung raus. ⚠️ Bei einer gewöhnlichen Shell mit **stillem** Langläufer (`sleep 6`) geht er zu früh raus — bekannte Grenze, Begründung in der Feature-Referenz |
-| **125** | **Online-Update** (Hilfe-Menue, Dialog, Einstellung) | Hilfe -> „Nach Updates suchen …“ auf einem **1.8.0**-Build muss **„QTmux 1.8.0 ist aktuell“** melden — kein Fehler, kein Haenger. Dann Einstellungen -> Allgemein -> Aktualisierung: Schalter aus, QTmux neu starten -> beim Start passiert nichts. Der Server ist scharf, die Meldung „aktuell“ ist also der ECHTE Fall. Der **vollstaendige** Durchlauf ist auf **macOS** am lebenden Objekt belegt (1.7.1-Instanz findet 1.8.0, laedt, mountet das DMG); ⚠️ **Windows und Linux fehlen dort noch** (nur Start-Plan geprueft) |
-
-| **127** | **MCP im Netzwerk erreichbar** (Bind-Adresse, Token, pf) | Einstellungen → Agenten & MCP: „Im Netzwerk erreichbar" **an** — es muss sofort ein Token erscheinen (Anzeigen/Kopieren/Neu erzeugen), die Statusleiste unten rechts muss auf **„MCP LAN :7345" in Amber** wechseln, und ein `curl` von einem anderen Rechner muss **ohne** Kopfzeile 401 und **mit** `Authorization: Bearer <token>` eine Antwort liefern. Danach wieder **aus** → Statusfeld zurück auf „MCP :7345", `curl` von außen läuft ins Leere. Beides in **beiden Designs** ansehen (die Sichtprüfung der Seite ist auf macOS nicht automatisierbar — eigenes `Window`). ⚠️ Getrennt davon die **pf-Regel**: `sudo tools/pf/install-pf-anchor.sh --net 192.168.0.0/24` (braucht ein Passwort, deshalb hier nicht ausgeführt), dann `sudo pfctl -s rules | grep com.qtmux` — und der einzige echte Beleg ist die Gegenprobe von **außerhalb** des Netzes: **Timeout**, nicht „connection refused" |
-⚠️ Abnahmen brauchen eine **frisch gebaute** Instanz. QTMUX-86 heilt bereits beschädigte
-Sessions **nicht** (Inhalt liegt im Scrollback) — betroffene Sessions neu starten.
-🔑 **Rezept für eine Abnahme am laufenden Programm** (seit QTMUX-96 erprobt): isolierte
-Instanz starten (`QTMUX_PROFILE=<name> QTMUX_MCP_PORT=<frei>`, Binary aus
-`build/macos-release`), per MCP **auf diesem Port** ein vorbereitetes Verzeichnis als Session
-anlegen und fokussieren, dann den Owner schauen lassen. Das ersetzt, was hier prinzipiell
-fehlt (kein Bedienungshilfen-Recht → keine synthetische Bedienung). Danach aufräumen:
-Prozess beenden, `defaults delete com.qtmux.QTmux-<name>`, Testdaten löschen.
-⚠️ **Nebenbefund QTMUX-100, ungeprüft:** Kachel auf Zeile 0 schieben, während die Liste
-**gescrollt** ist → `contentY` driftet (im Nachbau 160 → 144 → 84 → 24). Anderer Pfad als der
-behobene, in der App nicht gegengeprüft, im Ticket notiert.
+- Eine Abnahme braucht eine **frisch gebaute** Instanz, keine laufende Produktivinstanz.
+  Der Standardweg ist die isolierte Instanz (`QTMUX_PROFILE=<name> QTMUX_MCP_PORT=<frei>`).
+- **Selbst verifiziert ist nicht abgenommen** (Statuskonvention oben) — die offene Abnahme
+  wird über jene Datei geführt, nicht über den Jira-Status.
 
 ## Repository, Release, Zusammenarbeit
 
@@ -1616,7 +1582,7 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
 `docs/MCP.md`. Kernpunkte:
 - **Netzzugang ist eine WAHL, und sie kostet ein Token (QTMUX-127).** Bind-Adresse:
   `QTMUX_MCP_BIND` > Einstellung `mcp/bindAddress` > `127.0.0.1`; Regeln Gui-frei in
-  [src/server/McpAccess.h](src/server/McpAccess.h) (Test `test_mcpaccess`, 12 Fälle),
+  [src/server/McpAccess.h](src/server/McpAccess.h) (Test `test_mcpaccess`, 13 Fälle),
   bedient über Einstellungen → Agenten & MCP (Schalter „Im Netzwerk erreichbar",
   Adressfeld, Token anzeigen/kopieren/neu erzeugen) und die Palette.
   🔑 **Ungültige Adresse fällt auf Loopback zurück, nie auf `Any`** — ein Tippfehler in
