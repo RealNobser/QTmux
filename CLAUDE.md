@@ -426,8 +426,11 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-04** · Branch `main` (Vorgänger-Commit war `393ed47`; der Kopf steht mit
-`git log --oneline -3` fest). Alles aus dieser Sitzung ist committet **und gepusht**.
+Stand **2026-08-04** · Branch `main`, alles committet **und gepusht**: QTMUX-128 +
+QML-Editor-Tooling liegen in `3b63f00` (Vorgänger `393ed47`), diese Doku-Nachlese im Commit
+darüber. Bei Wiedereinstieg `git log --oneline -3` gegenprüfen — die Mac-Session pusht ebenfalls.
+⚠️ **Der CI-Lauf zu `3b63f00` ist von der Windows-Maschine aus NICHT geprüft** (kein `gh` hier
+installiert); wer als Erster kann, sieht nach — die drei Plattform-Jobs sind blockierend.
 
 **Nächster Punkt: QTMUX-94** — Terminal-Ausgabe als Agenten-Kontext.
 - Einstieg: `VtScreen::screenText()`/Scrollback liegen fertig vor; es fehlt allein der Weg
