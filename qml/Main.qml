@@ -466,6 +466,9 @@ ApplicationWindow {
     property bool rightClickPaste: false    // Rechtsklick fügt ein (statt Kontextmenü)
     property bool pasteWarnMultiline: true  // Vor mehrzeiligem Einfügen warnen
     property bool confirmQuit: true         // Vor dem Beenden nachfragen (QTMUX-41)
+    // Mausrad in einer Vollbild-App, die die Maus nicht greift: 0 = nur wenn die App es
+    // per DECSET 1007 verlangt (Vorgabe), 1 = immer. Regeln in src/core/AltScroll.h.
+    property int altScrollMode: 0
 
     // Einklappbare Seitenleiste (Design 2a): Breite frei ziehbar in [180, 420];
     // rastet beim Ziehen unter 140 px in den eingeklappten Zustand (52 px) ein.
@@ -614,7 +617,7 @@ ApplicationWindow {
         if (p.type === 1) {
             // Passwort aus dem Vault auflösen (nur wenn entsperrt + Geheimnis gesetzt).
             // Das Klartext-Passwort verlässt QML nur flüchtig an die Session.
-            var pw = (p.passwordSecret && Vault.unlocked) ? Vault.secret(p.passwordSecret) : ""
+            let pw = (p.passwordSecret && Vault.unlocked) ? Vault.secret(p.passwordSecret) : ""
             row = sessions.createSshSession(p.host, p.port || 22, p.user, p.identity, ls, pw)
         }
         else if (p.type === 2)
@@ -1405,7 +1408,7 @@ ApplicationWindow {
     function subtreeHasPane(node, id) {
         if (!node) return false
         if (node.children === undefined) return node.paneId === id       // Blatt
-        for (var i = 0; i < node.children.length; ++i)
+        for (let i = 0; i < node.children.length; ++i)
             if (subtreeHasPane(node.children[i], id)) return true
         return false
     }
@@ -1671,6 +1674,7 @@ ApplicationWindow {
         property alias copyOnSelect: window.copyOnSelect
         property alias rightClickPaste: window.rightClickPaste
         property alias pasteWarnMultiline: window.pasteWarnMultiline
+        property alias altScrollMode: window.altScrollMode
         property alias confirmQuit: window.confirmQuit
         property alias restoreSessionMode: window.restoreSessionMode
         property alias preventSleep: window.preventSleep
@@ -1738,6 +1742,7 @@ ApplicationWindow {
         case "window/copyOnSelect":         window.copyOnSelect = b(false); break
         case "window/rightClickPaste":      window.rightClickPaste = b(false); break
         case "window/pasteWarnMultiline":   window.pasteWarnMultiline = b(true); break
+        case "window/altScrollMode":        window.altScrollMode = i(0); break
         case "window/restoreAgents":        window.restoreAgents = b(false); break
         case "window/resumeAgentMode":      window.resumeAgentMode = i(0); break
         }
@@ -2527,6 +2532,8 @@ ApplicationWindow {
                             { title: qsTr("Auswahl automatisch kopieren"), sub: "",           icon: "copy",            run: function(){ window.copyOnSelect = !window.copyOnSelect } },
                             { title: qsTr("Rechtsklick fügt ein"),       sub: "",             icon: "clipboard",       run: function(){ window.rightClickPaste = !window.rightClickPaste } },
                             { title: qsTr("Vor mehrzeiligem Einfügen warnen"), sub: "",       icon: "info",            run: function(){ window.pasteWarnMultiline = !window.pasteWarnMultiline } },
+                            { title: qsTr("Mausrad in Vollbild-Anwendungen: nur auf Anforderung"), sub: "", icon: "terminal-window", run: function(){ window.altScrollMode = 0 } },
+                            { title: qsTr("Mausrad in Vollbild-Anwendungen: immer"), sub: "", icon: "terminal-window", run: function(){ window.altScrollMode = 1 } },
                             { title: qsTr("Vor dem Beenden nachfragen"),  sub: "",             icon: "info",            run: function(){ window.confirmQuit = !window.confirmQuit } },
                             { title: qsTr("Sessions wiederherstellen: gar nicht"), sub: "",    icon: "terminal-window", run: function(){ window.restoreSessionMode = 0 } },
                             { title: qsTr("Sessions wiederherstellen: ohne Verlauf"), sub: "", icon: "terminal-window", run: function(){ window.restoreSessionMode = 1 } },
@@ -2569,7 +2576,7 @@ ApplicationWindow {
                                      run: function(){ window.toggleQuake() } })
                         // Je geladenem Plugin-Backend ein Eintrag (wie im „+"-Menü).
                         var pts = Plugins.backendTypes
-                        for (var k = 0; k < pts.length; ++k) {
+                        for (let k = 0; k < pts.length; ++k) {
                             c.push({ title: qsTr("%1 (Plugin)").arg(pts[k].name), sub: qsTr("Neue Plugin-Session"),
                                      icon: "robot",
                                      run: (function(pt){ return function(){ window.newPluginSession(pt.pluginId, pt.typeId) } })(pts[k]) })
@@ -2578,8 +2585,8 @@ ApplicationWindow {
                         // (jetzt Einstellungen › Terminal) — je Shell ein Eintrag, damit die
                         // Wahl ohne Umweg über den Dialog erreichbar bleibt.
                         if (window.hasShellChoice) {
-                            var shs = sessions.availableShells()
-                            for (var s = 0; s < shs.length; ++s) {
+                            let shs = sessions.availableShells()
+                            for (let s = 0; s < shs.length; ++s) {
                                 c.push({ title: qsTr("Standard-Shell: %1").arg(shs[s].name),
                                          sub: qsTr("Einstellungen"), icon: "terminal-window",
                                          run: (function(p){ return function(){ window.defaultShellProgram = p } })(shs[s].program) })
@@ -2588,14 +2595,14 @@ ApplicationWindow {
                         // Je Einstellungs-Kategorie ein Direktsprung (Teil A4) — die Menüs
                         // führen jetzt nur noch auf zwei Seiten (Agenten, Tastenkürzel).
                         var cats = prefs.categories
-                        for (var ci = 0; ci < cats.length; ++ci) {
+                        for (let ci = 0; ci < cats.length; ++ci) {
                             c.push({ title: qsTr("Einstellungen: %1 …").arg(cats[ci].label),
                                      sub: "", icon: cats[ci].icon,
                                      run: (function(id){ return function(){ prefs.open(id) } })(cats[ci].id) })
                         }
                         // Je gespeichertem Profil ein Schnellverbinden.
                         var profs = Profiles.profiles
-                        for (var j = 0; j < profs.length; ++j) {
+                        for (let j = 0; j < profs.length; ++j) {
                             c.push({ title: qsTr("Verbinden: %1").arg(profs[j].name),
                                      sub: window.profileSummary(profs[j]),
                                      icon: window.profileIcon(profs[j].type),
@@ -2612,19 +2619,19 @@ ApplicationWindow {
                         // Rechtsklick-Menü der Kachel bzw. des Gruppenkopfs. Wirken auf das
                         // AKTIVE Window (windows.activeRow wird ERST beim Ausführen gelesen).
                         if (windows.count > 0) {
-                            var cw = window.activeWindowObj()
-                            var cwTitle = cw ? window.windowTitle(cw) : qsTr("Aktives Fenster")
+                            let cw = window.activeWindowObj()
+                            let cwTitle = cw ? window.windowTitle(cw) : qsTr("Aktives Fenster")
                             c.push({ title: qsTr("Fenster gruppieren …"), sub: cwTitle, icon: "bookmark",
                                      run: function(){ groupNameDialog.start(windows.activeRow) } })
-                            var gs = windows.groups()
-                            for (var gi = 0; gi < gs.length; ++gi) {
+                            let gs = windows.groups()
+                            for (let gi = 0; gi < gs.length; ++gi) {
                                 c.push({ title: qsTr("Fenster zu Gruppe: %1").arg(gs[gi]), sub: cwTitle,
                                          icon: "bookmark",
                                          run: (function(n){ return function(){ windows.setWindowGroup(windows.activeRow, n) } })(gs[gi]) })
                             }
                             c.push({ title: qsTr("Fenster aus Gruppe nehmen"), sub: cwTitle, icon: "x",
                                      run: function(){ windows.setWindowGroup(windows.activeRow, "") } })
-                            for (var gj = 0; gj < gs.length; ++gj) {
+                            for (let gj = 0; gj < gs.length; ++gj) {
                                 c.push({ title: qsTr("Gruppe umbenennen: %1 …").arg(gs[gj]), sub: qsTr("Gruppe"),
                                          icon: "bookmark",
                                          run: (function(n){ return function(){ groupNameDialog.startRename(n) } })(gs[gj]) })
@@ -2639,9 +2646,9 @@ ApplicationWindow {
                                          run: (function(n){ return function(){ window.moveGroupBy(n, 1) } })(gs[gj]) })
                             }
                         }
-                        for (var i = 0; i < windows.count; ++i) {
-                            var w = windows.windowAt(i)
-                            var t = window.windowTitle(w)
+                        for (let i = 0; i < windows.count; ++i) {
+                            let w = windows.windowAt(i)
+                            let t = window.windowTitle(w)
                             c.push({ title: qsTr("Wechseln zu: %1").arg(t), sub: qsTr("Fenster"),
                                      icon: "terminal-window",
                                      run: (function(id){ return function(){ window.loadWindow(id) } })(w.windowId) })
@@ -2657,7 +2664,7 @@ ApplicationWindow {
                         if (pcDir.length > 0) {
                             const pcSess = window.currentSession()
                             const pcs = App.projectCommands(pcDir, pcSess ? (pcSess.agentId || "") : "")
-                            for (var pi = 0; pi < pcs.length; ++pi) {
+                            for (let pi = 0; pi < pcs.length; ++pi) {
                                 c.push({ title: "/" + pcs[pi].name,
                                          // Ohne Beschreibung sagt wenigstens der Fundort,
                                          // woher der Befehl kommt — erfunden wird nichts.
@@ -3359,7 +3366,11 @@ ApplicationWindow {
                             // (0=Start 1=Läuft 2=WartetEingabe 3=Fehler 4=Zu).
                             Rectangle {
                                 id: statusRing
-                                width: 10; height: 10; radius: 5
+                                // In einem Layout ist die Größe fremdverwaltet: `width`/`height`
+                                // hier zu setzen ist laut Qt undefiniertes Verhalten (der Punkt
+                                // kann beim nächsten Neuaufbau auf 0 zusammenfallen). Die
+                                // implicit-Werte sind das, woraus das Layout die Größe ableitet.
+                                implicitWidth: 10; implicitHeight: 10; radius: 5
                                 color: tile.attention ? Theme.accent
                                      : tile.aggState === 1 ? "#46d369"
                                      : tile.aggState === 2 ? "#f5c451"
@@ -3588,7 +3599,8 @@ ApplicationWindow {
                                 RowLayout {
                                     spacing: 6
                                     Rectangle {
-                                        width: 8; height: 8; radius: 4
+                                        // s. statusRing: im Layout zählen die implicit-Werte.
+                                        implicitWidth: 8; implicitHeight: 8; radius: 4
                                         Layout.alignment: Qt.AlignVCenter
                                         color: tile.attention ? Theme.accent
                                              : tile.aggState === 1 ? "#46d369"
@@ -3997,7 +4009,7 @@ ApplicationWindow {
                         property var opts: {
                             var o = [ qsTr("(keines)") ]
                             var names = Vault.names
-                            for (var i = 0; i < names.length; i++) o.push(names[i])
+                            for (let i = 0; i < names.length; i++) o.push(names[i])
                             // Bei gesperrtem Vault den gespeicherten Namen trotzdem zeigen.
                             if (profileEditDialog.pwSecret && o.indexOf(profileEditDialog.pwSecret) < 0)
                                 o.push(profileEditDialog.pwSecret)

@@ -261,6 +261,7 @@ typedef enum {
   VTERM_PROP_CURSORSHAPE,       // number
   VTERM_PROP_MOUSE,             // number
   VTERM_PROP_FOCUSREPORT,       // bool
+  VTERM_PROP_ALTSCROLL,         // bool: 1007  /* QTMUX: Alternate Scroll (angehaengt, ABI-stabil) */
 
   VTERM_N_PROPS
 } VTermProp;

@@ -60,6 +60,7 @@ add_library(qtmux_core STATIC
     src/core/GitInfo.h
     src/core/GitInfo.cpp
     src/core/RestoreMode.h
+    src/core/AltScroll.h
     src/core/ShellIntegration.h
     src/core/ShellIntegration.cpp
     src/core/SleepInhibitor.h
@@ -189,6 +190,19 @@ qt_add_executable(qtmux
     src/app/main.cpp
     ${qtmux_platform_icon}
 )
+
+# --- Editor-Unterstützung für QML (qmlls) ------------------------------------
+# Ohne Importpfade findet der QML-Language-Server weder `QtQuick` noch unser eigenes
+# Modul `QTmux` — jede Typreferenz wird dann zur Fehlermeldung. Gemessen: 1092 Meldungen
+# über 28 Dateien, davon nur 372 echt. Qt schreibt die nötige `.qmlls.ini` (buildDir +
+# Importpfade) selbst; sie enthält absolute Pfade und ist darum git-ignoriert.
+set(QT_QML_GENERATE_QMLLS_INI ON)
+# 🔑 `no-cmake-calls=true` ist hier Pflicht, nicht Geschmack: qmlls ruft sonst von sich aus
+# CMake, um das Modul nachzubauen. Auf der Windows-Maschine hätte das zwei bekannte Folgen
+# (QTMUX-79) — es liefe ohne die VS-2022-Umgebung (fehlendes INCLUDE/LIB, verdorbener
+# Cache), und es baute in genau das Verzeichnis, aus dem die produktive Instanz läuft
+# (LNK1168, s. Windows-Kasten in CLAUDE.md). Der Editor soll lesen, nicht bauen.
+set(QT_QML_GENERATE_QMLLS_INI_NO_CMAKE_CALLS ON)
 
 qt_add_qml_module(qtmux
     URI QTmux

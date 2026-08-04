@@ -26,6 +26,14 @@ struct AgentInfo {
     QString resumePickArgs;  // interaktive Auswahl beim Start (z. B. "--resume" ohne Wert)
     QString resumeIdArgs;    // gezielt per ID; MUSS den Platzhalter {id} enthalten
 
+    // --- Mausrad in der Vollbild-Oberfläche des Agenten ---------------------
+    // Tastenfolge, mit der DIESER Agent seinen eigenen Verlauf scrollt. LEER heißt:
+    // die xterm-üblichen Cursor-Tasten (ESC[A/ESC[B) verwenden, so wie DECSET 1007 es
+    // vorsieht. Einen Eintrag bekommt nur, wer nachweislich etwas anderes braucht —
+    // ein geratenes Kürzel landet mitten in der Oberfläche des Agenten.
+    QByteArray scrollUpKeys;
+    QByteArray scrollDownKeys;
+
     /// Passt ein Kommando-Basisname (ohne Pfad und ohne .exe/.cmd/.bat) auf diesen
     /// Agenten? Vergleicht `command` UND alle `aliases`, Groß-/Kleinschreibung egal.
     bool matches(const QString &base) const;
@@ -70,6 +78,16 @@ public:
     /// Kann dieser Agent den Modus überhaupt? (leere Vorlage = nein) — die UI kann
     /// damit erklären, warum ein Agent trotz gesetztem Modus frisch startet.
     static bool supportsResumeMode(const AgentInfo &a, ResumeMode mode);
+
+    /// Tastenfolge, mit der der Agent `agentId` seinen Verlauf um eine Zeile scrollt
+    /// (`up` = nach oben). **Leer** heißt „nichts Besonderes bekannt" — der Aufrufer
+    /// nimmt dann die xterm-üblichen Cursor-Tasten, wie DECSET 1007 sie vorsieht.
+    ///
+    /// 🔑 Warum das überhaupt je Agent nötig ist: Codex fordert per 1007 Cursor-Tasten
+    /// an, reagiert aber nur auf **Shift+Pfeil** (am laufenden Programm gemessen). Wer
+    /// hier einen Eintrag ergänzt, misst ihn vorher — ein geratenes Kürzel landet
+    /// mitten in der Oberfläche des Agenten und richtet dort Schaden an.
+    static QByteArray scrollKeysFor(const QString &agentId, bool up);
 };
 
 } // namespace qtmux

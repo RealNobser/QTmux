@@ -857,6 +857,15 @@ static void set_dec_mode(VTermState *state, int num, int val)
     state->mouse_protocol = val ? MOUSE_SGR : MOUSE_X10;
     break;
 
+  /* QTMUX: 1007 = Alternate Scroll Mode (xterm). Die App verlangt damit, dass das
+   * Terminal Mausrad-Bewegungen im Alternate Screen als Cursor-Tasten schickt,
+   * OHNE Maus-Tracking einzuschalten (genau das tut z. B. der Codex-Agent).
+   * libvterm kannte den Modus nicht und liess ihn in den default-Zweig laufen; der
+   * CSI-Fallback sieht ihn nie, weil "CSI ? Ps h" als Sequenz erkannt ist. */
+  case 1007:
+    settermprop_bool(state, VTERM_PROP_ALTSCROLL, val);
+    break;
+
   case 1015:
     state->mouse_protocol = val ? MOUSE_RXVT : MOUSE_X10;
     break;
@@ -2276,6 +2285,10 @@ int vterm_state_set_termprop(VTermState *state, VTermProp prop, VTermValue *val)
     return 1;
   case VTERM_PROP_FOCUSREPORT:
     state->mode.report_focus = val->boolean;
+    return 1;
+  /* QTMUX: Alternate Scroll wird nicht im State gehalten, sondern nur durchgereicht
+   * (wie TITLE/ICONNAME) — allein das Frontend entscheidet, was es mit dem Rad tut. */
+  case VTERM_PROP_ALTSCROLL:
     return 1;
 
   case VTERM_N_PROPS:

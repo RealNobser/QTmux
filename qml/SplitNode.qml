@@ -235,6 +235,8 @@ Item {
                     copyOnSelect: win.copyOnSelect
                     rightClickPaste: win.rightClickPaste
                     pasteWarnMultiline: win.pasteWarnMultiline
+                    // Rad in Vollbild-Apps ohne Maus-Tracking (Codex): s. core/AltScroll.h.
+                    altScrollMode: win.altScrollMode
                     onMultilinePasteWarning: (lines) => win.askMultilinePaste(paneTerm, lines)
                     // Fokus (Klick/Tab) macht dieses Pane aktiv.
                     onActiveFocusChanged: if (activeFocus) win.setActivePaneById(pane.paneId, paneTerm)

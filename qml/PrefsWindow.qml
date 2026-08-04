@@ -217,6 +217,7 @@ Window {
             { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Auswahl automatisch kopieren"),      keywords: "kopieren auswahl copy select zwischenablage" },
             { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Rechtsklick fügt ein"),              keywords: "rechtsklick einfügen paste zwischenablage" },
             { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Vor mehrzeiligem Einfügen warnen"),  keywords: "einfügen paste warnung mehrzeilig multiline" },
+            { cat: "eingabe",          key: "eingabe.maus",          label: qsTr("Mausrad in Vollbild-Anwendungen"),   keywords: "maus mausrad scrollen scroll rad wheel vollbild alternate screen codex less vim pfeiltasten 1007" },
             { cat: "agenten",          key: "agenten.restore",       label: qsTr("Agenten beim Start wiederherstellen"), keywords: "agent wiederherstellen neustart restore claude codex starten sitzung" },
             { cat: "agenten",          key: "agenten.restore",       label: qsTr("Unterhaltung fortsetzen"),           keywords: "fortsetzen continue resume unterhaltung konversation agent auswahl gemeldet juengste" },
             { cat: "agenten",          key: "agenten.notifications", label: qsTr("Benachrichtigungen"),                keywords: "agent benachrichtigung abo matrix ereignis subscribe" },

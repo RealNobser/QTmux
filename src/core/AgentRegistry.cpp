@@ -31,11 +31,19 @@ const QList<AgentInfo> &AgentRegistry::all() {
         // gemeldete. `codex resume` nimmt dieselben Optionen wie der Direktstart an
         // (-m/--model, -p/--profile, -s/--sandbox … am `--help` geprüft), eine bereits
         // getippte Optionsliste bleibt also gültig.
+        // 🔑 Codex scrollt seinen Verlauf mit **Shift+Pfeil**, NICHT mit einfachen
+        // Cursor-Tasten — obwohl es DECSET 1007 setzt und damit genau die anfordert.
+        // Am laufenden Codex 0.146.0 gemessen (2026-08-03, isolierte Instanz): Shift+Up
+        // scrollt zeilenweise hoch, 3× Shift+Down führt exakt zurück; ESC[A, ESC O A,
+        // PageUp/PageDown und End bewirken **nichts**. Ohne diesen Eintrag wäre die
+        // 1007-Auswertung für den Anwender wirkungslos geblieben.
         {.id = QStringLiteral("codex"), .command = QStringLiteral("codex"),
          .displayName = QStringLiteral("Codex"),
          .resumeLastArgs = QStringLiteral("resume --last"),
          .resumePickArgs = QStringLiteral("resume"),
-         .resumeIdArgs   = QStringLiteral("resume {id}")},
+         .resumeIdArgs   = QStringLiteral("resume {id}"),
+         .scrollUpKeys   = QByteArrayLiteral("\x1b[1;2A"),
+         .scrollDownKeys = QByteArrayLiteral("\x1b[1;2B")},
 
         {.id = QStringLiteral("gemini"), .command = QStringLiteral("gemini"),
          .displayName = QStringLiteral("Gemini")},
@@ -187,6 +195,13 @@ static QString templateFor(const AgentInfo &a, ResumeMode mode) {
 
 bool AgentRegistry::supportsResumeMode(const AgentInfo &a, ResumeMode mode) {
     return !templateFor(a, mode).trimmed().isEmpty();
+}
+
+QByteArray AgentRegistry::scrollKeysFor(const QString &agentId, bool up) {
+    if (agentId.isEmpty()) return {};
+    for (const AgentInfo &a : all())
+        if (a.id == agentId) return up ? a.scrollUpKeys : a.scrollDownKeys;
+    return {};
 }
 
 QString AgentRegistry::resumeCommand(const QString &commandLine, ResumeMode mode,

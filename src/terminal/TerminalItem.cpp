@@ -1,5 +1,7 @@
 #include "TerminalItem.h"
 #include "KeyEncoding.h"
+#include "AltScroll.h"
+#include "AgentRegistry.h"
 #include "TerminalGrid.h"
 #include "Session.h"
 #include "VtScreen.h"
@@ -1322,6 +1324,40 @@ void TerminalItem::wheelEvent(QWheelEvent *event) {
     if (appMouseActive(sc)) {
         const QPoint c = cellAt(event->position());
         sc->mouseButton(dy > 0 ? 4 : 5, true, c.y(), c.x(), event->modifiers());
+        event->accept();
+        return;
+    }
+    // Die Anwendung zeichnet ihren Verlauf selbst, QTmux hat nichts zu scrollen: dann
+    // bekommt SIE eine Taste, mit der sie scrollt. Wann das gilt, steht Gui-frei und
+    // begründet in core/AltScroll.h — hier wird nur gefragt.
+    const bool up = dy > 0;
+    // Welche Taste der laufende Agent dafür braucht, weiß die AgentRegistry — dort liegt
+    // alles CLI-spezifische Wissen an einer Stelle (QTMUX-88). Leer heißt „nichts
+    // Besonderes bekannt": dann die xterm-üblichen Cursor-Tasten, also genau das, was
+    // DECSET 1007 verspricht (und was Anzeigeprogramme wie `less` verstehen).
+    //
+    // 🔑 Der Umweg ist NICHT hypothetisch: Codex reagiert allein auf **Shift+Pfeil** —
+    // einfache Cursor-Tasten, SS3, PageUp/PageDown und End bewirken bei ihm nachweislich
+    // nichts, obwohl es 1007 im Programm mitbringt.
+    const QByteArray agentKey =
+        m_session ? AgentRegistry::scrollKeysFor(m_session->agentId(), up) : QByteArray();
+    if (sc && m_session
+            && wheelGoesToApp(altScrollModeFromInt(m_altScrollMode), sc->altScreen(),
+                              sc->mouseTracking(), sc->altScroll(),
+                              sc->scrollbackCount() > 0, !agentKey.isEmpty())) {
+        // Sonst dieselben Bytes, die auch eine gedrückte Pfeiltaste erzeugt — eine zweite
+        // Kodierstelle würde sonst auseinanderdriften.
+        const QByteArray key = agentKey.isEmpty()
+            ? encodeKeyBytes(up ? Qt::Key_Up : Qt::Key_Down, Qt::NoModifier, QString())
+            : agentKey;
+        if (!key.isEmpty()) {
+            // Bewusst NICHT über sendInput(): Ein Rad ist Navigation, keine Eingabe — im
+            // Broadcast-Modus soll das Scrollen in EINEM Pane nicht alle Sessions bewegen.
+            QByteArray burst;
+            burst.reserve(key.size() * kAltScrollLinesPerNotch);
+            for (int i = 0; i < kAltScrollLinesPerNotch; ++i) burst += key;
+            m_session->write(burst);
+        }
         event->accept();
         return;
     }

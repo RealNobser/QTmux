@@ -106,6 +106,12 @@ public:
     /// So schickt ein nach einem TUI-Abbruch **hängen gebliebenes** Tracking-Flag keine
     /// SGR-Codes mehr in die zurückkehrende Shell, ohne die TUI-Maus zu brechen.
     bool altScreen() const { return m_altScreen; }
+    /// Hat die Anwendung **Alternate Scroll** verlangt (DECSET 1007)? Damit bittet sie
+    /// das Terminal, Mausrad-Bewegungen im Alt-Screen als **Cursor-Tasten** zu schicken —
+    /// ohne Maus-Tracking einzuschalten. Genau das tut der Codex-Agent: er setzt 1049h +
+    /// 1007h und **kein** 1000/1002/1003/1006 (am Binary belegt). Ohne Auswertung ist das
+    /// Rad in so einer App tot, weil im Alt-Screen auch der lokale Scrollback leer ist.
+    bool altScroll() const { return m_altScroll; }
     /// Hängende Eingabe-Reporting-Modi lösen (Maus-Tracking, SGR-Maus, Bracketed Paste)
     /// und Attribute/Cursor normalisieren — **ohne** den Bildschirm zu leeren oder den
     /// Alt-Screen umzuschalten. Der manuelle Notausgang, wenn ein TUI unsauber endete
@@ -176,6 +182,7 @@ public:
     void cbOutput(const QByteArray &data);
     void cbSetMouse(int mode);
     void cbSetAltScreen(bool on);
+    void cbSetAltScroll(bool on);
     /// Sammelt OSC-Fragmente (libvterm liefert sie ggf. stückweise) und parst sie.
     void cbOsc(int command, const char *str, int len, bool initial, bool final);
 
@@ -190,6 +197,7 @@ private:
     QString m_title;
     int m_mouseTracking = 0;   // VTERM_PROP_MOUSE: 0=aus,1=Klick,2=Drag,3=Move
     bool m_altScreen = false;  // VTERM_PROP_ALTSCREEN: Vollbild-TUI aktiv (DECSET 1049)
+    bool m_altScroll = false;  // VTERM_PROP_ALTSCROLL: Rad als Cursor-Tasten (DECSET 1007)
 
     // Scrollback-Zeile + ob sie ein weicher Umbruch der vorigen ist (für Copy).
     struct SbLine {

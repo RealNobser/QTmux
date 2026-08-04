@@ -3,6 +3,7 @@
 #include <QSysInfo>
 #include <QTemporaryDir>
 #include "VtScreen.h"
+#include "AltScroll.h"
 #include "LinkDetector.h"
 #include "Session.h"   // nur für die Gui-freie Vorrangregel effectiveWorkingDirectory()
 
@@ -31,6 +32,8 @@ private slots:
     void serializeAnsiRoundTrip();
     void clearViewportKeepsScrollback();
     void altScreenTracked();
+    void altScrollModeTracked();
+    void altScrollRule();
     void resetInputModesClearsMouse();
     void osc7WorkingDirectory();
     void osc7HostHandling();
@@ -154,6 +157,77 @@ void TestVtScreen::altScreenTracked() {
     QVERIFY(!vt.altScreen());
 }
 
+// Alternate Scroll (DECSET/DECRST 1007) wird verfolgt. Das ist der Modus, mit dem eine App
+// das Rad als Cursor-Tasten anfordert, OHNE Maus-Tracking einzuschalten — der Codex-Agent
+// macht genau das (1049h + 1007h, kein 1000/1002/1003/1006, am Binary gezählt). Ohne
+// libvterm-Patch 3 lief 1007 in den `default:`-Zweig von set_dec_mode und war unsichtbar;
+// der CSI-Fallback sieht ihn nie, weil „CSI ? Ps h" als Sequenz erkannt ist. Gegenprobe zum
+// Bug „Scrollen unmöglich": ohne den Patch bleibt altScroll() dauerhaft false.
+void TestVtScreen::altScrollModeTracked() {
+    VtScreen vt(24, 80);
+    QVERIFY(!vt.altScroll());                 // Start: die App hat nichts verlangt
+    vt.inputWrite("\x1b[?1007h");
+    QVERIFY(vt.altScroll());
+    vt.inputWrite("\x1b[?1007l");
+    QVERIFY(!vt.altScroll());
+    // Mehrere Modi in EINER Sequenz (so schickt es crossterm) müssen beide ankommen.
+    VtScreen vt2(24, 80);
+    vt2.inputWrite("\x1b[?1049h\x1b[?1007h");
+    QVERIFY(vt2.altScreen());
+    QVERIFY(vt2.altScroll());
+    // 1007 darf den Alt-Screen NICHT mitschalten (und umgekehrt) — es sind zwei Modi.
+    VtScreen vt3(24, 80);
+    vt3.inputWrite("\x1b[?1007h");
+    QVERIFY(!vt3.altScreen());
+}
+
+// Die Gui-freie Entscheidungsregel (AltScroll.h). Sie liegt an EINER Stelle, damit
+// TerminalItem nur noch fragt — dieselbe Machart wie `shouldPreventSleep` (QTMUX-89).
+void TestVtScreen::altScrollRule() {
+    using M = AltScrollMode;
+    // Reihenfolge der Argumente: mode, altScreen, mouseTracking, appRequested(1007),
+    //                            hasScrollback, hasAgentKeys
+    // --- Alternate Screen (vim, less, htop) ---------------------------------
+    // Vorgabe: nur auf ausdrückliche Anforderung der App (DECSET 1007).
+    QVERIFY(wheelGoesToApp(M::OnlyWhenRequested, true, 0, true, false, false));
+    QVERIFY(!wheelGoesToApp(M::OnlyWhenRequested, true, 0, false, false, false));
+    // „Immer" deckt zusätzlich die Anzeigeprogramme ab, die 1007 nicht senden.
+    QVERIFY(wheelGoesToApp(M::AlwaysInAltScreen, true, 0, false, false, false));
+    // 🔑 Im Alt-Screen darf ein vorhandener lokaler Scrollback NICHT abhalten: der
+    // stammt vom Primary Screen (Shell vor dem TUI) und wäre der falsche Inhalt.
+    // Gegenprobe: mit `!hasScrollback` auch in diesem Zweig fällt die Zeile.
+    QVERIFY(wheelGoesToApp(M::AlwaysInAltScreen, true, 0, false, /*hasScrollback*/true, false));
+
+    // --- Primary Screen: der Codex-Fall ------------------------------------
+    // Codex läuft NICHT im Alt-Screen und sendet kein 1007 (am laufenden Programm
+    // gemessen) — es zählt allein, dass eine gemessene Taste vorliegt und QTmux selbst
+    // nichts zu zeigen hat. Ohne diese Klausel bliebe das Ticket unbehoben; genau diese
+    // Zeile ist der Kern des Fixes.
+    QVERIFY(wheelGoesToApp(M::OnlyWhenRequested, /*alt*/false, 0, /*1007*/false,
+                           /*hasScrollback*/false, /*hasAgentKeys*/true));
+    // 🔑 Der eigene Verlauf hat Vorrang: sobald QTmux Scrollback hat, scrollt es selbst.
+    // Das heilt auch „Agent beendet, Shell wieder da".
+    QVERIFY(!wheelGoesToApp(M::OnlyWhenRequested, false, 0, false, /*hasScrollback*/true, true));
+    // 🔑 Ohne gemessene Taste wird im Primary Screen NIE etwas geschickt — an einem
+    // Shell-Prompt blättern Cursor-Tasten die Befehls-Historie durch. Gilt auch für
+    // „Immer" und selbst bei hängen gebliebenem 1007-Flag nach einem TUI-Absturz.
+    QVERIFY(!wheelGoesToApp(M::OnlyWhenRequested, false, 0, /*1007*/true, false, false));
+    QVERIFY(!wheelGoesToApp(M::AlwaysInAltScreen, false, 0, /*1007*/true, false, false));
+
+    // --- Maus-Tracking hat immer Vorrang -----------------------------------
+    // Greift die App die Maus (z. B. Claude Code), meldet QTMUX-104 das Rad als Taste
+    // 4/5 mitsamt Zelle — dieselbe Rastung darf nicht zusätzlich als Taste gehen.
+    QVERIFY(!wheelGoesToApp(M::OnlyWhenRequested, true, /*mouse*/2, true, false, false));
+    QVERIFY(!wheelGoesToApp(M::AlwaysInAltScreen, true, /*mouse*/1, false, false, false));
+    QVERIFY(!wheelGoesToApp(M::OnlyWhenRequested, false, /*mouse*/3, false, false, true));
+
+    // Persistierte Zahlen: unbekannt/negativ → die zurückhaltende Richtung, nie „immer".
+    QCOMPARE(altScrollModeFromInt(0), M::OnlyWhenRequested);
+    QCOMPARE(altScrollModeFromInt(1), M::AlwaysInAltScreen);
+    QCOMPARE(altScrollModeFromInt(99), M::OnlyWhenRequested);
+    QCOMPARE(altScrollModeFromInt(-1), M::OnlyWhenRequested);
+}
+
 // resetInputModes() löst hängendes Maus-Tracking (der manuelle Notausgang), ohne den
 // Bildschirm zu leeren. Gegenprobe zum Bug: Tracking bleibt sonst != 0.
 void TestVtScreen::resetInputModesClearsMouse() {
@@ -164,6 +238,13 @@ void TestVtScreen::resetInputModesClearsMouse() {
     // … und endet unsauber (kein DECRST). Der manuelle Reset räumt auf:
     vt.resetInputModes();
     QCOMPARE(vt.mouseTracking(), 0);
+    // 🔑 Alternate Scroll (1007) wird dabei bewusst NICHT gelöscht (Begründung in
+    // VtScreen::resetInputModes): ein hängendes 1007 schadet nicht, weil das Rad nur im
+    // Alt-Screen zur Cursor-Taste wird — es zu löschen würde nur einem *laufenden* Codex
+    // das Rad abschalten, der 1007h nie erneut sendet.
+    vt.inputWrite("\x1b[?1007h");
+    vt.resetInputModes();
+    QVERIFY(vt.altScroll());
     // Inhalt bleibt erhalten (kein Clear).
     QVERIFY(vt.screenText().contains(QStringLiteral("eins")));
     QVERIFY(vt.screenText().contains(QStringLiteral("zwei")));

@@ -46,6 +46,9 @@ class TerminalItem : public QQuickItem {
     Q_PROPERTY(bool broadcast READ broadcast WRITE setBroadcast NOTIFY broadcastChanged)
     Q_PROPERTY(bool copyOnSelect READ copyOnSelect WRITE setCopyOnSelect NOTIFY copyOnSelectChanged)
     Q_PROPERTY(bool rightClickPaste READ rightClickPaste WRITE setRightClickPaste NOTIFY rightClickPasteChanged)
+    /// `qtmux::AltScrollMode` als int (0 = nur auf Anforderung der App, 1 = immer im
+    /// Alt-Screen). Persistiert als `window/altScrollMode`; Regeln in core/AltScroll.h.
+    Q_PROPERTY(int altScrollMode READ altScrollMode WRITE setAltScrollMode NOTIFY altScrollModeChanged)
     Q_PROPERTY(bool pasteWarnMultiline READ pasteWarnMultiline WRITE setPasteWarnMultiline NOTIFY pasteWarnMultilineChanged)
     // Ziel des Links unter der Maus (leer = keiner). Treibt den QML-Tooltip „⌘-Klick zum
     // Öffnen"; die Erkennung läuft beim einfachen Drüberfahren, das Öffnen bleibt Cmd/Ctrl.
@@ -93,6 +96,8 @@ public:
     void setCopyOnSelect(bool b) { if (b != m_copyOnSelect) { m_copyOnSelect = b; emit copyOnSelectChanged(); } }
     bool rightClickPaste() const { return m_rightClickPaste; }
     void setRightClickPaste(bool b) { if (b != m_rightClickPaste) { m_rightClickPaste = b; emit rightClickPasteChanged(); } }
+    int altScrollMode() const { return m_altScrollMode; }
+    void setAltScrollMode(int m) { if (m != m_altScrollMode) { m_altScrollMode = m; emit altScrollModeChanged(); } }
     bool pasteWarnMultiline() const { return m_pasteWarnMultiline; }
     void setPasteWarnMultiline(bool b) { if (b != m_pasteWarnMultiline) { m_pasteWarnMultiline = b; emit pasteWarnMultilineChanged(); } }
 
@@ -145,6 +150,7 @@ signals:
     void broadcastChanged();
     void copyOnSelectChanged();
     void rightClickPasteChanged();
+    void altScrollModeChanged();
     void pasteWarnMultilineChanged();
     /// Mehrzeilige Einfügung erkannt — QML fragt nach (lineCount = Zeilenzahl).
     void multilinePasteWarning(int lineCount);
@@ -257,6 +263,7 @@ private:
     bool m_broadcast = false;          // Eingabe an alle Sessions (siehe sendInput)
     bool m_copyOnSelect = false;       // Auswahl automatisch kopieren (PuTTY-Stil)
     bool m_rightClickPaste = false;    // Rechtsklick fügt ein statt Kontextmenü
+    int m_altScrollMode = 0;           // qtmux::AltScrollMode (0 = nur auf Anforderung)
     bool m_pasteWarnMultiline = true;  // Vor mehrzeiligem Einfügen warnen
     QByteArray m_pendingPaste;         // zurückgehaltene Einfügung (Multiline-Warnung)
 

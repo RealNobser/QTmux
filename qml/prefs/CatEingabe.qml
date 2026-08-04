@@ -1,6 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Basic
-import QtQuick.Layouts
 import QTmux
 
 // Kategorie „Eingabe & Zwischenablage" (QTMUX-47, Tabelle A4): die drei Schalter, die mit
@@ -38,6 +36,29 @@ CatPage {
                 AppSwitch {
                     checked: page.host.app.pasteWarnMultiline
                     onToggled: page.host.app.pasteWarnMultiline = checked
+                }
+            }
+        }
+    }
+
+    PrefAnchor {
+        settingKey: "eingabe.maus"
+        page: page
+        PrefGroup {
+            title: qsTr("Maus")
+            PrefRow {
+                title: qsTr("Mausrad in Vollbild-Anwendungen")
+                description: qsTr("Vollbild-Anwendungen zeichnen ihren Verlauf selbst; der Verlauf von QTmux "
+                                  + "bleibt dort leer, das Rad hat also nichts zu scrollen. Es kann nur wirken, "
+                                  + "wenn QTmux daraus eine Taste macht, mit der die Anwendung selbst scrollt. "
+                                  + "„Nur auf Anforderung“ tut das ausschließlich, wenn die Anwendung es "
+                                  + "verlangt; „Immer“ deckt zusätzlich Anzeigeprogramme wie less und man ab, "
+                                  + "bewegt in vim aber den Cursor statt zu scrollen. Für erkannte Agenten mit "
+                                  + "bekannter Scroll-Taste — etwa Codex — wirkt das Rad unabhängig davon.")
+                SegmentedControl {
+                    model: [qsTr("Nur auf Anforderung"), qsTr("Immer")]
+                    currentIndex: page.host.app.altScrollMode
+                    onActivated: (i) => page.host.app.altScrollMode = i
                 }
             }
         }

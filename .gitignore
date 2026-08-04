@@ -10,6 +10,11 @@ cmake-build-*/
 # IDE
 .idea/
 *.user
+
+# Von CMake erzeugt (QT_QML_GENERATE_QMLLS_INI): Importpfade für den QML-Language-Server.
+# Enthält absolute Build- und Qt-Pfade, gilt also nur für DIESE Maschine — jeder Checkout
+# erzeugt sie beim ersten `cmake --preset …` selbst.
+/.qmlls.ini
 .DS_Store
 
 # Geheimnisse / Credentials (niemals committen)

@@ -114,6 +114,10 @@ int cbSetTermProp(VTermProp prop, VTermValue *val, void *user) {
         // setzt ihn per DECSET 1000/1002/1003. Ist er aktiv, leitet TerminalItem
         // Maus-/Scrollrad-Events an die App weiter, statt lokal zu scrollen.
         self->cbSetMouse(val->number);
+    } else if (prop == VTERM_PROP_ALTSCROLL) {
+        // Alternate Scroll (DECSET 1007, libvterm-Patch 3): die App will das Rad als
+        // Cursor-Tasten, ohne Maus-Tracking. TerminalItem entscheidet daraus.
+        self->cbSetAltScroll(val->boolean != 0);
     } else if (prop == VTERM_PROP_ALTSCREEN) {
         // Alternate Screen (DECSET 1049): Vollbild-TUI aktiv. Das Maus-Reporting wird
         // nur hier weitergeleitet — s. VtScreen::altScreen().
@@ -390,6 +394,8 @@ void VtScreen::cbSetMouse(int mode) { m_mouseTracking = mode; }
 
 void VtScreen::cbSetAltScreen(bool on) { m_altScreen = on; }
 
+void VtScreen::cbSetAltScroll(bool on) { m_altScroll = on; }
+
 void VtScreen::resetInputModes() {
     // Hängende Reporting-Modi lösen, ohne Bildschirm/Alt-Screen anzutasten. In den
     // EIGENEN Parser gespeist: libvterm setzt m_mouseTracking dabei über cbSetMouse
@@ -399,6 +405,12 @@ void VtScreen::resetInputModes() {
     //   2004            Bracketed Paste aus
     //   \033[m          Attribute (SGR) zurücksetzen ; \033[?25h  Cursor sichtbar
     // Bewusst NICHT 1049 (Alt-Screen) — der Reset soll den Inhalt nicht wegschalten.
+    // Bewusst auch NICHT 1007 (Alternate Scroll): Ein hängen gebliebenes 1007 richtet
+    // keinen Schaden an, weil das Rad ohnehin nur IM Alt-Screen als Cursor-Taste geht
+    // (s. TerminalItem::wheelEvent) — im zurückgekehrten Prompt ist es also wirkungslos.
+    // Es hier zu löschen hätte nur einen Effekt: einem *laufenden* Codex würde das Rad
+    // abgeschaltet, und er sendet 1007h nie erneut. Anders als beim Maus-Tracking, das
+    // SGR-Codes in die Shell schreibt, gibt es hier also nichts zu retten.
     inputWrite("\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?2004l\033[m\033[?25h");
 }
 

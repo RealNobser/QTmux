@@ -24,7 +24,33 @@ private slots:
     void resumeModeNoneNeverTouches();
     void resumeModePickOnlyWhereSupported();
     void resumeModeReportedNeedsRef();
+    void scrollKeysAreOnlySetWhereMeasured();
 };
+
+// Mausrad-Scrollen in der Agenten-Oberfläche: Nur Codex hat eine eigene Tastenfolge,
+// weil er als Einziger nachweislich etwas anderes braucht als die Cursor-Tasten, die er
+// per DECSET 1007 selbst anfordert (am laufenden Codex 0.146.0 gemessen, 2026-08-03).
+// Für alle anderen MUSS die Auskunft leer bleiben — der Aufrufer nimmt dann die
+// xterm-üblichen Cursor-Tasten. Ein geratener Eintrag würde Tastendrücke mitten in eine
+// fremde Oberfläche schicken; dieser Test ist die Bremse dagegen.
+void TestAgent::scrollKeysAreOnlySetWhereMeasured() {
+    QCOMPARE(AgentRegistry::scrollKeysFor(QStringLiteral("codex"), true),
+             QByteArrayLiteral("\x1b[1;2A"));   // Shift+Up
+    QCOMPARE(AgentRegistry::scrollKeysFor(QStringLiteral("codex"), false),
+             QByteArrayLiteral("\x1b[1;2B"));   // Shift+Down
+    // Claude Code greift die Maus selbst (Tracking) — für ihn ist der Weg gar nicht
+    // zuständig, also auch kein Eintrag.
+    QVERIFY(AgentRegistry::scrollKeysFor(QStringLiteral("claude"), true).isEmpty());
+    QVERIFY(AgentRegistry::scrollKeysFor(QStringLiteral("gemini"), true).isEmpty());
+    // Unbekannt und leer dürfen nicht in einen Treffer laufen.
+    QVERIFY(AgentRegistry::scrollKeysFor(QStringLiteral("gibtsnicht"), true).isEmpty());
+    QVERIFY(AgentRegistry::scrollKeysFor(QString(), true).isEmpty());
+    // Genau EIN Eintrag trägt bisher Tasten — wächst die Zahl, war eine Messung dabei.
+    int mitTasten = 0;
+    for (const AgentInfo &a : AgentRegistry::all())
+        if (!a.scrollUpKeys.isEmpty() || !a.scrollDownKeys.isEmpty()) ++mitTasten;
+    QCOMPARE(mitTasten, 1);
+}
 
 // "agy" (Google AntiGravity) muss erkannt werden.
 void TestAgent::detectsAgy() {

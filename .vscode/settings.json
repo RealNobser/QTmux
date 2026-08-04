@@ -37,5 +37,23 @@
   "C_Cpp.default.compileCommands": "${workspaceFolder}/build/${command:cmake.activeConfigurePresetName}/compile_commands.json",
   "files.associations": {
     "*.qml": "qml"
+  },
+  // Build-Verzeichnisse aus dem Arbeitsbereich heraushalten. Der Grund ist nicht Ordnung,
+  // sondern das QML-Rauschen: Unter build/ liegen 1501 .qml-Dateien — Kopien unserer
+  // eigenen (je Build-Verzeichnis eine) UND Qts komplette QtQuick.Controls.Basic-Quellen,
+  // die `windeployqt` neben die EXE legt. Jede davon, die im Editor geöffnet oder über eine
+  // Suche angetippt wird, landet mit ihren eigenen Meldungen in „Probleme" — bei fremdem
+  // Code, den niemand hier pflegt. `.gitignore` hält sie ohnehin aus dem Repo.
+  // (Die Build-Ausgabe selbst bleibt über die CMake-Tools-Ansicht und das Terminal erreichbar.)
+  "files.exclude": {
+    "build": true,
+    "build-*": true
+  },
+  "search.exclude": {
+    "build": true,
+    "build-*": true
+  },
+  "files.watcherExclude": {
+    "**/build/**": true
   }
 }
