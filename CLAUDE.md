@@ -600,7 +600,7 @@ findet man die Shift-Geste nicht; dieselbe Erfahrung wie bei den Links in QTMUX-
 teuer, da `VtScreen` den Sichtbereich lazy aus libvterm bildet) ·
 **13** (native macOS-Menü-Icons — deferred; Qt reicht `icon.source`/`icon.name` in nativen
 Menüs nicht durch, einziger Weg wäre ein QMenuBar-Umbau; [[qtmux-native-menu-icons]]) ·
-**126** (Marken-Badge „Q" in Menüleiste + App-Icon; Farbe **`#0284C7`** vom Owner bestätigt 2026-08-05 — die Spec schlug Violett `#7C3AED` vor, Ticket und Spec sind nachgezogen. ⚠️ **Deskstarter (DES-20) trägt jetzt denselben Hex** — Kollision im Spec-Dokument vermerkt, Owner-Entscheidung offen. Backlog; Spec
+**126** (Marken-Badge „Q" in Menüleiste + App-Icon; Farbe **`#B239EA`** (Violett), festgelegt 2026-08-05 nachdem `#0284C7` sich als die Farbe des **Deskstarters** herausstellte. 🔑 Eine weitere **Blaustufe war rechnerisch nicht möglich**: Der Bereich H 184–275 ist von MacPCAN, Deskstarter und AstroCAN dreifach belegt, jede Blaustufe scheitert am Abstand zu MacPCAN oder geht im **Dunkel**-Design unter. Belege — ΔE2000 und WCAG-Kontrast gegen **beide** Designs samt Kopfleiste — stehen in der Spec; Backlog; Spec
 `_ClaudeWorkspace/brand-badge-spec.md`).
 **Aus der Air-Evaluation (air.dev):** offen **91** (Agenten-Startprofile, gehört zu
 QTMUX-85) · **92** (Container-Backend) · **93** (Spike ACP, berührt 55/73/75) · **94**
