@@ -361,13 +361,27 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 - **Bei jedem Build-Zyklus auch Release bauen** (Presets `*-release`; Standard-Presets
   sind Debug) — Release-only-Probleme (Optimierung, Asserts, RHI/Shader) fallen sonst
   nicht auf.
-- **Versions-Bump-Stellen** (alle zusammen): `CMakeLists.txt` (project VERSION),
-  `installer/build-dmg.sh`, `installer/build-appimage.sh`, `.github/workflows/ci.yml`
-  (AppImage-Schritt), `installer/QTmux.wxs`, `README.md` (DE **und** EN).
-  🔑 `src/app/main.cpp` und `src/server/McpServer.cpp` stehen seit QTMUX-125 **nicht mehr**
-  in der Liste: beide lesen `QTMUX_VERSION_STRING` aus dem generierten `qtmux_version.h`
-  (`cmake/Version.h.in` ← `PROJECT_VERSION`). Die übrigen Stellen laufen ohne
-  CMake-Konfiguration und bleiben darum manuell.
+- **Versions-Bump-Stellen** (alle zusammen, am 2026-08-05 nachgemessen):
+  `CMakeLists.txt` (project VERSION) · `installer/build-dmg.sh` ·
+  `installer/build-appimage.sh` · **`installer/build-msi.ps1`** (`$Version`-Vorgabe) ·
+  `.github/workflows/ci.yml` (AppImage-Schritt) · `README.md` (**8** Vorkommen, DE **und** EN).
+  🔑 `src/app/main.cpp`, `src/server/McpServer.cpp` und `src/viewmodels/UpdateViewModel.cpp`
+  stehen seit QTMUX-125 **nicht mehr** in der Liste: alle drei lesen `QTMUX_VERSION_STRING`
+  aus dem generierten `qtmux_version.h` (`cmake/Version.h.in` ← `PROJECT_VERSION`). Die
+  übrigen laufen ohne CMake-Konfiguration und bleiben darum manuell.
+  🔑 **`installer/QTmux.wxs` ist KEINE Bump-Stelle** (stand hier früher fälschlich drin): Die
+  Zahl darin steht nur in einem Kommentar-Beispiel, der echte Wert kommt über `-d Version=`.
+  ⚠️ **`build-msi.ps1` hat dagegen eine Vorgabe, die auf `1.2.0` stehengeblieben ist** —
+  parameterlos gebaut ergäbe das ein MSI mit falscher `ProductVersion`, ohne dass irgendetwas
+  rot wird. Nicht behoben, weil der richtige Fix (**kein** Default) zum Build-ID-Baustein
+  gehört und hier nicht testbar ist (Windows-Maschine).
+  📋 Vollständige Analyse als **Vorlage für die anderen fünf Repos**:
+  [docs/versionsquellen.md](docs/versionsquellen.md) — dort auch die Kernfalle für die
+  workspace-weite Build-ID `<version>+<hash>[-dirty]`: `configure_file` friert den Hash zur
+  **Configure**-Zeit ein (ein Commit löst kein Re-Configure aus), er muss zur **Build**-Zeit
+  entstehen. Und: Die Build-ID ist eine **Anzeige**, nie eine Vergleichsgröße — in
+  `UpdateViewModel::currentVersion` darf nur `1.8.0` ankommen, sonst bricht der
+  Manifest-Vergleich.
 - **i18n:** Quellsprache Deutsch; QML `qsTr`, C++ `QCoreApplication::translate("<Kontext>",…)`.
   `cmake --build … --target update_translations`; gescannt werden **genau `qtmux` und
   `qtmux_core`** (`SOURCE_TARGETS` an `qt_add_translations`);
