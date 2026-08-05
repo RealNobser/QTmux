@@ -287,6 +287,18 @@ Tags/Branches sind verschiebbar; das Anhebe-Rezept steht als Kommentar in der `c
 > Bleibt es reproduzierbar, ist die Spur Ressourcenerschöpfung durch die davor laufenden
 > `run_detached.ps1`-Tests, nicht der Doku-Wächter selbst.
 
+> 🔑 **Wie man einen CI-Flake BEWEIST, statt ihn zu vermuten** (an `3b63f00` durchgespielt,
+> dritter Windows-Fehlschlag dieser Art): Ein roter Lauf und ein grüner Folgelauf sind erst
+> dann ein Beleg, wenn der Folgecommit **denselben Code** trägt —
+> `git diff --name-only <rot>..<gruen>` muss ausschließlich Doku nennen. Bei `3b63f00`→`923e8fc`
+> war der Unterschied genau `CLAUDE.md`, und `923e8fc` ist auf allen drei Plattformen grün:
+> damit ist der rote Lauf erledigt, ohne ihn zu wiederholen.
+> ⚠️ **Auf das Log darf man dabei nicht bauen** — schon einen Tag später antwortete
+> `gh run view --job <id> --log` mit `log not found`, während `gh run view <lauf> --json jobs`
+> Status und Fehlschritt weiter lieferte. Wer erst das Log sucht, steht ohne Diagnose da; der
+> Commit-Vergleich ist unabhängig davon. Und: `gh` braucht das Repo-Verzeichnis oder
+> `-R RealNobser/QTmux`, sonst „failed to determine base repo".
+
 > **⚠️ `env.QT_VERSION` (6.10.3) ist bewusst gewählt — nicht blind hochziehen.**
 > **Nicht 6.8.x:** dessen CMake-Config verlinkt das aus dem macOS-SDK entfernte
 > **AGL-Framework** → `ld: framework 'AGL' not found` (lokal unsichtbar, Homebrew-Qt ist
@@ -411,13 +423,16 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 
 **Ausgeliefert: v1.8.0** — Tag auf `4f10eb8`, alle 4 Installer, Manifest live unter
 `https://nobser.de/updates/qtmux/`; der volle Update-Zyklus ist am lebenden Objekt
-verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-127**.
+verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-128**.
 
 **Teststände:** **27** Tests (s. Dateitabelle). macOS Debug/Release je **27/27** (dort läuft
 `test_pty` mit und besteht); Linux (rtzsvr02-Container) und Windows je **26/26** —
 `test_pty` per `-E` ausgenommen (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter
 Windows braucht `ctest` zusätzlich Qt-`bin` im PATH, sonst `0xc0000135`). Größte Binaries:
 `tst_session` 24 Fälle, `tst_vtscreen` 24, `tst_agent` 20.
+🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
+besteht (**27/27**, am Lauf zu `3b63f00` abgelesen). Ein „26 statt 27" aus dem Container ist
+also kein Widerspruch, sondern die Ausnahme per `-E`.
 🔑 **„CI grün auf allen drei Plattformen" ist KEIN Vollständigkeitsbeleg** (Lektion aus
 QTMUX-124): Die CI baut **Release**, ebenso Homebrew-Qt und der Linux-Container —
 **Debug-only-Asserts in Qts vorgebauter Bibliothek sieht sie prinzipiell nicht**; der
@@ -426,11 +441,12 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-04** · Branch `main`, alles committet **und gepusht**: QTMUX-128 +
-QML-Editor-Tooling liegen in `3b63f00` (Vorgänger `393ed47`), diese Doku-Nachlese im Commit
-darüber. Bei Wiedereinstieg `git log --oneline -3` gegenprüfen — die Mac-Session pusht ebenfalls.
-⚠️ **Der CI-Lauf zu `3b63f00` ist von der Windows-Maschine aus NICHT geprüft** (kein `gh` hier
-installiert); wer als Erster kann, sieht nach — die drei Plattform-Jobs sind blockierend.
+Stand **2026-08-05** · Branch `main`, alles committet **und gepusht**: QTMUX-128 +
+QML-Editor-Tooling liegen in `3b63f00`, der Wiedereinstiegs-Anker in `923e8fc`.
+Bei Wiedereinstieg `git log --oneline -3` gegenprüfen — die Windows-Session pusht ebenfalls.
+✅ **Die Mac-Nachlese zu QTMUX-128 ist vollständig abgearbeitet** (2026-08-05): CI geprüft,
+macOS + Linux gebaut und getestet, Jira dual angelegt und auf Done, Prefs-Zeile in beiden
+Designs bildlich abgenommen, Confluence-Benutzerdoku dual ergänzt. Einzelheiten unten.
 
 **Nächster Punkt: QTMUX-94** — Terminal-Ausgabe als Agenten-Kontext.
 - Einstieg: `VtScreen::screenText()`/Scrollback liegen fertig vor; es fehlt allein der Weg
@@ -444,18 +460,25 @@ installiert); wer als Erster kann, sieht nach — die drei Plattform-Jobs sind b
 - Beachten: `qtmux_core` bleibt Gui-frei; jede neue Zeichenkette in `qsTr` + **beide** `.ts`;
   neue QML-Datei ohne `QML_FILES`-Eintrag existiert zur Laufzeit nicht.
 
-**Danach:** Owner-Durchklick der **27 fertigen Tickets** ([docs/owner-abnahmen.md](docs/owner-abnahmen.md))
+**Danach:** Owner-Durchklick der **28 fertigen Tickets** ([docs/owner-abnahmen.md](docs/owner-abnahmen.md))
 · QTMUX-122/123 (OSC 52 + Hinweis bei Maus-Grab) · Proxy-Unterstützung erst, wenn MacPCAN
 sie in `appupdate` geliefert hat (s. u.).
 
-⛔ **Was nur der Mac tun kann** (`CLAUDE.local.md` existiert nur dort):
-1. **QTMUX-128 in beiden Jira anlegen** (Doku vergibt 128, Jira stand auf 127) — vorher in
-   **beiden** Systemen die höchste Nummer frisch holen.
-2. **macOS und Linux bauen + testen** für QTMUX-128 und die QML-Tooling-Änderung
-   ([[qtmux-build-alle-plattformen]]).
-3. Sichtprüfung der neuen Prefs-Zeile „Mausrad in Vollbild-Anwendungen" in beiden Designs
-   → [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
-4. Confluence: Benutzerdoku um das Mausrad in Agenten-Oberflächen ergänzen.
+✅ **Mac-Nachlese QTMUX-128 — erledigt am 2026-08-05** (die Liste stand hier als „Was nur der
+Mac tun kann"; sie ist abgearbeitet, die dauerhaft nützlichen Ergebnisse bleiben):
+1. **Jira dual auf QTMUX-128** — beide Systeme standen frisch geholt auf 127, der Key ist
+   also deckungsgleich; beide auf Done/Erledigt mit Kurzkommentar.
+2. **macOS Debug + Release je 27/27, Linux (rtzsvr02-Container) 26/26.**
+3. **Prefs-Zeile in beiden Designs abgenommen** — Bild sauber, keine QML-Warnung beim Start.
+   🔑 Der Weg dorthin ist dauerhaft nützlich: Das Prefs-Fenster ist ein eigenes `Window` und
+   mit `--screenshot` auf macOS prinzipiell nicht greifbar. Was trägt, ist ein **temporärer**
+   QML-Hook in [qml/Main.qml](qml/Main.qml) — Timer → `prefs.open("<kategorie>")`, zweiter
+   Timer → `prefs.contentItem.children[0].grabToImage(…)` → `Qt.quit()`; der Pfad kommt aus
+   `Theme.dark`, also liefern zwei Läufe mit `defaults write com.qtmux.QTmux-<profil>
+   ui.themeMode -int 1|2` beide Designs. Danach Hook entfernen und neu bauen.
+   ⚠️ `timeout` gibt es auf macOS nicht (Exit 127) — solche Läufe in den Hintergrund geben.
+4. **Confluence-Benutzerdoku dual ergänzt** (neuer Abschnitt „Mausrad in Agenten-Oberflächen"
+   hinter „Verlauf (Scrollback)"; on-prem v19, Cloud v18, Umlaute beidseitig gegengelesen).
 
 ### Zuletzt abgeschlossen (Details in Git/Feature-Referenz)
 
@@ -658,7 +681,7 @@ und **„Online-Update (QTMUX-125)"** (Seiten-IDs in `CLAUDE.local.md`). Die
 **Benutzerdoku** trägt seit 2026-08-03 zusätzlich den Abschnitt „Aktuell bleiben
 (Online-Update)" — beide Systeme gepflegt.
 
-### Owner-Abnahmen offen — **27 Tickets**, je umgesetzt + selbst verifiziert
+### Owner-Abnahmen offen — **28 Tickets**, je umgesetzt + selbst verifiziert
 
 **Die Liste samt Abnahme-Rezept je Ticket steht in
 [docs/owner-abnahmen.md](docs/owner-abnahmen.md)** — sie ist Arbeitsvorrat und gehört
