@@ -1,4 +1,5 @@
 #include "ColorScheme.h"
+#include "SafeFileRead.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -299,10 +300,11 @@ bool parseKeyValue(const QString &text, ColorScheme &s) {
 QString ColorSchemeRegistry::importFile(const QString &path) {
     QString p = path;
     if (p.startsWith(QLatin1String("file://"))) p = QUrl(p).toLocalFile();
-    QFile f(p);
-    if (!f.open(QIODevice::ReadOnly)) return {};
-    const QByteArray data = f.readAll();
-    f.close();
+    // Defensiv lesen (s. SafeFileRead.h): Der Pfad kommt vom Menschen aus einem
+    // Dateidialog und darf auf alles zeigen — auch auf /dev/zero.
+    const auto rd = safefile::read(p, safefile::limits::kColorScheme);
+    if (!rd.ok) return {};
+    const QByteArray data = rd.data;
 
     ColorScheme s;
     s.builtin = false;

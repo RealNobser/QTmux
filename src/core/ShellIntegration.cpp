@@ -1,4 +1,5 @@
 #include "ShellIntegration.h"
+#include "SafeFileRead.h"
 
 #include <QDir>
 #include <QFile>
@@ -6,6 +7,12 @@
 #include <QStandardPaths>
 
 namespace qtmux {
+
+namespace {
+// Die mitgelieferten Skripte sind wenige KB gross; 1 MB ist grosszuegig
+// und faengt trotzdem jede Gerätedatei und jeden Unfall ab.
+constexpr qint64 kMaxScriptBytes = 1024 * 1024;
+}  // namespace
 
 namespace {
 
@@ -66,9 +73,13 @@ ShellIntegrationResult ShellIntegration::install(const QString &targetDir) {
         const QString path = r.targetDir + QLatin1Char('/') + name;
 
         QFile dst(path);
-        if (dst.exists() && dst.open(QIODevice::ReadOnly)) {
-            const bool same = (dst.readAll() == data);
-            dst.close();
+        if (dst.exists()) {
+            // Gedeckelt vergleichen (s. SafeFileRead.h): Zeigt die Zieldatei per
+            // Symlink auf /dev/zero, läse ein blankes readAll() unendlich. Schlägt
+            // die Prüfung fehl, gilt die Datei als „nicht identisch" und wird
+            // überschrieben — genau das soll der Befehl ja tun.
+            const auto rd = safefile::read(path, kMaxScriptBytes);
+            const bool same = rd.ok && rd.data == data;
             if (same) {
                 r.unchanged << name;
                 continue;   // Zeitstempel stehen lassen

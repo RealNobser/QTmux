@@ -1,4 +1,5 @@
 #include "SessionModel.h"
+#include "SafeFileRead.h"
 #include "AgentRegistry.h"
 #include "Session.h"
 #include "VtScreen.h"
@@ -709,10 +710,14 @@ int SessionModel::restoreState() {
         // Scrollback nach oben, die frische Shell-Prompt erscheint darunter. Datei nach
         // dem SPEICHER-Index i benannt (nicht der aktuellen Zeile — Plugin-Skips möglich).
         if (count() > before) {
-            QFile hf(historyDir() + QStringLiteral("/%1.ans").arg(i));
-            if (hf.open(QIODevice::ReadOnly)) {
-                const QByteArray dump = hf.readAll();
-                hf.close();
+            // Gedeckelt lesen (s. SafeFileRead.h): Der Pfad ist zwar intern
+            // gebildet, aber der Inhalt geht direkt in den Terminal-Puffer — ein
+            // übergroßer Dump (oder eine untergeschobene Gerätedatei) fräße hier
+            // Speicher, bevor überhaupt ein Fenster steht.
+            const auto rd = safefile::read(historyDir() + QStringLiteral("/%1.ans").arg(i),
+                                           safefile::limits::kHistoryDump);
+            if (rd.ok) {
+                const QByteArray &dump = rd.data;
                 if (!dump.isEmpty() && m_sessions.last()->screen())
                     m_sessions.last()->screen()->inputWrite(dump);
             }
@@ -816,12 +821,12 @@ void SessionModel::saveHistoryFor(int row, int key) const {
 
 void SessionModel::loadHistoryFor(int row, int key) const {
     if (row < 0 || row >= m_sessions.size()) return;
-    QFile hf(historyDir() + QStringLiteral("/%1.ans").arg(key));
-    if (!hf.open(QIODevice::ReadOnly)) return;
-    const QByteArray dump = hf.readAll();
-    hf.close();
-    if (!dump.isEmpty() && m_sessions.at(row)->screen())
-        m_sessions.at(row)->screen()->inputWrite(dump);
+    // Gedeckelt lesen — Begründung wie oben in der Wiederherstellung.
+    const auto rd = safefile::read(historyDir() + QStringLiteral("/%1.ans").arg(key),
+                                   safefile::limits::kHistoryDump);
+    if (!rd.ok) return;
+    if (!rd.data.isEmpty() && m_sessions.at(row)->screen())
+        m_sessions.at(row)->screen()->inputWrite(rd.data);
 }
 
 // --- Ruhezustand verhindern (QTMUX-89) ---------------------------------------

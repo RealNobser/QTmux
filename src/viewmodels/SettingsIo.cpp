@@ -1,4 +1,5 @@
 #include "SettingsIo.h"
+#include "SafeFileRead.h"
 
 #include "ColorScheme.h"
 #include "ConnectionProfile.h"
@@ -237,13 +238,16 @@ bool SettingsIo::exportToFile(const QUrl &url) {
 // --- Import -----------------------------------------------------------------
 QVariantMap SettingsIo::readFile(const QUrl &url) {
     const QString path = pathOf(url);
-    QFile f(path);
-    if (!f.open(QIODevice::ReadOnly)) {
-        setError(tr("Datei kann nicht gelesen werden: %1").arg(f.errorString()));
+    // Defensiv lesen (Sicherheitsbefund RAFTNG, 2026-08-06): Ein Dateidialog
+    // lässt auch /dev/zero oder ein FIFO auswählen — ein ungeprüftes readAll()
+    // darauf frisst den Speicher bzw. blockiert für immer.
+    const auto rd = safefile::read(path, safefile::limits::kSettingsJson);
+    if (!rd.ok) {
+        setError(rd.error);
         return {};
     }
     QJsonParseError err{};
-    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
+    const QJsonDocument doc = QJsonDocument::fromJson(rd.data, &err);
     if (err.error != QJsonParseError::NoError || !doc.isObject()) {
         setError(tr("Keine gültige JSON-Datei: %1").arg(err.errorString()));
         return {};

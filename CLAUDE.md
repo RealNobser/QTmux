@@ -71,7 +71,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `.qmllint.ini` + `.vscode/settings.json` (+ generierte `.qmlls.ini`) | Editor-Diagnosen für QML: abgeschaltete Kategorien mit Begründung, Ausschluss von `build/`, Importpfade für qmlls (s. QML-Lektionen) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **28** ctest-Tests: 27 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, **proxycredentials**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 27. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **29** ctest-Tests: 28 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, **safefileread**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 28. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -383,6 +383,33 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   entstehen. Und: Die Build-ID ist eine **Anzeige**, nie eine Vergleichsgröße — in
   `UpdateViewModel::currentVersion` darf nur `1.8.0` ankommen, sonst bricht der
   Manifest-Vergleich.
+- ⚠️ **Fremde Pfade NIE mit `readAll()` lesen** (Sicherheitsbefund aus RAFTNG, 2026-08-06).
+  Dort ließ `{"path":"/dev/zero"}` den Prozess in zwei Sekunden von 17 MB auf **30,4 GB**
+  wachsen, blockierte die Event-Loop und beendete ihn **ohne Crashreport**.
+  Gemeinsame Einheit: [src/core/SafeFileRead.h](src/core/SafeFileRead.h)
+  (`safefile::read(pfad, grenze)`), Test `test_safefileread`.
+  🔑 **DREI Riegel, und die ersten beiden allein genügen nicht:** (1) `QFileInfo::isFile()` —
+  wirft Geräte, FIFOs, Sockets, Verzeichnisse raus (`:/`-Ressourcen gelten als Datei und
+  bleiben erlaubt); (2) gemeldete Größe gegen eine Obergrenze; (3) **höchstens `grenze+1`
+  Bytes lesen** statt `readAll()`.
+  🔑 **Gemessen, nicht angenommen:** `/dev/zero`, `/dev/urandom` und ein FIFO melden alle
+  **`size() == 0`** bei `isFile() == false`. Eine reine Größenprüfung ließe sie also **durch**.
+  Umgekehrt fängt das gedeckelte Lesen `/dev/zero` auch ohne `isFile()` ab — beim **FIFO**
+  aber nicht, das blockiert für immer, **ohne** Speicher zu fressen, und sieht damit wie ein
+  Hänger aus, nicht wie ein Leck. Genau deshalb alle drei.
+  ⚠️ Ein Token schützt nicht davor: Wer sich anmeldet, kann trotzdem einen bösen Pfad
+  schicken — und ein **versehentlich** falscher Pfad tut dasselbe wie ein böser.
+  🔑 **Der MCP-Server ist frei von dieser Bauart** (2026-08-06 geprüft): Kein Werkzeug nimmt
+  einen Pfad zum **Lesen**. `cwd` wird nur als Arbeitsverzeichnis gesetzt, `program`
+  ausgeführt, `identity` unverändert an `ssh -i` durchgereicht. Gehärtet sind die vier
+  Stellen, die einen fremden Pfad wirklich öffnen: `SettingsIo`-Import, Farbschema-Import,
+  die beiden Scrollback-Dumps und der Vergleich in `ShellIntegration`.
+  📋 Nachprüfen mit [tools/fuzz_mcp.py](tools/fuzz_mcp.py) — 51 Fälle, prüft **nach jeder
+  Anfrage**, ob der Prozess noch lebt (sonst meldet so ein Lauf nur „es hat nicht geknallt",
+  statt zu sagen, welcher Aufruf getötet hätte). ⚠️ Nur gegen eine **eigene** Instanz auf
+  eigenem Port — QTmux hält Terminal-Sessions.
+  ⚠️ **Nebenbefund für Diagnosen:** Trotz 30 GB gab es **keinen** jetsam-Eintrag im
+  macOS-Log. Wer einen Prozesstod mit „kein OOM laut Log" ausschließt, schließt zu früh aus.
 - **Build-ID `<version>+<git-short-hash>[-dirty]`** (workspace-weite Owner-Vorgabe): steht im
   **Fenstertitel** (`qml/Main.qml`, `App.buildId`) und in MCP `get_server_info`
   (`buildId`/`buildDirty`). Erzeugt von [cmake/BuildId.cmake](cmake/BuildId.cmake) +
@@ -455,8 +482,8 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 `https://nobser.de/updates/qtmux/`; der volle Update-Zyklus ist am lebenden Objekt
 verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-129**.
 
-**Teststände:** **28** Tests (s. Dateitabelle). macOS Debug/Release je **28/28** (dort läuft
-`test_pty` mit und besteht); Linux (rtzsvr02-Container) und Windows je **27/27** —
+**Teststände:** **29** Tests (s. Dateitabelle). macOS Debug/Release je **29/29** (dort läuft
+`test_pty` mit und besteht); Linux (rtzsvr02-Container) und Windows je **28/28** —
 `test_pty` per `-E` ausgenommen (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter
 Windows braucht `ctest` zusätzlich Qt-`bin` im PATH, sonst `0xc0000135`). Größte Binaries:
 `tst_session` 24 Fälle, `tst_vtscreen` 24, `tst_agent` 20.
@@ -478,7 +505,7 @@ Bei Wiedereinstieg `git log --oneline -3` gegenprüfen — die Windows-Session p
 angeschlossen, Auth-Dialog nutzbar. Dazu die **Build-ID** `<version>+<hash>[-dirty]` im
 Fenstertitel und in `get_server_info`, und `build-msi.ps1` hat `-Version` als
 **Pflichtparameter** (der Default stand auf 1.2.0).
-Teststand: macOS Debug/Release je **28/28**, Linux **27/27**.
+Teststand: macOS Debug/Release je **29/29**.
 ⚠️ **Am echten Firmen-Proxy ist nichts abgenommen** — hier steht keiner. Was belegt ist:
 die Übersetzung der Einstellungen, die Ein-Versuch-Regel, das Schweigen des Start-Checks
 und dass das Passwort in keiner Einstellungsdatei landet.

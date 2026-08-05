@@ -81,6 +81,8 @@ add_library(qtmux_core STATIC
     src/core/PromptQueue.cpp
     src/core/ProxyCredentials.h
     src/core/ProxyCredentials.cpp
+    src/core/SafeFileRead.h
+    src/core/SafeFileRead.cpp
     src/core/SecretsVault.h
     src/core/SecretsVault.cpp
     src/core/GlobalHotkey.h

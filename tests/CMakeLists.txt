@@ -43,6 +43,14 @@ qt_add_executable(test_promptqueue tst_promptqueue.cpp)
 target_link_libraries(test_promptqueue PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_promptqueue COMMAND test_promptqueue)
 
+# Sicherheitsbefund RAFTNG (2026-08-06): readAll() auf einen fremden Pfad liess
+# den Prozess auf 30,4 GB wachsen. Der Test legt eine echte Gerätedatei und ein
+# echtes FIFO vor — die Regel ohne sie zu pruefen hiesse, genau den Fall
+# auszulassen, um den es geht.
+qt_add_executable(test_safefileread tst_safefileread.cpp)
+target_link_libraries(test_safefileread PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_safefileread COMMAND test_safefileread)
+
 # QTMUX-129: Sitzungsspeicher für Proxy-Anmeldedaten. Wächter über die
 # Ein-Versuch-Regel — `appupdate` erzwingt keine Obergrenze, also muss sie hier
 # sitzen, sonst sperrt ein falsches Passwort das Domänen-Konto.
