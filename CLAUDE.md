@@ -474,9 +474,16 @@ trägt nicht, es wirkt nur in den *Headern*).
 Stand **2026-08-05** · Branch `main`, alles committet **und gepusht**: QTMUX-128 +
 QML-Editor-Tooling liegen in `3b63f00`, der Wiedereinstiegs-Anker in `923e8fc`.
 Bei Wiedereinstieg `git log --oneline -3` gegenprüfen — die Windows-Session pusht ebenfalls.
-✅ **Die Mac-Nachlese zu QTMUX-128 ist vollständig abgearbeitet** (2026-08-05): CI geprüft,
-macOS + Linux gebaut und getestet, Jira dual angelegt und auf Done, Prefs-Zeile in beiden
-Designs bildlich abgenommen, Confluence-Benutzerdoku dual ergänzt. Einzelheiten unten.
+✅ **QTMUX-129 (Proxy) ist komplett** (2026-08-06, `37614b1`): Kern vendiert, App-Seite
+angeschlossen, Auth-Dialog nutzbar. Dazu die **Build-ID** `<version>+<hash>[-dirty]` im
+Fenstertitel und in `get_server_info`, und `build-msi.ps1` hat `-Version` als
+**Pflichtparameter** (der Default stand auf 1.2.0).
+Teststand: macOS Debug/Release je **28/28**, Linux **27/27**.
+⚠️ **Am echten Firmen-Proxy ist nichts abgenommen** — hier steht keiner. Was belegt ist:
+die Übersetzung der Einstellungen, die Ein-Versuch-Regel, das Schweigen des Start-Checks
+und dass das Passwort in keiner Einstellungsdatei landet.
+⚠️ Die **Build-ID-Quelle ist vorläufig** ([cmake/BuildId.cmake](cmake/BuildId.cmake)) — der
+kanonische Baustein kommt aus MacPCAN; beim Tausch ändert sich nur die Quelle.
 
 **Nächster Punkt: QTMUX-94** — Terminal-Ausgabe als Agenten-Kontext.
 - Einstieg: `VtScreen::screenText()`/Scrollback liegen fertig vor; es fehlt allein der Weg
