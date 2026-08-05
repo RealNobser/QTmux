@@ -14,6 +14,7 @@
 // noch das Netz an.
 
 #include <QtTest>
+#include <QDirIterator>
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -451,6 +452,116 @@ private slots:
     void downloadDirIsItsOwnFolder() {
         UpdateViewModel vm;
         QVERIFY(vm.downloadDir().endsWith(QStringLiteral("/QTmux-Updates")));
+    }
+
+    // ---- Proxy (QTMUX-129) -------------------------------------------------
+
+    // Die Uebersetzung Einstellung -> appupdate::ProxyConfig. Sie ist stille
+    // Logik: Ein vertauschter Modus faellt nirgends auf, er schickt den Verkehr
+    // nur am Proxy vorbei (oder umgekehrt).
+    void proxySettingsMapOntoTheLibraryConfig() {
+        UpdateViewModel vm;
+        // Vorgabe: System — im Firmennetz steht der Proxy meist schon.
+        QCOMPARE(vm.proxyMode(), 0);
+
+        vm.setProxyMode(2);                 // Manuell
+        vm.setProxyType(1);                 // SOCKS5
+        vm.setProxyHost(QStringLiteral("proxy.firma.local"));
+        vm.setProxyPort(3128);
+        vm.setProxyUser(QStringLiteral("DOMAENE\\nutzer"));
+
+        const auto cfg = vm.currentProxyConfig();
+        QCOMPARE(cfg.mode, appupdate::ProxyConfig::Mode::Manual);
+        QCOMPARE(cfg.type, QNetworkProxy::Socks5Proxy);
+        QCOMPARE(cfg.host, QStringLiteral("proxy.firma.local"));
+        QCOMPARE(cfg.port, quint16(3128));
+        QCOMPARE(cfg.user, QStringLiteral("DOMAENE\\nutzer"));
+        QVERIFY(appupdate::isUsable(cfg));
+
+        vm.setProxyMode(1);
+        QCOMPARE(vm.currentProxyConfig().mode, appupdate::ProxyConfig::Mode::None);
+        vm.setProxyMode(0);
+        QCOMPARE(vm.currentProxyConfig().mode, appupdate::ProxyConfig::Mode::System);
+    }
+
+    // Ein unsinniger Port darf nicht als gueltige Portnummer durchrutschen —
+    // quint16 wuerde 70000 stillschweigend auf 4464 kappen.
+    void absurdPortIsRejectedNotTruncated() {
+        UpdateViewModel vm;
+        vm.setProxyMode(2);
+        vm.setProxyHost(QStringLiteral("proxy.firma.local"));
+        vm.setProxyPort(70000);
+        const auto cfg = vm.currentProxyConfig();
+        QCOMPARE(cfg.port, quint16(0));
+        // Ohne brauchbaren Port ist die Konfiguration nicht anwendbar — genau das
+        // soll isUsable() melden, statt an Port 4464 zu verbinden.
+        QVERIFY(!appupdate::isUsable(cfg));
+    }
+
+    // Das Passwort darf NIRGENDS persistiert werden. Der Test schreibt eines in
+    // den Sitzungsspeicher und sieht danach in der kompletten Settings-Datei nach.
+    void proxyPasswordNeverReachesTheSettingsFile() {
+        UpdateViewModel vm;
+        vm.setProxyMode(2);
+        vm.setProxyUser(QStringLiteral("DOMAENE\\nutzer"));
+        vm.provideProxyCredentials(QStringLiteral("DOMAENE\\nutzer"),
+                                   QStringLiteral("streng-geheim-4711"));
+        QVERIFY(vm.hasProxyCredentials());
+        QSettings().sync();
+
+        bool gefunden = false;
+        QDirIterator it(m_settingsDir.path(), QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            QFile f(it.next());
+            if (!f.isOpen() && f.open(QIODevice::ReadOnly)) {
+                if (f.readAll().contains("streng-geheim-4711")) gefunden = true;
+                f.close();
+            }
+        }
+        QVERIFY2(!gefunden, "Proxy-Passwort in einer Einstellungsdatei gefunden");
+
+        // Der Benutzername dagegen SOLL bleiben — er ist kein Geheimnis.
+        QCOMPARE(vm.proxyUser(), QStringLiteral("DOMAENE\\nutzer"));
+    }
+
+    // Die Ein-Versuch-Regel im Zusammenspiel mit dem ViewModel: Nach einer
+    // Ablehnung wird nicht noch einmal geantwortet (Kontosperre), und der Dialog
+    // erfaehrt davon.
+    void rejectedCredentialsAreNotOfferedAgain() {
+        UpdateViewModel vm;
+        vm.setProxyMode(2);
+        vm.provideProxyCredentials(QStringLiteral("u"), QStringLiteral("falsch"));
+
+        QString user, pw;
+        QVERIFY(vm.answerProxyChallenge(QStringLiteral("p.local"), 3128, false, &user, &pw));
+        QCOMPARE(pw, QStringLiteral("falsch"));
+
+        // Zweite Aufforderung mit Fehlermeldung -> aufgeben, nicht wiederholen.
+        QVERIFY(!vm.answerProxyChallenge(QStringLiteral("p.local"), 3128, true, &user, &pw));
+        QVERIFY(!vm.hasProxyCredentials());
+    }
+
+    // 🔑 Der STILLE Start-Check darf keinen Anmeldedialog ausloesen. Sonst
+    // springt drei Sekunden nach dem Programmstart ungefragt ein Passwortfenster
+    // auf — genau das, was die Owner-Regel "Start-Check bleibt still" verbietet.
+    void silentStartupCheckNeverAsksForProxyCredentials() {
+        UpdateViewModel vm;
+        vm.setProxyMode(2);
+        QSignalSpy spy(&vm, &UpdateViewModel::proxyAuthenticationNeeded);
+
+        QString user, pw;
+        // Kein Passwort im Speicher, und nichts wurde von Hand angestossen.
+        QVERIFY(!vm.answerProxyChallenge(QStringLiteral("p.local"), 3128, false, &user, &pw));
+        QCoreApplication::processEvents();
+        QCOMPARE(spy.count(), 0);
+
+        // Von Hand angestossen wird dagegen gefragt.
+        vm.checkNow();
+        QVERIFY(!vm.answerProxyChallenge(QStringLiteral("p.local"), 3128, false, &user, &pw));
+        QCoreApplication::processEvents();
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toString(), QStringLiteral("p.local"));
+        QCOMPARE(spy.at(0).at(1).toInt(), 3128);
     }
 };
 

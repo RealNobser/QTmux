@@ -371,10 +371,11 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   übrigen laufen ohne CMake-Konfiguration und bleiben darum manuell.
   🔑 **`installer/QTmux.wxs` ist KEINE Bump-Stelle** (stand hier früher fälschlich drin): Die
   Zahl darin steht nur in einem Kommentar-Beispiel, der echte Wert kommt über `-d Version=`.
-  ⚠️ **`build-msi.ps1` hat dagegen eine Vorgabe, die auf `1.2.0` stehengeblieben ist** —
+  ✅ **`build-msi.ps1` hatte eine Vorgabe, die auf `1.2.0` stehengeblieben war** —
   parameterlos gebaut ergäbe das ein MSI mit falscher `ProductVersion`, ohne dass irgendetwas
-  rot wird. Nicht behoben, weil der richtige Fix (**kein** Default) zum Build-ID-Baustein
-  gehört und hier nicht testbar ist (Windows-Maschine).
+  rot wird. Seit 2026-08-06 ist `-Version` **Pflichtparameter** (`Mandatory` +
+  `ValidatePattern`): Ein Pflichtparameter kann nicht veralten. Kein Aufrufer bricht daran —
+  `build-release.ps1` liest die Version aus `CMakeLists.txt` und reicht sie durch.
   📋 Vollständige Analyse als **Vorlage für die anderen fünf Repos**:
   [docs/versionsquellen.md](docs/versionsquellen.md) — dort auch die Kernfalle für die
   workspace-weite Build-ID `<version>+<hash>[-dirty]`: `configure_file` friert den Hash zur
@@ -382,6 +383,21 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   entstehen. Und: Die Build-ID ist eine **Anzeige**, nie eine Vergleichsgröße — in
   `UpdateViewModel::currentVersion` darf nur `1.8.0` ankommen, sonst bricht der
   Manifest-Vergleich.
+- **Build-ID `<version>+<git-short-hash>[-dirty]`** (workspace-weite Owner-Vorgabe): steht im
+  **Fenstertitel** (`qml/Main.qml`, `App.buildId`) und in MCP `get_server_info`
+  (`buildId`/`buildDirty`). Erzeugt von [cmake/BuildId.cmake](cmake/BuildId.cmake) +
+  `BuildId.h.in` über das Target `qtmux_buildid`.
+  ⚠️ **VORLÄUFIG** — der kanonische Baustein entsteht in MacPCAN und wird vendiert; getauscht
+  wird dann nur die **Quelle**, nicht die Anzeige.
+  🔑 **Warum ein eigenes Target und kein zweites `configure_file`:** Letzteres liefe zur
+  **Configure**-Zeit, und ein Commit ändert keine CMake-Datei — der Hash bliebe stehen und
+  die App behauptete einen fremden Stand. Das ist schlimmer als gar keine Angabe.
+  🔑 **`-dirty` nur aus verfolgten Dateien** (`--untracked-files=no`), sonst macht ein
+  herumliegendes `build/` jeden Build „dirty". Header nur bei **Inhaltsänderung** schreiben
+  (`copy_if_different`), sonst Rebuild bei jedem Bauen — beides gemessen.
+  ⚠️ **Anzeige, NIE Vergleichsgröße:** `Updates.currentVersion` bekommt weiterhin nur
+  `1.8.0`. Mit angehängtem Hash schlüge der Manifest-Vergleich fehl oder böte dauerhaft ein
+  „Update" an. Vollständige Analyse: [docs/versionsquellen.md](docs/versionsquellen.md).
 - **i18n:** Quellsprache Deutsch; QML `qsTr`, C++ `QCoreApplication::translate("<Kontext>",…)`.
   `cmake --build … --target update_translations`; gescannt werden **genau `qtmux` und
   `qtmux_core`** (`SOURCE_TARGETS` an `qt_add_translations`);
@@ -549,12 +565,17 @@ Mac tun kann"; sie ist abgearbeitet, die dauerhaft nützlichen Ergebnisse bleibe
   wie beim SSH-Passwort-Auto-Fill. Kein Keychain (drei Implementierungen, Linux endete wie
   beim `SleepInhibitor` als Stub), nicht der Vault (er startet **gesperrt**, der stille
   Start-Check dürfte also nach dem Master-Passwort fragen).
-  ⛔ **Teil 2 offen — genau eine Sache: das Nachvendieren.** Der Proxy-Kern liegt in MacPCAN
-  vor (`ProxyConfig.{hpp,cpp}`, `UpdateChecker` mit `setProxyConfig` /
-  `setProxyCredentialProvider` / `ErrorKind`), ist hier aber **nicht** vendiert. Danach:
-  Sync-Skript grün, `UPSTREAM.md` nachziehen, Provider anschließen (eine Lambda-Zeile),
-  `ErrorKind` auswerten, [docs/update-regressionsliste.md](docs/update-regressionsliste.md)
-  Abschnitt D fahren.
+  ✅ **Teil 2 ebenfalls erledigt (2026-08-06):** Kern nachvendiert (Pin `80c19ee`), Provider
+  angeschlossen, `ProxyConfig` aus den Einstellungen gesetzt, `ErrorKind` in sprechende Texte
+  übersetzt. Teststand macOS Debug/Release je 28/28, Linux 27/27.
+  🔑 **`ProxyConfig.cpp` kam OHNE CMake-Pflege an** — der GLOB-Umbau aus `3e1af94` hat beim
+  ersten echten Anlass getragen.
+  🔑 **Der stille Start-Check fragt NIE nach dem Proxy-Passwort** (`answerProxyChallenge`
+  prüft `m_manual`): Ein ungefragt aufspringendes Passwortfenster drei Sekunden nach dem
+  Start ist genau das, was die Regel „Start-Check bleibt still" verbietet — und es käme, wenn
+  der Anwender auf sein Terminal wartet. Gefragt wird beim Check von Hand und beim Download.
+  Wächter `tst_updateviewmodel::silentStartupCheckNeverAsksForProxyCredentials`.
+  ⚠️ Offen bleibt nur die Abnahme am **echten** Firmen-Proxy — hier steht keiner.
 - ⚠️ **Am Update-Weg noch nicht am lebenden Objekt belegt:** Nur der **macOS**-Zweig wurde
   real ausgelöst (DMG gemountet). `msiexec /i` (Windows) und der **AppImage-Selbsttausch**
   (Linux) sind bisher nur als *Start-Plan* geprüft — die Zeichenkette stimmt, ausgeführt hat

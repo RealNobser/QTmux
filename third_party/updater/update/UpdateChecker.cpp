@@ -57,12 +57,107 @@ QUrl UpdateChecker::productUrl(const QString& fileName) const
 
 QNetworkReply* UpdateChecker::get(const QUrl& url)
 {
+    ensureProxyApplied(url);
     QNetworkRequest req(url);
     req.setAttribute(QNetworkRequest::CacheLoadControlAttribute,
                      QNetworkRequest::AlwaysNetwork);
     QNetworkReply* reply = m_nam.get(req);
     m_activeReply = reply;
     return reply;
+}
+
+// ---- Proxy (MAC-36) --------------------------------------------------------
+
+void UpdateChecker::setProxyConfig(const ProxyConfig& cfg)
+{
+    if (cfg == m_proxy) return;
+    m_proxy = cfg;
+    m_proxyResolved = false;   // re-resolve on the next request
+    m_authAttempts  = 0;
+}
+
+void UpdateChecker::setProxyCredentialProvider(ProxyCredentialProvider provider)
+{
+    m_credentialProvider = std::move(provider);
+    // The signal is connected lazily and exactly once: without a provider
+    // there is nothing sensible to answer a challenge with, and Qt would
+    // otherwise retry against an empty authenticator.
+    static const char* kTag = "proxyAuthWired";
+    if (!property(kTag).toBool()) {
+        connect(&m_nam, &QNetworkAccessManager::proxyAuthenticationRequired,
+                this, &UpdateChecker::onProxyAuthRequired);
+        setProperty(kTag, true);
+    }
+}
+
+void UpdateChecker::ensureProxyApplied(const QUrl& target)
+{
+    m_authAttempts = 0;
+
+    switch (m_proxy.mode) {
+    case ProxyConfig::Mode::None:
+        m_nam.setProxy(QNetworkProxy(QNetworkProxy::NoProxy));
+        return;
+    case ProxyConfig::Mode::Manual:
+        m_nam.setProxy(toQNetworkProxy(m_proxy));
+        return;
+    case ProxyConfig::Mode::System:
+        break;
+    }
+
+    // System mode. Resolve at most once per checker — the worst case is
+    // 64 s of blocked OS call (measured), and paying it per request would
+    // be unusable. resolveSystemProxy() bounds the WAIT, not the call.
+    if (m_proxyResolved) return;
+    m_proxyResolved = true;
+
+    const ResolvedProxy r = resolveSystemProxy(target);
+    switch (r.status) {
+    case ProxyResolution::Proxy:
+        m_nam.setProxy(r.proxy);
+        break;
+    case ProxyResolution::NoProxy:
+        m_nam.setProxy(QNetworkProxy(QNetworkProxy::NoProxy));
+        break;
+    case ProxyResolution::TimedOut:
+    case ProxyResolution::Failed:
+        // Deliberately NOT silently direct: going direct here is what turns
+        // a broken PAC into "server unreachable" three seconds later. Go
+        // direct so the request can still succeed on a healthy network, but
+        // record why, so a later failure can name the real cause.
+        m_nam.setProxy(QNetworkProxy(QNetworkProxy::NoProxy));
+        m_lastErrorKind = ErrorKind::ProxyResolutionFailed;
+        break;
+    }
+}
+
+void UpdateChecker::onProxyAuthRequired(const QNetworkProxy& proxy,
+                                        QAuthenticator* auth)
+{
+    if (auth == nullptr) return;
+    if (!m_credentialProvider) {
+        // Nobody can answer — leave the authenticator empty so Qt fails the
+        // request instead of looping, and name the reason.
+        m_lastErrorKind = ErrorKind::ProxyAuthenticationRequired;
+        return;
+    }
+    if (++m_authAttempts > kMaxAuthAttempts) {
+        m_lastErrorKind = ErrorKind::ProxyAuthenticationFailed;
+        return;
+    }
+
+    QString user = m_proxy.user;
+    QString password;
+    if (!m_credentialProvider(proxy.hostName(), proxy.port(),
+                              /*previousAttemptFailed*/ m_authAttempts > 1,
+                              &user, &password)) {
+        m_lastErrorKind = ErrorKind::ProxyAuthenticationRequired;
+        return;
+    }
+    auth->setUser(user);
+    auth->setPassword(password);
+    // Not stored, not logged, not written anywhere — it lives exactly as
+    // long as this authenticator.
 }
 
 // Marks the in-flight request as finished. MUST run before any callback: the

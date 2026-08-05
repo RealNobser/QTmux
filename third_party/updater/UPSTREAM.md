@@ -9,9 +9,18 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `59a9e3531ca4d97848e7bb0913bbcb7d26d97b4f` |
-| Datum | 2026-08-02 |
-| Betreff | `fix(update): clear the in-flight marker before invoking a callback` |
+| Commit | `80c19eefdf96a33b4575892c7b051deb6760ed91` |
+| Datum | 2026-08-06 |
+| Betreff | `perf(ota): Sendetaktung entkoppeln — ein Frame pro Tick war der Deckel` |
+
+Mit diesem Stand kam die **Proxy-Unterstützung** herüber (MAC-36, in MacPCAN als
+`0934eff` eingeführt): neu `ProxyConfig.{hpp,cpp}`, dazu am `UpdateChecker`
+`setProxyConfig()`, `setProxyCredentialProvider()` und das erweiterte
+`ErrorKind`-Enum. Die QTmux-Hälfte dazu liegt in `UpdateViewModel` und
+`src/core/ProxyCredentials.{h,cpp}` (QTMUX-129).
+🔑 `ProxyConfig.cpp` landete **ohne CMake-Pflege** im Target — seit dem
+GLOB-Umbau (`3e1af94`) wird `update/` gerastert statt aufgezählt. Genau dafür
+war er gedacht.
 
 Enthält den **Produktions-Public-Key** (`update/UpdateKeys.hpp`, Ed25519, 32 Byte,
 Owner-Schlüssel vom 2026-08-02) — kein Platzhalter mehr.

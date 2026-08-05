@@ -15,6 +15,17 @@ class AppController : public QObject {
     QML_NAMED_ELEMENT(App)
     QML_SINGLETON
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
+
+    /// Build-ID dieses Programms: `<version>+<git-short-hash>[-dirty]`.
+    /// Steht im **Fenstertitel**, nicht nur im Über-Dialog — man muss einer
+    /// laufenden Anwendung ansehen, ob sie der frisch gebaute Stand ist.
+    /// ⚠️ Reine **Anzeige**. Der Versionsvergleich gegen das Update-Manifest
+    /// läuft über `Updates.currentVersion` und bekommt nur „1.8.0" — mit
+    /// angehängtem Hash schlüge er fehl.
+    Q_PROPERTY(QString buildId READ buildId CONSTANT)
+    /// Wurde aus einem Baum mit uncommitteten Änderungen gebaut? Treibt die
+    /// Kennzeichnung in der Oberfläche.
+    Q_PROPERTY(bool buildIsDirty READ buildIsDirty CONSTANT)
     // „Bewegung reduzieren" des Systems (QTMUX-47, Teil B): true → die Sidebar zeichnet
     // pulsierende Status-Elemente statisch statt animiert. Beim Start ermittelt (macOS
     // universalaccess reduceMotion, Windows SPI_GETCLIENTAREAANIMATION), sonst false;
@@ -29,6 +40,9 @@ public:
 
     QString language() const { return m_language; }
     void setLanguage(const QString &lang);
+
+    QString buildId() const;
+    bool buildIsDirty() const;
 
     bool reduceMotion() const { return m_reduceMotion; }
 

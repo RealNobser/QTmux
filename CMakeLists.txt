@@ -146,6 +146,33 @@ endif()
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Version.h.in"
                "${CMAKE_CURRENT_BINARY_DIR}/generated/qtmux_version.h" @ONLY)
 
+# Build-ID `<version>+<git-short-hash>[-dirty]` (Owner-Vorgabe, workspace-weit).
+# ⚠️ VORLÄUFIG: Der kanonische Baustein entsteht in MacPCAN und wird später
+# vendiert; beim Tausch ändert sich nur die Quelle, nicht die Anzeige.
+#
+# 🔑 Bewusst ein eigenes Target statt eines zweiten `configure_file`: Letzteres
+# liefe zur CONFIGURE-Zeit, und ein Commit ändert keine CMake-Datei — der Hash
+# bliebe stehen und die Anwendung behauptete einen fremden Stand. Das Target
+# läuft bei JEDEM Build; das Skript schreibt den Header nur bei Inhaltsänderung
+# (sonst zöge der neue Zeitstempel jedes Mal einen Rebuild nach sich).
+set(qtmux_buildid_header "${CMAKE_CURRENT_BINARY_DIR}/generated/qtmux_buildid.h")
+add_custom_target(qtmux_buildid ALL
+    BYPRODUCTS "${qtmux_buildid_header}"
+    COMMAND "${CMAKE_COMMAND}"
+            -DQTMUX_SRC=${CMAKE_CURRENT_SOURCE_DIR}
+            -DQTMUX_OUT=${qtmux_buildid_header}
+            -DQTMUX_VERSION=${PROJECT_VERSION}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildId.cmake"
+    COMMENT "Build-ID aus Git ermitteln"
+    VERBATIM)
+# Einmal beim Konfigurieren erzeugen, damit der Header schon beim ERSTEN
+# Compile-Lauf existiert (das Target läuft sonst evtl. zu spät).
+execute_process(COMMAND "${CMAKE_COMMAND}"
+    -DQTMUX_SRC=${CMAKE_CURRENT_SOURCE_DIR}
+    -DQTMUX_OUT=${qtmux_buildid_header}
+    -DQTMUX_VERSION=${PROJECT_VERSION}
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildId.cmake")
+
 # Update-Kern (QTMUX-125) -----------------------------------------------------
 # `third_party/updater/update/` ist eine BYTE-IDENTISCHE Kopie von
 # MacPCANs `src/update/` (Namespace `appupdate`) — QTmux teilt mit MacPCAN/RAFTNG
@@ -288,6 +315,8 @@ qt_add_qml_module(qtmux
 target_include_directories(qtmux PRIVATE src/terminal src/viewmodels src/server
                                         "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(qtmux PRIVATE Qt6::Network Qt6::Svg qtmux_updater)
+# Ohne das kann der Header beim ersten Übersetzungslauf noch fehlen.
+add_dependencies(qtmux qtmux_buildid)
 
 # GPU-Glyph-Atlas (QTMUX-6): RHI-Shader für das Glyph-Material in .qsb kompilieren
 # und unter qrc:/shaders/ einbetten. BATCHABLE, damit das Material in der

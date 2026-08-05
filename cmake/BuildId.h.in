@@ -1,0 +1,18 @@
+#pragma once
+
+// GENERIERT von cmake/BuildId.cmake bei JEDEM Build — nicht von Hand bearbeiten,
+// nicht einchecken (liegt im Build-Verzeichnis unter generated/).
+//
+// Workspace-weites Format: <version>+<git-short-hash>[-dirty]
+//   1.8.0+8b48a04         committeter Stand, sauberer Baum
+//   1.8.0+8b48a04-dirty   dieser Stand PLUS uncommittete Änderungen
+//   1.8.0+unknown         ohne Git-Umgebung (Tarball, flacher Checkout)
+//
+// ⚠️ ANZEIGE, NICHT VERGLEICHSGRÖSSE. Der Versionsvergleich gegen das
+// Update-Manifest läuft weiterhin über QTMUX_VERSION_STRING (qtmux_version.h).
+// Käme die Build-ID dorthin, schlüge der Vergleich fehl oder böte dauerhaft ein
+// „Update" an — die Gegenstelle kennt nur „1.8.0".
+
+#define QTMUX_BUILD_ID   "@QTMUX_BUILD_ID@"
+#define QTMUX_GIT_HASH   "@QTMUX_GIT_HASH@"
+#define QTMUX_GIT_DIRTY  @QTMUX_GIT_DIRTY@

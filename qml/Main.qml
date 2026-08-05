@@ -11,7 +11,13 @@ ApplicationWindow {
     width: 1100
     height: 720
     visible: true
-    title: "QTmux"
+    // Fenstertitel trägt die BUILD-ID, nicht nur den Namen (Owner-Vorgabe
+    // 2026-08-05): Man muss einer laufenden Anwendung ansehen können, ob sie der
+    // frisch gebaute Stand ist — im Über-Dialog allein sieht man es beim
+    // Testen nicht. Format `QTmux 1.8.0+8b48a04`, bei einem Bastelstand
+    // zusätzlich `-dirty` (kommt aus App.buildId).
+    // „QTmux" ist Eigenname → bewusst kein qsTr.
+    title: "QTmux " + App.buildId
     color: Theme.bgMain
 
     // Themengebundene Palette: alle (In-Window-)Basic-Controls — Dialoge, ComboBoxen,

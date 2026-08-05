@@ -15,10 +15,19 @@
                   wix extension add -g WixToolset.UI.wixext/5.0.2   (optional)
 
   Aufruf (aus der Repo-Wurzel, in einer Dev-Shell / vcvars):
-    powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1
+    powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1 -Version 1.8.0
 #>
 param(
-    [string]$Version = "1.2.0",
+    # PFLICHT, bewusst ohne Vorgabewert (2026-08-06). Hier stand "1.2.0" — sechs
+    # Minor-Versionen hinter dem Projekt. Parameterlos gebaut waere daraus ein MSI
+    # mit falscher ProductVersion geworden, ohne dass Build oder Test rot werden.
+    # Ein Pflichtparameter kann nicht veralten; eine Vorgabe ist genau so lange
+    # richtig, wie jemand sie pflegt — und niemand merkt, wenn nicht.
+    # (Dieselbe Fehlerklasse wie die zwei Wrapper, die still die alte Version
+    # bauten — s. CLAUDE.md, "Fehler, die wie ein normaler Lauf aussehen".)
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^\d+\.\d+\.\d+$')]
+    [string]$Version,
     # Leer lassen = automatisch bestimmen (s. u.). Ein explizit uebergebener Wert
     # gewinnt immer — so bleibt das Skript auf Sondermaschinen ueberschreibbar.
     [string]$QtDir        = "",

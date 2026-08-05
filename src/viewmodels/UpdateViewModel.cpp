@@ -151,17 +151,82 @@ void UpdateViewModel::setError(const QString &err) {
     emit lastErrorChanged();
 }
 
+// Die QTmux-Einstellungen in die Lib-Struktur übersetzen (QTMUX-129).
+// 🔑 Die ganze `ProxyConfig` darf persistiert werden — sie hat bewusst KEIN
+// Passwortfeld. Das Passwort kommt ausschließlich durch den Lieferanten und lebt
+// nur so lange wie die Anfrage.
+appupdate::ProxyConfig UpdateViewModel::currentProxyConfig() const {
+    appupdate::ProxyConfig cfg;
+    switch (proxyMode()) {
+    case 1:  cfg.mode = appupdate::ProxyConfig::Mode::None;   break;
+    case 2:  cfg.mode = appupdate::ProxyConfig::Mode::Manual; break;
+    default: cfg.mode = appupdate::ProxyConfig::Mode::System; break;
+    }
+    cfg.type = (proxyType() == 1) ? QNetworkProxy::Socks5Proxy
+                                  : QNetworkProxy::HttpProxy;
+    cfg.host = proxyHost();
+    const int p = proxyPort();
+    cfg.port = (p > 0 && p <= 65535) ? static_cast<quint16>(p) : 0;
+    cfg.user = proxyUser();
+    return cfg;
+}
+
 void UpdateViewModel::rebuildChecker() {
     const QString base = baseUrl();
-    if (m_checker && m_checkerBase == base) return;
-    m_checker = std::make_unique<appupdate::UpdateChecker>(QUrl(base),
-                                                           QLatin1String(kProduct));
-    m_checkerBase = base;
-    connect(m_checker.get(), &appupdate::UpdateChecker::downloadProgress, this,
-            [this](qint64 got, qint64 total) {
-                m_progress = (total > 0) ? double(got) / double(total) : 0.0;
-                emit downloadProgressChanged();
+    if (!m_checker || m_checkerBase != base) {
+        m_checker = std::make_unique<appupdate::UpdateChecker>(QUrl(base),
+                                                               QLatin1String(kProduct));
+        m_checkerBase = base;
+        connect(m_checker.get(), &appupdate::UpdateChecker::downloadProgress, this,
+                [this](qint64 got, qint64 total) {
+                    m_progress = (total > 0) ? double(got) / double(total) : 0.0;
+                    emit downloadProgressChanged();
+                });
+        // Der Anmelde-Lieferant wird EINMAL je Checker gesetzt. Er antwortet nur
+        // aus dem Sitzungsspeicher und blockiert nie — die Begründung steht im
+        // Kopf von answerProxyChallenge().
+        m_checker->setProxyCredentialProvider(
+            [this](const QString &host, quint16 port, bool previousAttemptFailed,
+                   QString *user, QString *password) {
+                return answerProxyChallenge(host, int(port), previousAttemptFailed,
+                                            user, password);
             });
+    }
+    // 🔑 Die Proxy-Einstellung wird bei JEDEM Vorgang neu gesetzt, nicht nur beim
+    // Neuanlegen: Sie kann sich geändert haben, ohne dass die Basis-URL sich
+    // ändert — und dann liefe der nächste Check noch über den alten Proxy.
+    m_checker->setProxyConfig(currentProxyConfig());
+}
+
+// Fehlertext der Lib gegen einen sprechenden ersetzen, wo der typisierte Fehler
+// einen hergibt. Der Rohtext bleibt angehängt — er nennt Host und Ursache und ist
+// bei einer Rückfrage das, was zählt.
+QString UpdateViewModel::decorateError(const QString &raw) const {
+    if (!m_checker) return raw;
+    const QString proxy = proxyErrorText(int(m_checker->lastErrorKind()));
+    if (proxy.isEmpty()) return raw;
+    return raw.isEmpty() ? proxy : proxy + QStringLiteral("\n(") + raw + QLatin1Char(')');
+}
+
+// Sprechender Text zum typisierten Fehler. 🔑 Der Sinn der Proxy-Fälle ist genau
+// dieser: Ohne sie liest sich ein falsch eingestellter Proxy als „Server nicht
+// erreichbar", und man sucht an der falschen Stelle.
+QString UpdateViewModel::proxyErrorText(int kind) const {
+    using EK = appupdate::UpdateChecker::ErrorKind;
+    switch (static_cast<EK>(kind)) {
+    case EK::ProxyAuthenticationRequired:
+        return tr("Der Proxy verlangt eine Anmeldung.");
+    case EK::ProxyAuthenticationFailed:
+        return tr("Der Proxy hat die Anmeldung abgelehnt.");
+    case EK::ProxyUnreachable:
+        return tr("Der Proxy %1 antwortet nicht.").arg(proxyHost());
+    case EK::ProxyResolutionFailed:
+        return tr("Die Proxy-Einstellung des Systems ließ sich nicht ermitteln. "
+                  "Häufigste Ursache ist eine hinterlegte Konfigurationsdatei "
+                  "(PAC/WPAD), die nicht erreichbar ist — „Direkt“ umgeht sie.");
+    default:
+        return QString();
+    }
 }
 
 // --- Prüfen ------------------------------------------------------------------
@@ -205,7 +270,7 @@ void UpdateViewModel::startCheck(bool manual) {
         if (!m) {
             // Still scheitern, wenn niemand danach gefragt hat.
             if (manual) {
-                setError(error);
+                setError(decorateError(error));
                 setState(Failed);
             } else {
                 setState(Idle);
@@ -261,7 +326,7 @@ void UpdateViewModel::download() {
         if (!error.isEmpty()) {
             // Bei SHA-Abweichung hat der Kern die Datei bereits gelöscht — ein
             // beschädigter Installer darf nicht liegen bleiben.
-            setError(error);
+            setError(decorateError(error));
             setState(Failed);
             return;
         }
@@ -385,6 +450,15 @@ bool UpdateViewModel::answerProxyChallenge(const QString &host, int port,
         *password = m_proxyCreds.password();
         return true;
     }
+
+    // ⚠️ Beim STILLEN Start-Check wird NICHT gefragt. Ein ungefragt aufspringender
+    // Anmeldedialog drei Sekunden nach dem Start ist genau das, was die
+    // Owner-Regel „Fehler des Start-Checks bleiben still" verhindern soll — und
+    // er käme ausgerechnet dann, wenn der Anwender gerade auf sein Terminal
+    // wartet. Der Check scheitert hier still; beim nächsten Check von Hand (oder
+    // beim Download, den der Mensch angestoßen hat) wird gefragt.
+    if (!m_manual && !m_proxyRetryIsDownload)
+        return false;
 
     // Kein (brauchbares) Passwort da. Den Menschen fragen — aber NUR melden,
     // nicht warten: Wir stehen in einem synchronen Callback, jedes Blockieren

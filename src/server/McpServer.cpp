@@ -8,6 +8,7 @@
 #include "ConnectionProfile.h"
 
 #include "qtmux_version.h"   // generiert aus cmake/Version.h.in (PROJECT_VERSION)
+#include "qtmux_buildid.h"   // generiert bei jedem Build (cmake/BuildId.cmake)
 
 #include <QDebug>
 #include <QTcpServer>
@@ -518,7 +519,13 @@ QJsonObject McpServer::serverInfo() const {
     return QJsonObject{
         {"server", "QTmux MCP"},
         {"transport", "streamable-http"},
+        // `version` bleibt die reine Nummer — daran vergleicht ein Client.
         {"version", QTMUX_VERSION_STRING},
+        // `buildId` ist die Herkunftsangabe `<version>+<hash>[-dirty]`. Ein Agent
+        // stellt dieselbe Frage wie der Mensch am Fenstertitel: Ist das der
+        // frisch gebaute Stand? ⚠️ NICHT zum Vergleichen verwenden.
+        {"buildId", QTMUX_BUILD_ID},
+        {"buildDirty", QTMUX_GIT_DIRTY},
         {"bindAddress", bind.text()},
         {"port", m_port},
         {"listening", listening()},

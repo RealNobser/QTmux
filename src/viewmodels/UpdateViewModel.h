@@ -27,6 +27,7 @@
 #include <memory>
 
 #include "update/UpdateManifest.hpp"
+#include "update/ProxyConfig.hpp"
 #include "ProxyCredentials.h"
 
 namespace appupdate {
@@ -235,11 +236,21 @@ public:
     bool answerProxyChallenge(const QString &host, int port, bool previousAttemptFailed,
                               QString *user, QString *password);
 
+    /// Die QTmux-Einstellungen als Lib-Struktur (QTMUX-129). Öffentlich, weil der
+    /// Test die Übersetzung prüft — sie liest nur Einstellungen und hat keine
+    /// Nebenwirkung.
+    [[nodiscard]] appupdate::ProxyConfig currentProxyConfig() const;
+
 private:
     void startCheck(bool manual);
     void setState(State s);
     void setError(const QString &err);
     void rebuildChecker();
+    /// Lib-Fehlertext um den sprechenden Proxy-Grund ergänzen.
+    [[nodiscard]] QString decorateError(const QString &raw) const;
+    /// Text zu `UpdateChecker::ErrorKind` (als int, damit der Header den
+    /// Lib-Typ nicht in die Signatur ziehen muss).
+    [[nodiscard]] QString proxyErrorText(int kind) const;
 
     std::unique_ptr<appupdate::UpdateChecker> m_checker;
     std::optional<appupdate::UpdateManifest> m_manifest;

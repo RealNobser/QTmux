@@ -1,6 +1,7 @@
 #include "AppController.h"
 #include "ProjectCommands.h"
 #include "McpAccess.h"   // QTMUX-127: Portprobe auf derselben Adresse wie der Server
+#include "qtmux_buildid.h"   // generiert bei JEDEM Build aus cmake/BuildId.cmake
 #include <QSettings>
 #include <QLocale>
 #include <QFontDatabase>
@@ -204,6 +205,19 @@ int AppController::openNewInstance() const {
         QStringLiteral("--mcp-port"), QString::number(port),
     };
     return QProcess::startDetached(exe, args) ? port : -1;
+}
+
+
+// --- Build-ID (Owner-Vorgabe 2026-08-05) -------------------------------------
+// Reine Anzeige. Sie beantwortet die Frage, die man einer laufenden Anwendung
+// sonst nicht ansieht: Ist das der frisch gebaute Stand? Der Hash sagt WELCHER
+// Stand, `-dirty` trennt einen Bastelstand von einem, den es im Repo gibt.
+QString AppController::buildId() const {
+    return QStringLiteral(QTMUX_BUILD_ID);
+}
+
+bool AppController::buildIsDirty() const {
+    return QTMUX_GIT_DIRTY;
 }
 
 } // namespace qtmux
