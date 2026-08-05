@@ -71,7 +71,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `.qmllint.ini` + `.vscode/settings.json` (+ generierte `.qmlls.ini`) | Editor-Diagnosen für QML: abgeschaltete Kategorien mit Begründung, Ausschluss von `build/`, Importpfade für qmlls (s. QML-Lektionen) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **27** ctest-Tests: 26 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, **mcpaccess**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 26. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **28** ctest-Tests: 27 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, **proxycredentials**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 27. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -423,15 +423,15 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 
 **Ausgeliefert: v1.8.0** — Tag auf `4f10eb8`, alle 4 Installer, Manifest live unter
 `https://nobser.de/updates/qtmux/`; der volle Update-Zyklus ist am lebenden Objekt
-verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-128**.
+verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-129**.
 
-**Teststände:** **27** Tests (s. Dateitabelle). macOS Debug/Release je **27/27** (dort läuft
-`test_pty` mit und besteht); Linux (rtzsvr02-Container) und Windows je **26/26** —
+**Teststände:** **28** Tests (s. Dateitabelle). macOS Debug/Release je **28/28** (dort läuft
+`test_pty` mit und besteht); Linux (rtzsvr02-Container) und Windows je **27/27** —
 `test_pty` per `-E` ausgenommen (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter
 Windows braucht `ctest` zusätzlich Qt-`bin` im PATH, sonst `0xc0000135`). Größte Binaries:
 `tst_session` 24 Fälle, `tst_vtscreen` 24, `tst_agent` 20.
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
-besteht (**27/27**, am Lauf zu `3b63f00` abgelesen). Ein „26 statt 27" aus dem Container ist
+besteht (am Lauf zu `3b63f00` abgelesen). Ein „26 statt 27" aus dem Container ist
 also kein Widerspruch, sondern die Ausnahme per `-E`.
 🔑 **„CI grün auf allen drei Plattformen" ist KEIN Vollständigkeitsbeleg** (Lektion aus
 QTMUX-124): Die CI baut **Release**, ebenso Homebrew-Qt und der Linux-Container —
@@ -512,18 +512,35 @@ Mac tun kann"; sie ist abgearbeitet, die dauerhaft nützlichen Ergebnisse bleibe
 
 ### Offene Fäden (dauerhaft relevant)
 
-- 📋 **Owner-Anforderung Proxy fürs Firmenumfeld** (2026-08-03) — in
-  [docs/workorder-online-update.md](docs/workorder-online-update.md), **nicht begonnen**.
-  ⛔ **Keine eigene Implementierung:** Der Mechanismus entsteht kanonisch in der Shared-Lib
-  `appupdate` (MacPCAN ist der Hub), QTmux **erbt ihn über das Vendoring** — nachvendieren,
-  `tools/check-updater-sync.sh` muss danach grün sein, `UPSTREAM.md` nachziehen. QTmux-Anteil
-  ist nur die App-Hälfte (Settings-Keys `update/proxy*`, Prefs-Abschnitt, Auth-Abfrage im
-  Dialog, ViewModel-Properties, i18n), weil die Lib GUI- und QSettings-frei bleibt.
-  🔑 **Die Zuarbeit an MacPCAN ist geliefert** (Abschnitt „Zuarbeit an MacPCAN" in derselben
-  Datei) — Settings-Keys, der zweistufige Auth-Weg (`proxyAuthenticationRequired` ist
-  **synchron** und damit als QML-Rückfrage untauglich → Anmelde-Lieferant + typisierter
-  Fehler + **genau ein** Versuch wegen AD-Kontosperre), Anmeldedaten im Sitzungsspeicher
-  (Keychain abgelehnt, Vault startet gesperrt). Nicht erneut erarbeiten.
+- 📋 **Proxy fürs Firmenumfeld (QTMUX-129)** — Anforderung und Schnittlinie in
+  [docs/workorder-online-update.md](docs/workorder-online-update.md).
+  ⛔ **Keine eigene Implementierung des Mechanismus:** Er entsteht kanonisch in der
+  Shared-Lib `appupdate` (MacPCAN ist der Hub, MAC-36), QTmux **erbt ihn über das
+  Vendoring**. Die Lib bleibt GUI- und QSettings-frei, darum liegen Dialog und Persistenz
+  bei uns.
+  ✅ **Teil 1 erledigt** (Commit `3e1af94`, 2026-08-05): die gesamte App-Hälfte, die **ohne**
+  die Lib-API auskommt — Sitzungsspeicher [ProxyCredentials.h](src/core/ProxyCredentials.h),
+  der zweistufige Auth-Weg im `UpdateViewModel` (`answerProxyChallenge` ist der fertige
+  Anschlusspunkt, bewusst mit **eigenen** Typen statt `appupdate`-Typen), Settings
+  `update/proxy*`, [ProxyAuthDialog.qml](qml/dialogs/ProxyAuthDialog.qml), Prefs-Abschnitt,
+  i18n. Teststand: macOS Debug/Release je 28/28, Linux 27/27.
+  🔑 **Warum der Dialog nichts zurückgibt:** `proxyAuthenticationRequired` ist **synchron**,
+  der `QAuthenticator*` gilt nur im Slot — ein QML-Dialog antwortet asynchron. Also fragt die
+  Lib einen **Lieferanten**, der nur aus dem Speicher antwortet und nie blockiert; ist er
+  leer, endet die Anfrage sauber, QML fragt den Menschen, und `provideProxyCredentials()`
+  legt ab und **wiederholt** den unterbrochenen Vorgang.
+  🔑 **Die Ein-Versuch-Regel MUSS bei uns sitzen** (an MacPCAN `0934eff` gelesen):
+  `appupdate` reicht `previousAttemptFailed` nur durch und erzwingt **keine** Obergrenze.
+  Mehrere Fehlversuche sperren in einer AD-Umgebung das **Domänen-Konto** — dieselbe Lektion
+  wie beim SSH-Passwort-Auto-Fill. Kein Keychain (drei Implementierungen, Linux endete wie
+  beim `SleepInhibitor` als Stub), nicht der Vault (er startet **gesperrt**, der stille
+  Start-Check dürfte also nach dem Master-Passwort fragen).
+  ⛔ **Teil 2 offen — genau eine Sache: das Nachvendieren.** Der Proxy-Kern liegt in MacPCAN
+  vor (`ProxyConfig.{hpp,cpp}`, `UpdateChecker` mit `setProxyConfig` /
+  `setProxyCredentialProvider` / `ErrorKind`), ist hier aber **nicht** vendiert. Danach:
+  Sync-Skript grün, `UPSTREAM.md` nachziehen, Provider anschließen (eine Lambda-Zeile),
+  `ErrorKind` auswerten, [docs/update-regressionsliste.md](docs/update-regressionsliste.md)
+  Abschnitt D fahren.
 - ⚠️ **Am Update-Weg noch nicht am lebenden Objekt belegt:** Nur der **macOS**-Zweig wurde
   real ausgelöst (DMG gemountet). `msiexec /i` (Windows) und der **AppImage-Selbsttausch**
   (Linux) sind bisher nur als *Start-Plan* geprüft — die Zeichenkette stimmt, ausgeführt hat
@@ -583,7 +600,7 @@ findet man die Shift-Geste nicht; dieselbe Erfahrung wie bei den Links in QTMUX-
 teuer, da `VtScreen` den Sichtbereich lazy aus libvterm bildet) ·
 **13** (native macOS-Menü-Icons — deferred; Qt reicht `icon.source`/`icon.name` in nativen
 Menüs nicht durch, einziger Weg wäre ein QMenuBar-Umbau; [[qtmux-native-menu-icons]]) ·
-**126** (Marken-Badge „Q"/Violett in Menüleiste + App-Icon, Backlog; Spec
+**126** (Marken-Badge „Q" in Menüleiste + App-Icon; Farbe **`#0284C7`** vom Owner bestätigt 2026-08-05 — die Spec schlug Violett `#7C3AED` vor, Ticket und Spec sind nachgezogen. ⚠️ **Deskstarter (DES-20) trägt jetzt denselben Hex** — Kollision im Spec-Dokument vermerkt, Owner-Entscheidung offen. Backlog; Spec
 `_ClaudeWorkspace/brand-badge-spec.md`).
 **Aus der Air-Evaluation (air.dev):** offen **91** (Agenten-Startprofile, gehört zu
 QTMUX-85) · **92** (Container-Backend) · **93** (Spike ACP, berührt 55/73/75) · **94**
