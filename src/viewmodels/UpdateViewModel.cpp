@@ -29,6 +29,13 @@ constexpr auto kKeyAutoCheck = "update/autoCheck";
 constexpr auto kKeyLastCheck = "update/lastCheck";
 constexpr auto kKeySkipped   = "update/skippedVersion";
 constexpr auto kKeyBaseUrl   = "update/baseUrl";
+// Proxy (QTMUX-129) — deckt sich mit appupdate::ProxyConfig. KEIN Passwort-
+// Schlüssel: das lebt nur im Sitzungsspeicher (ProxyCredentials.h).
+constexpr auto kKeyProxyMode = "update/proxyMode";
+constexpr auto kKeyProxyType = "update/proxyType";
+constexpr auto kKeyProxyHost = "update/proxyHost";
+constexpr auto kKeyProxyPort = "update/proxyPort";
+constexpr auto kKeyProxyUser = "update/proxyUser";
 
 QVersionNumber currentVersionNumber() {
     return QVersionNumber(QTMUX_VERSION_MAJOR, QTMUX_VERSION_MINOR,
@@ -169,6 +176,10 @@ void UpdateViewModel::checkOnStartup() {
 
 void UpdateViewModel::startCheck(bool manual) {
     if (busy()) return;
+    // Merken, was läuft — eine Proxy-Anmeldung mittendrin muss genau DAS
+    // wiederholen können (QTMUX-129).
+    m_proxyRetryIsDownload = false;
+    m_proxyRetryManual = manual;
     m_manual = manual;
     m_available = false;
     m_downgrade = false;
@@ -232,6 +243,7 @@ void UpdateViewModel::startCheck(bool manual) {
 // --- Herunterladen -----------------------------------------------------------
 void UpdateViewModel::download() {
     if (busy() || !m_manifest) return;
+    m_proxyRetryIsDownload = true;   // s. startCheck()
     const auto art = m_manifest->currentArtifact();
     if (!art) {
         setError(tr("Für dieses Betriebssystem liegt kein Paket bereit."));
@@ -294,6 +306,117 @@ void UpdateViewModel::skipVersion() {
 void UpdateViewModel::abort() {
     if (m_checker) m_checker->abort();
     if (busy()) setState(Idle);
+}
+
+// ---- Proxy-Einstellungen (QTMUX-129) ---------------------------------------
+// Bewusst ohne Zwischenspeicher direkt aus/in QSettings — genau wie autoCheck
+// und baseUrl daneben. So kann `SettingsIo` (Reset/Import) die Schlüssel
+// ändern, ohne dass hier ein veralteter Wert stehen bliebe.
+
+int UpdateViewModel::proxyMode() const {
+    return QSettings().value(QLatin1String(kKeyProxyMode), 0).toInt();
+}
+void UpdateViewModel::setProxyMode(int mode) {
+    if (mode == proxyMode()) return;
+    QSettings().setValue(QLatin1String(kKeyProxyMode), mode);
+    // Ein Moduswechsel macht ein gemerktes Passwort gegenstandslos — es gehörte
+    // zu einem anderen Proxy.
+    m_proxyCreds.clear();
+    emit proxyChanged();
+}
+
+int UpdateViewModel::proxyType() const {
+    return QSettings().value(QLatin1String(kKeyProxyType), 0).toInt();
+}
+void UpdateViewModel::setProxyType(int type) {
+    if (type == proxyType()) return;
+    QSettings().setValue(QLatin1String(kKeyProxyType), type);
+    emit proxyChanged();
+}
+
+QString UpdateViewModel::proxyHost() const {
+    return QSettings().value(QLatin1String(kKeyProxyHost)).toString();
+}
+void UpdateViewModel::setProxyHost(const QString &host) {
+    if (host == proxyHost()) return;
+    QSettings().setValue(QLatin1String(kKeyProxyHost), host);
+    m_proxyCreds.clear();   // anderer Proxy → altes Passwort ungültig
+    emit proxyChanged();
+}
+
+int UpdateViewModel::proxyPort() const {
+    return QSettings().value(QLatin1String(kKeyProxyPort), 0).toInt();
+}
+void UpdateViewModel::setProxyPort(int port) {
+    if (port == proxyPort()) return;
+    QSettings().setValue(QLatin1String(kKeyProxyPort), port);
+    emit proxyChanged();
+}
+
+QString UpdateViewModel::proxyUser() const {
+    return QSettings().value(QLatin1String(kKeyProxyUser)).toString();
+}
+void UpdateViewModel::setProxyUser(const QString &user) {
+    if (user == proxyUser()) return;
+    QSettings().setValue(QLatin1String(kKeyProxyUser), user);
+    m_proxyCreds.clear();   // anderer Benutzer → altes Passwort ungültig
+    emit proxyChanged();
+}
+
+// ---- Proxy-Anmeldung (QTMUX-129) -------------------------------------------
+//
+// Der Weg im Ganzen: Lib fragt synchron → `answerProxyChallenge` antwortet aus
+// dem Sitzungsspeicher, ohne zu blockieren → liegt nichts vor, feuert sie
+// `proxyAuthenticationNeeded` und die Anfrage endet → QML fragt den Menschen →
+// `provideProxyCredentials` legt ab und **wiederholt** den Vorgang.
+//
+// ⚠️ Noch NICHT an `appupdate` angeschlossen: Der vendierte Kern kennt
+// `setProxyCredentialProvider` in dieser Arbeitskopie noch nicht (das Nachziehen
+// ist eine eigene, angekündigte Runde). Die App-Hälfte ist bewusst vollständig
+// und getestet, damit dann nur eine Lambda-Zeile fehlt.
+
+bool UpdateViewModel::answerProxyChallenge(const QString &host, int port,
+                                           bool previousAttemptFailed,
+                                           QString *user, QString *password) {
+    if (!user || !password) return false;
+
+    if (m_proxyCreds.mayAnswer(previousAttemptFailed)) {
+        *user = m_proxyCreds.user();
+        *password = m_proxyCreds.password();
+        return true;
+    }
+
+    // Kein (brauchbares) Passwort da. Den Menschen fragen — aber NUR melden,
+    // nicht warten: Wir stehen in einem synchronen Callback, jedes Blockieren
+    // hier friert das Netzwerk-Ereignis ein.
+    // 🔑 Queued, damit das Signal die Event-Loop erreicht, nachdem der Callback
+    // zurückgekehrt ist und die Lib ihre Anfrage sauber beendet hat.
+    QMetaObject::invokeMethod(this, [this, host, port]() {
+        emit proxyAuthenticationNeeded(host, port, m_proxyCreds.lastAttemptRejected());
+    }, Qt::QueuedConnection);
+    return false;
+}
+
+void UpdateViewModel::provideProxyCredentials(const QString &user, const QString &password) {
+    m_proxyCreds.set(user, password);
+    // Genau den Vorgang wiederholen, der unterbrochen wurde. Ohne das müsste der
+    // Mensch nach der Anmeldung von Hand neu anstoßen — und würde beim Download
+    // wieder ganz vorne anfangen.
+    if (m_proxyRetryIsDownload)
+        download();
+    else
+        startCheck(m_proxyRetryManual);
+}
+
+void UpdateViewModel::cancelProxyAuthentication() {
+    m_proxyCreds.clear();
+    setState(Idle);
+}
+
+void UpdateViewModel::forgetProxyCredentials() { m_proxyCreds.clear(); }
+
+bool UpdateViewModel::hasProxyCredentials() const {
+    return m_proxyCreds.hasUsablePassword();
 }
 
 } // namespace qtmux

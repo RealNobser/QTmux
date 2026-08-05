@@ -43,6 +43,13 @@ qt_add_executable(test_promptqueue tst_promptqueue.cpp)
 target_link_libraries(test_promptqueue PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_promptqueue COMMAND test_promptqueue)
 
+# QTMUX-129: Sitzungsspeicher für Proxy-Anmeldedaten. Wächter über die
+# Ein-Versuch-Regel — `appupdate` erzwingt keine Obergrenze, also muss sie hier
+# sitzen, sonst sperrt ein falsches Passwort das Domänen-Konto.
+qt_add_executable(test_proxycredentials tst_proxycredentials.cpp)
+target_link_libraries(test_proxycredentials PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_proxycredentials COMMAND test_proxycredentials)
+
 qt_add_executable(test_agent tst_agent.cpp)
 target_link_libraries(test_agent PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_agent COMMAND test_agent)
@@ -153,9 +160,14 @@ add_test(NAME test_updater COMMAND test_updater)
 # UpdateKeys.hpp. Ein Schluesselwechsel macht diesen Test rot — genau der
 # gewuenschte Alarm (Begruendung in tests/fixtures/update/README.md).
 qt_add_executable(test_updateviewmodel tst_updateviewmodel.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/UpdateViewModel.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/UpdateViewModel.cpp
+    # QTMUX-129: Der Sitzungsspeicher gehört zum ViewModel. Er wird hier
+    # MITKOMPILIERT statt qtmux_core zu verlinken — der Test kommt bewusst ohne
+    # den ganzen Kern aus (er braucht nur Core+Network, nicht SerialPort).
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core/ProxyCredentials.cpp)
 target_include_directories(test_updateviewmodel PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
     ${CMAKE_BINARY_DIR}/generated)
 target_compile_definitions(test_updateviewmodel PRIVATE
     QTMUX_UPDATE_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update")

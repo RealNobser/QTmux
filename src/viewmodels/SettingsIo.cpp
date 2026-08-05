@@ -106,7 +106,19 @@ QStringList SettingsIo::patternsFor(const QString &category) {
                  // Tagesdrosselung einer fremden Maschine erben.
                  QStringLiteral("update/autoCheck"),
                  QStringLiteral("update/skippedVersion"),
-                 QStringLiteral("update/baseUrl") };
+                 QStringLiteral("update/baseUrl"),
+                 // Proxy (QTMUX-129). Die Felder decken sich mit
+                 // `appupdate::ProxyConfig` — Modus, Typ, Host, Port.
+                 QStringLiteral("update/proxyMode"),
+                 QStringLiteral("update/proxyType"),
+                 QStringLiteral("update/proxyHost"),
+                 QStringLiteral("update/proxyPort") };
+                 // 🔑 `update/proxyUser` steht BEWUSST NICHT hier. Er wird zwar
+                 // in QSettings gehalten (Komfort: `DOMÄNE\name` nicht bei jedem
+                 // Start neu tippen), gehört aber nicht in eine Exportdatei —
+                 // die ist zum Weitergeben gedacht, und ein Domänen-Benutzername
+                 // ist Personenbezug. Ein PASSWORT existiert als Schlüssel gar
+                 // nicht: es lebt nur im Sitzungsspeicher (ProxyCredentials.h).
     if (category == QLatin1String("erscheinungsbild"))
         return { QStringLiteral("colorSchemes/") };
     if (category == QLatin1String("terminal"))

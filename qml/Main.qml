@@ -469,6 +469,9 @@ ApplicationWindow {
     // Mausrad in einer Vollbild-App, die die Maus nicht greift: 0 = nur wenn die App es
     // per DECSET 1007 verlangt (Vorgabe), 1 = immer. Regeln in src/core/AltScroll.h.
     property int altScrollMode: 0
+    // Der Netzwerk-Proxy (QTMUX-129) steht bewusst NICHT hier: Seine Schlüssel
+    // liegen unter `update/*` und gehören damit ins UpdateViewModel — dieselbe
+    // Stelle wie `autoCheck` und `baseUrl`. QML greift über `Updates.proxy*` zu.
 
     // Einklappbare Seitenleiste (Design 2a): Breite frei ziehbar in [180, 420];
     // rastet beim Ziehen unter 140 px in den eingeklappten Zustand (52 px) ein.
@@ -4328,6 +4331,17 @@ ApplicationWindow {
     // `updateFound` — nur DANN geht der Dialog von selbst auf. Ist nichts zu
     // holen oder der Server unerreichbar, bleibt es beim Schweigen.
     UpdateDialog { id: updateDialog }
+
+    // QTMUX-129: Proxy-Anmeldung. Der Dialog beantwortet das Signal NICHT direkt
+    // (Qts proxyAuthenticationRequired ist synchron) — er legt die Anmeldedaten
+    // in den Sitzungsspeicher und lässt den Vorgang wiederholen.
+    ProxyAuthDialog { id: proxyAuthDialog }
+    Connections {
+        target: Updates
+        function onProxyAuthenticationNeeded(host, port, retry) {
+            proxyAuthDialog.ask(host, port, retry)
+        }
+    }
     // Einstiegspunkt für das Einstellungsfenster (eigenes Window, sieht die IDs aus
     // Main.qml nicht — es kommt über `host.app` hierher, s. PrefsWindow-Brücke).
     function checkForUpdates() { actCheckUpdates.trigger() }

@@ -138,6 +138,93 @@ CatPage {
         }
     }
 
+    // --- Netzwerk-Proxy (QTMUX-129) ---
+    // 🔑 GERÜST: Die Felder schreiben bereits ihre Einstellungen, wirksam werden
+    // sie erst, wenn der Proxy-fähige `appupdate`-Kern nachvendiert ist. Der
+    // Abschnitt steht trotzdem schon hier, weil Settings-Schlüssel, Suchindex
+    // und Übersetzungen sonst später in einem Rutsch nachgezogen werden müssten.
+    PrefAnchor {
+        settingKey: "allgemein.proxy"
+        page: page
+        PrefGroup {
+            title: qsTr("Netzwerk-Proxy")
+            PrefRow {
+                title: qsTr("Proxy für die Update-Prüfung")
+                // Warum „System“ die Vorgabe ist, gehört hierhin: Im Firmenumfeld
+                // steht der Proxy meist schon per WPAD/Systemeinstellung.
+                description: qsTr("„System“ übernimmt, was das Betriebssystem vorgibt — im "
+                                + "Firmennetz meist das Richtige, ohne dass du etwas eintragen "
+                                + "musst. „Direkt“ umgeht den Proxy bewusst; das hilft, wenn eine "
+                                + "hinterlegte Konfigurationsdatei nicht erreichbar ist. „Manuell“ "
+                                + "nutzt die Angaben darunter.")
+                SegmentedControl {
+                    model: [qsTr("System"), qsTr("Direkt"), qsTr("Manuell")]
+                    currentIndex: Updates.proxyMode
+                    onActivated: (i) => Updates.proxyMode = i
+                }
+            }
+            PrefRow {
+                title: qsTr("Proxy-Adresse")
+                description: qsTr("Nur für „Manuell“. Host und Port des Proxys, dazu die Art der "
+                                + "Verbindung.")
+                rowEnabled: Updates.proxyMode === 2
+                RowLayout {
+                    spacing: 8
+                    AppComboBox {
+                        model: [qsTr("HTTP"), qsTr("SOCKS5")]
+                        currentIndex: Updates.proxyType
+                        onActivated: Updates.proxyType = currentIndex
+                    }
+                    TextField {
+                        Layout.preferredWidth: 170
+                        color: Theme.textBright
+                        placeholderText: qsTr("proxy.firma.local")
+                        text: Updates.proxyHost
+                        onEditingFinished: Updates.proxyHost = text
+                    }
+                    TextField {
+                        Layout.preferredWidth: 70
+                        color: Theme.textBright
+                        placeholderText: qsTr("Port")
+                        text: Updates.proxyPort > 0 ? String(Updates.proxyPort) : ""
+                        validator: IntValidator { bottom: 0; top: 65535 }
+                        onEditingFinished: Updates.proxyPort = parseInt(text || "0")
+                    }
+                }
+            }
+            PrefRow {
+                title: qsTr("Benutzername")
+                // Der wichtigste Satz des Abschnitts — im Firmenumfeld ist das
+                // die erste Frage, und die Antwort ist ein Alleinstellungsmerkmal.
+                description: qsTr("Optional. Verlangt der Proxy eine Anmeldung, wird beim nächsten "
+                                + "Versuch nach dem Passwort gefragt. Das Passwort wird "
+                                + "ausschließlich für die laufende Sitzung im Arbeitsspeicher "
+                                + "gehalten — es landet weder in den Einstellungen noch in einer "
+                                + "Exportdatei. Der Benutzername wird gespeichert, aber nicht "
+                                + "mitexportiert.")
+                rowEnabled: Updates.proxyMode === 2
+                TextField {
+                    Layout.preferredWidth: 200
+                    color: Theme.textBright
+                    placeholderText: qsTr("Benutzername, ggf. mit Domäne")
+                    text: Updates.proxyUser
+                    onEditingFinished: Updates.proxyUser = text
+                }
+            }
+            PrefRow {
+                title: qsTr("Anmeldedaten dieser Sitzung verwerfen")
+                description: Updates.hasProxyCredentials()
+                             ? qsTr("Für diese Sitzung liegt ein Passwort im Arbeitsspeicher.")
+                             : qsTr("Zurzeit ist kein Passwort gespeichert.")
+                Button {
+                    text: qsTr("Verwerfen")
+                    palette.buttonText: Theme.textBright
+                    onClicked: Updates.forgetProxyCredentials()
+                }
+            }
+        }
+    }
+
     // --- Energie (QTMUX-89) ---
     PrefAnchor {
         settingKey: "allgemein.energie"

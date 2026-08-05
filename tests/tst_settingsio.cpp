@@ -31,6 +31,7 @@ private slots:
     void allowlistCoversSettingsAndExcludesState();
     void exportSkipsStateKeys();
     void exportNeverContainsSecrets();
+    void exportCarriesProxyConfigButNotIdentity();
     void roundTripExportResetImport();
     void resetCategoryTouchesOnlyThatPage();
     void resetAllKeepsWindowLayout();
@@ -196,6 +197,41 @@ void tst_settingsio::exportNeverContainsSecrets() {
 
     vault->removeSecret(QStringLiteral("prod-ssh"));
     vault->lock();
+}
+
+// QTMUX-129: Die Proxy-Einstellung ist geteilt — Verbindungsdaten dürfen in eine
+// Exportdatei, die Identität nicht. Ein Passwort taucht als Schlüssel gar nicht
+// auf (Sitzungsspeicher, s. ProxyCredentials.h); dass hier trotzdem eines
+// geschrieben wird, ist Absicht: Der Test soll auch dann greifen, wenn jemand
+// später einen solchen Schlüssel einführt.
+void tst_settingsio::exportCarriesProxyConfigButNotIdentity() {
+    QSettings s;
+    s.setValue(QStringLiteral("update/proxyMode"), QStringLiteral("manual"));
+    s.setValue(QStringLiteral("update/proxyType"), QStringLiteral("http"));
+    s.setValue(QStringLiteral("update/proxyHost"), QStringLiteral("proxy.firma.local"));
+    s.setValue(QStringLiteral("update/proxyPort"), 3128);
+    s.setValue(QStringLiteral("update/proxyUser"), QStringLiteral("DOMAENE\\nutzer"));
+    s.setValue(QStringLiteral("update/proxyPassword"), QStringLiteral("darf-nie-raus"));
+    s.sync();
+
+    SettingsIo io;
+    const QByteArray json = io.exportJson();
+
+    // Verbindungsdaten: ja. Ohne sie müsste jeder Kollege den Proxy neu suchen.
+    QVERIFY(json.contains("update/proxyMode"));
+    QVERIFY(json.contains("proxy.firma.local"));
+    QVERIFY(json.contains("3128"));
+
+    // Identität und Geheimnis: nie. Die Exportdatei ist zum WEITERGEBEN gedacht.
+    QVERIFY(!json.contains("update/proxyUser"));
+    QVERIFY(!json.contains("DOMAENE"));
+    QVERIFY(!json.contains("update/proxyPassword"));
+    QVERIFY(!json.contains("darf-nie-raus"));
+
+    // Und der Benutzername darf durch den Export auch nicht VERLOREN gehen —
+    // er steht weiterhin in den Einstellungen, nur eben nicht in der Datei.
+    QCOMPARE(s.value(QStringLiteral("update/proxyUser")).toString(),
+             QStringLiteral("DOMAENE\\nutzer"));
 }
 
 // Der eigentliche Round-Trip: exportieren → alles zurücksetzen → importieren.

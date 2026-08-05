@@ -27,6 +27,7 @@
 #include <memory>
 
 #include "update/UpdateManifest.hpp"
+#include "ProxyCredentials.h"
 
 namespace appupdate {
 class UpdateChecker;
@@ -61,6 +62,21 @@ class UpdateViewModel : public QObject {
     Q_PROPERTY(QString baseUrl READ baseUrl WRITE setBaseUrl NOTIFY baseUrlChanged)
     /// Anzeigesprache der Anmerkungen; QML bindet das an `App.language`.
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY notesChanged)
+
+    // ---- Proxy-Einstellungen (QTMUX-129) -----------------------------------
+    // Die Felder decken sich mit `appupdate::ProxyConfig`. Sie liegen HIER und
+    // nicht im QML-`Settings`-Block von Main.qml, weil ihre Schlüssel `update/*`
+    // sind — dieselbe Stelle wie `autoCheck`/`baseUrl`.
+    // ⚠️ Es gibt bewusst KEIN Passwort: das lebt nur im Sitzungsspeicher
+    // (ProxyCredentials.h) und wird nirgends persistiert.
+    /// 0 = System (Vorgabe) · 1 = Direkt · 2 = Manuell.
+    Q_PROPERTY(int proxyMode READ proxyMode WRITE setProxyMode NOTIFY proxyChanged)
+    /// 0 = HTTP · 1 = SOCKS5. Nur bei Modus „Manuell“ von Belang.
+    Q_PROPERTY(int proxyType READ proxyType WRITE setProxyType NOTIFY proxyChanged)
+    Q_PROPERTY(QString proxyHost READ proxyHost WRITE setProxyHost NOTIFY proxyChanged)
+    Q_PROPERTY(int proxyPort READ proxyPort WRITE setProxyPort NOTIFY proxyChanged)
+    /// Optional. Wird gespeichert (Komfort), aber NICHT mitexportiert.
+    Q_PROPERTY(QString proxyUser READ proxyUser WRITE setProxyUser NOTIFY proxyChanged)
 
 public:
     /// Zustand des Ablaufs. Bewusst ein Enum statt mehrerer Boolesche: der Dialog
@@ -100,6 +116,17 @@ public:
     void setBaseUrl(const QString &url);
     QString language() const { return m_language; }
     void setLanguage(const QString &lang);
+
+    int proxyMode() const;
+    void setProxyMode(int mode);
+    int proxyType() const;
+    void setProxyType(int type);
+    QString proxyHost() const;
+    void setProxyHost(const QString &host);
+    int proxyPort() const;
+    void setProxyPort(int port);
+    QString proxyUser() const;
+    void setProxyUser(const QString &user);
 
     /// Prüfung von Hand (Menü/Palette): ignoriert die Tagesdrosselung UND eine
     /// übersprungene Version, meldet Fehler sichtbar.
@@ -148,6 +175,10 @@ signals:
     void lastErrorChanged();
     void autoCheckChanged();
     void baseUrlChanged();
+    /// Ein Sammelsignal für alle Proxy-Felder — sie werden immer zusammen
+    /// gelesen (die Konfiguration ist eine Einheit), einzelne Signale wären nur
+    /// fünf Namen mehr ohne Nutzen.
+    void proxyChanged();
 
     /// Es gibt etwas anzubieten — QML öffnet daraufhin den Dialog. Feuert auch
     /// beim stillen Start-Check (das ist sein einziger Zweck).
@@ -155,6 +186,54 @@ signals:
     /// Eine Prüfung ist durch. `manual` unterscheidet den Menüpunkt vom
     /// Start-Check: nur bei `true` darf „Sie sind aktuell" gemeldet werden.
     void checkFinished(bool manual);
+
+    /// Der Proxy verlangt eine Anmeldung, und im Sitzungsspeicher liegt nichts
+    /// (mehr). QML öffnet daraufhin `ProxyAuthDialog`. `retry` ist wahr, wenn
+    /// zuvor bereits ein Passwort abgelehnt wurde — der Dialog sagt das dann,
+    /// statt wortgleich noch einmal zu fragen.
+    ///
+    /// ⚠️ Wird aus einem **synchronen** Lib-Callback gefeuert und ist deshalb
+    /// eine reine Benachrichtigung: Die laufende Anfrage ist damit beendet
+    /// (`ErrorKind::ProxyAuthenticationRequired`). Die Antwort kommt später über
+    /// `provideProxyCredentials()` und startet den Vorgang **neu**.
+    void proxyAuthenticationNeeded(const QString &host, int port, bool retry);
+
+public:
+    // ---- Proxy-Anmeldung: der Weg von QML zurück in die Lib (QTMUX-129) -----
+    //
+    // 🔑 Warum zweistufig und nicht „Dialog beantwortet das Signal": Qts
+    // `proxyAuthenticationRequired` wird **synchron** zugestellt, der
+    // `QAuthenticator*` gilt nur während des Slot-Aufrufs. Ein QML-Dialog
+    // antwortet asynchron — der Slot wäre längst zurück. Bliebe eine
+    // verschachtelte Event-Loop mitten im Netzwerk-Callback, und genau diese
+    // Klasse Fehler hat uns der `busy()`-Fall schon einmal gekostet.
+    // Deshalb: Die Lib fragt einen **Lieferanten**, der nur aus dem Speicher
+    // antwortet und nie blockiert; fehlt etwas, scheitert die Anfrage sauber
+    // und QML füllt nach.
+
+    /// Aus dem Dialog. Legt die Anmeldedaten in den **Sitzungsspeicher** (nur
+    /// RAM, s. ProxyCredentials.h) und wiederholt den unterbrochenen Vorgang.
+    Q_INVOKABLE void provideProxyCredentials(const QString &user, const QString &password);
+
+    /// Der Mensch bricht ab: Speicher leeren, nicht erneut fragen.
+    Q_INVOKABLE void cancelProxyAuthentication();
+
+    /// Anmeldedaten dieser Sitzung vergessen (Proxy abgeschaltet, Einstellungen
+    /// geändert, Programmende).
+    Q_INVOKABLE void forgetProxyCredentials();
+
+    /// Liegt für diese Sitzung ein Passwort im Speicher?
+    Q_INVOKABLE bool hasProxyCredentials() const;
+
+    /// **Der Anschlusspunkt für den Lib-Lieferanten.** Bewusst mit eigenen Typen
+    /// statt mit `appupdate`-Typen: So ist die App-Hälfte fertig und testbar,
+    /// bevor der Kern nachvendiert ist — angeschlossen wird sie später mit einer
+    /// einzigen Lambda-Zeile an `setProxyCredentialProvider`.
+    ///
+    /// Gibt `true` zurück, wenn `user`/`password` gefüllt wurden. Bei `false`
+    /// soll der Aufrufer aufgeben (**nicht** wiederholen — Kontosperre).
+    bool answerProxyChallenge(const QString &host, int port, bool previousAttemptFailed,
+                              QString *user, QString *password);
 
 private:
     void startCheck(bool manual);
@@ -174,6 +253,13 @@ private:
     QString m_downloadedPath;
     QString m_lastError;
     QString m_language;
+
+    /// Nur im Arbeitsspeicher, nie persistiert — s. ProxyCredentials.h.
+    ProxyCredentials m_proxyCreds;
+    /// Was zuletzt lief, damit `provideProxyCredentials()` es wiederholen kann.
+    /// Ohne das müsste der Mensch nach der Anmeldung von Hand neu anstoßen.
+    bool m_proxyRetryIsDownload = false;
+    bool m_proxyRetryManual = false;
 };
 
 } // namespace qtmux

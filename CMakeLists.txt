@@ -79,6 +79,8 @@ add_library(qtmux_core STATIC
     src/core/AgentEventHub.cpp
     src/core/PromptQueue.h
     src/core/PromptQueue.cpp
+    src/core/ProxyCredentials.h
+    src/core/ProxyCredentials.cpp
     src/core/SecretsVault.h
     src/core/SecretsVault.cpp
     src/core/GlobalHotkey.h
@@ -155,22 +157,42 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Version.h.in"
 # (Projektregel), `UpdateChecker` braucht aber QNetworkAccessManager.
 # 🔑 Der Include-Pfad zeigt auf `third_party/updater`, weil sich der Kern selbst
 # mit dem Präfix `update/` inkludiert — das gehört zur Byte-Identität.
-add_library(qtmux_updater STATIC
-    third_party/updater/update/UpdateManifest.hpp
-    third_party/updater/update/UpdateManifest.cpp
-    third_party/updater/update/UpdateChecker.hpp
-    third_party/updater/update/UpdateChecker.cpp
-    third_party/updater/update/UpdatePolicy.hpp
-    third_party/updater/update/InstallerLauncher.hpp
-    third_party/updater/update/InstallerLauncher.cpp
-    third_party/updater/update/UpdateKeys.hpp
-    third_party/updater/update/Ed25519Verify.hpp
-    third_party/updater/update/Ed25519Verify.cpp
-    third_party/updater/update/ed25519/monocypher.h
-    third_party/updater/update/ed25519/monocypher.c
-    third_party/updater/update/ed25519/monocypher-ed25519.h
-    third_party/updater/update/ed25519/monocypher-ed25519.c
+#
+# 🔑 Die Dateiliste wird GEGLOBBT, und das ist hier bewusst richtig (2026-08-05,
+# Owner-Auftrag „ein Wächter, den man von Hand nachziehen muss, fällt irgendwann
+# still aus"). Vorher stand hier eine Aufzählung; sie war die einzige Stelle, die
+# beim Nachvendieren von Hand gepflegt werden musste. Eine neu vendierte Datei war
+# damit sync-grün (tools/check-updater-sync.sh vergleicht BEIDE Bäume und sieht
+# neue Dateien selbst) und trotzdem nicht übersetzt — genau die stille Lücke, die
+# bei der kommenden Proxy-Erweiterung aufgeschlagen wäre.
+#
+# ⚠️ Der übliche Einwand gegen GLOB — „er verdeckt Drift" — trägt für DIESEN Baum
+# nicht: Sein Inhalt wird nicht hier verantwortet, sondern per SHA-256 gegen
+# MacPCAN geprüft. Die explizite Liste machte also keine zusätzliche Drift
+# sichtbar, sie war reine Redundanz zu einem stärkeren Wächter. Für eigenen Code
+# gilt die Regel unverändert: dort wird aufgezählt.
+# CONFIGURE_DEPENDS lässt CMake bei jedem Build neu globben, sodass eine neue
+# Datei auch ohne manuelles Re-Configure ankommt.
+file(GLOB qtmux_updater_sources CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/ed25519/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/ed25519/*.c"
 )
+# Ein leerer oder halber Glob darf NICHT in einem unverständlichen Linkfehler
+# enden: fehlt der vendierte Baum (unvollständiger Checkout), sagt es das hier.
+foreach(qtmux_updater_required
+        UpdateManifest.cpp UpdateChecker.cpp InstallerLauncher.cpp Ed25519Verify.cpp)
+    set(qtmux_updater_probe
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/${qtmux_updater_required}")
+    list(FIND qtmux_updater_sources "${qtmux_updater_probe}" qtmux_updater_found)
+    if(qtmux_updater_found EQUAL -1)
+        message(FATAL_ERROR
+            "qtmux_updater: ${qtmux_updater_required} fehlt in third_party/updater/update/. "
+            "Vendierter Update-Kern unvollständig — tools/check-updater-sync.sh --update ausführen.")
+    endif()
+endforeach()
+add_library(qtmux_updater STATIC ${qtmux_updater_sources})
 target_include_directories(qtmux_updater PUBLIC third_party/updater)
 target_link_libraries(qtmux_updater PUBLIC Qt6::Core Qt6::Network)
 
@@ -212,6 +234,7 @@ qt_add_qml_module(qtmux
         qml/SplitNode.qml
         qml/PrefsWindow.qml
         qml/dialogs/UpdateDialog.qml
+        qml/dialogs/ProxyAuthDialog.qml
         qml/Ui/IconToolButton.qml
         qml/Ui/ShortcutMenuItem.qml
         qml/Ui/AppMenuItem.qml
