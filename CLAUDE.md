@@ -1501,6 +1501,14 @@ Datei-URL zerstörte sie die Pfadauflösung) und ein Download, der in Häppchen 
 darum überhaupt Fortschritt meldet. Deshalb hat `tst_updateviewmodel` einen eigenen
 In-Process-HTTP-Server; genau dort ist der `busy()`-Fehler oben aufgeschlagen.
 
+🔑 **Regressionsliste für den Update-Weg:**
+[docs/update-regressionsliste.md](docs/update-regressionsliste.md) — fünf Minuten an einem
+1.8.0-Build (Manifest-Abruf, Signatur **mit Gegentest**, Versionsvergleich, „ist aktuell").
+Gedacht als schneller Gegencheck **nach jedem Re-Vendoring**, weil die kommende
+Proxy-Unterstützung auf **beide** Netzwege wirkt (Manifest **und** Artefakt-Download) und
+QTmux der Konsument ist, bei dem eine Regression zuerst auffällt. Alle Sollwerte sind
+gemessen, die Befehle laufen wörtlich.
+
 **Nächste Version veröffentlichen — das Rezept** (einmal komplett gefahren für 1.8.0):
 1. Bump an den Stellen aus den Konventionen; `qtmux_version.h` danach **gegenlesen**.
 2. Alle drei Plattformen bauen + testen, committen, pushen, CI abwarten.
