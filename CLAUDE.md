@@ -511,8 +511,8 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-06** · Branch `main` = `origin/main` = `6da1608`, Working Tree sauber,
-**alles gepusht**. Die letzten beiden Commits stammen aus dem Aufräumlauf 2026-08-06:
+Stand **2026-08-06** · Branch `main`, Working Tree sauber, **alles gepusht**.
+Aus dem Aufräumlauf 2026-08-06 stammen:
 `4f77eb8` (Doku-Wächter repariert, s. Owner-Entscheid 2) und `6da1608` (diese `CLAUDE.md`
 gekürzt, Detailwissen nach `docs/feature-referenz.md` + `docs/e2e-fallen.md` ausgelagert,
 beide im Wächter aufgenommen). Bei Wiedereinstieg `git log --oneline -3` gegenprüfen —
@@ -552,10 +552,23 @@ lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, pf-Installation)
    Überschriften) und meldete seit QTMUX-34 grün, ohne je zu prüfen; Ursache und Messwerte
    stehen in [docs/e2e-fallen.md](docs/e2e-fallen.md). Repariert über einen `REGEX`-Filter
    in `tests/CheckDocDuplicates.cmake`, Erkennung jetzt 100 % je Datei, Gegentest fällt
-   nachweislich (grün → rot → rot → grün). ⚠️ Belegt ist das **nur auf macOS** — der
-   Wächter läuft auch in der CI auf Windows und Linux; dort ist der Fix noch nicht gesehen.
+   nachweislich (grün → rot → rot → grün). ✅ **Auf allen drei Plattformen belegt:** macOS
+   lokal 29/29, **Windows und Linux grün** im CI-Lauf `31127792710` (auf `22ba6f8`).
+   🔑 Der macOS-**Job** jenes Laufs steht auf `cancelled` und färbt den Lauf rot — das ist
+   **kein** Befund: `steps: []`, der Job bekam nie einen Runner (15 min Wartezeit, während
+   Linux/Windows in 5 min durchliefen). Vor jeder Deutung eines roten macOS-Jobs also erst
+   `gh api …/jobs` lesen: **leere Schrittliste = nie gelaufen**, nicht fehlgeschlagen.
 
 #### Zustand, der nicht aus Code/Git hervorgeht
+
+- ⚠️ **Der `push`-Trigger der CI hat am 2026-08-06 abends nicht gefeuert** — drei Pushes auf
+  `main` (`4f77eb8`, `6da1608`, `22ba6f8`) erzeugten **null** Check-Runs, obwohl
+  `on: push: branches: [main]` ohne `paths`-Filter greift und Actions aktiviert ist
+  (`allowed_actions: all`); der Vormittagslauf zu `a2d0fa9` war noch normal. Actions selbst
+  ist intakt: `gh workflow run CI --ref main` startete sofort. Ursache **ungeklärt**,
+  vermutlich GitHub-seitig. **Beim nächsten Push nachsehen, ob wieder ein Lauf entsteht** —
+  bleibt es aus, laufen Änderungen ungeprüft durch, und die Branch-Protection erwartet
+  weiterhin drei Status-Checks (was einen echten PR blockieren würde).
 
 - Die **Produktivinstanz läuft** (PID 31102, Port 7345) aus `build/macos` — dort **nicht**
   hineinbauen, das reißt alle Terminal-Sessions mit.
