@@ -26,7 +26,23 @@ foreach(_file IN LISTS DOC_FILES)
     # Mehrbyte-Zeichen (im README die Flaggen-Emoji der Sprachhälften) den Anfang
     # der Zeile — die '##'-Marke ginge verloren, der Überschriften-Pfad verrutschte
     # und der Wächter meldete Duplikate, die keine sind.
-    file(STRINGS "${_file}" _lines ENCODING UTF-8)
+    #
+    # ⚠️ REGEX ist ebenso PFLICHT, und zwar aus einem teurer erkauften Grund
+    # (2026-08-06 gemessen, nachdem ein Gegentest NICHT fiel): Liest man die Datei
+    # VOLLSTÄNDIG ein — egal ob mit file(STRINGS) oder file(READ) + Splitten —, dann
+    # zerlegen einzelne Prosa-Zeilen die CMake-Liste und ALLES DAHINTER geht verloren.
+    # Schuld sind Zeilen mit Backslash-Sequenzen (`\033[2J`) und Variablen-Referenzen
+    # (`${command:cmake.activeBuildPresetName}`) im Fließtext. Wirkung war verheerend
+    # und völlig unsichtbar: Von der CLAUDE.md kamen nur 141 von 779 Zeilen an und
+    # damit 7 von 27 Überschriften, von docs/feature-referenz.md 62 von 1044 (4 von 13).
+    # Der Wächter meldete seit QTMUX-34 grün, ohne die Datei je vollständig zu sehen —
+    # README.md und docs/MCP.md waren zufällig unauffällig, deshalb fiel es nie auf.
+    #
+    # Mit dem REGEX-Filter werden die Problemzeilen gar nicht erst angefasst: gelesen
+    # werden nur Überschriften und Code-Fences, und genau die sind harmlos. Gegenprobe
+    # nach jeder Änderung hier: Erkennungsrate je Datei gegen `grep -c '^#\+ '` messen —
+    # sie muss 100 % sein, sonst prüft der Wächter wieder ins Leere.
+    file(STRINGS "${_file}" _lines ENCODING UTF-8 REGEX "^([ \t]*```|#+[ \t])")
     set(_seen "")
     set(_stack "")     # aktueller Überschriften-Pfad, Index 0 = Ebene 1
     set(_in_code FALSE)
