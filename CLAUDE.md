@@ -511,12 +511,14 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-06** · Branch `main`, Working Tree sauber, **alles gepusht**.
-Aus dem Aufräumlauf 2026-08-06 stammen:
-`4f77eb8` (Doku-Wächter repariert, s. Owner-Entscheid 2) und `6da1608` (diese `CLAUDE.md`
-gekürzt, Detailwissen nach `docs/feature-referenz.md` + `docs/e2e-fallen.md` ausgelagert,
-beide im Wächter aufgenommen). Bei Wiedereinstieg `git log --oneline -3` gegenprüfen —
-die Windows-Session pusht ebenfalls. Teststand: macOS Release **29/29** (`ctest -N` = 29).
+Stand **2026-08-07** · ⚠️ **Zwei fertige Commits warten auf den Merge nach `main`** —
+`162f079` (QTMUX-122/123, rebast) und `6788a82` (Agenten-Resume abgeschaltet), beide auf
+`fix/agent-resume-deaktiviert` im Worktree `../QTmux-w2`. `main` steht auf `e99ab76` und ist
+**fast-forward-fähig**; blockiert ist allein `git merge --ff-only` durch den
+Berechtigungs-Klassifikator (s. Owner-Entscheid 1). **Erster Schritt beim Wiedereinstieg:**
+Merge nachholen, pushen, Trigger prüfen, Worktree + beide Branches abbauen, Jira dual.
+Teststand: macOS Debug **29/29** und Release **29/29** (`ctest -N` = 29).
+Bei Wiedereinstieg `git log --oneline -3` gegenprüfen — die Windows-Session pusht ebenfalls.
 ✅ Erledigt und in `main`: **QTMUX-129** (Proxy, `37614b1`), **Build-ID**
 `<version>+<hash>[-dirty]` im Fenstertitel und in `get_server_info`, `build-msi.ps1` mit
 `-Version` als **Pflichtparameter**, Pfad-Härtung `safefile::read` (`8964e50`).
@@ -541,12 +543,21 @@ lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, pf-Installation)
 
 #### Offene Owner-Entscheide (blockieren nichts, aber warten)
 
-1. ⚠️ **Was passiert mit `feat/osc52-und-maus-hinweis`?** Im Worktree
-   `../QTmux-w2` liegt `2e761ca` (2026-08-01) mit **QTMUX-122 + 123** fertig umgesetzt —
-   **nicht gepusht, nicht in `main`**, ~10 Commits hinter dem Hauptbaum, hängt an `f9c712e`.
-   Der Worktree hat ein eigenes `build/`. Die Doku führte beide Tickets bis heute als
-   „offen"; verifiziert ist, dass in `main` **kein** OSC-52-Code steht. Optionen: rebasen +
-   mergen · liegen lassen · verwerfen. **Nicht ohne Zuruf angefasst.**
+1. ✅ **`feat/osc52-und-maus-hinweis` — entschieden (rebasen + mergen), Owner 2026-08-07.**
+   `2e761ca` ist auf `main` rebast (**`162f079`**, 7 Konflikte gelöst: `VtScreen.{h,cpp}`,
+   `SettingsIo.cpp`, `Main.qml` 2×, `PrefsWindow.qml`, beide `.ts`), darauf sitzt die
+   Resume-Abschaltung **`6788a82`**. macOS Debug **29/29** und Release **29/29**.
+   🔑 **Alle sieben Konflikte lagen NEBENeinander, nicht gegeneinander** — QTMUX-128
+   (`altScrollMode`) und 122 (`appClipboardWrite`) landeten in denselben Listen
+   (Settings-Allowlist, Alias-Block, `restoreDefault`-`switch`, Prefs-Suchindex). Überall
+   sind **beide** behalten; nichts aus `main` wurde verdrängt. Wer hier „ours" nimmt, verliert
+   still ein fremdes Feature.
+   ⚠️ **Noch nicht in `main`:** `git merge --ff-only` wird vom Berechtigungs-Klassifikator
+   abgelehnt (zweimal, auch als Einzelbefehl) — bewusst **nicht** umgangen. Es fehlt allein
+   die Freigabe; danach Fast-Forward, Push, Worktree-Abbau, Jira dual.
+   🔑 **Solange der Merge aussteht, gehört jede Doku-Änderung auf den Feature-Branch, nicht
+   auf `main`** — ein Commit auf `main` macht aus dem Fast-Forward einen echten Merge und
+   erzwingt einen zweiten Konfliktdurchgang in denselben Dateien.
 2. **Der Doku-Wächter war blind — erledigt, der Fix ist auf allen drei Plattformen in der CI belegt.**
    `test_doc_duplicates` las von dieser Datei nur **141 von 779** Zeilen (7 von 27
    Überschriften) und meldete seit QTMUX-34 grün, ohne je zu prüfen; Ursache und Messwerte
@@ -694,16 +705,13 @@ zuständigen Fachabschnitt, nicht hier.
   QML-Anbindung danach seriell durch eine Instanz.
 
 **Offene Jira (geführt wird in Jira, hier nur Zeiger):**
-⚠️ **122/123 sind NICHT unbearbeitet — sie liegen fertig, aber ungemergt** im Worktree
-`../QTmux-w2` (Branch `feat/osc52-und-maus-hinweis`, Commit `2e761ca` vom 2026-08-01,
-**nicht gepusht**). **122** = OSC 52 (Zwischenablage aus dem Terminal füllen; Anwenderbefund
-— aus einem Claude Code über `ssh` ließ sich nichts kopieren: die Anwendung hält
-Maus-Tracking + Alt-Screen, QTmux reicht die Maus durch (QTMUX-104), markiert wird **in der
-Anwendung**, QTmux hat gar keine Auswahl), **123** = sichtbarer Hinweis, wenn eine
-Vollbild-Anwendung die Maus hält (ohne ihn findet man die Shift-Geste nicht — dieselbe
-Erfahrung wie bei den Links in QTMUX-39). Der Branch hängt an `f9c712e` und ist damit
-~10 Commits hinter `main`; vor einem Merge sind Rebase, Neubau und die `.ts`-Dateien zu
-prüfen (der Commit fasst beide `.ts` großflächig an). **Entscheidung des Owners, s. Anker.** ·
+✅ **122/123 sind umgesetzt und rebast** (`162f079`, s. Owner-Entscheid 1) — **122** = OSC 52
+(Zwischenablage aus dem Terminal füllen; Anwenderbefund — aus einem Claude Code über `ssh`
+ließ sich nichts kopieren: die Anwendung hält Maus-Tracking + Alt-Screen, QTmux reicht die
+Maus durch (QTMUX-104), markiert wird **in der Anwendung**, QTmux hat gar keine Auswahl),
+**123** = sichtbarer Hinweis, wenn eine Vollbild-Anwendung die Maus hält (ohne ihn findet man
+die Shift-Geste nicht — dieselbe Erfahrung wie bei den Links in QTMUX-39). Offen ist nur der
+Merge (Klassifikator-Freigabe) und danach Jira dual. ·
 **40** (OSC-8-Hyperlinks — deferred; bräuchte Cursor-Span-Tracking + neues `Cell`-Feld,
 teuer, da `VtScreen` den Sichtbereich lazy aus libvterm bildet) ·
 **13** (native macOS-Menü-Icons — deferred; Qt reicht `icon.source`/`icon.name` in nativen

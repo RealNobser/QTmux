@@ -421,6 +421,20 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   wird direkt exec't und bei argumentloser Angabe als Login-Shell markiert (`argv0 = "-claude"`),
   der Agent liefe ohne Shell-Umgebung und sein `exit` schlösse das Pane.
   Schalter `window/restoreAgents`, **Vorgabe AUS**.
+- ⚠️ **ABGESCHALTET seit 2026-08-07 (Owner-Anweisung, Commit `6788a82`).** Das Fortsetzen
+  arbeitete nicht zuverlässig und wird überarbeitet; **wiederhergestellt wird weiterhin**, nur
+  eben mit frischer Unterhaltung im gespeicherten Arbeitsverzeichnis. Der folgende Absatz
+  beschreibt die Mechanik, die **liegen bleibt** — Code, `AgentInfo`-Vorlagen und die sieben
+  `agentLaunchCommand`-Tests sind unangetastet, damit die Überarbeitung nicht bei null beginnt.
+  🔑 **Der Riegel sitzt an der WIRKUNG, nicht an der Einstellung:** `_createSessionFromCfg`
+  (Main.qml) übergibt den Modus fest als `0`, statt `window.resumeAgentMode` zu lesen. Ein
+  bereits gespeicherter Wert ≠ 0 wirkt damit nicht mehr — ein reines Umstellen der *Vorgabe*
+  hätte genau die Anwender nicht erreicht, die die Funktion benutzt haben, also jene, bei
+  denen sie versagte. Die vier Palette-Einträge entfallen, die Prefs-Zeile bleibt **sichtbar,
+  aber ausgegraut** (verschwände sie, sähe es aus, als hätte QTmux die Fähigkeit nie gehabt).
+  ⚠️ Nicht durch einen Test gedeckt ist der QML-Pfad selbst — `Main.qml` hat keinen Test
+  (bekannte Architekturschuld); auf C++-Seite deckt `resumeModeNoneNeverTouches` den jetzt
+  einzigen Pfad ab.
 - **Unterhaltung fortsetzen ist eine WAHL, kein Schalter (QTMUX-98):** `window/resumeAgentMode`
   = `qtmux::ResumeMode` — 0 gar nicht (Vorgabe) · 1 **jüngste** im Verzeichnis · 2 **Auswahl**
   beim Start · 3 die vom Agenten **gemeldete** Sitzung. Je Modus eine Argument-Vorlage in
