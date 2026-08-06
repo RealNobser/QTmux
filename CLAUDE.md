@@ -547,28 +547,80 @@ lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, pf-Installation)
    Der Worktree hat ein eigenes `build/`. Die Doku führte beide Tickets bis heute als
    „offen"; verifiziert ist, dass in `main` **kein** OSC-52-Code steht. Optionen: rebasen +
    mergen · liegen lassen · verwerfen. **Nicht ohne Zuruf angefasst.**
-2. **Der Doku-Wächter war blind — der Fix ist ungeprüft auf Windows/Linux.**
+2. **Der Doku-Wächter war blind — erledigt, der Fix ist auf allen drei Plattformen in der CI belegt.**
    `test_doc_duplicates` las von dieser Datei nur **141 von 779** Zeilen (7 von 27
    Überschriften) und meldete seit QTMUX-34 grün, ohne je zu prüfen; Ursache und Messwerte
    stehen in [docs/e2e-fallen.md](docs/e2e-fallen.md). Repariert über einen `REGEX`-Filter
    in `tests/CheckDocDuplicates.cmake`, Erkennung jetzt 100 % je Datei, Gegentest fällt
-   nachweislich (grün → rot → rot → grün). ✅ **Auf allen drei Plattformen belegt:** macOS
-   lokal 29/29, **Windows und Linux grün** im CI-Lauf `31127792710` (auf `22ba6f8`).
-   🔑 Der macOS-**Job** jenes Laufs steht auf `cancelled` und färbt den Lauf rot — das ist
-   **kein** Befund: `steps: []`, der Job bekam nie einen Runner (15 min Wartezeit, während
-   Linux/Windows in 5 min durchliefen). Vor jeder Deutung eines roten macOS-Jobs also erst
-   `gh api …/jobs` lesen: **leere Schrittliste = nie gelaufen**, nicht fehlgeschlagen.
+   nachweislich (grün → rot → rot → grün).
+   ✅ **Beleg aus zwei Läufen zusammengesetzt**, weil die Actions-Störung (s. u.) in jedem
+   Lauf einen Job ohne Runner ließ: `31127792710` (auf `22ba6f8`) **Linux + Windows** grün ·
+   `31128481280` (auf `b642f93`) **macOS + Windows** grün. Zulässig ist das Zusammensetzen,
+   weil `git diff --name-only 22ba6f8..b642f93` **ausschließlich `CLAUDE.md`** nennt — der
+   Code ist identisch (die Beweisregel aus dem CI-Abschnitt).
+   🔑 **Feinheit, die man nur hier hat:** Für *diesen* Test ist „nur Doku geändert" **kein**
+   identischer Input — die Doku ist sein Prüfgegenstand. Beide Stände sind grün, damit trägt
+   es trotzdem; bei einem Doku-Wächter muss man diesen Schritt aber ausdrücklich mitdenken.
+   🔑 **Je ein Job stand auf `cancelled` und färbte den Lauf rot** (macOS in `31127792710`,
+   Linux in `31128481280`) — **kein** Befund: `steps: []`, der Job bekam nie einen Runner.
+   Vor jeder Deutung eines roten Jobs also erst `gh api …/jobs` lesen: **leere Schrittliste =
+   nie gelaufen**, nicht fehlgeschlagen.
 
 #### Zustand, der nicht aus Code/Git hervorgeht
 
-- ⚠️ **Der `push`-Trigger der CI hat am 2026-08-06 abends nicht gefeuert** — drei Pushes auf
-  `main` (`4f77eb8`, `6da1608`, `22ba6f8`) erzeugten **null** Check-Runs, obwohl
-  `on: push: branches: [main]` ohne `paths`-Filter greift und Actions aktiviert ist
-  (`allowed_actions: all`); der Vormittagslauf zu `a2d0fa9` war noch normal. Actions selbst
-  ist intakt: `gh workflow run CI --ref main` startete sofort. Ursache **ungeklärt**,
-  vermutlich GitHub-seitig. **Beim nächsten Push nachsehen, ob wieder ein Lauf entsteht** —
-  bleibt es aus, laufen Änderungen ungeprüft durch, und die Branch-Protection erwartet
-  weiterhin drei Status-Checks (was einen echten PR blockieren würde).
+- ⚠️ **Der `push`-Trigger der CI feuerte am 2026-08-06 abends nicht — Ursache geklärt:
+  GitHub-Störung, nichts am Repo.** Vier Pushes auf `main` (`4f77eb8`, `6da1608`, `22ba6f8`,
+  `b642f93`) erzeugten **null** Check-Runs, obwohl `on: push: branches: [main]` ohne
+  `paths`-Filter greift und Actions aktiviert ist (`allowed_actions: all`); der
+  Vormittagslauf zu `a2d0fa9` (10:39 UTC) war der letzte normale.
+  🔑 **Beleg:** githubstatus.com, Incident „Incident with Actions" (seit 15:22 UTC, impact
+  *critical*), Update **20:34 UTC** wörtlich: *„Webhook triggers are currently throttled to
+  help with recovery … we are processing approximately 15% of webhooks, so many events such
+  as pushes and pull requests are not triggering workflow runs."* Damit erklärt sich auch der
+  **nie zugeteilte macOS-Job** aus Lauf `31127792710` (Kapazität) — beides eine Störung, kein
+  zweiter Befund.
+  🔑 **Vier Repos, ein Muster** (workspace-weit gemessen 2026-08-06, alle Zeiten UTC): QTmux
+  zuletzt `a2d0fa9` 10:39 ✅, danach 4 Pushes ❌ · MacPCAN zuletzt `925314a` **17:31** ✅,
+  danach **7** Commits bis `387d489` ❌ · Deskstarter zuletzt `f08d39b` **17:30** ✅, danach
+  `6dd77f1` ❌ · RAFTNG zuletzt `1cb07b2` ~11:10 ✅, danach `917f1b5`/`7b66fb7` ❌.
+  **RAFTNG baut auf einem self-hosted Runner** — es fehlt also nicht die Runner-Zuteilung,
+  sondern die **Run-Erzeugung**; der Fehler sitzt vor jeder Runner-Infrastruktur, egal wem
+  sie gehört. Betroffen sind **public wie privat** (QTmux public, die drei anderen privat).
+  ⚠️ **Trugschluss, den die eigenen Daten zweimal widerlegen:** Es liegt nahe, aus „letzter
+  erzeugter Lauf 17:30 / erster fehlender ~19:00" auf ein **Ausfallfenster** zu schließen.
+  Das trägt nicht. (1) Die Störung lief zu diesem Zeitpunkt bereits **zwei Stunden**
+  (Beginn 15:22) — Deskstarter und MacPCAN kamen mitten in der Drosselung durch. (2) Um
+  **21:44 entstanden wieder Läufe**, obwohl die Statuspage um 21:30 weiter Drosselung
+  meldete. Es gibt also keinen Beginn und kein Ende in unseren Daten, sondern durchgehend
+  **~15 % Zufallsdurchsatz**. Was durchkommt, ist eine Stichprobe, keine Grenze — den
+  Zeitraum liefert allein die Statuspage.
+  🔑 **Wie man diese Klasse in einer Minute erkennt** statt stundenlang im Repo zu suchen:
+  `curl -s https://www.githubstatus.com/api/v2/summary.json` **vor** jeder Trigger-Diagnose.
+  Zweites, repo-lokales Merkmal: `gh workflow list --all` zeigte den frisch gepushten
+  Diagnose-Workflow **gar nicht** — GitHub nahm die Datei nicht einmal entgegen, obwohl
+  `git ls-remote` den Commit sah. Refs kommen an, die Event-Verarbeitung steht: ein Muster,
+  das repo-seitig nicht herstellbar ist.
+  ✅ **Gegenprobe geglückt (21:44 UTC): der `push`-Trigger funktioniert, das Repo ist heil.**
+  Der Diagnose-Workflow lief auf `cc16b2b` durch (`#31128515520`, *success*), und zu
+  `b642f93` entstand ein CI-Lauf. **Beide kamen mit ~30 min Verzug** — die Events wurden
+  nachgeholt, nicht sofort verarbeitet; im selben Zug tauchte `Trigger-Test` erstmals in
+  `gh workflow list --all` auf. Damit ist auch belegt, dass die fehlende
+  Workflow-Registrierung eine **Folge** der unverarbeiteten Push-Events war, kein eigener
+  Defekt.
+  ⚠️ **Trotzdem nicht entwarnen:** Die Statuspage meldete um 21:30 UTC weiter
+  *„Webhook triggers remain throttled"*. Genau der oben beschriebene Trugschluss in Reinform —
+  **durchgekommene Läufe sind Stichproben, kein Störungsende**. Solange das Incident offen
+  ist, gilt: nach jedem Push prüfen, ob ein Lauf entstand, sonst `gh workflow run CI --ref main`.
+  🔑 **Workspace-weite Konsequenz:** Während der Störung sind auf `main` ungeprüfte Commits
+  aufgelaufen (QTmux 4, MacPCAN 7, RAFTNG 2). Ein *späterer* Push testet nur seinen eigenen
+  Stand mit — je Repo einmal `gh workflow run` auf dem **aktuellen** Stand nachholen.
+  🧹 **Aufgeräumt:** Der temporäre Branch `ci-trigger-test` (`cc16b2b`) ist lokal und auf
+  origin gelöscht, nach `main` gemerged wurde er nie. **Der Workflow-Eintrag `Trigger-Test`
+  (ID `328898398`) bleibt trotzdem in `gh workflow list --all` stehen** — GitHub führt ihn,
+  solange sein Lauf existiert. Er ist **bewusst nicht** entfernt: Lauf `#31128515520` ist der
+  Beleg, dass der `push`-Trigger funktioniert; ihn zu löschen hieße, das Beweisstück für die
+  eigene Diagnose wegzuwerfen. Der Eintrag ist wirkungslos (die Datei existiert auf keinem
+  Branch mehr) und verschwindet von selbst.
 
 - Die **Produktivinstanz läuft** (PID 31102, Port 7345) aus `build/macos` — dort **nicht**
   hineinbauen, das reißt alle Terminal-Sessions mit.
