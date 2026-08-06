@@ -1240,8 +1240,16 @@ ApplicationWindow {
         // bei einer wartenden Shell kommt der nie.
         const wantsAgent = window.restoreAgents && !!cfg.agentCommand
         const ref = cfg.agentSessionRef || ""
+        // ⚠️ Fortsetzen ist seit 2026-08-07 auf Owner-Anweisung ABGESCHALTET: Der Modus wird
+        // hier fest als 0 („gar nicht") übergeben, statt `window.resumeAgentMode` zu lesen.
+        // Der Agent startet also frisch im gespeicherten Arbeitsverzeichnis — genau das war
+        // zuverlässig; das Fortsetzen der Unterhaltung war es nicht (QTMUX-98 wird überarbeitet).
+        // 🔑 Der Riegel sitzt bewusst an der WIRKUNG, nicht an der Einstellung: Ein bereits
+        // gespeicherter Wert ≠ 0 wirkt damit auch dann nicht mehr, wenn er noch in den
+        // QSettings steht. Code und Vorlagen bleiben liegen, damit die Überarbeitung nicht
+        // bei null beginnt.
         const launch = wantsAgent
-            ? sessions.agentLaunchCommand(cfg.agentCommand, window.resumeAgentMode, ref) : ""
+            ? sessions.agentLaunchCommand(cfg.agentCommand, 0 /* ResumeMode::None */, ref) : ""
         const row = (t === 1)
             ? sessions.createSshSession(cfg.host || "", cfg.sshPort || 22, cfg.user || "",
                                         cfg.identity || "", launch)
@@ -2564,10 +2572,10 @@ ApplicationWindow {
                                   if (d.length === 0) { window.notifyToast(qsTr("Diese Session hat kein Arbeitsverzeichnis.")); return }
                                   App.copyToClipboard(d); window.notifyToast(qsTr("Pfad kopiert: %1").arg(d)) } },
                             { title: qsTr("Agenten beim Start wiederherstellen"), sub: "",     icon: "robot",           run: function(){ window.restoreAgents = !window.restoreAgents } },
-                            { title: qsTr("Unterhaltung fortsetzen: gar nicht"), sub: "",      icon: "robot",           run: function(){ window.resumeAgentMode = 0 } },
-                            { title: qsTr("Unterhaltung fortsetzen: jüngste im Verzeichnis"), sub: "", icon: "robot",   run: function(){ window.resumeAgentMode = 1 } },
-                            { title: qsTr("Unterhaltung fortsetzen: Auswahl beim Start"), sub: "", icon: "robot",       run: function(){ window.resumeAgentMode = 2 } },
-                            { title: qsTr("Unterhaltung fortsetzen: gemeldete Sitzung"), sub: "", icon: "robot",        run: function(){ window.resumeAgentMode = 3 } },
+                            // ⚠️ Die vier „Unterhaltung fortsetzen"-Einträge sind seit 2026-08-07
+                            // entfallen (Owner-Anweisung, s. _createSessionFromCfg): Was nicht
+                            // wirkt, darf die Palette nicht anbieten — ein Eintrag, der eine
+                            // Einstellung setzt, die niemand mehr liest, ist schlimmer als keiner.
                             { title: qsTr("Design: Wie System"),         sub: "",             icon: "gear",            run: function(){ Theme.mode = Theme.System } },
                             { title: qsTr("Design: Hell"),               sub: "",             icon: "sun",             run: function(){ Theme.mode = Theme.Light } },
                             { title: qsTr("Design: Dunkel"),             sub: "",             icon: "moon",            run: function(){ Theme.mode = Theme.Dark } },

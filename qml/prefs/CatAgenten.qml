@@ -102,35 +102,23 @@ CatPage {
                     onToggled: page.host.app.restoreAgents = checked
                 }
             }
-            // Der richtige Weg hängt am Nutzungsverhalten — deshalb je Wahl der konkrete
-            // Preis, nicht nur die Funktion. Vier Optionen: bleibt eine ComboBox (der
-            // Segment-Umschalter ist für ≤ 3 gedacht, s. Design 1a C3).
+            // ⚠️ Seit 2026-08-07 abgeschaltet (Owner-Anweisung): Das Fortsetzen der
+            // Unterhaltung arbeitete nicht zuverlässig und wird überarbeitet. Die Zeile
+            // bleibt SICHTBAR, aber wirkungslos — verschwände sie ganz, sähe es aus, als
+            // hätte QTmux die Fähigkeit nie gehabt, und der gespeicherte Wert bliebe
+            // unerklärt stehen. Der eigentliche Riegel sitzt in Main.qml an der Wirkung.
             PrefRow {
                 title: qsTr("Unterhaltung fortsetzen")
-                description: {
-                    switch (page.host.app.resumeAgentMode) {
-                    case 1: return qsTr("Der Agent nimmt die JÜNGSTE Unterhaltung seines Arbeitsverzeichnisses. "
-                                      + "Richtig, solange dort nur ein Agent arbeitet — laufen mehrere im selben "
-                                      + "Ordner, bekommen sie alle dieselbe.")
-                    case 2: return qsTr("Der Agent öffnet beim Start seine eigene Auswahlliste; du entscheidest je "
-                                      + "Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur "
-                                      + "Claude Code eine solche Liste an.")
-                    case 3: return qsTr("Genau die Unterhaltung, die der Agent zuletzt selbst gemeldet hat "
-                                      + "(MCP-Werkzeug set_agent_session) — auch bei mehreren Agenten im selben "
-                                      + "Ordner eindeutig. Meldet er nichts, startet er frisch. QTmux kann die "
-                                      + "Kennung nicht selbst ermitteln: sie entsteht im Agenten und ändert sich "
-                                      + "bei /resume oder /clear.")
-                    default: return qsTr("Der Agent startet mit einer frischen Unterhaltung.")
-                    }
-                }
-                rowEnabled: page.host.app.restoreAgents
+                description: qsTr("Vorübergehend deaktiviert: Das Fortsetzen arbeitete nicht zuverlässig "
+                                + "und wird überarbeitet. Wiederhergestellte Agenten starten mit einer "
+                                + "frischen Unterhaltung — im gespeicherten Arbeitsverzeichnis.")
+                rowEnabled: false
                 controlWidth: 210
                 AppComboBox {
                     Layout.fillWidth: true
-                    model: [qsTr("Gar nicht"), qsTr("Jüngste im Verzeichnis"),
-                            qsTr("Auswahl beim Start"), qsTr("Gemeldete Sitzung")]
-                    currentIndex: page.host.app.resumeAgentMode
-                    onActivated: (i) => page.host.app.resumeAgentMode = i
+                    enabled: false
+                    model: [qsTr("Gar nicht")]
+                    currentIndex: 0
                 }
             }
         }
