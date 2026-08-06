@@ -511,14 +511,12 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-06** · Branch `main`, Working Tree sauber. Letzter **gepushter** Stand ist
-`a2d0fa9`; darauf liegen **zwei ungepushte** Commits aus dem Aufräumlauf 2026-08-06:
-`4f77eb8` (Doku-Wächter repariert, s. Owner-Entscheid 2) und der Aufräum-Commit selbst
-(diese `CLAUDE.md` gekürzt, Detailwissen nach `docs/feature-referenz.md` +
-`docs/e2e-fallen.md` ausgelagert, beide im Wächter aufgenommen).
-⚠️ **Push steht aus** — vor dem Push `git fetch` und bei Divergenz erst committen, dann
-mergen (die Windows-Session pusht ebenfalls). Bei Wiedereinstieg `git log --oneline -3`
-gegenprüfen. Teststand: macOS Release **29/29** (neu gebaut; `ctest -N` = 29).
+Stand **2026-08-06** · Branch `main` = `origin/main` = `6da1608`, Working Tree sauber,
+**alles gepusht**. Die letzten beiden Commits stammen aus dem Aufräumlauf 2026-08-06:
+`4f77eb8` (Doku-Wächter repariert, s. Owner-Entscheid 2) und `6da1608` (diese `CLAUDE.md`
+gekürzt, Detailwissen nach `docs/feature-referenz.md` + `docs/e2e-fallen.md` ausgelagert,
+beide im Wächter aufgenommen). Bei Wiedereinstieg `git log --oneline -3` gegenprüfen —
+die Windows-Session pusht ebenfalls. Teststand: macOS Release **29/29** (`ctest -N` = 29).
 ✅ Erledigt und in `main`: **QTMUX-129** (Proxy, `37614b1`), **Build-ID**
 `<version>+<hash>[-dirty]` im Fenstertitel und in `get_server_info`, `build-msi.ps1` mit
 `-Version` als **Pflichtparameter**, Pfad-Härtung `safefile::read` (`8964e50`).
