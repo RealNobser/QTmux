@@ -63,6 +63,44 @@ done <<EOF
 $files
 EOF
 
+# --- Kontrakt-Waechter: bleibt der Kern in sich geschlossen? -----------------
+#
+# 🔑 Warum das hier steht (2026-08-06, vor dem AP8-Umbau im Hub): Der
+# Datei-Abgleich oben bemerkt zwar JEDE Aenderung an `src/update/` — die
+# Dateiliste kommt aus BEIDEN Baeumen, neue und geloeschte Dateien fallen also
+# auf. Was er NICHT bemerkt, ist eine neue Abhaengigkeit NACH AUSSEN: Bekommt
+# der Kern eine Zeile wie `#include "specs/DbcDecoder.hpp"`, meldet der Abgleich
+# nur "ABWEICHUNG", man zieht nach — und bekommt danach einen Compile-Fehler
+# "file not found", der nicht sagt, dass der VENDORING-KONTRAKT verletzt wurde.
+#
+# QTmux vendiert ausschliesslich `src/update/`. Alles, was der Kern darueber
+# hinaus inkludiert, muesste QTmux mitvendieren und liegt damit ausserhalb des
+# vereinbarten Umfangs. Dieser Waechter benennt genau das, statt es dem Compiler
+# zu ueberlassen.
+fremd=0
+while IFS= read -r inc; do
+    [ -z "$inc" ] && continue
+    # Erlaubt: alles unter update/… und die im selben Baum liegenden Dateien
+    # (Monocypher inkludiert sich flach, deshalb der Existenztest).
+    case "$inc" in
+        update/*) continue ;;
+    esac
+    if [ -e "$vendored/$inc" ] || find "$vendored" -name "$(basename "$inc")" -print -quit | grep -q .; then
+        continue
+    fi
+    echo "  FREMD-INCLUDE (ausserhalb des Vendorings): $inc"
+    fremd=1
+done <<EOF
+$(grep -rhoE '#include[[:space:]]+"[^"]+"' "$vendored" 2>/dev/null | sed 's/.*"\(.*\)"/\1/' | sort -u)
+EOF
+
+if [ "$fremd" = "1" ]; then
+    echo "check-updater-sync: Der Kern greift ausserhalb von src/update/ zu."
+    echo "  QTmux vendiert NUR src/update/ — solche Abhaengigkeiten muessen im Hub"
+    echo "  aufgeloest oder der Vendoring-Umfang muss mit MacPCAN neu vereinbart werden."
+    [ "$mode" != "update" ] && exit 1
+fi
+
 if [ "$mode" = "update" ]; then
     if [ "$drift" = "1" ]; then
         echo "check-updater-sync: Dateien uebernommen. UPSTREAM.md-Commit nachziehen:"

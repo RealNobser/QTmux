@@ -383,6 +383,19 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   entstehen. Und: Die Build-ID ist eine **Anzeige**, nie eine Vergleichsgröße — in
   `UpdateViewModel::currentVersion` darf nur `1.8.0` ankommen, sonst bricht der
   Manifest-Vergleich.
+- 🔑 **Der Vendoring-Kontrakt umfasst NUR `MacPCAN/src/update/`** — und
+  [tools/check-updater-sync.sh](tools/check-updater-sync.sh) wacht seit 2026-08-06 über
+  **beides**: den Datei-Abgleich (Liste aus **beiden** Bäumen, neue und gelöschte Dateien
+  fallen auf) **und** den Kontrakt selbst. Der zweite Wächter meldet jeden `#include`, der
+  aus `update/` herausführt.
+  ⚠️ **Warum das nötig wurde:** Der Datei-Abgleich allein bemerkt eine neue Abhängigkeit
+  nach außen **nicht** — er meldet nur „ABWEICHUNG", man zieht nach, und der Compiler sagt
+  dann „file not found", ohne dass jemand den Kontrakt als Ursache erkennt.
+  **Zum Hub-Paket AP8** (Profillader `DbcLoader`/`JsonLoader` wandern in den Hub):
+  **QTmux ist nicht betroffen** — MacPCANs `DbcDecoder` liegt in `src/specs/`, RAFTNGs Lader
+  in `src/io/`, beide außerhalb des Kontrakts; QTmux liest keine DBC-Profile. Nachziehen
+  wäre nur nötig, wenn der Update-Kern selbst eine Abhängigkeit darauf bekäme — genau das
+  meldet der Wächter. Reihenfolge bleibt MacPCAN → RAFTNG → QTmux.
 - ⚠️ **Fremde Pfade NIE mit `readAll()` lesen** (Sicherheitsbefund aus RAFTNG, 2026-08-06).
   Dort ließ `{"path":"/dev/zero"}` den Prozess in zwei Sekunden von 17 MB auf **30,4 GB**
   wachsen, blockierte die Event-Loop und beendete ihn **ohne Crashreport**.

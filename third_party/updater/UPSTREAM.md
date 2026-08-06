@@ -25,6 +25,31 @@ war er gedacht.
 Enthält den **Produktions-Public-Key** (`update/UpdateKeys.hpp`, Ed25519, 32 Byte,
 Owner-Schlüssel vom 2026-08-02) — kein Platzhalter mehr.
 
+## Umfang des Kontrakts — und was AP8 (Profillader in den Hub) daran ändert
+
+QTmux vendiert **ausschließlich `MacPCAN/src/update/`**. Alles andere im Hub ist
+nicht Teil der Abmachung.
+
+**Zum Paket „Geräte-Updates zum sauberen Abschluss", AP8** (RAFTNGs `DbcLoader`/
+`JsonLoader` werden kanonisch in den Hub gehoben, MacPCANs `DbcDecoder` geht
+darin auf): Am 2026-08-06 geprüft — **QTmux ist davon nicht betroffen**.
+MacPCANs `DbcDecoder` liegt in `src/specs/`, RAFTNGs Lader in `src/io/`; beide
+liegen **außerhalb** von `src/update/`. QTmux flasht keine Geräte und liest keine
+DBC-Profile, es braucht den Lader also auch fachlich nicht.
+
+⚠️ **Der eine Weg, auf dem es uns doch träfe:** Wenn der Update-Kern selbst eine
+Abhängigkeit auf den Lader bekäme (`#include "specs/…"`). Dann müsste QTmux
+Dateien mitvendieren, die nicht im Kontrakt stehen. Genau dafür hat
+`tools/check-updater-sync.sh` seit 2026-08-06 einen **Kontrakt-Wächter**: Er
+meldet jeden Include, der aus `update/` herausführt, mit klarer Ansage — statt
+den Fall dem Compiler und seinem „file not found" zu überlassen.
+Heutiger Stand: Der Kern ist **in sich geschlossen**, alle Includes zeigen auf
+`update/…` oder auf die mitvendierten Monocypher-Dateien.
+
+🔑 **Reihenfolge beim Nachziehen:** MacPCAN zuerst, dann RAFTNG (Submodul), dann
+QTmux (Vendoring). Ein Sync-Lauf hier ist erst sinnvoll, wenn MacPCAN gepusht
+hat — und nur nötig, wenn sich `src/update/` überhaupt geändert hat.
+
 ## ⚠️ Einbahnstraße
 
 Dateien unter `update/` werden **nie lokal editiert**. Jede Änderung gehört nach
