@@ -235,5 +235,5 @@ endif()
 # damit der Test auf allen drei Plattformen ohne sh/grep läuft.
 add_test(NAME test_doc_duplicates
     COMMAND ${CMAKE_COMMAND}
-        "-DDOC_FILES=${CMAKE_SOURCE_DIR}/CLAUDE.md;${CMAKE_SOURCE_DIR}/README.md;${CMAKE_SOURCE_DIR}/docs/MCP.md"
+        "-DDOC_FILES=${CMAKE_SOURCE_DIR}/CLAUDE.md;${CMAKE_SOURCE_DIR}/README.md;${CMAKE_SOURCE_DIR}/docs/MCP.md;${CMAKE_SOURCE_DIR}/docs/feature-referenz.md;${CMAKE_SOURCE_DIR}/docs/e2e-fallen.md"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckDocDuplicates.cmake")
