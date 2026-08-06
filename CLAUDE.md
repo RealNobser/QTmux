@@ -511,14 +511,17 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-07** · ⚠️ **Zwei fertige Commits warten auf den Merge nach `main`** —
-`162f079` (QTMUX-122/123, rebast) und `6788a82` (Agenten-Resume abgeschaltet), beide auf
-`fix/agent-resume-deaktiviert` im Worktree `../QTmux-w2`. `main` steht auf `e99ab76` und ist
-**fast-forward-fähig**; blockiert ist allein `git merge --ff-only` durch den
-Berechtigungs-Klassifikator (s. Owner-Entscheid 1). **Erster Schritt beim Wiedereinstieg:**
-Merge nachholen, pushen, Trigger prüfen, Worktree + beide Branches abbauen, Jira dual.
+Stand **2026-08-07** · Branch `main` auf **`3f0c794`**, Working Tree sauber, **alles
+gepusht**, Worktree `../QTmux-w2` und beide Feature-Branches **abgebaut**.
 Teststand: macOS Debug **29/29** und Release **29/29** (`ctest -N` = 29).
 Bei Wiedereinstieg `git log --oneline -3` gegenprüfen — die Windows-Session pusht ebenfalls.
+✅ Neu in `main`: **QTMUX-122/123** (OSC 52 + Maus-Hinweis, `162f079` — rebast aus dem
+Worktree, Jira dual auf Done) und die **Abschaltung des Agenten-Resume** (`6788a82`,
+Owner-Anweisung; Mechanik in der Feature-Referenz).
+⚠️ **Zu `3f0c794` gibt es noch keinen CI-Beleg** — der Push fiel in die Actions-Störung
+(s. u.). Der Stand ist lokal auf macOS Debug+Release geprüft, **Windows und Linux stehen
+aus**. Beim Wiedereinstieg zuerst nachsehen, ob inzwischen ein Lauf entstand; wenn nicht,
+`gh workflow run CI --ref main`.
 ✅ Erledigt und in `main`: **QTMUX-129** (Proxy, `37614b1`), **Build-ID**
 `<version>+<hash>[-dirty]` im Fenstertitel und in `get_server_info`, `build-msi.ps1` mit
 `-Version` als **Pflichtparameter**, Pfad-Härtung `safefile::read` (`8964e50`).
@@ -543,21 +546,26 @@ lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, pf-Installation)
 
 #### Offene Owner-Entscheide (blockieren nichts, aber warten)
 
-1. ✅ **`feat/osc52-und-maus-hinweis` — entschieden (rebasen + mergen), Owner 2026-08-07.**
-   `2e761ca` ist auf `main` rebast (**`162f079`**, 7 Konflikte gelöst: `VtScreen.{h,cpp}`,
-   `SettingsIo.cpp`, `Main.qml` 2×, `PrefsWindow.qml`, beide `.ts`), darauf sitzt die
-   Resume-Abschaltung **`6788a82`**. macOS Debug **29/29** und Release **29/29**.
-   🔑 **Alle sieben Konflikte lagen NEBENeinander, nicht gegeneinander** — QTMUX-128
-   (`altScrollMode`) und 122 (`appClipboardWrite`) landeten in denselben Listen
-   (Settings-Allowlist, Alias-Block, `restoreDefault`-`switch`, Prefs-Suchindex). Überall
-   sind **beide** behalten; nichts aus `main` wurde verdrängt. Wer hier „ours" nimmt, verliert
-   still ein fremdes Feature.
-   ⚠️ **Noch nicht in `main`:** `git merge --ff-only` wird vom Berechtigungs-Klassifikator
-   abgelehnt (zweimal, auch als Einzelbefehl) — bewusst **nicht** umgangen. Es fehlt allein
-   die Freigabe; danach Fast-Forward, Push, Worktree-Abbau, Jira dual.
-   🔑 **Solange der Merge aussteht, gehört jede Doku-Änderung auf den Feature-Branch, nicht
-   auf `main`** — ein Commit auf `main` macht aus dem Fast-Forward einen echten Merge und
-   erzwingt einen zweiten Konfliktdurchgang in denselben Dateien.
+1. ✅ **ERLEDIGT — `feat/osc52-und-maus-hinweis` rebast, gemergt, abgebaut** (2026-08-07).
+   `2e761ca` → **`162f079`** (7 Konflikte gelöst: `VtScreen.{h,cpp}`, `SettingsIo.cpp`,
+   `Main.qml` 2×, `PrefsWindow.qml`, beide `.ts`), darauf `6788a82` (Resume-Abschaltung) und
+   `3f0c794` (Doku). `main` steht auf `3f0c794`, Jira 122/123 dual auf Done.
+   🔑 **Die Lektion, die bleibt: Alle sieben Konflikte lagen NEBENeinander, nicht
+   gegeneinander** — QTMUX-128 (`altScrollMode`) und 122 (`appClipboardWrite`) landeten in
+   denselben Listen (Settings-Allowlist, Alias-Block, `restoreDefault`-`switch`,
+   Prefs-Suchindex). Überall sind **beide** behalten. Wer hier reflexhaft „ours" nimmt,
+   verliert still ein fremdes Feature — und zwar ohne Compilerfehler, weil eine fehlende
+   Zeile in einer Allowlist niemandem auffällt.
+   🔑 **Zweite Lektion, teuer erkauft: Ein ausstehender Fast-Forward verträgt keinen Commit
+   auf `main`.** Während der Merge an einer Freigabe hing, wanderte die Doku bewusst auf den
+   **Feature-Branch** — ein Commit auf `main` hätte aus dem Fast-Forward einen echten Merge
+   gemacht, mit einem zweiten Konfliktdurchgang in genau denselben Dateien.
+   ⚠️ **Und die Falle, die fast zugeschnappt wäre:** Der Owner führte den Merge von Hand aus,
+   traf dabei aber nur **zwei** der **drei** Commits (`3f0c794` fehlte). Hätte man danach
+   ungeprüft `git worktree remove` + `git branch -D` ausgeführt, wäre der Doku-Commit
+   **spurlos weg** gewesen. Deshalb vor jedem Worktree-Abbau: `git log --oneline main..<branch>`
+   muss **leer** sein, und Branches mit `-d` löschen (nicht `-D`) — `-d` verweigert den
+   Dienst bei ungemergten Commits, `-D` fragt nicht.
 2. **Der Doku-Wächter war blind — erledigt, der Fix ist auf allen drei Plattformen in der CI belegt.**
    `test_doc_duplicates` las von dieser Datei nur **141 von 779** Zeilen (7 von 27
    Überschriften) und meldete seit QTMUX-34 grün, ohne je zu prüfen; Ursache und Messwerte
@@ -635,7 +643,8 @@ lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, pf-Installation)
 
 - Die **Produktivinstanz läuft** (PID 31102, Port 7345) aus `build/macos` — dort **nicht**
   hineinbauen, das reißt alle Terminal-Sessions mit.
-- Der Worktree `../QTmux-w2` existiert samt eigenem Build-Verzeichnis (s. Owner-Entscheid 1).
+- ✅ Der Worktree `../QTmux-w2` ist **abgebaut** (2026-08-07), beide Feature-Branches
+  gelöscht — es gibt wieder genau einen Arbeitsbaum.
 
 ### Zuletzt abgeschlossen (Mechanik in der Feature-Referenz, Verlauf in Git)
 
