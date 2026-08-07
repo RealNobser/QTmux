@@ -68,6 +68,41 @@ QNetworkReply* UpdateChecker::get(const QUrl& url)
 
 // ---- Proxy (MAC-36) --------------------------------------------------------
 
+
+namespace {
+// Maps a transport failure onto what the operator should DO about it.
+// Lumping them together produced "signature fetch failed: ... status code
+// 404" for a product that simply had no release yet — a sentence that sends
+// someone hunting for a signature problem that does not exist (found
+// 2026-08-06 on RAFTNG, same checker, same three call sites).
+struct FailureInfo { UpdateChecker::ErrorKind kind; QString text; };
+
+FailureInfo classifyFailure(QNetworkReply* reply, const QString& what)
+{
+    using EK = UpdateChecker::ErrorKind;
+    switch (reply->error()) {
+    case QNetworkReply::ContentNotFoundError:
+        return {EK::NotPublished,
+                QStringLiteral("no release published for this product yet")};
+    case QNetworkReply::ProxyAuthenticationRequiredError:
+        return {EK::ProxyAuthenticationRequired,
+                QStringLiteral("the proxy requires authentication")};
+    case QNetworkReply::ProxyConnectionRefusedError:
+    case QNetworkReply::ProxyConnectionClosedError:
+    case QNetworkReply::ProxyNotFoundError:
+    case QNetworkReply::ProxyTimeoutError:
+        return {EK::ProxyUnreachable,
+                QStringLiteral("the configured proxy did not answer")};
+    case QNetworkReply::ContentAccessDenied:
+    case QNetworkReply::ContentOperationNotPermittedError:
+    case QNetworkReply::AuthenticationRequiredError:
+        return {EK::Http, QStringLiteral("%1: access denied").arg(what)};
+    default:
+        return {EK::Network, QStringLiteral("%1: %2").arg(what, reply->errorString())};
+    }
+}
+}  // namespace
+
 void UpdateChecker::setProxyConfig(const ProxyConfig& cfg)
 {
     if (cfg == m_proxy) return;
@@ -187,8 +222,9 @@ void UpdateChecker::checkForUpdate(CheckCallback callback)
             [this, sigReply, callback = std::move(callback)]() mutable {
         finishActive(sigReply);
         if (sigReply->error() != QNetworkReply::NoError) {
-            callback(std::nullopt, QStringLiteral("signature fetch failed: %1")
-                                       .arg(sigReply->errorString()));
+            const auto f = classifyFailure(sigReply, QStringLiteral("signature"));
+            m_lastErrorKind = f.kind;
+            callback(std::nullopt, f.text);
             return;
         }
         const QByteArray sig = sigReply->readAll();
@@ -206,9 +242,9 @@ void UpdateChecker::checkForUpdate(CheckCallback callback)
                 [this, manReply, sig, callback = std::move(callback)]() {
             finishActive(manReply);
             if (manReply->error() != QNetworkReply::NoError) {
-                callback(std::nullopt,
-                         QStringLiteral("manifest fetch failed: %1")
-                             .arg(manReply->errorString()));
+                const auto f = classifyFailure(manReply, QStringLiteral("manifest"));
+                m_lastErrorKind = f.kind;
+                callback(std::nullopt, f.text);
                 return;
             }
             const QByteArray bytes = manReply->readAll();

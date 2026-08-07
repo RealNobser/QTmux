@@ -85,6 +85,11 @@ public:
     // and can adopt this at their own pace.
     enum class ErrorKind : std::uint8_t {
         None = 0,
+        // Nothing is published for this product — a clean negative answer,
+        // NOT a failure. The server is right and the operator has nothing
+        // to fix. Kept apart from Network because the two demand opposite
+        // reactions: wait for a release vs. check the connection.
+        NotPublished,
         Network,      // transport failed for a non-proxy reason
         Http,         // server answered, but not with 200
         Signature,    // Ed25519 over the manifest bytes did not verify

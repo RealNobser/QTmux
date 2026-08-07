@@ -9,11 +9,29 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `80c19eefdf96a33b4575892c7b051deb6760ed91` |
-| Datum | 2026-08-06 |
-| Betreff | `perf(ota): Sendetaktung entkoppeln — ein Frame pro Tick war der Deckel` |
+| Commit | `58df9e4739b1ca69af7250e4a07fea706044bdeb` |
+| Datum | 2026-08-07 |
+| Betreff | `docs: Push erfolgreich -- Guard am Draht bewaehrt, Referenzmessung abgelegt` |
 
-Mit diesem Stand kam die **Proxy-Unterstützung** herüber (MAC-36, in MacPCAN als
+Mit diesem Stand kam die **Fehler-Klassifikation** herüber (MacPCAN `9952202`,
+„404 ist kein Signaturfehler"): `UpdateChecker` bildet Transportfehler jetzt über
+`classifyFailure()` auf das ab, was der Betreiber tun soll, und `ErrorKind` bekam
+dafür **`NotPublished`**. Vorher las sich ein Produkt ohne Release als
+„signature fetch failed: … 404" — und schickte den Leser auf die Suche nach einem
+Signaturproblem, das es nicht gibt.
+⚠️ **`NotPublished` steht MITTEN im Enum** (hinter `None`, vor `Network`) und
+verschiebt damit alle folgenden Zahlenwerte. Für QTmux geprüft und **unschädlich**:
+Der einzige Zahlen-Umweg ist `proxyErrorText(int)` in `UpdateViewModel` — die Zahl
+entsteht und zerfällt zwischen zwei Zeilen desselben Übersetzungsvorgangs, die
+Funktion ist **privat** (kein `Q_INVOKABLE`, kein QML-Zugriff), und kein
+`ErrorKind` wird je persistiert oder über MCP gereicht. Wäre eines davon anders,
+hätte dieser Sync stillschweigend Fehlertexte vertauscht.
+📋 Offener Folgepunkt (klein, nicht dringend): `proxyErrorText` kennt
+`NotPublished` nicht und fällt auf den Rohtext zurück — der ist englisch
+(„no release published for this product yet"). Ein übersetzter eigener Satz wäre
+die Kür; ein Rückschritt ist es nicht, vorher stand dort ebenfalls Englisch.
+
+Mit dem vorigen Stand `80c19ee` (2026-08-06) kam die **Proxy-Unterstützung** herüber (MAC-36, in MacPCAN als
 `0934eff` eingeführt): neu `ProxyConfig.{hpp,cpp}`, dazu am `UpdateChecker`
 `setProxyConfig()`, `setProxyCredentialProvider()` und das erweiterte
 `ErrorKind`-Enum. Die QTmux-Hälfte dazu liegt in `UpdateViewModel` und
