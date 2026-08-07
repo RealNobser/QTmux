@@ -512,28 +512,22 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-07 abends** · `origin/main` = **`20ab250`**, darauf **1 ungepushter Commit**
-(das Doku-Aufräumen). Ein Arbeitsbaum, nur Branch `main` (Worktree und Feature-Branches
-abgebaut). Teststand macOS Debug **30/30** und Release **30/30** (`ctest -N` = 30).
-🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` am Aufräum-Commit
-ändert ihn, und der Anker wäre im selben Moment falsch (2026-08-07 genau so passiert).
-Belastbar ist die Beziehung zu `origin/main`; die Lage prüft man mit
-`git log --oneline origin/main..HEAD`. Beim Wiedereinstieg zusätzlich `git log --oneline -3`
-gegenlesen — die Windows-Session pusht ebenfalls.
-
-⚠️ **Working Tree ist NICHT sauber — eine Änderung wartet auf Owner-Freigabe:**
-- `qml/Ui/AppComboBox.qml` — **Bugfix für einen gemeldeten Anwenderfehler**: Popup-Einträge
-  jeder ComboBox mit `textRole` blieben **leer** (Sprach- und Shell-Auswahl). Ursache
-  gemessen: `Array.isArray(cb.model)` liefert **false**, auch wenn das Model ein JS-Array
-  ist — die `model`-Property reicht es als QVariant durch. Der Delegate lief deshalb immer
-  in den `model[textRole]`-Zweig, den es bei Array-Models nicht gibt → `undefined`.
-  Gegentest belegt (alt `undefined`, neu `"Deutsch"`); 30/30 grün. **Committen wurde
-  zweimal angeboten, nie beantwortet.** Regel und Messung stehen in der Feature-Referenz
-  (QML-Lektionen, `Array.isArray`).
+Stand **2026-08-07 abends** · **Working Tree sauber, alles gepusht**, ein Arbeitsbaum, nur
+Branch `main` (Worktree und Feature-Branches abgebaut). Teststand macOS Debug **30/30** und
+Release **30/30** (`ctest -N` = 30).
+🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` ändert ihn, und der
+Anker wäre im selben Moment falsch (2026-08-07 genau so passiert). Belastbar ist die
+Beziehung zu `origin/main`: `git log --oneline origin/main..HEAD` muss **leer** sein. Beim
+Wiedereinstieg zusätzlich `git log --oneline -3` gegenlesen — die Windows-Session pusht
+ebenfalls.
 
 ✅ **In `main` seit heute:** QTMUX-130 (Verlaufs-Umbruch, `47d313e`, CI grün auf allen drei
 Plattformen — Lauf `31165779520`) · Vendoring auf MacPCAN `58df9e4` (`c9fee38`) samt
-Richtigstellung (`4eb04b0`) · korrigierter Sprach-Hinweis in den Prefs (`20ab250`).
+Richtigstellung (`4eb04b0`) · korrigierter Sprach-Hinweis in den Prefs (`20ab250`) ·
+**ComboBox-Fix** (leere Popup-Einträge bei Sprach- und Shell-Auswahl; `Array.isArray` am
+Model ist im Delegate immer falsch — Regel in der Feature-Referenz) · Doku-Aufräumen.
+⚠️ **Keine gebaute Instanz des Anwenders hat diese Stände** — die Produktivinstanz läuft
+weiter aus `build/macos` (s. u.).
 ⚠️ **QTMUX-130 wirkt nicht rückwirkend:** Vorhandene Dumps tragen die eingefrorenen
 80er-Umbrüche als Inhalt — erst der **zweite** Neustart nach dem Update ist sauber. Wer das
 übersieht, hält den Fix für wirkungslos.
@@ -559,14 +553,13 @@ Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, p
 
 ### Offene Owner-Entscheide (blockieren nichts, aber warten)
 
-1. **Den AppComboBox-Bugfix committen?** (s. Working Tree oben) — zweimal angeboten,
-   unbeantwortet. Bis dahin hat **keine** gebaute Instanz den Fix.
-2. **System-Modus für die Sprache von RAFTNG übernehmen?** RAFTNG bietet seinen
+1. **System-Modus für die Sprache von RAFTNG übernehmen?** RAFTNG bietet seinen
    `Mode::System` an (`QLocale::system()`, EN/DE/SV); QTmux kann nur fest Deutsch/Englisch.
    RAFTNG nennt es ausdrücklich eine **Produktentscheidung**, keine technische, und liefert
    auf Zuruf. Nicht eigenmächtig übernommen.
-3. **Produktivinstanz neu bauen?** Sie läuft aus `build/macos` mit `1.8.0+34449de` und hat
-   damit keinen der heutigen Stände. Ein Neubau reißt alle Terminal-Sessions mit.
+2. **Produktivinstanz neu bauen?** Sie läuft aus `build/macos` mit `1.8.0+34449de` und hat
+   damit keinen der heutigen Stände — auch den ComboBox-Fix nicht, den der Anwender selbst
+   gemeldet hat. Ein Neubau reißt alle Terminal-Sessions mit.
 
 #### Zustand, der nicht aus Code/Git hervorgeht
 
