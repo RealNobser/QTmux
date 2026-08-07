@@ -369,8 +369,26 @@ Tags/Branches sind verschiebbar; das Anhebe-Rezept steht als Kommentar in der `c
 >    Nicht-Ereignis kann man nicht warten.** Und die Gefahr steht auf dem Kopf — Fremdlast
 >    macht diese Tests nicht rot, sondern **still grün**: Käme das Signal erst nach 300 ms,
 >    sieht der Test trotzdem „0" und bestätigt fälschlich. Ein Wächter, der unter Last blind
->    wird, ist schlimmer als einer, der flackert. Die Härtung muss dort **strukturell** sein
->    (den Auslöser nachweislich abschalten), nicht zeitlich.
+>    wird, ist schlimmer als einer, der flackert.
+>
+> 🔑 **Woran man eine BLINDE Negativprüfung erkennt — nicht am Namen und nicht an der
+> Prüfung, sondern daran, WORAUF vorher gewartet wurde** (2026-08-07 über alle Tests
+> gemessen, nachdem RAFTNG zwei blinde Wächter bei sich fand). Von **16** Negativprüfungen
+> im Baum sind nur **zwei** blind:
+> | vorher | Beispiel | Bewertung |
+> |---|---|---|
+> | **Anker-Ereignis** abgewartet, das definitiv kommt | `QVERIFY(runCheck(vm,…))` spinnt bis `checkFinished`, **dann** `QCOMPARE(found.count(), 0)` (4×) | **sauber** — der Vorgang ist nachweislich durch |
+> | **synchroner** Aufruf | `PromptQueue`-Signale kommen im Aufruf selbst (3× in `tst_promptqueue`) | **sauber** — deterministisch |
+> | **nur eine Frist** | `qWait(200); QCOMPARE(finished.count(), 0)` (2× in `tst_updateviewmodel`) | ⚠️ **blind** |
+> ⚠️ **Die Kategorie NIE vom Testnamen ableiten** (RAFTNG-Messung: deren „StreamsAndStops"
+> klang negativ, prüft aber nur Zustand). Lesen, was **vor** der Prüfung steht.
+> 🔑 **Und genau dort, wo es blind ist, gibt es KEIN Anker-Ereignis** — der Start-Check tut ja
+> nichts, also feuert auch nichts, worauf man spinnen könnte. Deshalb greifen zwei Muster
+> ineinander: **Gibt es ein Anker-Ereignis, darauf warten und danach prüfen** (billig, schon
+> viermal so gelöst); **gibt es keines, den Empfänger instrumentieren** — ein verbotenes
+> Ereignis setzt **sofort** ein Flag, geprüft wird das Flag statt einer Frist (RAFTNGs
+> Muster, fängt den Fall wann immer er eintritt statt nur im Zeitfenster).
+> 📌 Backlog: die zwei Stellen zusammen mit dem Startup-Check-Paar anfassen (s. Arbeitsstand).
 
 > **⚠️ `env.QT_VERSION` (6.10.3) ist bewusst gewählt — nicht blind hochziehen.**
 > **Nicht 6.8.x:** dessen CMake-Config verlinkt das aus dem macOS-SDK entfernte
