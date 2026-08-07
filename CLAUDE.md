@@ -98,7 +98,39 @@ wenn aus `macos-release` gerade eine Instanz läuft), `macdeployqt -qmldir=qml`
 --sign -` — macdeployqt schreibt rpaths NACH seiner Signatur um → ungültig; Apple Silicon
 startet nur signiert), `hdiutil`-DMG → `dist/QTmux-<ver>-macos.dmg`. Nicht notarisiert
 (Early-Adopter): Rechtsklick→Öffnen bzw. `xattr -dr com.apple.quarantine`. macdeployqt-
-`ERROR` zu QtVirtualKeyboard/Multimedia/Pdf ist harmlos.
+`ERROR` zu QtVirtualKeyboard/Multimedia/Pdf bricht den Build nicht — **harmlos ist er aber
+nur auf einer Maschine ohne Homebrew-Qt** (2026-08-07 an 1.8.1 gemessen, gilt seit
+mindestens 1.8.0 unverändert):
+> ⚠️ **Ein nicht aufgelöster `@rpath` verschwindet nicht, er wird nur später eingelöst.**
+> macdeployqt kopiert `PlugIns/imageformats/libqpdf.dylib` mit, kann dessen `@rpath/QtPdf`
+> aber nicht auflösen (genau jener „harmlose" ERROR). Zur **Laufzeit** greift dann der im
+> Binary verbliebene `LC_RPATH /opt/homebrew/lib`, und über Homebrews `QtPdf` lädt die
+> **komplette zweite Qt-Kette** (QtCore, QtGui, QtNetwork, QtDBus, icu, harfbuzz …). Qt
+> meldet das selbst: „Class … is implemented in both … This may cause spurious casting
+> failures and mysterious crashes."
+> 🔑 **Warum es trotzdem niemandem auffiel:** Das **Hauptbinary** lädt alles über
+> `@executable_path/../Frameworks` und **nichts** über `@rpath` — gemessen: 0 Treffer. Der
+> Homebrew-RPATH ist für das Hauptbinary also wirkungslos; der Schaden entsteht
+> ausschließlich über ein **mitkopiertes, ungenutztes Plugin**. Auf einer Anwendermaschine
+> existiert `/opt/homebrew/lib` nicht → das Plugin lädt nicht → alles gut. Betroffen ist
+> allein der Entwicklungsrechner, und dort **startet die App trotzdem** (Exit 0, Fenster,
+> Screenshot).
+> 🔑 **Messgerät:** `env -i HOME=$HOME <bundle>/Contents/MacOS/qtmux --profile <name>
+> --mcp-port <frei> --screenshot <png>` und die Ausgabe nach `/opt/homebrew` durchsehen;
+> vollständig wird die Kette mit `DYLD_PRINT_LIBRARIES=1` sichtbar. **Ein reines `otool -l`
+> genügt nicht** — es zeigt den RPATH, aber nicht, ob ihn jemand einlöst.
+> **Abhilfe (nicht umgesetzt, Backlog):** ungenutzte Plugins nach dem `macdeployqt`-Lauf aus
+> dem Bundle nehmen (`imageformats/libqpdf`, `platforminputcontexts`, die vkb-/Scene3D-QML-
+> Plugins) oder den Homebrew-RPATH per `install_name_tool -delete_rpath` entfernen. Beides
+> gehört ins `build-dmg.sh` **vor** die Re-Signatur, sonst ist die Signatur wieder ungültig.
+
+> ⚠️ **`QT_QPA_PLATFORM=offscreen` funktioniert am DMG-Bundle NICHT** — macdeployqt bündelt
+> nur die gebrauchten Plattform-Plugins, im Bundle liegt allein `libqcocoa.dylib`. Ein
+> erzwungenes offscreen stirbt per `qFatal`, und das sieht wie ein kaputtes Paket aus,
+> obwohl es keines ist. QTmux fängt den Fall selbst ab („Offscreen-Plattform-Plugin nicht
+> gefunden: Screenshot am sichtbaren Fenster") — deshalb bei jeder Abnahme am **Bundle**
+> offscreen weglassen. Der Windows-Weg bündelt `qoffscreen.dll` bereits mit; auf macOS ist
+> das nicht nachgezogen (Backlog).
 
 ## Build & Test (Linux)
 
@@ -491,9 +523,16 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.8.0** — Tag auf `4f10eb8`, alle 4 Installer, Manifest live unter
+**Ausgeliefert: v1.8.1** — Tag auf `3744c38`, alle 4 Installer, Manifest live unter
 `https://nobser.de/updates/qtmux/`; der volle Update-Zyklus ist am lebenden Objekt
 verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-129**.
+🔑 **Belegt ist die Auslieferung selbst, nicht der Einspielweg:** Manifest, Signatur gegen
+die in `UpdateKeys.hpp` einkompilierten **Client**-Bytes, alle drei Artefakte
+heruntergeladen und **byte-identisch** (`cmp`) zu den lokalen, `index.json` mit allen acht
+Produkten unversehrt — Sollwerte in
+[docs/update-regressionsliste.md](docs/update-regressionsliste.md). Das **Selbst-Update**
+einer 1.8.0-Instanz auf 1.8.1 ist bewusst **nicht** gefahren worden: es reißt die
+Terminal-Sessions mit, und die Produktivinstanz trägt die laufende Orchestrierung.
 
 **Teststände:** **30** Tests (s. Dateitabelle). macOS Debug/Release je **30/30** (dort läuft
 `test_pty` mit und besteht). Linux (rtzsvr02-Container) und Windows nehmen `test_pty` per
@@ -520,6 +559,23 @@ Anker wäre im selben Moment falsch (2026-08-07 genau so passiert). Belastbar is
 Beziehung zu `origin/main`: `git log --oneline origin/main..HEAD` muss **leer** sein. Beim
 Wiedereinstieg zusätzlich `git log --oneline -3` gegenlesen — die Windows-Session pusht
 ebenfalls.
+
+🚢 **v1.8.1 ist am 2026-08-07 abends veröffentlicht** (Tag `3744c38`, CI-Lauf
+`31209285839` **grün auf allen drei Jobs**). Vier Artefakte, alle mit Build-ID
+`1.8.1+3744c38`: DMG lokal · MSI + portables ZIP von **rtzbld01** · AppImage aus dem
+CI-Lauf **desselben Commits**. Live-Gegenprobe unabhängig von `publish.py` gefahren
+(Manifest, Signatur gegen die **Client**-Bytes aus `UpdateKeys.hpp` mit zwei fallenden
+Gegentests, alle drei Artefakte heruntergeladen und `cmp`-identisch, `index.json` mit allen
+acht Produkten unversehrt).
+⚠️ **Das Selbst-Update wurde bewusst NICHT ausgelöst** — es reißt die Terminal-Sessions mit,
+und die Produktivinstanz trägt die laufende Orchestrierung. Der Owner spielt das als
+Stufe 1 durch.
+⚠️ **Zwei offene Owner-Entscheide aus dem Startup-Check-Vertrag** stehen in der
+Feature-Referenz (Abschnitt „Online-Update"): der **Key-Name** (`update/autoCheck` hier vs.
+`update/auto_check` bei RAFTNG — ein Angleichen ohne Migration setzt jeden abgeschalteten
+Schalter still auf EIN zurück) und der **Zeitpunkt des Drossel-Zeitstempels** (bei uns im
+Callback, bei RAFTNG vor dem Request). Der Vertrag selbst war in QTmux bereits vollständig
+erfüllt — es wurde nichts nachgebaut.
 
 ✅ **In `main` seit heute:** QTMUX-130 (Verlaufs-Umbruch, `47d313e`, CI grün auf allen drei
 Plattformen — Lauf `31165779520`) · Vendoring auf MacPCAN `58df9e4` (`c9fee38`) samt

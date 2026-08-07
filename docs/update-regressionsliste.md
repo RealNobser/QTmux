@@ -2,7 +2,7 @@
 
 > **Wozu:** QTmux ist das einzige Produkt der Familie, dessen **voller** Update-Zyklus schon
 > am lebenden Objekt lief — damit ist es die Referenz dafür, dass die Kette Ende zu Ende
-> trägt. Diese Liste belegt an einem **1.8.0**-Build, dass Manifest-Abruf, Signaturprüfung,
+> trägt. Diese Liste belegt an einem **1.8.1**-Build, dass Manifest-Abruf, Signaturprüfung,
 > Versionsvergleich und der „ist aktuell"-Fall unverändert funktionieren.
 >
 > **Anlass:** MacPCAN baut die Proxy-Unterstützung in `appupdate` ein. Sie wirkt auf
@@ -10,11 +10,11 @@
 > bei dem eine Regression am schnellsten auffällt; die Liste ist der schnelle Gegencheck
 > nach jedem Re-Vendoring (`tools/check-updater-sync.sh`).
 >
-> 🔑 **Der Server ist scharf.** „QTmux 1.8.0 ist aktuell" ist damit der **echte** Fall und
+> 🔑 **Der Server ist scharf.** „QTmux 1.8.1 ist aktuell" ist damit der **echte** Fall und
 > kein Platzhalter: Manifest wurde geholt, Signatur geprüft, Version verglichen. Eine
 > Fehlermeldung an dieser Stelle ist ein Befund, kein Normalzustand.
 >
-> Alle Sollwerte unten sind am **2026-08-05** gemessen, nicht geschätzt.
+> Alle Sollwerte unten sind am **2026-08-07** gemessen, nicht geschätzt.
 
 ## A · Ohne GUI, ohne Build — die Kette in 60 Sekunden (Werkzeugweg)
 
@@ -29,14 +29,14 @@ curl -sS -o manifest.json     -w "manifest HTTP %{http_code} %{size_download}B\n
 curl -sS -o manifest.json.sig -w "sig      HTTP %{http_code} %{size_download}B\n" https://nobser.de/updates/qtmux/manifest.json.sig
 ```
 
-| Prüfpunkt | Sollwert (2026-08-05) |
+| Prüfpunkt | Sollwert (2026-08-07) |
 |---|---|
-| Manifest | HTTP **200**, **2048 B** |
+| Manifest | HTTP **200**, **2433 B** |
 | Signatur | HTTP **200**, **genau 64 B** (rohe Ed25519-Signatur, keine Base64-Hülle) |
-| `product` / `version` / `published` | `qtmux` / **1.8.0** / `2026-08-02` |
+| `product` / `version` / `published` | `qtmux` / **1.8.1** / `2026-08-07` |
 | Artefaktschlüssel | `macos-universal`, `win-x86_64`, `linux-x86_64` — **alle drei** |
 | Cache-Bust | `…/manifest.json?ts=<epoch>` ⇒ **200**. Der Kern hängt das an **http(s)** an, weil `manifest.json` die einzige veränderliche Datei auf dem Webspace ist. ⚠️ Ein Proxy, der die Abfrage verschluckt oder die URL normalisiert, liefert ein **altes** Manifest aus — die Prüfung meldet dann „aktuell", obwohl es das nicht ist. Genau hier fällt eine Proxy-Regression zuerst auf |
-| Artefakt erreichbar (ohne 60 MB zu laden) | `curl -I …/1.8.0/QTmux-1.8.0-macos.dmg` ⇒ **200**, `content-length: 60987522`, `accept-ranges: bytes` |
+| Artefakt erreichbar (ohne 60 MB zu laden) | `curl -I …/1.8.1/QTmux-1.8.1-macos.dmg` ⇒ **200**, `content-length: 60635900`, `accept-ranges: bytes` |
 
 **Signatur gegen den Produktionsschlüssel** — der Schlüssel steht im vendierten Kern
 ([UpdateKeys.hpp](../third_party/updater/update/UpdateKeys.hpp), 32 rohe Bytes); für
@@ -70,7 +70,7 @@ die **exakten** Manifest-Bytes steht — und genau deshalb ist jede Byte-Veränd
 Transportweg tödlich. Siehe die `.gitattributes`-Lektion (`-text`): CRLF-Umschreibung machte
 aus 935 Byte 966 und riss sechs Tests mit.
 
-## B · Am 1.8.0-Build durchklicken (drei Minuten)
+## B · Am 1.8.1-Build durchklicken (drei Minuten)
 
 Voraussetzung: **frische, isolierte** Instanz — nicht die Produktivinstanz.
 
@@ -78,7 +78,7 @@ Voraussetzung: **frische, isolierte** Instanz — nicht die Produktivinstanz.
 QTMUX_PROFILE=updatecheck QTMUX_MCP_PORT=7346 ./build/macos-release/qtmux.app/Contents/MacOS/qtmux
 ```
 
-1. **Hilfe → „Nach Updates suchen …"** ⇒ Dialog meldet **„QTmux 1.8.0 ist aktuell."**
+1. **Hilfe → „Nach Updates suchen …"** ⇒ Dialog meldet **„QTmux 1.8.1 ist aktuell."**
    Kein Fehlertext, kein Hänger, kein Fortschrittsbalken. Das ist der Beleg für
    Abruf + Signatur + Versionsvergleich in einem Schritt.
    ⚠️ Der Knopf muss **beim ersten Klick** wirken. Tut der erste Knopf im geöffneten Dialog

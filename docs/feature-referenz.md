@@ -771,6 +771,59 @@ Produkt `qtmux` → `…/qtmux/manifest.json`.
   Netz darf nicht jeden Morgen mit einem Fehlerdialog begrüßen.
 - Der Zeitstempel wird **auch nach einem Fehlschlag** geschrieben; sonst wird aus
   „1×/Tag" bei unerreichbarem Server „bei jedem Start".
+  ⚠️ **Offen gegenüber RAFTNG:** Dort wird der Zeitstempel **vor** dem Request gesetzt, bei
+  uns im **Callback**. Der Unterschied trifft genau einen Fall — eine Antwort, die *nie*
+  kommt (hängender Server, Anwender beendet QTmux vor dem Timeout): dann bleibt der
+  Zeitstempel aus und der nächste Start fragt erneut. Bei einem *fehlschlagenden* Request
+  verhalten sich beide gleich. Nicht eigenmächtig umgestellt — die Änderung ist trivial,
+  aber sie gehört zusammen mit der Key-Frage unten entschieden.
+
+**Vertrags-Abgleich „Beim-Start-Update-Check" (Owner-Vorgabe 2026-08-07, workspace-weit für
+alle drei Desktop-Apps):** In QTmux war der Vertrag **bereits vollständig erfüllt** — es gab
+nichts zu bauen. Punkt für Punkt gemessen, nicht aus dem Code geschlossen:
+
+| Vertragspunkt | Stand in QTmux |
+|---|---|
+| Einstellung, Default EIN | „Beim Start automatisch nach Updates suchen", Einstellungen → **Allgemein → Aktualisierung** (`CatAllgemein.qml`, `objectName: swUpdateAutoCheck`); `value(kKeyAutoCheck, **true**)` |
+| Start nie blockieren | `QTimer::singleShot(**3000**, …)` in `main.cpp`, nach Layout/Session-Wiederherstellung |
+| Still, sichtbar nur bei neuerer Version | Callback: `if (manual) setError/Failed; **else setState(Idle)**` |
+| Kein Netz ⇒ lautlos | derselbe Zweig — der stille Pfad kennt keinen Fehlerzustand |
+| Menüweg unverändert | `checkNow()` → `startCheck(manual=**true**)`, eigener Pfad, unberührt |
+| Strings in beiden `.ts` | **0 unfinished** in `qtmux_de.ts` und `qtmux_en.ts`; EN: „Check for updates automatically at startup" |
+| Settings-Text mit Deckung | beschreibt, was er **tut** („Höchstens einmal am Tag und still: Gibt es nichts Neues oder ist der Server nicht erreichbar, passiert gar nichts") — keine Zusage „hält aktuell" |
+| Proxy: nie Auth-Dialog beim stillen Check | `answerProxyChallenge` prüft `m_manual`; Wächter `tst_updateviewmodel::silentStartupCheckNeverAsksForProxyCredentials` |
+
+⚠️ **Der Key heißt bei uns `update/autoCheck`, bei RAFTNG `update/auto_check`.** Ein
+Angleichen ist **keine Kosmetik**: Es setzt jeden Anwender, der den Schalter ausgeschaltet
+hat, stillschweigend auf EIN zurück (der alte Key wird nie mehr gelesen). Entweder mit
+Migration oder gar nicht — Owner-Entscheid, nicht eigenmächtig genommen.
+
+🔑 **Zwei Messfallen, beide hier hineingelaufen** — wer den Start-Check nachmisst, verliert
+sonst eine halbe Stunde an einem Messgerät, das schweigt:
+1. **`--screenshot` löst den Start-Check absichtlich NIE aus** (`if (shotPath.isEmpty())` in
+   `main.cpp`). Ein Beleglauf mit dem Screenshot-Schalter misst also garantiert nichts — und
+   sieht dabei exakt so aus wie ein abgeschalteter Check.
+2. **QSettings ersetzt `/` durch `.`, sobald der Wert in der macOS-plist landet.** Der Key
+   heißt im Code `update/lastCheck`, in `defaults read` aber **`update.lastCheck`**. Ein
+   `defaults write …  "update/autoCheck"` schreibt einen Schlüssel, den die App **nie liest**
+   — der Gegentest lief damit gegen die Vorgabe statt gegen den ausgeschalteten Schalter und
+   „bestätigte" fälschlich. Erkennbar war es nur daran, dass Test und Gegentest **dasselbe**
+   Ergebnis lieferten.
+
+**Beleg „Default EIN" (2026-08-07, mit scharfem Gegentest):**
+```bash
+# A: frische Config, Key NICHT gesetzt  -> Vorgabe muss greifen
+env -i HOME=$HOME ./build/macos-release/qtmux.app/Contents/MacOS/qtmux \
+    --profile belegA --mcp-port 7353 &     # 14 s laufen lassen, dann TERM
+defaults read com.qtmux.QTmux-belegA | grep update
+#   -> "update.lastCheck" = "2026-08-07T21:18:36";     Pruefung LIEF
+
+# C: Gegentest, Schalter ausdruecklich AUS (Punkt-Schreibweise!)
+defaults write com.qtmux.QTmux-belegC "update.autoCheck" -bool false
+env -i HOME=$HOME … --profile belegC --mcp-port 7355 &
+defaults read com.qtmux.QTmux-belegC | grep update
+#   -> nur "update.autoCheck" = 0;   KEIN lastCheck  ->  Pruefung lief NICHT
+```
 - **„Version überspringen" bindet nur den stillen Check.** Von Hand sieht man sie weiter —
   sonst wäre ein Fehlklick unwiderruflich.
 - **Downgrade** erlaubt (Owner), aber nur auf ausdrückliche Anforderung und mit Warnung;
