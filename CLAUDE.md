@@ -331,6 +331,21 @@ Tags/Branches sind verschiebbar; das Anhebe-Rezept steht als Kommentar in der `c
 > Commit-Vergleich ist unabhängig davon. Und: `gh` braucht das Repo-Verzeichnis oder
 > `-R RealNobser/QTmux`, sonst „failed to determine base repo".
 
+> ⚠️ **Windows-Job stirbt MITTEN im Build mit `##[error]Process completed with exit code -1`**
+> (von **RAFTNG** gemeldet 2026-08-07, geteilte Runner-Infrastruktur — bei uns noch nicht
+> aufgetreten, hier bewusst vorab notiert). **Kein Compilerfehler, kein `FAILED`, kein
+> „ninja: build stopped"** — der Lauf endet einfach an einem beliebigen Ziel, und das
+> getroffene Ziel hat **keinen Bezug zum Diff**. Genau das verführt dazu, im eigenen Diff zu
+> suchen: Es sieht aus, als habe die letzte Änderung etwas zerlegt.
+> 🔑 **Regel: erst `gh run rerun <id> --failed`, dann im eigenen Diff suchen.** RAFTNG hat es
+> per Rerun **auf demselben Commit** als Runner-Ursache belegt; die umgekehrte Reihenfolge
+> kostet einen Abend.
+> ⚠️ **Nicht mit dem Ausfall vom 2026-08-06 verwechseln** (Git-Lektionen unten) — der sieht
+> nur oberflächlich ähnlich, die Mechanik ist eine andere: Dort entstand **gar kein Lauf**
+> (GitHub-Störung, Webhooks gedrosselt), hier stirbt ein **laufender Job** mittendrin. Beide
+> teilen allein die Lehre, zuerst außerhalb des eigenen Codes zu suchen; das Messmittel ist
+> ein anderes — dort die Statuspage, hier der Rerun.
+
 > **⚠️ `env.QT_VERSION` (6.10.3) ist bewusst gewählt — nicht blind hochziehen.**
 > **Nicht 6.8.x:** dessen CMake-Config verlinkt das aus dem macOS-SDK entfernte
 > **AGL-Framework** → `ld: framework 'AGL' not found` (lokal unsichtbar, Homebrew-Qt ist
