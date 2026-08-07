@@ -345,6 +345,32 @@ Tags/Branches sind verschiebbar; das Anhebe-Rezept steht als Kommentar in der `c
 > (GitHub-Störung, Webhooks gedrosselt), hier stirbt ein **laufender Job** mittendrin. Beide
 > teilen allein die Lehre, zuerst außerhalb des eigenen Codes zu suchen; das Messmittel ist
 > ein anderes — dort die Statuspage, hier der Rerun.
+>
+> 🔑 **Zwei Fehlerbilder auf geteilten Runnern — nur EINES ist Infrastruktur** (RAFTNG-
+> Präzisierung 2026-08-07). Die Unterscheidung entscheidet, ob der Rerun das richtige oder
+> das **zerstörerische** Werkzeug ist:
+> | Bild | Deutung | Erster Griff |
+> |---|---|---|
+> | `exit code -1` **mitten** im Build, kein Compilerfehler | Runner-Abbruch | `gh run rerun <id> --failed` |
+> | Build **komplett**, **ein einzelner Test** rot | **echter Befund** (meist Timing unter Fremdlast) | **erst dokumentieren** — Lauf-ID, Testname, Fehlzeile — **dann** rerun |
+> ⚠️ **Beim zweiten Bild entsorgt ein voreiliger Rerun den Befund**: Der grüne Wiederholungs-
+> lauf überschreibt die einzige Spur, und der Fehler heißt fortan „Flake", obwohl niemand ihn
+> je gelesen hat. Fix-Richtung dort: **Wartebedingung statt fester Frist**.
+> 🔑 **Aber die Fix-Richtung gilt nicht überall — bei uns gemessen (2026-08-07): 17 feste
+> Fristen, davon nur ~11 echte Kandidaten.** Drei Klassen, die man auseinanderhalten muss:
+> 1. **Warteschleife mit Abbruchbedingung** (`for (attempt < 100 && !found) qWait(100)`, so in
+>    `tst_session` an vier Stellen) — ist bereits eine Wartebedingung, nur von Hand gebaut,
+>    und toleriert bis zu 10 s Fremdlast. **Kein Handlungsbedarf.**
+> 2. **Positiv-Wartung** (`qWait(500)`, danach ist etwas da) — echter Kandidat.
+>    `tst_session` und `tst_pty`; ⚠️ `test_pty` läuft in der CI nur auf **macOS** mit
+>    (Windows/Linux per `-E` ausgenommen), die Fristen dort treffen also nur einen Runner.
+> 3. **Negativ-Wartung** (`qWait(200)`, danach muss `count() == 0` sein — `tst_updateviewmodel`
+>    zweimal). ⚠️ **Hier hilft „Wartebedingung statt Frist" PRINZIPIELL nicht: Auf ein
+>    Nicht-Ereignis kann man nicht warten.** Und die Gefahr steht auf dem Kopf — Fremdlast
+>    macht diese Tests nicht rot, sondern **still grün**: Käme das Signal erst nach 300 ms,
+>    sieht der Test trotzdem „0" und bestätigt fälschlich. Ein Wächter, der unter Last blind
+>    wird, ist schlimmer als einer, der flackert. Die Härtung muss dort **strukturell** sein
+>    (den Auslöser nachweislich abschalten), nicht zeitlich.
 
 > **⚠️ `env.QT_VERSION` (6.10.3) ist bewusst gewählt — nicht blind hochziehen.**
 > **Nicht 6.8.x:** dessen CMake-Config verlinkt das aus dem macOS-SDK entfernte
@@ -876,6 +902,7 @@ Nachschlagewerk braucht man aber nur beim Anfassen des jeweiligen Themas.
 | Datei | Wann sie zu lesen ist |
 |---|---|
 | **[docs/feature-referenz.md](docs/feature-referenz.md)** | **Bevor du an einem Feature arbeitest.** Mechanik und Begründungen zu: Rendering/Glyph-Atlas · Terminal-Verhalten (Maus, Tasten, Scrollback, Links, OSC) · PTY-Layer · Sessions & UI (Persistenz, Gruppen, Palette, Prefs, Agenten-Wiederherstellung, Warteschlange) · Online-Update inkl. Proxy · QML-/Theming-Lektionen · macOS-Spezifika · Vault/Profile · Plugins · MCP-Server. |
+| **[docs/update-dialog-spec.md](docs/update-dialog-spec.md)** | **Bevor du den Update-Dialog anfasst.** Er ist seit 2026-08-07 die **Vorlage für alle drei Desktop-Apps** (Owner); der geteilte Widgets-Dialog entsteht danach im Hub. Die Spec beschreibt Zustände, Layout, alle Texte in DE/EN, Verhalten und die Gründe. Wer den Dialog ändert, ändert die Vorlage — Spec mitziehen. |
 | **[docs/e2e-fallen.md](docs/e2e-fallen.md)** | **Bevor du irgendetwas misst**, das über `ctest` hinausgeht — MCP-E2E, `--screenshot`, GUI-Automatisierung, Messung an einer laufenden Instanz. Enthält die Fälle, in denen das **Messmittel** log (falsch-positive Gegentests, Detektor-Blindheit, Screenshot-Eigenheiten je Plattform). |
 
 ⚠️ **Die Auslagerung ist keine Erlaubnis, sie zu überspringen.** Wer eine Änderung an einem

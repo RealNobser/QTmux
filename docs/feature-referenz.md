@@ -758,6 +758,14 @@ gäbe die Byte-Identität — und damit den Sync-Wächter — auf.
 Fehler IM KERN (s. u.); der Fix ging nach MacPCAN, wurde dort gepusht und kam per
 `--update` zurück.
 
+📐 **Der Dialog ist als Design-Spezifikation ausgeschrieben:**
+[docs/update-dialog-spec.md](update-dialog-spec.md) — Zustände und Übergänge, Layout und
+Maße, Elementmatrix je Zustand, **alle** Texte in DE und EN, Verhalten (Skip, Abbrechen je
+Phase, Fortschritt, Übergabe an den Installer) und ein Abschnitt „bewusste Entscheidungen".
+Anlass: Der Owner hat ihn zum **Vorbild für alle drei Desktop-Apps** erklärt (2026-08-07);
+der geteilte Widgets-Dialog entsteht danach im Hub. Wer hier etwas ändert, ändert damit die
+Vorlage — **die Spec mitziehen**, sonst driften Beschreibung und Sache auseinander.
+
 **App-Seite:** [`UpdateViewModel`](src/viewmodels/UpdateViewModel.h) (Context-Property
 `Updates`, Zustandsautomat Idle/Checking/UpToDate/Available/Downloading/Ready/Failed,
 QSettings `update/autoCheck|lastCheck|skippedVersion|baseUrl`) +
