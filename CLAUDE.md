@@ -518,10 +518,12 @@ Bei Wiedereinstieg `git log --oneline -3` gegenprüfen — die Windows-Session p
 ✅ Neu in `main`: **QTMUX-122/123** (OSC 52 + Maus-Hinweis, `162f079` — rebast aus dem
 Worktree, Jira dual auf Done) und die **Abschaltung des Agenten-Resume** (`6788a82`,
 Owner-Anweisung; Mechanik in der Feature-Referenz).
-⚠️ **Zu `3f0c794` gibt es noch keinen CI-Beleg** — der Push fiel in die Actions-Störung
-(s. u.). Der Stand ist lokal auf macOS Debug+Release geprüft, **Windows und Linux stehen
-aus**. Beim Wiedereinstieg zuerst nachsehen, ob inzwischen ein Lauf entstand; wenn nicht,
-`gh workflow run CI --ref main`.
+✅ **Die Actions-Störung ist vorbei** (2026-08-07 nachgemessen): Der Push von `47d313e`
+erzeugte binnen Sekunden einen Lauf. Nachgeholt sind auch die Stände von gestern —
+`3f0c794` ist auf **Linux + Windows** grün (Lauf `31129290055`; der dritte Job stand auf
+`cancelled` mit **leerer Schrittliste**, also nie zugeteilt, kein Befund), **macOS** kommt
+aus `34449de` (Lauf `31129007538`, komplett grün) — zulässig, weil
+`git diff --name-only 3f0c794..34449de` ausschließlich `CLAUDE.md` nennt.
 ✅ Erledigt und in `main`: **QTMUX-129** (Proxy, `37614b1`), **Build-ID**
 `<version>+<hash>[-dirty]` im Fenstertitel und in `get_server_info`, `build-msi.ps1` mit
 `-Version` als **Pflichtparameter**, Pfad-Härtung `safefile::read` (`8964e50`).
@@ -536,6 +538,9 @@ wartet auf die Pane-Breite"). Neu: [src/core/HistoryDump.h](src/core/HistoryDump
 `Session::setPendingHistory`, Test `test_restorehistory` (11 Fälle).
 Belegt: macOS Debug+Release je 30/30, Gegentest fällt nachweislich (80 statt 100 Zeichen), und
 am lebenden Objekt alter Stand 80+26 gegen neuen 84+22 bei 84 Spalten Fensterbreite.
+**CI grün auf allen drei Plattformen** (Lauf `31165779520`, je 14 Schritte — kein Job ohne
+Runner). ⚠️ Das ersetzt den Windows-**Debug**-Build nicht: Die CI baut Release, Qts
+Debug-Asserts sieht sie prinzipiell nicht (Lektion QTMUX-124).
 ⚠️ **Der Fix wirkt nicht rückwirkend:** Vorhandene Dumps tragen die eingefrorenen 80er-Umbrüche
 bereits in sich — der erste Neustart nach dem Update zeigt sie noch zerhackt, ab dem zweiten
 ist es sauber. Wer das beim Nachprüfen übersieht, hält den Fix für wirkungslos.
