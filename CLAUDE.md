@@ -570,12 +570,14 @@ acht Produkten unversehrt).
 ⚠️ **Das Selbst-Update wurde bewusst NICHT ausgelöst** — es reißt die Terminal-Sessions mit,
 und die Produktivinstanz trägt die laufende Orchestrierung. Der Owner spielt das als
 Stufe 1 durch.
-⚠️ **Zwei offene Owner-Entscheide aus dem Startup-Check-Vertrag** stehen in der
-Feature-Referenz (Abschnitt „Online-Update"): der **Key-Name** (`update/autoCheck` hier vs.
-`update/auto_check` bei RAFTNG — ein Angleichen ohne Migration setzt jeden abgeschalteten
-Schalter still auf EIN zurück) und der **Zeitpunkt des Drossel-Zeitstempels** (bei uns im
-Callback, bei RAFTNG vor dem Request). Der Vertrag selbst war in QTmux bereits vollständig
-erfüllt — es wurde nichts nachgebaut.
+📌 **Backlog-Paar aus dem Startup-Check-Vertrag** (Koordinator-Entscheid 2026-08-07:
+**keine 1.8.2**, beides zusammen ins nächste ohnehin anstehende Paket) — Mechanik und
+Begründungen im Abschnitt „Online-Update" der Feature-Referenz:
+1. Key `update/autoCheck` → **`update/auto_check`**, aber **nur mit Migration** (alten Key
+   lesen, Wert übernehmen, erst dann den neuen als führend behandeln). Ohne Migration wird
+   jeder bewusst abgeschaltete Schalter still auf EIN zurückgesetzt.
+2. Drossel-Zeitstempel **vor** den Request setzen statt im Callback.
+Der Vertrag selbst war in QTmux bereits vollständig erfüllt — es wurde **nichts** nachgebaut.
 
 ✅ **In `main` seit heute:** QTMUX-130 (Verlaufs-Umbruch, `47d313e`, CI grün auf allen drei
 Plattformen — Lauf `31165779520`) · Vendoring auf MacPCAN `58df9e4` (`c9fee38`) samt
@@ -712,7 +714,10 @@ diese Linie beim nächsten Feature-Vergleich wiederverwenden.
 **Backlog (nicht beauftragt):** SFTP-MCP-Tools (Companion-Prio 2) ·
 Signierung/Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-Feinschliff
 (CAN-FD, ID-Filter, Konfig-Dialog, DBC-Decoding) · optional CPack-Distro-Pakete
-(.deb/.rpm) · **LGPL-Beilagen** fürs gebündelte Qt (Lizenztext + Quellen-Hinweis).
+(.deb/.rpm) · **LGPL-Beilagen** fürs gebündelte Qt (Lizenztext + Quellen-Hinweis) ·
+**DMG-Bundle ausdünnen** (ungenutzte Plugins raus bzw. Homebrew-`LC_RPATH` löschen, beides
+**vor** der Re-Signatur — Begründung und Messweg im DMG-Abschnitt oben) · **Startup-Check-
+Paar** (Key-Migration + Zeitstempel vor den Request, s. Arbeitsstand).
 
 ### Design 1a/2a (GUI-Umbau) — abgeschlossen
 

@@ -771,12 +771,13 @@ Produkt `qtmux` → `…/qtmux/manifest.json`.
   Netz darf nicht jeden Morgen mit einem Fehlerdialog begrüßen.
 - Der Zeitstempel wird **auch nach einem Fehlschlag** geschrieben; sonst wird aus
   „1×/Tag" bei unerreichbarem Server „bei jedem Start".
-  ⚠️ **Offen gegenüber RAFTNG:** Dort wird der Zeitstempel **vor** dem Request gesetzt, bei
-  uns im **Callback**. Der Unterschied trifft genau einen Fall — eine Antwort, die *nie*
-  kommt (hängender Server, Anwender beendet QTmux vor dem Timeout): dann bleibt der
-  Zeitstempel aus und der nächste Start fragt erneut. Bei einem *fehlschlagenden* Request
-  verhalten sich beide gleich. Nicht eigenmächtig umgestellt — die Änderung ist trivial,
-  aber sie gehört zusammen mit der Key-Frage unten entschieden.
+  📌 **Umzustellen: Zeitstempel VOR den Request** (Koordinator-Entscheid 2026-08-07, dem
+  Owner ohne Veto vorgelegt — RAFTNG macht es so). Der Unterschied trifft genau einen Fall:
+  eine Antwort, die *nie* kommt (hängender Server, Anwender beendet QTmux vor dem Timeout).
+  Dann bleibt der Zeitstempel aus und der nächste Start fragt erneut. Bei einem
+  *fehlschlagenden* Request verhalten sich beide Fassungen gleich — wir schreiben ihn auch
+  nach Fehlschlag. **Kein eigener Release dafür**: geht als Paar mit der Key-Migration unten
+  ins nächste ohnehin anstehende Paket.
 
 **Vertrags-Abgleich „Beim-Start-Update-Check" (Owner-Vorgabe 2026-08-07, workspace-weit für
 alle drei Desktop-Apps):** In QTmux war der Vertrag **bereits vollständig erfüllt** — es gab
@@ -793,10 +794,14 @@ nichts zu bauen. Punkt für Punkt gemessen, nicht aus dem Code geschlossen:
 | Settings-Text mit Deckung | beschreibt, was er **tut** („Höchstens einmal am Tag und still: Gibt es nichts Neues oder ist der Server nicht erreichbar, passiert gar nichts") — keine Zusage „hält aktuell" |
 | Proxy: nie Auth-Dialog beim stillen Check | `answerProxyChallenge` prüft `m_manual`; Wächter `tst_updateviewmodel::silentStartupCheckNeverAsksForProxyCredentials` |
 
-⚠️ **Der Key heißt bei uns `update/autoCheck`, bei RAFTNG `update/auto_check`.** Ein
-Angleichen ist **keine Kosmetik**: Es setzt jeden Anwender, der den Schalter ausgeschaltet
-hat, stillschweigend auf EIN zurück (der alte Key wird nie mehr gelesen). Entweder mit
-Migration oder gar nicht — Owner-Entscheid, nicht eigenmächtig genommen.
+📌 **Key-Angleichung `update/autoCheck` → `update/auto_check` — NUR mit Migration**
+(Koordinator-Entscheid 2026-08-07). RAFTNG nutzt `update/auto_check`, MacPCAN verdrahtet
+neu und übernimmt dieselbe Schreibweise; nach der Migration sind es drei von drei.
+⚠️ **Ein Angleichen ohne Migration ist keine Kosmetik, sondern ein Übergriff:** Es setzt
+jeden Anwender, der den Schalter bewusst ausgeschaltet hat, stillschweigend auf EIN zurück —
+der alte Key wird nie mehr gelesen, und niemand merkt es. **Pflichtreihenfolge:** alten Key
+lesen, Wert übernehmen, **erst dann** den neuen als führend behandeln.
+Geht als Paar mit dem Zeitstempel oben ins nächste Paket — **kein eigener Release**.
 
 🔑 **Zwei Messfallen, beide hier hineingelaufen** — wer den Start-Check nachmisst, verliert
 sonst eine halbe Stunde an einem Messgerät, das schweigt:
