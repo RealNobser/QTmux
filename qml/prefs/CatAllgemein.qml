@@ -28,7 +28,15 @@ CatPage {
             }
             PrefRow {
                 title: qsTr("Sprache")
-                description: qsTr("Wirkt sofort; das native macOS-App-Menü folgt erst nach einem Neustart.")
+                // 🔑 Der Satz stand bis 2026-08-07 als „…das native macOS-App-Menü folgt erst
+                // nach einem Neustart." hier — und das war eine Warnung OHNE DECKUNG: Der
+                // Owner hat am laufenden Programm nachgesehen, das Programm-Menü wechselt
+                // sehr wohl sofort mit. Gemessen ist auch, warum: Beim Sprachwechsel wird
+                // die MenuBar NICHT neu gebaut (Erzeugungs-/Zerstörungs-Hooks belegen es);
+                // `engine.retranslate()` wertet die `qsTr`-Bindings der bestehenden Objekte
+                // neu aus. Eine erfundene Einschränkung kostet keinen Absturz, sondern
+                // Vertrauen und unnötige Neustarts.
+                description: qsTr("Wirkt sofort, auch im macOS-Programm-Menü.")
                 controlWidth: 180
                 AppComboBox {
                     Layout.fillWidth: true

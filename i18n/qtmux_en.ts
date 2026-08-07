@@ -280,17 +280,17 @@
         <translation type="vanished">Window</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="87"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="95"/>
         <source>Vor dem Beenden nachfragen</source>
         <translation>Ask before quitting</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="88"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="96"/>
         <source>Beenden schließt alle Sitzungen samt laufender Prozesse.</source>
         <translation>Quitting closes all sessions along with their running processes.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="54"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="62"/>
         <source>Sessions beim Start wiederherstellen</source>
         <translation>Restore sessions on start</translation>
     </message>
@@ -310,152 +310,156 @@
         <translation>“Follow system” follows the operating system setting.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="31"/>
         <source>Wirkt sofort; das native macOS-App-Menü folgt erst nach einem Neustart.</source>
-        <translation>Takes effect immediately; the native macOS app menu follows after a restart.</translation>
+        <translation type="vanished">Takes effect immediately; the native macOS app menu follows after a restart.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="49"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="39"/>
+        <source>Wirkt sofort, auch im macOS-Programm-Menü.</source>
+        <translation>Takes effect immediately, including the macOS application menu.</translation>
+    </message>
+    <message>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="57"/>
         <source>Start &amp; Beenden</source>
         <translation>Start &amp; quit</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="57"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="65"/>
         <source>QTmux startet mit einer einzelnen, leeren Session. Der zuletzt gespeicherte Stand bleibt erhalten — er wird beim Beenden nicht überschrieben und ist wieder da, sobald hier erneut wiederhergestellt wird.</source>
         <translation>QTmux starts with a single, empty session. The last saved state is kept — it is not overwritten on quit and returns as soon as restoring is enabled here again.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="69"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="77"/>
         <source>Gar nicht</source>
         <translation>Not at all</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="69"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="77"/>
         <source>Ohne Verlauf</source>
         <translation>Without history</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="69"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="77"/>
         <source>Alles</source>
         <translation>Everything</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="75"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="83"/>
         <source>Agenten in den Panes</source>
         <translation>Agents in the panes</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="76"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="84"/>
         <source>Ob die Agenten dabei erneut starten und ihre Unterhaltung fortsetzen, steht unter „Agenten &amp; MCP“.</source>
         <translation>Whether those agents restart and resume their conversation is set under “Agents &amp; MCP”.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="95"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="103"/>
         <source>Quake-Modus</source>
         <translation>Quake mode</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="97"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="105"/>
         <source>Globaler Hotkey Strg+^ blendet QTmux überall ein und aus.</source>
         <translation>Global hotkey Ctrl+^ shows and hides QTmux from anywhere.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="132"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="140"/>
         <source>Jetzt nach Updates suchen</source>
         <translation>Check for updates now</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="150"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="158"/>
         <source>Netzwerk-Proxy</source>
         <translation>Network proxy</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="152"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="160"/>
         <source>Proxy für die Update-Prüfung</source>
         <translation>Proxy for update checks</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="155"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="163"/>
         <source>„System“ übernimmt, was das Betriebssystem vorgibt — im Firmennetz meist das Richtige, ohne dass du etwas eintragen musst. „Direkt“ umgeht den Proxy bewusst; das hilft, wenn eine hinterlegte Konfigurationsdatei nicht erreichbar ist. „Manuell“ nutzt die Angaben darunter.</source>
         <translation>“System” uses whatever the operating system provides — usually the right thing on a corporate network, with nothing to type in. “Direct” deliberately bypasses the proxy, which helps when a configured auto-config file is unreachable. “Manual” uses the settings below.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="161"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="169"/>
         <source>System</source>
         <translation>System</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="161"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="169"/>
         <source>Direkt</source>
         <translation>Direct</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="161"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="169"/>
         <source>Manuell</source>
         <translation>Manual</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="167"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="175"/>
         <source>Proxy-Adresse</source>
         <translation>Proxy address</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="168"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="176"/>
         <source>Nur für „Manuell“. Host und Port des Proxys, dazu die Art der Verbindung.</source>
         <translation>For “Manual” only. Host and port of the proxy, plus the connection type.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="174"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="182"/>
         <source>HTTP</source>
         <translation>HTTP</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="174"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="182"/>
         <source>SOCKS5</source>
         <translation>SOCKS5</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="181"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="189"/>
         <source>proxy.firma.local</source>
         <translation>proxy.company.local</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="188"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="196"/>
         <source>Port</source>
         <translation>Port</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="196"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="204"/>
         <source>Benutzername</source>
         <translation>User name</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="199"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="207"/>
         <source>Optional. Verlangt der Proxy eine Anmeldung, wird beim nächsten Versuch nach dem Passwort gefragt. Das Passwort wird ausschließlich für die laufende Sitzung im Arbeitsspeicher gehalten — es landet weder in den Einstellungen noch in einer Exportdatei. Der Benutzername wird gespeichert, aber nicht mitexportiert.</source>
         <translation>Optional. If the proxy requires authentication, you will be asked for the password on the next attempt. The password is kept in memory for the current session only — it goes neither into the settings nor into an export file. The user name is stored, but never exported.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="209"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="217"/>
         <source>Benutzername, ggf. mit Domäne</source>
         <translation>User name, with domain if required</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="215"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="223"/>
         <source>Anmeldedaten dieser Sitzung verwerfen</source>
         <translation>Discard this session’s credentials</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="217"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="225"/>
         <source>Für diese Sitzung liegt ein Passwort im Arbeitsspeicher.</source>
         <translation>A password is held in memory for this session.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="218"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="226"/>
         <source>Zurzeit ist kein Passwort gespeichert.</source>
         <translation>No password is currently stored.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="220"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="228"/>
         <source>Verwerfen</source>
         <translation>Discard</translation>
     </message>
@@ -464,12 +468,12 @@
         <translation type="vanished">QTmux starts with a single, empty session. The last saved state is kept — it is not overwritten on exit and returns as soon as you choose to restore again.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="61"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="69"/>
         <source>Fenster, Panes und deren Arbeitsverzeichnisse kommen zurück, die Terminals starten aber leer. Der gespeicherte Verlauf bleibt liegen und wird bei „Alles“ wieder angezeigt.</source>
         <translation>Windows, panes and their working directories return, but the terminals start empty. The saved history is kept and is shown again with “Everything”.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="64"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="72"/>
         <source>Fenster, Panes und Arbeitsverzeichnisse kommen zurück, dazu der farbige Verlauf jedes Panes.</source>
         <translation>Windows, panes and working directories return, along with each pane’s colored history.</translation>
     </message>
@@ -486,32 +490,32 @@
         <translation type="vanished">Global hotkey: Ctrl+` (toggles QTmux from anywhere)</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="98"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="106"/>
         <source>Derzeit nur unter macOS verfügbar.</source>
         <translation>Currently available on macOS only.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="114"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="122"/>
         <source>Aktualisierung</source>
         <translation>Updates</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="116"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="124"/>
         <source>Beim Start automatisch nach Updates suchen</source>
         <translation>Check for updates automatically at startup</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="117"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="125"/>
         <source>Höchstens einmal am Tag und still: Gibt es nichts Neues oder ist der Server nicht erreichbar, passiert gar nichts. Über das Hilfe-Menü lässt sich jederzeit von Hand suchen.</source>
         <translation>At most once a day and silently: if there is nothing new, or the server cannot be reached, nothing happens at all. You can always check manually from the Help menu.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="127"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="135"/>
         <source>Jetzt suchen</source>
         <translation>Check now</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="129"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="137"/>
         <source>Installiert ist Version %1.</source>
         <translation>Installed version is %1.</translation>
     </message>
@@ -520,37 +524,37 @@
         <translation type="obsolete">Search …</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="233"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="241"/>
         <source>Energie</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="235"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="243"/>
         <source>Ruhezustand verhindern, solange Agenten arbeiten</source>
         <translation>Prevent sleep while agents are working</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="237"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="245"/>
         <source>Der Rechner bleibt wach, solange mindestens eine Session „beschäftigt“ meldet — und nur dann. Wartet ein Agent auf eine Antwort von dir, darf der Rechner schlafen. Der Bildschirm wird nicht wachgehalten.</source>
         <translation>The computer stays awake while at least one session reports “busy” — and only then. If an agent is waiting for your answer, the computer may sleep. The display is not kept awake.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="241"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="249"/>
         <source>Auf dieser Plattform noch nicht verfügbar.</source>
         <translation>Not available on this platform yet.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="251"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="259"/>
         <source>Zustand</source>
         <translation>State</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="253"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="261"/>
         <source>Aktiv — der Ruhezustand ist gerade gesperrt.</source>
         <translation>Active — sleep is currently blocked.</translation>
     </message>
     <message>
-        <location filename="../qml/prefs/CatAllgemein.qml" line="254"/>
+        <location filename="../qml/prefs/CatAllgemein.qml" line="262"/>
         <source>Zurzeit nicht gesperrt: keine Session arbeitet.</source>
         <translation>Not blocked right now: no session is working.</translation>
     </message>
