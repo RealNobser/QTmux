@@ -877,6 +877,27 @@ ausgelieferten App (openssl signiert, das vendierte Monocypher verifiziert) — 
 Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
 
 ### QML-/Theming-Lektionen
+- ⚠️ **`Array.isArray(control.model)` ist im Delegate IMMER `false`** — auch wenn das Model
+  ein JS-Array ist (2026-08-07 gemessen, Anwenderbefund). Die `model`-Property reicht den
+  Wert als **QVariant** durch; beim Auslesen ist er kein JS-Array mehr. In
+  [AppComboBox.qml](qml/Ui/AppComboBox.qml) verzweigte der Popup-Delegate darüber und lief
+  deshalb **immer** in den `model[textRole]`-Zweig, den es bei einem Array-Model gar nicht
+  gibt → `undefined` → **leere Einträge in jeder ComboBox mit `textRole`** (Sprach- und
+  Shell-Auswahl). Tückisch: Das **geschlossene Feld blieb korrekt**, weil `currentText`
+  einen eigenen Weg nimmt — der Fehler sah nach einem Farb-/Theme-Problem aus.
+  🔑 **Regel: `modelData` FRAGEN, nicht den Modelltyp raten.** Es ist bei Array-Models
+  gesetzt und bei rollenbasierten Models `undefined`:
+  `modelData?.[textRole] ?? model?.[textRole] ?? ""`.
+- 🔑 **Ein Sprachwechsel baut die MenuBar NICHT neu auf** (2026-08-07 mit Erzeugungs-/
+  Zerstörungs-Hooks gemessen): Es entsteht kein neues `MenuBar`- oder `Menu`-Objekt und
+  keines wird zerstört — `applyLanguage()` tauscht die Translator und ruft
+  `QQmlApplicationEngine::retranslate()`, das die `qsTr`-Bindings der **bestehenden** Objekte
+  neu auswertet. Auch die ins macOS-Programm-Menü promoteten Einträge (Über/Einstellungen/
+  Beenden) folgen dabei sofort — die Prefs-Beschreibung behauptete bis dahin das Gegenteil.
+  ⚠️ Der **Auslöser** ist Qt-Quick-spezifisch: Bei Widgets gibt es kein `retranslate()`, dort
+  müssten alle Texte in `changeEvent(QEvent::LanguageChange)` selbst neu gesetzt werden.
+  Ob eine solche Textänderung auch ein bereits promotetes `NSMenuItem` erreicht, ist **nicht
+  gemessen** (dafür fehlt hier das Messgerät) — nicht zusagen.
 - **Editor-Diagnosen (VSCode/qmlls), 2026-08-04:** Ausgangslage waren **über 2000**
   „Probleme" in den QML-Dateien, geblieben sind **2** (beide echt, s. u.). Drei Ursachen,
   jede mit eigener Abhilfe — die Begründungen stehen in den Dateien selbst

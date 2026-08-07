@@ -9,6 +9,21 @@
 
 ## E2E-/Test-Fallen (alle Plattformen)
 
+- 🔑 **Eine Gegenprobe, die nur die gewünschte Richtung misst, beweist nichts — prüfe BEIDES:
+  ist das Neue da UND ist das Alte weg?** (2026-08-07, an einem Prefs-Text erlebt; RAFTNG hat
+  die Regel danach übernommen.) Der neue Text allein belegt nicht, dass die alte Stelle
+  verschwunden ist — eine **zweite, unbemerkte Fundstelle** sieht dann aus wie ein Erfolg.
+  Bei uns steht dieselbe Regel schon für Versions-Bumps („neue Nummer **und** 0 Reste der
+  alten"), sie gilt aber allgemein: für Umbenennungen, Allowlists, Konstanten, jede Migration.
+  ⚠️ **Der zweite Teil derselben Geschichte, und er ist der gefährlichere:** Die Suche lieferte
+  für UTF-8 **zweimal `False`** — für den neuen wie für den alten Satz. Ein Messgerät, das auf
+  beide Fragen dasselbe antwortet, beantwortet **keine davon**; „Änderung nicht angekommen"
+  wäre hier eine Diagnose des Messgeräts gewesen. Ursache: **QML-Texte liegen kompiliert im
+  qmlcache**, nicht als UTF-8 im Binary — mit UTF-16 zeigte sich sofort „neu da, alt restlos
+  weg". Verwandt und aus derselben Woche: **rcc legt Ressourcen*namen* als UTF-16 ab**, weshalb
+  `strings <binary> | grep qtbase_de.qm` nichts findet, obwohl die Datei eingebettet ist.
+  **Merke: Bei jedem negativen Binary-Befund erst das Messgerät prüfen** — beide Kodierungen,
+  und eine Kontrollzeichenkette, von der man WEISS, dass sie drinsteht.
 - ⚠️ **`tools\vsdev-build.cmd` baut standardmäßig NUR `qtmux` — Tests brauchen `all`**
   (`tools\vsdev-build.cmd windows all`). Steht im Kopf des Skripts, ist trotzdem passiert
   (2026-07-31): `ctest` lief danach gegen ein **altes** Testbinary, und zwar in beide

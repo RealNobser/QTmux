@@ -496,13 +496,14 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-129**.
 
 **Teststände:** **30** Tests (s. Dateitabelle). macOS Debug/Release je **30/30** (dort läuft
-`test_pty` mit und besteht); Linux (rtzsvr02-Container) und Windows je **28/28** —
-`test_pty` per `-E` ausgenommen (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter
-Windows braucht `ctest` zusätzlich Qt-`bin` im PATH, sonst `0xc0000135`). Größte Binaries:
+`test_pty` mit und besteht). Linux (rtzsvr02-Container) und Windows nehmen `test_pty` per
+`-E` aus (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest`
+zusätzlich Qt-`bin` im PATH, sonst `0xc0000135`) — dort sind also **29** zu erwarten;
+zuletzt gemessen wurde dort 28/28, **vor** `test_restorehistory`. Größte Binaries:
 `tst_session` 24 Fälle, `tst_vtscreen` 24, `tst_agent` 20.
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
-besteht (am Lauf zu `3b63f00` abgelesen). Ein „26 statt 27" aus dem Container ist
-also kein Widerspruch, sondern die Ausnahme per `-E`.
+besteht. Eine kleinere Zahl aus dem Container ist kein Widerspruch, sondern die
+Ausnahme per `-E`. **Zahl immer per `ctest -N` gegenprüfen, nie schätzen.**
 🔑 **„CI grün auf allen drei Plattformen" ist KEIN Vollständigkeitsbeleg** (Lektion aus
 QTMUX-124): Die CI baut **Release**, ebenso Homebrew-Qt und der Linux-Container —
 **Debug-only-Asserts in Qts vorgebauter Bibliothek sieht sie prinzipiell nicht**; der
@@ -511,40 +512,33 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-07** · Branch `main` auf **`34449de`** + QTMUX-130 (s. u.), Working Tree
-sauber, **alles gepusht**, Worktree `../QTmux-w2` und beide Feature-Branches **abgebaut**.
-Teststand: macOS Debug **30/30** und Release **30/30** (`ctest -N` = 30).
-Bei Wiedereinstieg `git log --oneline -3` gegenprüfen — die Windows-Session pusht ebenfalls.
-✅ Neu in `main`: **QTMUX-122/123** (OSC 52 + Maus-Hinweis, `162f079` — rebast aus dem
-Worktree, Jira dual auf Done) und die **Abschaltung des Agenten-Resume** (`6788a82`,
-Owner-Anweisung; Mechanik in der Feature-Referenz).
-✅ **Die Actions-Störung ist vorbei** (2026-08-07 nachgemessen): Der Push von `47d313e`
-erzeugte binnen Sekunden einen Lauf. Nachgeholt sind auch die Stände von gestern —
-`3f0c794` ist auf **Linux + Windows** grün (Lauf `31129290055`; der dritte Job stand auf
-`cancelled` mit **leerer Schrittliste**, also nie zugeteilt, kein Befund), **macOS** kommt
-aus `34449de` (Lauf `31129007538`, komplett grün) — zulässig, weil
-`git diff --name-only 3f0c794..34449de` ausschließlich `CLAUDE.md` nennt.
-✅ Erledigt und in `main`: **QTMUX-129** (Proxy, `37614b1`), **Build-ID**
-`<version>+<hash>[-dirty]` im Fenstertitel und in `get_server_info`, `build-msi.ps1` mit
-`-Version` als **Pflichtparameter**, Pfad-Härtung `safefile::read` (`8964e50`).
+Stand **2026-08-07 abends** · `origin/main` = **`20ab250`**, darauf **1 ungepushter Commit**
+(das Doku-Aufräumen). Ein Arbeitsbaum, nur Branch `main` (Worktree und Feature-Branches
+abgebaut). Teststand macOS Debug **30/30** und Release **30/30** (`ctest -N` = 30).
+🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` am Aufräum-Commit
+ändert ihn, und der Anker wäre im selben Moment falsch (2026-08-07 genau so passiert).
+Belastbar ist die Beziehung zu `origin/main`; die Lage prüft man mit
+`git log --oneline origin/main..HEAD`. Beim Wiedereinstieg zusätzlich `git log --oneline -3`
+gegenlesen — die Windows-Session pusht ebenfalls.
+
+⚠️ **Working Tree ist NICHT sauber — eine Änderung wartet auf Owner-Freigabe:**
+- `qml/Ui/AppComboBox.qml` — **Bugfix für einen gemeldeten Anwenderfehler**: Popup-Einträge
+  jeder ComboBox mit `textRole` blieben **leer** (Sprach- und Shell-Auswahl). Ursache
+  gemessen: `Array.isArray(cb.model)` liefert **false**, auch wenn das Model ein JS-Array
+  ist — die `model`-Property reicht es als QVariant durch. Der Delegate lief deshalb immer
+  in den `model[textRole]`-Zweig, den es bei Array-Models nicht gibt → `undefined`.
+  Gegentest belegt (alt `undefined`, neu `"Deutsch"`); 30/30 grün. **Committen wurde
+  zweimal angeboten, nie beantwortet.** Regel und Messung stehen in der Feature-Referenz
+  (QML-Lektionen, `Array.isArray`).
+
+✅ **In `main` seit heute:** QTMUX-130 (Verlaufs-Umbruch, `47d313e`, CI grün auf allen drei
+Plattformen — Lauf `31165779520`) · Vendoring auf MacPCAN `58df9e4` (`c9fee38`) samt
+Richtigstellung (`4eb04b0`) · korrigierter Sprach-Hinweis in den Prefs (`20ab250`).
+⚠️ **QTMUX-130 wirkt nicht rückwirkend:** Vorhandene Dumps tragen die eingefrorenen
+80er-Umbrüche als Inhalt — erst der **zweite** Neustart nach dem Update ist sauber. Wer das
+übersieht, hält den Fix für wirkungslos.
 ⚠️ Die **Build-ID-Quelle ist vorläufig** ([cmake/BuildId.cmake](cmake/BuildId.cmake)) — der
 kanonische Baustein kommt aus MacPCAN; beim Tausch ändert sich nur die Quelle.
-
-🆕 **QTMUX-130 in `main`** (Anwenderbefund 2026-08-07: wiederhergestellter Verlauf sah
-„zerrupft" aus). Ursache: Der Restore spielte den Dump ein, **bevor** das Pane vermessen war —
-also bei den geratenen 80 Spalten, und das friert ein. Mechanik, die drei übersehenen
-Randfälle und die Messwerte stehen in der Feature-Referenz („Wiederhergestellter Verlauf
-wartet auf die Pane-Breite"). Neu: [src/core/HistoryDump.h](src/core/HistoryDump.h),
-`Session::setPendingHistory`, Test `test_restorehistory` (11 Fälle).
-Belegt: macOS Debug+Release je 30/30, Gegentest fällt nachweislich (80 statt 100 Zeichen), und
-am lebenden Objekt alter Stand 80+26 gegen neuen 84+22 bei 84 Spalten Fensterbreite.
-**CI grün auf allen drei Plattformen** (Lauf `31165779520`, je 14 Schritte — kein Job ohne
-Runner). ⚠️ Das ersetzt den Windows-**Debug**-Build nicht: Die CI baut Release, Qts
-Debug-Asserts sieht sie prinzipiell nicht (Lektion QTMUX-124).
-⚠️ **Der Fix wirkt nicht rückwirkend:** Vorhandene Dumps tragen die eingefrorenen 80er-Umbrüche
-bereits in sich — der erste Neustart nach dem Update zeigt sie noch zerhackt, ab dem zweiten
-ist es sauber. Wer das beim Nachprüfen übersieht, hält den Fix für wirkungslos.
-**Offen:** Windows- und Linux-Build.
 
 **Nächster Punkt: QTMUX-94** — Terminal-Ausgabe als Agenten-Kontext.
 - Einstieg: `VtScreen::screenText()`/Scrollback liegen fertig vor; es fehlt allein der Weg
@@ -558,111 +552,33 @@ ist es sauber. Wer das beim Nachprüfen übersieht, hält den Fix für wirkungsl
 - Beachten: `qtmux_core` bleibt Gui-frei; jede neue Zeichenkette in `qsTr` + **beide** `.ts`;
   neue QML-Datei ohne `QML_FILES`-Eintrag existiert zur Laufzeit nicht.
 
-**Danach:** Owner-Durchklick der **28 fertigen Tickets**
-([docs/owner-abnahmen.md](docs/owner-abnahmen.md)) · Windows-/Linux-Zweig des Update-Wegs am
-lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, pf-Installation).
+**Danach:** Windows-**Debug**-Build von QTMUX-130 auf rtzbld01 (die CI baut Release und sieht
+Qts Debug-Asserts prinzipiell nicht, Lektion QTMUX-124) · Owner-Durchklick der fertigen
+Tickets ([docs/owner-abnahmen.md](docs/owner-abnahmen.md)) · Windows-/Linux-Zweig des
+Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, pf-Installation).
 
-#### Offene Owner-Entscheide (blockieren nichts, aber warten)
+### Offene Owner-Entscheide (blockieren nichts, aber warten)
 
-1. ✅ **ERLEDIGT — `feat/osc52-und-maus-hinweis` rebast, gemergt, abgebaut** (2026-08-07).
-   `2e761ca` → **`162f079`** (7 Konflikte gelöst: `VtScreen.{h,cpp}`, `SettingsIo.cpp`,
-   `Main.qml` 2×, `PrefsWindow.qml`, beide `.ts`), darauf `6788a82` (Resume-Abschaltung) und
-   `3f0c794` (Doku). `main` steht auf `3f0c794`, Jira 122/123 dual auf Done.
-   🔑 **Die Lektion, die bleibt: Alle sieben Konflikte lagen NEBENeinander, nicht
-   gegeneinander** — QTMUX-128 (`altScrollMode`) und 122 (`appClipboardWrite`) landeten in
-   denselben Listen (Settings-Allowlist, Alias-Block, `restoreDefault`-`switch`,
-   Prefs-Suchindex). Überall sind **beide** behalten. Wer hier reflexhaft „ours" nimmt,
-   verliert still ein fremdes Feature — und zwar ohne Compilerfehler, weil eine fehlende
-   Zeile in einer Allowlist niemandem auffällt.
-   🔑 **Zweite Lektion, teuer erkauft: Ein ausstehender Fast-Forward verträgt keinen Commit
-   auf `main`.** Während der Merge an einer Freigabe hing, wanderte die Doku bewusst auf den
-   **Feature-Branch** — ein Commit auf `main` hätte aus dem Fast-Forward einen echten Merge
-   gemacht, mit einem zweiten Konfliktdurchgang in genau denselben Dateien.
-   ⚠️ **Und die Falle, die fast zugeschnappt wäre:** Der Owner führte den Merge von Hand aus,
-   traf dabei aber nur **zwei** der **drei** Commits (`3f0c794` fehlte). Hätte man danach
-   ungeprüft `git worktree remove` + `git branch -D` ausgeführt, wäre der Doku-Commit
-   **spurlos weg** gewesen. Deshalb vor jedem Worktree-Abbau: `git log --oneline main..<branch>`
-   muss **leer** sein, und Branches mit `-d` löschen (nicht `-D`) — `-d` verweigert den
-   Dienst bei ungemergten Commits, `-D` fragt nicht.
-2. **Der Doku-Wächter war blind — erledigt, der Fix ist auf allen drei Plattformen in der CI belegt.**
-   `test_doc_duplicates` las von dieser Datei nur **141 von 779** Zeilen (7 von 27
-   Überschriften) und meldete seit QTMUX-34 grün, ohne je zu prüfen; Ursache und Messwerte
-   stehen in [docs/e2e-fallen.md](docs/e2e-fallen.md). Repariert über einen `REGEX`-Filter
-   in `tests/CheckDocDuplicates.cmake`, Erkennung jetzt 100 % je Datei, Gegentest fällt
-   nachweislich (grün → rot → rot → grün).
-   ✅ **Beleg aus zwei Läufen zusammengesetzt**, weil die Actions-Störung (s. u.) in jedem
-   Lauf einen Job ohne Runner ließ: `31127792710` (auf `22ba6f8`) **Linux + Windows** grün ·
-   `31128481280` (auf `b642f93`) **macOS + Windows** grün. Zulässig ist das Zusammensetzen,
-   weil `git diff --name-only 22ba6f8..b642f93` **ausschließlich `CLAUDE.md`** nennt — der
-   Code ist identisch (die Beweisregel aus dem CI-Abschnitt).
-   🔑 **Feinheit, die man nur hier hat:** Für *diesen* Test ist „nur Doku geändert" **kein**
-   identischer Input — die Doku ist sein Prüfgegenstand. Beide Stände sind grün, damit trägt
-   es trotzdem; bei einem Doku-Wächter muss man diesen Schritt aber ausdrücklich mitdenken.
-   🔑 **Je ein Job stand auf `cancelled` und färbte den Lauf rot** (macOS in `31127792710`,
-   Linux in `31128481280`) — **kein** Befund: `steps: []`, der Job bekam nie einen Runner.
-   Vor jeder Deutung eines roten Jobs also erst `gh api …/jobs` lesen: **leere Schrittliste =
-   nie gelaufen**, nicht fehlgeschlagen.
+1. **Den AppComboBox-Bugfix committen?** (s. Working Tree oben) — zweimal angeboten,
+   unbeantwortet. Bis dahin hat **keine** gebaute Instanz den Fix.
+2. **System-Modus für die Sprache von RAFTNG übernehmen?** RAFTNG bietet seinen
+   `Mode::System` an (`QLocale::system()`, EN/DE/SV); QTmux kann nur fest Deutsch/Englisch.
+   RAFTNG nennt es ausdrücklich eine **Produktentscheidung**, keine technische, und liefert
+   auf Zuruf. Nicht eigenmächtig übernommen.
+3. **Produktivinstanz neu bauen?** Sie läuft aus `build/macos` mit `1.8.0+34449de` und hat
+   damit keinen der heutigen Stände. Ein Neubau reißt alle Terminal-Sessions mit.
 
 #### Zustand, der nicht aus Code/Git hervorgeht
 
-- ⚠️ **Der `push`-Trigger der CI feuerte am 2026-08-06 abends nicht — Ursache geklärt:
-  GitHub-Störung, nichts am Repo.** Vier Pushes auf `main` (`4f77eb8`, `6da1608`, `22ba6f8`,
-  `b642f93`) erzeugten **null** Check-Runs, obwohl `on: push: branches: [main]` ohne
-  `paths`-Filter greift und Actions aktiviert ist (`allowed_actions: all`); der
-  Vormittagslauf zu `a2d0fa9` (10:39 UTC) war der letzte normale.
-  🔑 **Beleg:** githubstatus.com, Incident „Incident with Actions" (seit 15:22 UTC, impact
-  *critical*), Update **20:34 UTC** wörtlich: *„Webhook triggers are currently throttled to
-  help with recovery … we are processing approximately 15% of webhooks, so many events such
-  as pushes and pull requests are not triggering workflow runs."* Damit erklärt sich auch der
-  **nie zugeteilte macOS-Job** aus Lauf `31127792710` (Kapazität) — beides eine Störung, kein
-  zweiter Befund.
-  🔑 **Vier Repos, ein Muster** (workspace-weit gemessen 2026-08-06, alle Zeiten UTC): QTmux
-  zuletzt `a2d0fa9` 10:39 ✅, danach 4 Pushes ❌ · MacPCAN zuletzt `925314a` **17:31** ✅,
-  danach **7** Commits bis `387d489` ❌ · Deskstarter zuletzt `f08d39b` **17:30** ✅, danach
-  `6dd77f1` ❌ · RAFTNG zuletzt `1cb07b2` ~11:10 ✅, danach `917f1b5`/`7b66fb7` ❌.
-  **RAFTNG baut auf einem self-hosted Runner** — es fehlt also nicht die Runner-Zuteilung,
-  sondern die **Run-Erzeugung**; der Fehler sitzt vor jeder Runner-Infrastruktur, egal wem
-  sie gehört. Betroffen sind **public wie privat** (QTmux public, die drei anderen privat).
-  ⚠️ **Trugschluss, den die eigenen Daten zweimal widerlegen:** Es liegt nahe, aus „letzter
-  erzeugter Lauf 17:30 / erster fehlender ~19:00" auf ein **Ausfallfenster** zu schließen.
-  Das trägt nicht. (1) Die Störung lief zu diesem Zeitpunkt bereits **zwei Stunden**
-  (Beginn 15:22) — Deskstarter und MacPCAN kamen mitten in der Drosselung durch. (2) Um
-  **21:44 entstanden wieder Läufe**, obwohl die Statuspage um 21:30 weiter Drosselung
-  meldete. Es gibt also keinen Beginn und kein Ende in unseren Daten, sondern durchgehend
-  **~15 % Zufallsdurchsatz**. Was durchkommt, ist eine Stichprobe, keine Grenze — den
-  Zeitraum liefert allein die Statuspage.
-  🔑 **Wie man diese Klasse in einer Minute erkennt** statt stundenlang im Repo zu suchen:
-  `curl -s https://www.githubstatus.com/api/v2/summary.json` **vor** jeder Trigger-Diagnose.
-  Zweites, repo-lokales Merkmal: `gh workflow list --all` zeigte den frisch gepushten
-  Diagnose-Workflow **gar nicht** — GitHub nahm die Datei nicht einmal entgegen, obwohl
-  `git ls-remote` den Commit sah. Refs kommen an, die Event-Verarbeitung steht: ein Muster,
-  das repo-seitig nicht herstellbar ist.
-  ✅ **Gegenprobe geglückt (21:44 UTC): der `push`-Trigger funktioniert, das Repo ist heil.**
-  Der Diagnose-Workflow lief auf `cc16b2b` durch (`#31128515520`, *success*), und zu
-  `b642f93` entstand ein CI-Lauf. **Beide kamen mit ~30 min Verzug** — die Events wurden
-  nachgeholt, nicht sofort verarbeitet; im selben Zug tauchte `Trigger-Test` erstmals in
-  `gh workflow list --all` auf. Damit ist auch belegt, dass die fehlende
-  Workflow-Registrierung eine **Folge** der unverarbeiteten Push-Events war, kein eigener
-  Defekt.
-  ⚠️ **Trotzdem nicht entwarnen:** Die Statuspage meldete um 21:30 UTC weiter
-  *„Webhook triggers remain throttled"*. Genau der oben beschriebene Trugschluss in Reinform —
-  **durchgekommene Läufe sind Stichproben, kein Störungsende**. Solange das Incident offen
-  ist, gilt: nach jedem Push prüfen, ob ein Lauf entstand, sonst `gh workflow run CI --ref main`.
-  🔑 **Workspace-weite Konsequenz:** Während der Störung sind auf `main` ungeprüfte Commits
-  aufgelaufen (QTmux 4, MacPCAN 7, RAFTNG 2). Ein *späterer* Push testet nur seinen eigenen
-  Stand mit — je Repo einmal `gh workflow run` auf dem **aktuellen** Stand nachholen.
-  🧹 **Aufgeräumt:** Der temporäre Branch `ci-trigger-test` (`cc16b2b`) ist lokal und auf
-  origin gelöscht, nach `main` gemerged wurde er nie. **Der Workflow-Eintrag `Trigger-Test`
-  (ID `328898398`) bleibt trotzdem in `gh workflow list --all` stehen** — GitHub führt ihn,
-  solange sein Lauf existiert. Er ist **bewusst nicht** entfernt: Lauf `#31128515520` ist der
-  Beleg, dass der `push`-Trigger funktioniert; ihn zu löschen hieße, das Beweisstück für die
-  eigene Diagnose wegzuwerfen. Der Eintrag ist wirkungslos (die Datei existiert auf keinem
-  Branch mehr) und verschwindet von selbst.
-
-- Die **Produktivinstanz läuft** (PID 31102, Port 7345) aus `build/macos` — dort **nicht**
-  hineinbauen, das reißt alle Terminal-Sessions mit.
-- ✅ Der Worktree `../QTmux-w2` ist **abgebaut** (2026-08-07), beide Feature-Branches
-  gelöscht — es gibt wieder genau einen Arbeitsbaum.
+- ⚠️ **Die Produktivinstanz läuft aus `build/macos`** (Port 7345, `1.8.0+34449de`, gebaut
+  2026-08-07 09:24) — dort **nicht** hineinbauen, das reißt alle Terminal-Sessions mit.
+  🔑 Sie ist damit **älter als jeder heutige Stand**. Vor jeder Diagnose an ihr die Build-ID
+  gegen `git log` halten; PID über `lsof -nP -iTCP:7345 -sTCP:LISTEN` holen, **nie** eine
+  notierte PID verwenden (die hier eingetragene war zweimal veraltet).
+- Der Workflow-Eintrag **`Trigger-Test`** (ID `328898398`) steht bleibend in
+  `gh workflow list --all`, obwohl sein Branch gelöscht ist — GitHub führt ihn, solange sein
+  Lauf existiert. Bewusst nicht entfernt: Lauf `#31128515520` ist der Beleg, dass der
+  `push`-Trigger funktioniert. Wirkungslos, verschwindet von selbst.
 
 ### Zuletzt abgeschlossen (Mechanik in der Feature-Referenz, Verlauf in Git)
 
@@ -697,19 +613,10 @@ zuständigen Fachabschnitt, nicht hier.
   bleiben gemini/aider/cursor/qwen und die 13 Nachtrags-Einträge — dort sind die Vorlagen
   bewusst leer, weil die CLIs hier nicht installiert sind (ein ungeprüftes Flag sähe für den
   Anwender wie ein QTmux-Fehler aus).
-- **Architektur-Landkarte (Vollanalyse 2026-08-01, nicht beauftragt):** Die C++-Seite ist
-  sauber (Gui-freier Core bestätigt, keine Include-Zyklen, keine Lifetime-Probleme); die
-  Schulden sitzen in **`qml/Main.qml`** (~4.700 LOC, 136 Funktionen: Split-Baum,
-  Layout-Persistenz, Aggregationslogik als ungetestetes JS, zwei divergierende
-  Layout-Serialisierer). Abbaupfad: (1) Sidebar (~735 LOC) + Inline-Dialoge (~945 LOC) in
-  eigene QML-Dateien, (2) Layout-Baum + Persistenz als testbare C++-Klasse in `core`, (3)
-  damit entfällt die QML-Brücke — **13 der 39 MCP-Tools brauchen heute die geladene UI**,
-  weshalb der McpServer keinen einzigen Test hat (25 Tools wären schon jetzt testbar).
-  Kleinere Punkte: `Session` ist ein God-Object (~40 Member; Extraktionskandidaten
-  AgentDetection/LoginAutomation/CwdTracker) · 22 attached `ToolTip` über
-  [IconToolButton.qml](qml/Ui/IconToolButton.qml) statt `AppToolTip` · Statusfarben-Literale
-  ~10× dupliziert (Kandidat StatusColors-Singleton) · `SessionModel::sessionById` fehlt
-  `Q_INVOKABLE`. Umgesetzt daraus: `Theme.accentText` statt hartem Weiß (6 Stellen).
+- **Architektur-Landkarte** (Vollanalyse 2026-08-01, nicht beauftragt): C++ sauber, die
+  Schulden sitzen in `qml/Main.qml` (~4.700 LOC). Befund und Abbaupfad stehen in
+  [docs/architektur-landkarte.md](docs/architektur-landkarte.md) — **vor** jedem
+  strukturellen Umbau dort lesen.
 
 ### Maschinen-Eigenheiten (Build-Verzeichnisse)
 
@@ -848,6 +755,32 @@ nicht in jede Session. Hier bleiben nur die zwei Regeln, die man beim Planen ken
   stehen **nur** in `CLAUDE.local.md` — git-ignoriert, bewusst nicht im öffentlichen Repo.
 
 ## Git-/GitHub-Lektionen (teuer erkauft)
+
+- ⚠️ **Merge-Konflikte zwischen zwei Features liegen meist NEBENeinander, nicht gegeneinander.**
+  Beim Rebase von QTMUX-122/123 (`162f079`) waren alle sieben Konflikte von dieser Sorte:
+  128 (`altScrollMode`) und 122 (`appClipboardWrite`) landeten in denselben Listen
+  (Settings-Allowlist, Alias-Block, `restoreDefault`-`switch`, Prefs-Suchindex). Überall
+  gehören **beide** hinein. Wer reflexhaft „ours" nimmt, verliert still ein fremdes Feature —
+  **ohne Compilerfehler**, weil eine fehlende Zeile in einer Allowlist niemandem auffällt.
+- ⚠️ **Ein ausstehender Fast-Forward verträgt keinen Commit auf `main`** — sonst wird daraus
+  ein echter Merge mit einem zweiten Konfliktdurchgang in denselben Dateien. Während der
+  Merge an einer Freigabe hängt, gehört auch die Doku auf den **Feature-Branch**.
+- ⚠️ **Vor jedem Worktree-/Branch-Abbau gegenprüfen**, besonders nach einem fremden
+  Hand-Eingriff: `git log --oneline main..<branch>` muss **leer** sein, und Branches mit
+  **`-d`** löschen statt `-D` (`-d` verweigert bei Ungemergtem, `-D` fragt nicht). Am
+  2026-08-07 traf ein Owner-Handmerge nur zwei von drei Commits — ein ungeprüftes Aufräumen
+  hätte den dritten spurlos vernichtet.
+- 🔑 **Ein roter Job ist nicht automatisch ein Fehlschlag.** Erst `gh api …/jobs` lesen:
+  **leere Schrittliste (`steps: []`) = nie einem Runner zugeteilt**, also kein Befund. Kam
+  während der Actions-Störung mehrfach vor und färbte ganze Läufe rot.
+- 🔑 **Trigger-Diagnosen beginnen außerhalb des Repos:**
+  `curl -s https://www.githubstatus.com/api/v2/summary.json` **vor** jeder Suche. Am
+  2026-08-06 erzeugten vier Pushes null Läufe — Ursache war eine GitHub-Störung
+  (Webhooks auf ~15 % gedrosselt), nichts am Repo; vier Repos zeigten dasselbe Muster,
+  auch eines mit self-hosted Runner. ⚠️ **Durchgekommene Läufe sind Stichproben, kein
+  Störungsende** — aus „was durchkam" lässt sich kein Ausfallfenster ableiten; den Zeitraum
+  liefert allein die Statuspage. Solange ein Incident offen ist: nach jedem Push prüfen, ob
+  ein Lauf entstand, sonst `gh workflow run CI --ref main`.
 
 - **Historien-Rewrites betreffen vier Ebenen:** `git filter-repo --replace-text` fasst nur
   **Dateiinhalte** an — Commit-Nachrichten brauchen `--replace-message`, Autor-Adressen
