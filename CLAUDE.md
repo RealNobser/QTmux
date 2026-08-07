@@ -71,7 +71,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `.qmllint.ini` + `.vscode/settings.json` (+ generierte `.qmlls.ini`) | Editor-Diagnosen für QML: abgeschaltete Kategorien mit Begründung, Ausschluss von `build/`, Importpfade für qmlls (s. QML-Lektionen) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **29** ctest-Tests: 28 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, **safefileread**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 28. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **30** ctest-Tests: 29 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, **restorehistory**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 29. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -495,7 +495,7 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 `https://nobser.de/updates/qtmux/`; der volle Update-Zyklus ist am lebenden Objekt
 verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-129**.
 
-**Teststände:** **29** Tests (s. Dateitabelle). macOS Debug/Release je **29/29** (dort läuft
+**Teststände:** **30** Tests (s. Dateitabelle). macOS Debug/Release je **30/30** (dort läuft
 `test_pty` mit und besteht); Linux (rtzsvr02-Container) und Windows je **28/28** —
 `test_pty` per `-E` ausgenommen (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter
 Windows braucht `ctest` zusätzlich Qt-`bin` im PATH, sonst `0xc0000135`). Größte Binaries:
@@ -511,9 +511,9 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-07** · Branch `main` auf **`3f0c794`**, Working Tree sauber, **alles
-gepusht**, Worktree `../QTmux-w2` und beide Feature-Branches **abgebaut**.
-Teststand: macOS Debug **29/29** und Release **29/29** (`ctest -N` = 29).
+Stand **2026-08-07** · Branch `main` auf **`34449de`** + QTMUX-130 (s. u.), Working Tree
+sauber, **alles gepusht**, Worktree `../QTmux-w2` und beide Feature-Branches **abgebaut**.
+Teststand: macOS Debug **30/30** und Release **30/30** (`ctest -N` = 30).
 Bei Wiedereinstieg `git log --oneline -3` gegenprüfen — die Windows-Session pusht ebenfalls.
 ✅ Neu in `main`: **QTMUX-122/123** (OSC 52 + Maus-Hinweis, `162f079` — rebast aus dem
 Worktree, Jira dual auf Done) und die **Abschaltung des Agenten-Resume** (`6788a82`,
@@ -527,6 +527,19 @@ aus**. Beim Wiedereinstieg zuerst nachsehen, ob inzwischen ein Lauf entstand; we
 `-Version` als **Pflichtparameter**, Pfad-Härtung `safefile::read` (`8964e50`).
 ⚠️ Die **Build-ID-Quelle ist vorläufig** ([cmake/BuildId.cmake](cmake/BuildId.cmake)) — der
 kanonische Baustein kommt aus MacPCAN; beim Tausch ändert sich nur die Quelle.
+
+🆕 **QTMUX-130 in `main`** (Anwenderbefund 2026-08-07: wiederhergestellter Verlauf sah
+„zerrupft" aus). Ursache: Der Restore spielte den Dump ein, **bevor** das Pane vermessen war —
+also bei den geratenen 80 Spalten, und das friert ein. Mechanik, die drei übersehenen
+Randfälle und die Messwerte stehen in der Feature-Referenz („Wiederhergestellter Verlauf
+wartet auf die Pane-Breite"). Neu: [src/core/HistoryDump.h](src/core/HistoryDump.h),
+`Session::setPendingHistory`, Test `test_restorehistory` (11 Fälle).
+Belegt: macOS Debug+Release je 30/30, Gegentest fällt nachweislich (80 statt 100 Zeichen), und
+am lebenden Objekt alter Stand 80+26 gegen neuen 84+22 bei 84 Spalten Fensterbreite.
+⚠️ **Der Fix wirkt nicht rückwirkend:** Vorhandene Dumps tragen die eingefrorenen 80er-Umbrüche
+bereits in sich — der erste Neustart nach dem Update zeigt sie noch zerhackt, ab dem zweiten
+ist es sauber. Wer das beim Nachprüfen übersieht, hält den Fix für wirkungslos.
+**Offen:** Windows- und Linux-Build.
 
 **Nächster Punkt: QTMUX-94** — Terminal-Ausgabe als Agenten-Kontext.
 - Einstieg: `VtScreen::screenText()`/Scrollback liegen fertig vor; es fehlt allein der Weg

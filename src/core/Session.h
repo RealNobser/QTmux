@@ -257,6 +257,33 @@ public:
 
     VtScreen *screen() const { return m_screen.get(); }
 
+    /// Wiederhergestellten Scrollback übernehmen (QTMUX-130) — er wird NICHT sofort
+    /// eingespielt, sondern bis zur ersten echten Terminalgröße zurückgehalten.
+    ///
+    /// 🔑 Warum die Verzögerung: `serializeAnsi` schreibt weiche Umbrüche bewusst OHNE
+    /// CRLF, damit das Terminal beim Einspielen selbst auf die aktuelle Breite umbricht.
+    /// Beim Restore steht die Session aber noch auf den Startwerten 80×24 — die echte
+    /// Breite kommt erst über `TerminalItem::applyPendingResize` (Layout + 60 ms
+    /// Entprellung, QTMUX-86). Sofort eingespielt würde der Verlauf also bei 80 Spalten
+    /// hart in Zellen umbrochen, und `vterm_set_size` reflowt den Scrollback nicht mehr:
+    /// der falsche Umbruch wäre eingefroren — und würde beim nächsten Beenden erneut
+    /// gespeichert, heilte also nie von selbst.
+    ///
+    /// Solange der Verlauf aussteht, puffert die Session auch die Backend-Ausgabe:
+    /// sonst stünde ein frisch eintreffendes Prompt ÜBER der wiederhergestellten
+    /// Historie statt darunter.
+    ///
+    /// `lastKnownCols` ist die Breite, bei der der Dump entstand (0 = unbekannt, etwa
+    /// bei einer Datei aus einer älteren Fassung). Sie greift NUR im Sicherheitsnetz —
+    /// wenn nie eine Messung kommt, weil das Fenster seit dem Neustart nicht sichtbar
+    /// war. Dann ist die letzte bekannte Breite die beste verfügbare Näherung; der
+    /// geratene Startwert 80 wäre genau der Fehler, um den es hier geht.
+    void setPendingHistory(const QByteArray &dump, int lastKnownCols = 0);
+    /// true, solange ein Verlauf auf die erste echte Größe wartet. ⚠️ Wer in diesem
+    /// Zustand speichert, würde einen leeren Bildschirm sichern und den Dump auf der
+    /// Platte damit vernichten — siehe `SessionModel::saveHistoryFor`.
+    bool hasPendingHistory() const { return m_historyPending; }
+
     void start(int cols, int rows);
     void write(const QByteArray &data);
 
@@ -310,6 +337,8 @@ private:
     void onPromptMarker(char kind, int exitCode); // OSC 133
     void onAgentEvent(const QString &kind, const QString &text); // OSC 777;qtmux-event
     void tryDispatchQueued();                   // QTMUX-90: Abgabe pruefen
+    void onBackendData(const QByteArray &data); // QTMUX-130: puffern oder durchreichen
+    void flushPendingHistory();                 // QTMUX-130: Verlauf + Puffer einspielen
 
     std::unique_ptr<ITerminalBackend> m_backend;
     std::unique_ptr<VtScreen> m_screen;
@@ -319,6 +348,20 @@ private:
     std::unique_ptr<PromptQueue> m_queue;      // QTMUX-90
     QElapsedTimer m_lastOutput;               // Uhr fuer msSinceLastOutput
     QTimer *m_dispatchTimer = nullptr;        // laeuft nur, solange etwas ansteht
+    // QTMUX-130: wiederhergestellter Verlauf, der auf die erste echte Groesse wartet,
+    // und die derweil zurueckgehaltene Backend-Ausgabe (Reihenfolge bleibt erhalten).
+    QByteArray m_pendingHistory;
+    QByteArray m_pendingOutput;
+    int     m_pendingCols = 0;                // Breite, bei der der Dump entstand (0 = unbekannt)
+    bool    m_historyPending = false;
+    QTimer *m_historyTimer = nullptr;         // Sicherheitsnetz, falls nie ein resize kommt
+    // Sicherheitsnetz-Frist. Ein Pane wird binnen ~60 ms vermessen (QTMUX-86); so lange
+    // zu warten kostet nichts, deckt aber auch einen zaehen Layout-Aufbau ab.
+    static constexpr int kHistoryHoldMs = 1500;
+    // Notbremse: Ein Backend, das sofort losplappert, darf den Puffer nicht unbegrenzt
+    // wachsen lassen. Wird sie erreicht, gilt die Reihenfolge als verloren — das ist
+    // immer noch besser als unbegrenzter Speicher.
+    static constexpr int kMaxPendingOutput = 1 << 20;   // 1 MiB
     QString m_gitBranch;       // QTMUX-58: Branch bzw. kurzer SHA (detached)
     bool    m_gitDetached = false;
     // OSC 7 (QTMUX-108): hat die Shell ihr Verzeichnis je selbst gemeldet, und gehört

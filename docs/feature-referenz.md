@@ -179,6 +179,32 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `m_restoring`-Guard (Restore erbt kein fremdes CWD, führt keine Login-Scripts aus).
   Neue Shell **erbt das Live-CWD** der aktiven Session (nur Shell-Quellen, explizites
   Verzeichnis hat Vorrang).
+- **Wiederhergestellter Verlauf wartet auf die Pane-Breite (QTMUX-130).** Der Scrollback wird
+  als ANSI-Strom gesichert (`VtScreen::serializeAnsi`), in dem weiche Umbrüche **bewusst
+  ohne CRLF** stehen — das Terminal soll beim Einspielen selbst auf die aktuelle Breite
+  umbrechen. Genau daran scheiterte der Restore: `SessionModel` hängt jedes Backend mit den
+  geratenen Startwerten **80×24** an, und `Main.qml` lud den Dump unmittelbar danach; die
+  echte Breite kommt aber erst über `TerminalItem::applyPendingResize` (Layout + 60 ms
+  Entprellung, QTMUX-86). Der Verlauf wurde also bei 80 Spalten **hart in Zellen** umbrochen —
+  und `vterm_set_size` reflowt den Scrollback nicht (feste `Cell`-Vektoren), der Umbruch war
+  eingefroren. Beim nächsten Beenden wurde er als weiche Fortsetzung gespeichert und erneut
+  bei 80 zerhackt: **der Zustand heilte nie von selbst.**
+  🔑 **Neu:** `loadHistoryFor` übergibt nur noch (`Session::setPendingHistory`), eingespielt
+  wird beim ersten echten `Session::resize()`. Solange puffert die Session auch die
+  **Backend-Ausgabe** (`onBackendData`) — sonst stünde das frische Prompt *über* der Historie.
+  ⚠️ **Die drei Fälle, die man dabei übersieht:** (1) Ein Pane, das zufällig genau 80×24 trifft,
+  bekommt ein `resize` mit unveränderten Werten — der frühe Ausstieg dort muss trotzdem
+  freigeben, sonst hängt der Verlauf. (2) Ein Fenster, das seit dem Neustart **nie sichtbar
+  war**, wird nie vermessen; dafür trägt die Dump-Datei eine optionale Kopfzeile
+  (`core/HistoryDump.h`, `QTMUX-HISTORY 1 cols=<n>`), aus der das Sicherheitsnetz nach 1,5 s
+  die **zuletzt bekannte** Breite nimmt statt der geratenen 80. Alte Dumps ohne Kopfzeile
+  bleiben gültig (Breite unbekannt = 0). (3) Wer speichert, **solange der Verlauf aussteht**,
+  sichert einen leeren Bildschirm und **löscht damit den Dump auf der Platte** — `saveHistory`
+  und `saveHistoryFor` steigen bei `hasPendingHistory()` aus.
+  📋 Belegt am lebenden Objekt (offscreen-Instanz, 84 Spalten, Zeile aus 100 Zeichen):
+  alter Stand `34449de` bricht nach dem Neustart bei **80** um (80 + 26), der neue bei **84**
+  (84 + 22) — also genau dort, wo die Anwendung selbst umbrochen hätte. Tests:
+  `test_restorehistory` (11 Fälle, inkl. Gegentest `oldOrderWouldWrapAt80`).
 - **Gruppen in der Sidebar (QTMUX-42/45, seit QTMUX-83 **Window**-Gruppen):** Frei benannte,
   einklappbare Gruppen mit Kopfzeile + Anzahl; Farbe aus dem Namen gehasht. Zuordnung per
   Rechtsklick, Palette oder MCP (`set_window_group`, `set_session_group` wirkt aufs Window

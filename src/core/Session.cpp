@@ -178,8 +178,10 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
 
     m_screen = std::make_unique<VtScreen>(rows, cols);
 
+    // QTMUX-130: NICHT direkt in den Screen — onBackendData haelt die Ausgabe zurueck,
+    // solange ein wiederhergestellter Verlauf auf die erste echte Groesse wartet.
     connect(m_backend.get(), &ITerminalBackend::dataReceived,
-            m_screen.get(), &VtScreen::inputWrite);
+            this, &Session::onBackendData);
     // Beim ersten Output den Fallback-Timer fürs Login-Script bewaffnen (greift, wenn
     // keine OSC-133-Shell-Integration vorhanden ist) und den Output auf eine SSH-
     // Passwort-Eingabeaufforderung hin abtasten (Vault-Auto-Fill).
@@ -580,12 +582,70 @@ void Session::runLoginScript() {
     if (!out.isEmpty() && m_backend) m_backend->write(out);
 }
 
+void Session::onBackendData(const QByteArray &data) {
+    if (!m_screen) return;
+    if (m_historyPending) {
+        // Solange der wiederhergestellte Verlauf aussteht, darf nichts vor ihm im Screen
+        // landen — sonst stuende das frische Prompt UEBER der Historie statt darunter.
+        m_pendingOutput += data;
+        if (m_pendingOutput.size() > kMaxPendingOutput) flushPendingHistory();
+        return;
+    }
+    m_screen->inputWrite(data);
+}
+
+void Session::setPendingHistory(const QByteArray &dump, int lastKnownCols) {
+    if (dump.isEmpty() || !m_screen) return;
+    m_pendingHistory = dump;
+    m_pendingCols = lastKnownCols;
+    m_historyPending = true;
+    // Sicherheitsnetz: Kommt nie ein resize() (headless, oder ein Fenster, das seit dem
+    // Neustart nie sichtbar war — dessen Panes entstehen erst beim Umschalten), wird der
+    // Verlauf nach kurzer Frist mit der zuletzt bekannten Breite eingespielt.
+    if (!m_historyTimer) {
+        m_historyTimer = new QTimer(this);
+        m_historyTimer->setSingleShot(true);
+        connect(m_historyTimer, &QTimer::timeout, this, &Session::flushPendingHistory);
+    }
+    m_historyTimer->start(kHistoryHoldMs);
+}
+
+void Session::flushPendingHistory() {
+    if (!m_historyPending) return;
+    m_historyPending = false;                  // vor dem Schreiben loeschen: inputWrite
+                                               // laeuft in Callbacks, die zurueckrufen koennen
+    if (m_historyTimer) m_historyTimer->stop();
+    // Netz-Fall: Ohne je gemessene Groesse steht hier noch der geratene Startwert 80 —
+    // also gerade die Breite, die den Verlauf zerhackt. Die zuletzt bekannte Breite ist
+    // die beste verfuegbare Naeherung; ueber resize() gesetzt, damit Screen, Backend und
+    // die gemeldete Rastergroesse zusammenpassen (ein spaeteres echtes resize korrigiert
+    // sie ohnehin). Rekursion ist ausgeschlossen: m_historyPending steht bereits auf false.
+    const int cols = m_pendingCols;
+    m_pendingCols = 0;
+    if (cols > 0 && cols != m_cols) resize(cols, m_rows);
+    if (m_screen) {
+        if (!m_pendingHistory.isEmpty()) m_screen->inputWrite(m_pendingHistory);
+        if (!m_pendingOutput.isEmpty()) m_screen->inputWrite(m_pendingOutput);
+    }
+    m_pendingHistory = QByteArray();           // Speicher wirklich freigeben (clear()
+    m_pendingOutput = QByteArray();            // behielte die Kapazitaet des Dumps)
+}
+
 void Session::resize(int cols, int rows) {
-    if (cols == m_cols && rows == m_rows) return;
+    if (cols == m_cols && rows == m_rows) {
+        // QTMUX-130: Auch eine unveraenderte Groesse ist die ERSTE gemessene. Traefe ein
+        // Pane zufaellig genau die Startwerte 80x24, bliebe der Verlauf sonst bis zum
+        // Sicherheitsnetz-Timer haengen — und wuerde am Ende doch bei 80 umbrochen.
+        flushPendingHistory();
+        return;
+    }
     m_cols = cols;
     m_rows = rows;
     if (m_screen) m_screen->setSize(rows, cols);
     if (m_backend) m_backend->resize(cols, rows);
+    // Erst JETZT steht die Breite fest, auf die der Verlauf umbrechen soll (nach
+    // setSize, sonst wraeppte libvterm ihn wieder auf die alte Breite).
+    flushPendingHistory();
     // QTMUX-120: Erst hier — und nur hier — steht die Größe fest, die auch im PTY
     // ankommt. Der Aufruf kommt aus TerminalItem::applyPendingResize, also NACH der
     // 60-ms-Entprellung aus QTMUX-86; die transienten Zwischengrößen des Layouts

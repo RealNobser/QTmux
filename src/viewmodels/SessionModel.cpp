@@ -1,5 +1,6 @@
 #include "SessionModel.h"
 #include "SafeFileRead.h"
+#include "HistoryDump.h"
 #include "AgentRegistry.h"
 #include "Session.h"
 #include "VtScreen.h"
@@ -602,16 +603,25 @@ QString SessionModel::historyDir() const {
            + QStringLiteral("/history");
 }
 
+// QTMUX-130: Die Kopfzeile der Dump-Datei (Breite, bei der der Verlauf entstand) liegt
+// Gui-frei in core/HistoryDump.h — dort ist sie ohne QSettings und ohne echte Sessions
+// testbar (test_restorehistory).
+
 void SessionModel::saveHistory() const {
     const QString dir = historyDir();
     QDir().mkpath(dir);
     for (int i = 0; i < m_sessions.size(); ++i) {
         Session *s = m_sessions.at(i);
+        if (s && s->hasPendingHistory()) continue;   // QTMUX-130, Begründung in saveHistoryFor
         const QByteArray dump = s && s->screen() ? s->screen()->serializeAnsi() : QByteArray();
         const QString path = dir + QStringLiteral("/%1.ans").arg(i);
         if (dump.isEmpty()) { QFile::remove(path); continue; }
         QFile f(path);
-        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) { f.write(dump); f.close(); }
+        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            f.write(historydump::header(s->cols()));
+            f.write(dump);
+            f.close();
+        }
     }
     // Überzählige Dumps einer früher längeren Sitzungsliste entfernen.
     for (int i = m_sessions.size(); ; ++i) {
@@ -706,9 +716,10 @@ int SessionModel::restoreState() {
             m_configs.last().group = m_sessions.last()->group();
         }
         // Farbgetreuen Verlauf (QTMUX-81 Stufe 2) VOR der ersten Backend-Ausgabe
-        // einspeisen: hier synchron (noch vor dem Event-Loop) → er rendert und rollt als
-        // Scrollback nach oben, die frische Shell-Prompt erscheint darunter. Datei nach
-        // dem SPEICHER-Index i benannt (nicht der aktuellen Zeile — Plugin-Skips möglich).
+        // einspeisen — seit QTMUX-130 aber nicht mehr sofort, sondern erst bei der
+        // ersten echten Terminalgröße (Begründung an Session::setPendingHistory). Datei
+        // nach dem SPEICHER-Index i benannt (nicht der aktuellen Zeile — Plugin-Skips
+        // möglich).
         if (count() > before) {
             // Gedeckelt lesen (s. SafeFileRead.h): Der Pfad ist zwar intern
             // gebildet, aber der Inhalt geht direkt in den Terminal-Puffer — ein
@@ -717,9 +728,9 @@ int SessionModel::restoreState() {
             const auto rd = safefile::read(historyDir() + QStringLiteral("/%1.ans").arg(i),
                                            safefile::limits::kHistoryDump);
             if (rd.ok) {
-                const QByteArray &dump = rd.data;
-                if (!dump.isEmpty() && m_sessions.last()->screen())
-                    m_sessions.last()->screen()->inputWrite(dump);
+                QByteArray dump = rd.data;
+                const int cols = historydump::takeHeader(dump);
+                m_sessions.last()->setPendingHistory(dump, cols);
             }
         }
     }
@@ -812,11 +823,20 @@ void SessionModel::saveHistoryFor(int row, int key) const {
     const QString dir = historyDir();
     QDir().mkpath(dir);
     Session *s = m_sessions.at(row);
+    // ⚠️ QTMUX-130: Steht der wiederhergestellte Verlauf noch aus (Pane nie vermessen,
+    // App sofort wieder beendet), ist der Bildschirm leer — Speichern hiesse hier, die
+    // Datei auf der Platte durch nichts zu ersetzen bzw. sie zu LOESCHEN. Ausstehend
+    // heisst: der Stand auf der Platte gilt unveraendert weiter.
+    if (s && s->hasPendingHistory()) return;
     const QByteArray dump = s && s->screen() ? s->screen()->serializeAnsi() : QByteArray();
     const QString path = dir + QStringLiteral("/%1.ans").arg(key);
     if (dump.isEmpty()) { QFile::remove(path); return; }
     QFile f(path);
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) { f.write(dump); f.close(); }
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        f.write(historydump::header(s->cols()));   // QTMUX-130: Breite festhalten
+        f.write(dump);
+        f.close();
+    }
 }
 
 void SessionModel::loadHistoryFor(int row, int key) const {
@@ -825,8 +845,12 @@ void SessionModel::loadHistoryFor(int row, int key) const {
     const auto rd = safefile::read(historyDir() + QStringLiteral("/%1.ans").arg(key),
                                    safefile::limits::kHistoryDump);
     if (!rd.ok) return;
-    if (!rd.data.isEmpty() && m_sessions.at(row)->screen())
-        m_sessions.at(row)->screen()->inputWrite(rd.data);
+    // QTMUX-130: nur übergeben, nicht einspielen — die Session hält den Verlauf zurück,
+    // bis das Pane vermessen ist. Hier steht die Session noch auf 80×24, der Verlauf
+    // würde also auf 80 Spalten umbrochen und bliebe es (kein Scrollback-Reflow).
+    QByteArray dump = rd.data;
+    const int cols = historydump::takeHeader(dump);
+    m_sessions.at(row)->setPendingHistory(dump, cols);
 }
 
 // --- Ruhezustand verhindern (QTMUX-89) ---------------------------------------

@@ -58,6 +58,14 @@ qt_add_executable(test_proxycredentials tst_proxycredentials.cpp)
 target_link_libraries(test_proxycredentials PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_proxycredentials COMMAND test_proxycredentials)
 
+# QTMUX-130: Wiederhergestellter Verlauf darf erst bei der ERSTEN echten Terminalgroesse
+# eingespielt werden (sonst friert der Umbruch bei 80 Spalten ein). Laeuft gegen eine
+# Backend-Attrappe — geprueft wird die Reihenfolge, die an einem echten PTY vom Zufall
+# abhinge.
+qt_add_executable(test_restorehistory tst_restorehistory.cpp)
+target_link_libraries(test_restorehistory PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_restorehistory COMMAND test_restorehistory)
+
 qt_add_executable(test_agent tst_agent.cpp)
 target_link_libraries(test_agent PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_agent COMMAND test_agent)
