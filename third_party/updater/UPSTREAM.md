@@ -31,6 +31,31 @@ hätte dieser Sync stillschweigend Fehlertexte vertauscht.
 („no release published for this product yet"). Ein übersetzter eigener Satz wäre
 die Kür; ein Rückschritt ist es nicht, vorher stand dort ebenfalls Englisch.
 
+### 🔑 Wogegen ein Vendoring-Konsument misst — die Lektion vom 2026-08-07
+
+Bei der Push-Runde am 2026-08-07 lautete die Ansage aus der Koordination: „Der Guard
+liegt in `src/ota/`, die REST-Felder in der Control-Schicht — **keine Betroffenheit**
+erwartet." Der Wächter schlug trotzdem an. Beides war richtig, weil beide Seiten gegen
+**verschiedene Basen** maßen:
+
+| Basis | `src/update/` | Antwort |
+|---|---|---|
+| Sprung der Push-Runde (`c487394..58df9e4`, 8 Commits) | unberührt | nicht betroffen |
+| **Unser Pin** (`80c19ee..58df9e4`) | 2 Dateien | betroffen |
+
+Der Drift kam aus `9952202` (2026-08-06), einem **Vorfahren von `c487394`** — er lag
+längst auf origin. Nicht die Push-Runde hatte den Kontrakt berührt, **unser Pin hing
+einen Tag hinterher**.
+
+⚠️ **Daraus folgt die Regel:** Die Betroffenheit eines Konsumenten ergibt sich NIE aus
+dem Sprung einer Push-Runde, sondern **ausschließlich aus dem Abstand zum eigenen Pin**.
+Eine Ankündigung „diese Commits fassen euren Bereich nicht an" ist deshalb kein Beleg für
+„nichts zu tun" — sie beantwortet eine andere Frage. Belastbar ist nur
+`git diff --stat <unser-Pin>..<neuer-Stand> -- src/update/` bzw. der Wächter selbst.
+🔑 Und der Umkehrschluss: Ein Wächter-Ausschlag ist **kein** Vorwurf an die Push-Runde.
+Wer ihn so meldet (wie hier zunächst geschehen), schickt die anderen Konsumenten in den
+falschen Commit-Bereich.
+
 Mit dem vorigen Stand `80c19ee` (2026-08-06) kam die **Proxy-Unterstützung** herüber (MAC-36, in MacPCAN als
 `0934eff` eingeführt): neu `ProxyConfig.{hpp,cpp}`, dazu am `UpdateChecker`
 `setProxyConfig()`, `setProxyCredentialProvider()` und das erweiterte
