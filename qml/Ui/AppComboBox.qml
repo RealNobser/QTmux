@@ -24,9 +24,21 @@ ComboBox {
         width: ListView.view ? ListView.view.width : implicitWidth
         highlighted: cb.highlightedIndex === index
         contentItem: Text {
-            text: cb.textRole
-                  ? (Array.isArray(cb.model) ? modelData[cb.textRole] : model[cb.textRole])
-                  : modelData
+            // ⚠️ NICHT über `Array.isArray(cb.model)` verzweigen — gemessen liefert das
+            // **false**, auch wenn das Model ein JS-Array ist: Die `model`-Property reicht
+            // den Wert als QVariant durch, und der ist beim Auslesen kein JS-Array mehr.
+            // Damit lief der Ausdruck immer in den `model[textRole]`-Zweig, den es bei
+            // einem Array-Model gar nicht gibt → `undefined` → LEERE Einträge im Popup,
+            // während das geschlossene Feld (`currentText`) korrekt blieb. Genau so
+            // gemeldet (Sprachauswahl, 2026-08-07): Feld lesbar, Liste leer.
+            // Richtig ist, `modelData` zu FRAGEN statt den Modelltyp zu raten: Es ist bei
+            // Array-Models gesetzt und bei rollenbasierten Models undefined.
+            text: {
+                if (!cb.textRole) return modelData
+                if (modelData !== undefined && modelData !== null
+                    && modelData[cb.textRole] !== undefined) return modelData[cb.textRole]
+                return (typeof model !== "undefined" && model) ? (model[cb.textRole] || "") : ""
+            }
             color: Theme.textBright
             font.pixelSize: 13
             verticalAlignment: Text.AlignVCenter
