@@ -156,6 +156,12 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Hinweis fand der Anwender die Geste nicht. Jetzt Hover, aber **je Zeile gecacht**
   (`m_hoverDetectRow`), nicht je Pixel. Klick läuft **vor** der App-Maus-Weiterleitung.
   Zeilentext aus `absLineText(absRow)` (Spalten↔Zeichen 1:1, solange kein Emoji davor).
+  **Rechtsklick auf einen Link** bietet im Kontextmenü zusätzlich „Link kopieren" an
+  (Owner-Wunsch 2026-08-09): `TerminalItem` hält das Ziel unmittelbar vor
+  `contextMenuRequested` in `contextLinkTarget` fest (`linkTargetAt` — dieselbe
+  Span-Logik wie `openLinkAt`), `popupTermContextMenu` übernimmt es einmalig beim
+  Öffnen; kopiert wird das **aufgelöste** Ziel (bei Dateipfaden also der absolute Pfad).
+  Bewusst nur kopieren, nicht öffnen — das Öffnen bleibt die Cmd/Ctrl-Geste.
   Tests: `tst_linkdetector` + `tst_vtscreen::linkDetectionOnScreenLine`.
   **OSC 8 bewusst NICHT** — s. offene Jira (QTMUX-40).
 

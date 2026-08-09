@@ -388,8 +388,11 @@ ApplicationWindow {
     }
 
     // Kontextmenü des Terminals (Rechtsklick): Kopieren/Einfügen + Pane teilen/schließen.
+    // Liegt unter dem Rechtsklick ein erkannter Link, zusätzlich „Link kopieren" —
+    // die modifierfreie Ergänzung zum Cmd/Strg-Klick (der öffnet, das Menü kopiert).
     Menu {
         id: termContextMenu
+        property string linkTarget: ""
         padding: 4
         onAboutToShow: window.sizeMenu(this)
         palette.window: Theme.bgElevated
@@ -398,6 +401,14 @@ ApplicationWindow {
         palette.highlight: Theme.sidebarHover
         palette.highlightedText: Theme.textBright
         background: AppPopupBg { implicitWidth: 200 }
+        AppMenuItem {
+            text: qsTr("Link kopieren")
+            visible: termContextMenu.linkTarget !== ""
+            height: visible ? implicitHeight : 0
+            icon.source: window.icon("copy")
+            onTriggered: App.copyToClipboard(termContextMenu.linkTarget)
+        }
+        MenuSeparator { visible: termContextMenu.linkTarget !== "" }
         AppMenuItem { action: actCopy;  icon.source: window.icon("copy") }
         AppMenuItem { action: actPaste; icon.source: window.icon("clipboard") }
         MenuSeparator {}
@@ -1036,7 +1047,12 @@ ApplicationWindow {
         return false
     }
     function broadcastWrite(data) { sessions.writeToAll(data) }
-    function popupTermContextMenu(term) { termContextMenu.popup() }
+    function popupTermContextMenu(term) {
+        // Link unter dem auslösenden Rechtsklick übernehmen (einmalig beim Öffnen —
+        // das Menü ist modal, der Wert kann sich währenddessen nicht ändern).
+        termContextMenu.linkTarget = term ? term.contextLinkTarget : ""
+        termContextMenu.popup()
+    }
 
     // Baum eines Windows auf die reinen Knoten-Properties reduzieren
     // ({paneId,sessionId} / {orientation,children,sizes}). Split-Proportionen (sizes)

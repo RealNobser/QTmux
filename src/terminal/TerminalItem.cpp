@@ -983,6 +983,16 @@ bool TerminalItem::openLinkAt(const QPointF &pos) {
     return false;
 }
 
+QString TerminalItem::linkTargetAt(const QPointF &pos) const {
+    if (!screen()) return {};
+    const QPoint ac = absCellAt(pos);
+    const auto spans = LinkDetector::detect(absLineText(ac.y()), sessionCwd());
+    for (const auto &s : spans)
+        if (ac.x() >= s.start && ac.x() < s.start + s.length)
+            return s.target;
+    return {};
+}
+
 // --- Scrollback-Suche (QTMUX-71) -----------------------------------------------------
 void TerminalItem::recomputeMatches() {
     m_matches.clear();
@@ -1248,10 +1258,19 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
         emit selectionChanged();
         update();
     } else if (event->button() == Qt::RightButton) {
-        if (m_rightClickPaste)
+        if (m_rightClickPaste) {
             paste();
-        else
+        } else {
+            // Link unter dem Klick festhalten, BEVOR das Menü aufgeht — das Kontextmenü
+            // bietet dann „Link kopieren" an (Rechtsklick als modifierfreie Alternative
+            // zum Cmd/Ctrl-Klick; kopieren statt öffnen, also keine versehentliche Aktion).
+            const QString link = linkTargetAt(event->position());
+            if (link != m_contextLink) {
+                m_contextLink = link;
+                emit contextLinkChanged();
+            }
             emit contextMenuRequested();
+        }
     }
     event->accept();
 }

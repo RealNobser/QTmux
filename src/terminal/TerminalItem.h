@@ -63,6 +63,9 @@ class TerminalItem : public QQuickItem {
     // Ziel des Links unter der Maus (leer = keiner). Treibt den QML-Tooltip „⌘-Klick zum
     // Öffnen"; die Erkennung läuft beim einfachen Drüberfahren, das Öffnen bleibt Cmd/Ctrl.
     Q_PROPERTY(QString hoverLinkTarget READ hoverLinkTarget NOTIFY hoverLinkChanged)
+    // Link unter dem letzten Rechtsklick (leer = keiner). Wird unmittelbar vor
+    // `contextMenuRequested` gesetzt — das Kontextmenü bietet dann „Link kopieren" an.
+    Q_PROPERTY(QString contextLinkTarget READ contextLinkTarget NOTIFY contextLinkChanged)
     // Scrollback-Suche (QTMUX-71): Find-Bar aktiv? Trefferzahl? aktueller Treffer (1-basiert,
     // 0 = keiner) — treiben die QML-Find-Bar (Anzeige „3/12", Weiter/Zurück-Aktivierung).
     Q_PROPERTY(bool searchActive READ searchActive NOTIFY searchChanged)
@@ -171,6 +174,8 @@ signals:
     void multilinePasteWarning(int lineCount);
     /// Link unter der Maus hat gewechselt (Ziel geändert) — QML aktualisiert den Tooltip.
     void hoverLinkChanged();
+    /// Link unter dem letzten Rechtsklick hat gewechselt (s. contextLinkTarget).
+    void contextLinkChanged();
     /// Such-Zustand geändert (aktiv/Trefferzahl/aktueller Treffer) — QML-Find-Bar folgt.
     void searchChanged();
 
@@ -225,6 +230,8 @@ private:
     void updateHoverLink(const QPointF &pos, Qt::KeyboardModifiers mods);
     /// Öffnet den Link unter `pos` im verknüpften Viewer (Scheme-Whitelist); true, wenn dort einer lag.
     bool openLinkAt(const QPointF &pos);
+    /// Ziel des Links unter `pos` (URL oder aufgelöster Dateipfad); leer, wenn dort keiner liegt.
+    QString linkTargetAt(const QPointF &pos) const;
     void clearSelection();
     void onDamaged();                            // Damage + Scroll-Anker nachführen
     /// Zeigt kurz „Die Anwendung steuert die Maus · Shift halten zum Markieren".
@@ -313,6 +320,10 @@ private:
     QString m_hoverDetectText;
     QList<LinkDetector::Span> m_hoverSpans;
 
+    // Link unter dem letzten Rechtsklick (leer = keiner) — Grundlage für den
+    // Kontextmenü-Eintrag „Link kopieren".
+    QString m_contextLink;
+
     // Scrollback-Suche (QTMUX-71). m_matches sind Treffer über den GESAMTEN Inhalt
     // (Scrollback + sichtbar), `line` = absolute Inhalts-Zeile; m_currentMatch = Index
     // des aktiven Treffers (-1 = keiner).
@@ -325,6 +336,7 @@ private:
 
 public:
     QString hoverLinkTarget() const { return m_hoverTarget; }
+    QString contextLinkTarget() const { return m_contextLink; }
 };
 
 } // namespace qtmux
