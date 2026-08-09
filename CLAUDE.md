@@ -313,8 +313,8 @@ Tags/Branches sind verschiebbar; das Anhebe-Rezept steht als Kommentar in der `c
 
 > ⚠️ **Sporadisch: `test_doc_duplicates` fällt auf Windows mit `0xc0000142`**
 > (STATUS_DLL_INIT_FAILED). Das ist **kein** Prüfbefund — der Prozess (`cmake -P`) startet gar
-> nicht erst, die Doku wird nie gelesen. Einmal gesehen (Lauf `30635817273`), im nächsten Lauf
-> **derselben** Datei grün. Fällt erst seit der Blockier-Umstellung überhaupt auf. Also: nicht
+> nicht erst, die Doku wird nie gelesen. Zweimal gesehen (Läufe `30635817273`, `31214375537`),
+> danach jeweils wieder grün. Fällt erst seit der Blockier-Umstellung überhaupt auf. Also: nicht
 > als Regression lesen und nicht in der CheckDocDuplicates.cmake suchen — **erst wiederholen**.
 > Bleibt es reproduzierbar, ist die Spur Ressourcenerschöpfung durch die davor laufenden
 > `run_detached.ps1`-Tests, nicht der Doku-Wächter selbst.
@@ -839,7 +839,7 @@ und **„Online-Update (QTMUX-125)"** (Seiten-IDs in `CLAUDE.local.md`). Die
 **Benutzerdoku** trägt seit 2026-08-03 zusätzlich den Abschnitt „Aktuell bleiben
 (Online-Update)" — beide Systeme gepflegt.
 
-### Owner-Abnahmen offen — **28 Tickets**, je umgesetzt + selbst verifiziert
+### Owner-Abnahmen offen — **29 Tickets**, je umgesetzt + selbst verifiziert
 
 **Die Liste samt Abnahme-Rezept je Ticket steht in
 [docs/owner-abnahmen.md](docs/owner-abnahmen.md)** — sie ist Arbeitsvorrat und gehört
