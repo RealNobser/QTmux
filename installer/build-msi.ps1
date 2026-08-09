@@ -15,7 +15,7 @@
                   wix extension add -g WixToolset.UI.wixext/5.0.2   (optional)
 
   Aufruf (aus der Repo-Wurzel, in einer Dev-Shell / vcvars):
-    powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1 -Version 1.8.1
+    powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1 -Version 1.9.0
 #>
 param(
     # PFLICHT, bewusst ohne Vorgabewert (2026-08-06). Hier stand "1.2.0" — sechs
