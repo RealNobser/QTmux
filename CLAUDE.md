@@ -145,6 +145,12 @@ qtserialport/qtshadertools-Ergänzung stehen in `CLAUDE.local.md`.
 **CI-Fallen:** Runner ohne FUSE → `APPIMAGE_EXTRACT_AND_RUN=1`; `ARCH=x86_64`;
 `qmake` via `QMAKE`/`QT_ROOT_DIR`. Nutzt `installer/qtmux.desktop` + `resources/appicon/`.
 AppImage ist **kein CPack-Generator** — bewusst hand-gerollt wie DMG/MSI.
+🔒 **Die linuxdeploy-Tools sind familienweit GEPINNT** (seit `d782a5a`, kanonische Quelle
+MacPCAN `b74957d` + `docs/SHARED.md` „Gepinnte AppImage-Build-Tools"): datierter
+Mirror-Ordner + SHA256-Pflicht statt der rollenden `continuous`-URL; der **Cache wird
+mitgeprüft** (`~/.cache/qtmux-appimage/<LD_PIN>`, pro Pin), bewusst **kein**
+Upstream-Fallback. Pin anheben: **immer zuerst in MacPCAN**, dann 1:1 hierher spiegeln
+(Rezept im Skript-Kommentar).
 
 ## Build & Test (Windows, MSVC)
 
@@ -216,7 +222,11 @@ aktuellen Stand und baut MSI + portables ZIP; `-NoFetch` überspringt den Pull.
   `0.0.0`-Fallback. Für solche Fälle ist der **Gegentest Pflicht**: die alte Logik muss
   nachweislich das falsche, die neue das richtige Ergebnis liefern. Und gegenprüfen, dass
   die neue Version wirklich im Paket steckt (nicht nur im Dateinamen): `strings qtmux.exe`
-  auf Version **und** ein neues Merkmal.
+  auf Version **und** ein neues Merkmal. 🔑 **Messwege je Paket** (2026-08-10 erprobt):
+  das portable ZIP nutzt **Backslash-Separatoren** (PowerShell-Archiv) — macOS-`unzip`
+  scheitert, Python `zipfile` liest es; das **MSI** auf rtzbld01 per
+  `msiexec /a <msi> /qn TARGETDIR=…` administrativ entpacken und im extrahierten
+  `qtmux.exe` messen; ein **AppImage** nur auf Linux per `--appimage-extract`.
 - ⚠️ **Fernsteuern per SSH:** Windows-OpenSSH beendet Kindprozesse beim Sitzungsende — Build
   in einer *offenen* Sitzung laufen lassen, nicht per `Start-Process` detachen (endet sonst
   stumm mit 0-Byte-Logs). PowerShell dort: `&` ist kein Trenner, `-Filter` nimmt nur EINE
@@ -455,7 +465,8 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 - **Versions-Bump-Stellen** (alle zusammen, am 2026-08-05 nachgemessen):
   `CMakeLists.txt` (project VERSION) · `installer/build-dmg.sh` ·
   `installer/build-appimage.sh` · **`installer/build-msi.ps1`** (`$Version`-Vorgabe) ·
-  `.github/workflows/ci.yml` (AppImage-Schritt) · `README.md` (**8** Vorkommen, DE **und** EN).
+  `.github/workflows/ci.yml` (AppImage-Schritt) · `README.md` (**9** Zeilen, DE **und** EN —
+  am 2026-08-10 nachgezählt, Badge kam hinzu).
   🔑 `src/app/main.cpp`, `src/server/McpServer.cpp` und `src/viewmodels/UpdateViewModel.cpp`
   stehen seit QTMUX-125 **nicht mehr** in der Liste: alle drei lesen `QTMUX_VERSION_STRING`
   aus dem generierten `qtmux_version.h` (`cmake/Version.h.in` ← `PROJECT_VERSION`). Die
@@ -576,7 +587,7 @@ Standardweg für visuelle Abnahmen. ⚠️ Er setzt `QTMUX_NO_GPU=1` und fotogra
 **QPainter-Fallback**: Fehler im Glyph-Atlas (QTMUX-97) sind darauf **prinzipiell unsichtbar**.
 Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fallen, nicht hier.
 
-## Arbeitsstand & Wiedereinstieg (2026-08-06)
+## Arbeitsstand & Wiedereinstieg (2026-08-10)
 
 > Die EINE Stelle für den aktuellen Stand (Pflegeregeln 2–4 oben). Verlauf steht in
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
@@ -596,9 +607,9 @@ Terminal-Sessions mit, und die Produktivinstanz trägt die laufende Orchestrieru
 **Teststände:** **30** Tests (s. Dateitabelle). macOS Debug/Release je **30/30** (dort läuft
 `test_pty` mit und besteht). Linux (rtzsvr02-Container) und Windows nehmen `test_pty` per
 `-E` aus (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest`
-zusätzlich Qt-`bin` im PATH, sonst `0xc0000135`) — dort sind also **29** zu erwarten;
-zuletzt gemessen wurde dort 28/28, **vor** `test_restorehistory`. Größte Binaries:
-`tst_session` 24 Fälle, `tst_vtscreen` 24, `tst_agent` 20.
+zusätzlich Qt-`bin` im PATH, sonst `0xc0000135`) — dort sind **29** zu erwarten und am
+2026-08-10 auch gemessen (rtzsvr02-Container 29/29, rtzbld01 Release 29/29 + Debug-Build
+grün). Größte Binaries: `tst_session` 24 Fälle, `tst_vtscreen` 24, `tst_agent` 20.
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
 besteht. Eine kleinere Zahl aus dem Container ist kein Widerspruch, sondern die
 Ausnahme per `-E`. **Zahl immer per `ctest -N` gegenprüfen, nie schätzen.**
@@ -610,30 +621,23 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-07 abends** · **Working Tree sauber, alles gepusht**, ein Arbeitsbaum, nur
-Branch `main` (Worktree und Feature-Branches abgebaut). Teststand macOS Debug **30/30** und
-Release **30/30** (`ctest -N` = 30).
+Stand **2026-08-10** · Working Tree sauber, ein Arbeitsbaum, nur Branch `main`;
+**ein Doku-Commit (dieses Aufräumen) liegt ungepusht** — Push nur auf Owner-Zuruf.
+Teststand macOS Debug **30/30** und Release **30/30** (`ctest -N` = 30);
+Linux-Container und rtzbld01-Release je **29/29** (2026-08-10).
 🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` ändert ihn, und der
 Anker wäre im selben Moment falsch (2026-08-07 genau so passiert). Belastbar ist die
 Beziehung zu `origin/main`: `git log --oneline origin/main..HEAD` muss **leer** sein. Beim
 Wiedereinstieg zusätzlich `git log --oneline -3` gegenlesen — die Windows-Session pusht
 ebenfalls.
 
-🚢 **v1.9.0 ist am 2026-08-10 veröffentlicht** (Tag `75cc7b0`, CI-Lauf `31340847602`
-**grün auf allen drei Jobs**) — koordinierter Meilenstein-Release mit MacPCAN 0.2.0 und
-RAFTNG; gegenüber 1.8.1 funktional nur QTMUX-131 („Link kopieren") neu. Vier Artefakte,
-alle **einzeln gemessen** mit Build-ID `1.9.0+75cc7b0`: DMG lokal · MSI + portables ZIP
-von **rtzbld01** (⚠️ `build_msi.cmd` verlangt jetzt die Version als Argument) · AppImage
-aus dem CI-Lauf **desselben Commits**. Upload via MacPCANs `publish.py` lief in der
-**MacPCAN-Session** (der Harness-Classifier dieser Session blockiert Credential-Sourcen +
-Upload — nicht umgehen, sondern an den Koordinator melden, genau so gelöst).
-Live-Gegenprobe unabhängig davon gefahren (Manifest, Signatur gegen die **Client**-Bytes
-aus `UpdateKeys.hpp` mit fallendem Gegentest, alle drei Artefakte heruntergeladen und
-`cmp`-identisch, `index.json`: **nur** der qtmux-Eintrag geändert, übrige sieben
-byte-gleich).
-⚠️ **Das Selbst-Update wurde bewusst NICHT ausgelöst** — es reißt die Terminal-Sessions mit,
-und die Produktivinstanz trägt die laufende Orchestrierung. Der Owner spielt das als
-Stufe 1 durch.
+🚢 **v1.9.0**: Belege und Sollwerte stehen im Absatz „Ausgeliefert" oben — hier nur die
+drei Publish-Mechanik-Fakten, die beim nächsten Release wieder gebraucht werden:
+`build_msi.cmd` auf rtzbld01 **verlangt die Version als Argument** (sonst
+`VERSION_ARG_FEHLT`) · den **Upload** fährt die **MacPCAN-Session** als kanonischer
+Publisher (der Harness-Classifier dieser Session blockiert Credential-Sourcen + Upload —
+nicht umgehen, sondern an den Koordinator melden), das unabhängige VERIFY danach QTmux ·
+gegenüber 1.8.1 ist funktional nur QTMUX-131 („Link kopieren") neu.
 📌 **Backlog-Paar aus dem Startup-Check-Vertrag** (Koordinator-Entscheid 2026-08-07:
 **keine 1.8.2**, beides zusammen ins nächste ohnehin anstehende Paket) — Mechanik und
 Begründungen im Abschnitt „Online-Update" der Feature-Referenz:
@@ -642,19 +646,6 @@ Begründungen im Abschnitt „Online-Update" der Feature-Referenz:
    jeder bewusst abgeschaltete Schalter still auf EIN zurückgesetzt.
 2. Drossel-Zeitstempel **vor** den Request setzen statt im Callback.
 Der Vertrag selbst war in QTmux bereits vollständig erfüllt — es wurde **nichts** nachgebaut.
-
-✅ **In `main` seit heute:** QTMUX-130 (Verlaufs-Umbruch, `47d313e`, CI grün auf allen drei
-Plattformen — Lauf `31165779520`) · Vendoring auf MacPCAN `58df9e4` (`c9fee38`) samt
-Richtigstellung (`4eb04b0`) · korrigierter Sprach-Hinweis in den Prefs (`20ab250`) ·
-**ComboBox-Fix** (leere Popup-Einträge bei Sprach- und Shell-Auswahl; `Array.isArray` am
-Model ist im Delegate immer falsch — Regel in der Feature-Referenz) · Doku-Aufräumen.
-⚠️ **Keine gebaute Instanz des Anwenders hat diese Stände** — die Produktivinstanz läuft
-weiter aus `build/macos` (s. u.).
-⚠️ **QTMUX-130 wirkt nicht rückwirkend:** Vorhandene Dumps tragen die eingefrorenen
-80er-Umbrüche als Inhalt — erst der **zweite** Neustart nach dem Update ist sauber. Wer das
-übersieht, hält den Fix für wirkungslos.
-⚠️ Die **Build-ID-Quelle ist vorläufig** ([cmake/BuildId.cmake](cmake/BuildId.cmake)) — der
-kanonische Baustein kommt aus MacPCAN; beim Tausch ändert sich nur die Quelle.
 
 **Nächster Punkt: QTMUX-94** — Terminal-Ausgabe als Agenten-Kontext.
 - Einstieg: `VtScreen::screenText()`/Scrollback liegen fertig vor; es fehlt allein der Weg
@@ -668,10 +659,11 @@ kanonische Baustein kommt aus MacPCAN; beim Tausch ändert sich nur die Quelle.
 - Beachten: `qtmux_core` bleibt Gui-frei; jede neue Zeichenkette in `qsTr` + **beide** `.ts`;
   neue QML-Datei ohne `QML_FILES`-Eintrag existiert zur Laufzeit nicht.
 
-**Danach:** Windows-**Debug**-Build von QTMUX-130 auf rtzbld01 (die CI baut Release und sieht
-Qts Debug-Asserts prinzipiell nicht, Lektion QTMUX-124) · Owner-Durchklick der fertigen
-Tickets ([docs/owner-abnahmen.md](docs/owner-abnahmen.md)) · Windows-/Linux-Zweig des
+**Danach:** Owner-Durchklick der fertigen Tickets
+([docs/owner-abnahmen.md](docs/owner-abnahmen.md)) · Windows-/Linux-Zweig des
 Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, pf-Installation).
+(Der Windows-**Debug**-Build aller Stände lief am 2026-08-10 auf rtzbld01, `BUILD_CHECK_OK` —
+der frühere Punkt „Debug-Build von QTMUX-130" ist damit erledigt.)
 
 ### Offene Owner-Entscheide (blockieren nichts, aber warten)
 
@@ -679,9 +671,9 @@ Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, p
    `Mode::System` an (`QLocale::system()`, EN/DE/SV); QTmux kann nur fest Deutsch/Englisch.
    RAFTNG nennt es ausdrücklich eine **Produktentscheidung**, keine technische, und liefert
    auf Zuruf. Nicht eigenmächtig übernommen.
-2. **Produktivinstanz neu bauen?** Sie läuft aus `build/macos` mit `1.8.0+34449de` und hat
-   damit keinen der heutigen Stände — auch den ComboBox-Fix nicht, den der Anwender selbst
-   gemeldet hat. Ein Neubau reißt alle Terminal-Sessions mit.
+2. **Produktivinstanz erneuern?** Sie läuft aus `build/macos` mit `1.8.0+34449de` und hängt
+   damit zwei Releases zurück (weder 1.8.1-Fixes noch 1.9.0). Wege: Self-Update aus der App
+   (Owner-Sache, Stufe-1-Plan) oder Neubau — beides reißt alle Terminal-Sessions mit.
 
 #### Zustand, der nicht aus Code/Git hervorgeht
 
@@ -697,13 +689,15 @@ Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, p
 
 ### Zuletzt abgeschlossen (Mechanik in der Feature-Referenz, Verlauf in Git)
 
-QTMUX-124 (Windows-Absturz) · **125** (Online-Update) · **127** (MCP im LAN) · **128**
-(Mausrad in Codex) · **129** (Proxy) · QML-Editor-Diagnosen von >2000 auf **2** (beide echt).
-Alle selbst verifiziert und in `main`; die dauerhaften Lektionen stehen jeweils im
-zuständigen Fachabschnitt, nicht hier.
+QTMUX-124 bis **131** (u. a. Online-Update, MCP im LAN, Proxy, „Link kopieren") sowie der
+familienweite **AppImage-Tool-Pin** (`d782a5a`) — alle selbst verifiziert und in `main`;
+die dauerhaften Lektionen stehen jeweils im zuständigen Fachabschnitt, nicht hier.
 
 ### Offene Fäden (dauerhaft relevant)
 
+- ⚠️ **QTMUX-130 wirkt nicht rückwirkend** (Diagnose-Falle bei Owner-Abnahmen): Vorhandene
+  Verlaufs-Dumps tragen die eingefrorenen 80er-Umbrüche als Inhalt — erst der **zweite**
+  Neustart nach dem Update ist sauber; wer das übersieht, hält den Fix für wirkungslos.
 - ⚠️ **QTMUX-127-Rest:** Sichtprüfung der Einstellungsseite (auf macOS ist das Prefs-Fenster
   mit `--screenshot` prinzipiell nicht greifbar — eigenes `Window`; Rezept in den E2E-Fallen)
   und die **pf-Installation** auf dem Zielrechner (`sudo` verlangt hier ein Passwort; Skript
@@ -754,13 +748,9 @@ zuständigen Fachabschnitt, nicht hier.
   QML-Anbindung danach seriell durch eine Instanz.
 
 **Offene Jira (geführt wird in Jira, hier nur Zeiger):**
-✅ **122/123 sind umgesetzt und rebast** (`162f079`, s. Owner-Entscheid 1) — **122** = OSC 52
-(Zwischenablage aus dem Terminal füllen; Anwenderbefund — aus einem Claude Code über `ssh`
-ließ sich nichts kopieren: die Anwendung hält Maus-Tracking + Alt-Screen, QTmux reicht die
-Maus durch (QTMUX-104), markiert wird **in der Anwendung**, QTmux hat gar keine Auswahl),
-**123** = sichtbarer Hinweis, wenn eine Vollbild-Anwendung die Maus hält (ohne ihn findet man
-die Shift-Geste nicht — dieselbe Erfahrung wie bei den Links in QTMUX-39). Offen ist nur der
-Merge (Klassifikator-Freigabe) und danach Jira dual. ·
+**122/123** (OSC-52-Zwischenablage · Hinweis bei App-Maus) sind seit `162f079` in `main`
+und mit 1.8.1 **ausgeliefert** — Mechanik in der Feature-Referenz; ob der Jira-Status
+dual auf Done steht, ist ungeprüft. ·
 **40** (OSC-8-Hyperlinks — deferred; bräuchte Cursor-Span-Tracking + neues `Cell`-Feld,
 teuer, da `VtScreen` den Sichtbereich lazy aus libvterm bildet) ·
 **13** (native macOS-Menü-Icons — deferred; Qt reicht `icon.source`/`icon.name` in nativen
@@ -869,6 +859,9 @@ nicht in jede Session. Hier bleiben nur die zwei Regeln, die man beim Planen ken
   abgelehnt** (HTTP 422). Assets: DMG + MSI + portables ZIP + AppImage.
   Das AppImage stammt aus dem CI-Lauf desselben Commits
   (`gh run download <id> -n QTmux-AppImage`), nicht aus einem Extra-Build.
+  Releases existieren ab **v1.4.0** (je 4 Assets); für 1.0.1/1.3.0 gibt es seit der
+  Repo-Neuaufsetzung **weder** Releases **noch** lokale Kopien (dist/-Aufräumen 2026-08-10,
+  Owner-Freigabe) — diese Binaries sind endgültig weg.
 - **Interne Zugänge** (Confluence-/Jira-Hosts, Space-Keys, Seiten-IDs, Build-Maschinen)
   stehen **nur** in `CLAUDE.local.md` — git-ignoriert, bewusst nicht im öffentlichen Repo.
 
