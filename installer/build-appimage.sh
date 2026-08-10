@@ -23,7 +23,23 @@ VERSION="${1:-1.9.0}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${QTMUX_BUILD_DIR:-$REPO/build/linux-release}"
 OUT="$REPO/dist/QTmux-$VERSION-x86_64.AppImage"
-TOOLS="$REPO/dist/.tools"
+
+# Gepinnte AppImage-Build-Tools (familienweit, kanonische Quelle: MacPCAN
+# platform/linux/build-appimage.sh + docs/SHARED.md „Gepinnte AppImage-Build-Tools",
+# Mechanik b74957d). Upstream-`continuous` ist eine rollende URL — der Pin geht über
+# einen datierten Mirror-Ordner + SHA256. Anheben (Reihenfolge einhalten):
+#   1. MacPCAN tools/updates/mirror-buildtools.sh --fetch-upstream <YYYY-MM-DD>
+#   2. ein AppImage mit dem neuen Satz bauen und wirklich starten
+#   3. LD_PIN + beide Checksummen ZUERST in MacPCAN anheben, dann 1:1 hierher
+#      und nach RAFTNG spiegeln (gleiche Mechanik, gleiche Werte)
+# Alte Pin-Ordner bleiben auf dem Mirror liegen — ältere Releases bauen weiter.
+LD_PIN="2026-08-10"
+LD_SHA256="421ca71d5c69ea97c6309276232990d43df1dcece0edfaa26bbf926ff96ed12e"
+LD_QT_SHA256="be1b7e166bf9975cfb694ebe6759ba40502ffc6196440d3e64aa90c4dbd67e9f"
+LD_MIRROR="${LD_MIRROR:-https://nobser.de/updates/tools/linuxdeploy}"
+
+# Cache PRO Pin: ein angehobener LD_PIN darf nie einen alten Cache-Eintrag treffen.
+TOOLS="${XDG_CACHE_HOME:-$HOME/.cache}/qtmux-appimage/$LD_PIN"
 
 echo "==> 1/4  Release bauen (falls nötig)"
 if [[ ! -x "$BUILD_DIR/qtmux" ]]; then
@@ -53,18 +69,50 @@ if [[ -f "$BUILD_DIR/plugins/libqtmux_echo_plugin.so" ]]; then
     echo "    Echo-Plugin übernommen"
 fi
 
-echo "==> 3/4  linuxdeploy + Qt-Plugin holen"
+echo "==> 3/4  linuxdeploy + Qt-Plugin holen (gepinnt, SHA256-verifiziert)"
 mkdir -p "$TOOLS"
-fetch() {  # $1=Zieldatei $2=URL
-    if [[ ! -f "$TOOLS/$1" ]]; then
-        echo "    lade $1 …"
-        wget -qO "$TOOLS/$1" "$2"
+
+sha256_of() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d' ' -f1
+    else
+        shasum -a 256 "$1" | cut -d' ' -f1   # macOS hat kein sha256sum
     fi
-    chmod +x "$TOOLS/$1"
 }
-BASE="https://github.com/linuxdeploy"
-fetch linuxdeploy-x86_64.AppImage           "$BASE/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-fetch linuxdeploy-plugin-qt-x86_64.AppImage "$BASE/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+
+# Prüft auch den CACHE, nicht nur frische Downloads — sonst hebelt eine einzige
+# untergeschobene oder veraltete Cache-Datei den ganzen Pin still aus.
+fetch_verified() {  # $1=URL $2=Zieldatei $3=Soll-SHA256
+    local url="$1" out="$2" want="$3" got
+    if [[ -f "$out" ]]; then
+        got="$(sha256_of "$out")"
+        if [[ "$got" == "$want" ]]; then
+            chmod +x "$out"
+            return 0
+        fi
+        echo "Gecachtes $(basename "$out") hat eine unerwartete Checksumme — lade neu." >&2
+        rm -f "$out"
+    fi
+    echo "    lade $(basename "$out") vom gepinnten Mirror …"
+    curl -fL --retry 3 -o "$out" "$url"
+    got="$(sha256_of "$out")"
+    if [[ "$got" != "$want" ]]; then
+        rm -f "$out"
+        echo "FEHLER: Checksummen-Abweichung bei $(basename "$out")." >&2
+        echo "  erwartet $want" >&2
+        echo "  erhalten $got" >&2
+        echo "Baue nicht mit einem unverifizierten Build-Tool." >&2
+        exit 1
+    fi
+    chmod +x "$out"
+}
+
+# Bewusst KEIN Upstream-Fallback: Bei einem Mirror-Ausfall auf `continuous`
+# auszuweichen stellte still genau die Angriffsfläche wieder her, die der Pin schließt.
+fetch_verified "$LD_MIRROR/$LD_PIN/linuxdeploy-x86_64.AppImage" \
+               "$TOOLS/linuxdeploy-x86_64.AppImage" "$LD_SHA256"
+fetch_verified "$LD_MIRROR/$LD_PIN/linuxdeploy-plugin-qt-x86_64.AppImage" \
+               "$TOOLS/linuxdeploy-plugin-qt-x86_64.AppImage" "$LD_QT_SHA256"
 
 # GitHub-Runner haben kein FUSE → die Tool-AppImages entpacken-und-ausführen lassen.
 export APPIMAGE_EXTRACT_AND_RUN=1
