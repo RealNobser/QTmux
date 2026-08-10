@@ -582,15 +582,15 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.8.1** — Tag auf `3744c38`, alle 4 Installer, Manifest live unter
+**Ausgeliefert: v1.9.0** — Tag auf `75cc7b0`, alle 4 Installer, Manifest live unter
 `https://nobser.de/updates/qtmux/`; der volle Update-Zyklus ist am lebenden Objekt
-verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-129**.
+verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-131**.
 🔑 **Belegt ist die Auslieferung selbst, nicht der Einspielweg:** Manifest, Signatur gegen
 die in `UpdateKeys.hpp` einkompilierten **Client**-Bytes, alle drei Artefakte
 heruntergeladen und **byte-identisch** (`cmp`) zu den lokalen, `index.json` mit allen acht
 Produkten unversehrt — Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Das **Selbst-Update**
-einer 1.8.0-Instanz auf 1.8.1 ist bewusst **nicht** gefahren worden: es reißt die
+einer älteren Instanz ist bewusst **nicht** gefahren worden: es reißt die
 Terminal-Sessions mit, und die Produktivinstanz trägt die laufende Orchestrierung.
 
 **Teststände:** **30** Tests (s. Dateitabelle). macOS Debug/Release je **30/30** (dort läuft
@@ -619,13 +619,18 @@ Beziehung zu `origin/main`: `git log --oneline origin/main..HEAD` muss **leer** 
 Wiedereinstieg zusätzlich `git log --oneline -3` gegenlesen — die Windows-Session pusht
 ebenfalls.
 
-🚢 **v1.8.1 ist am 2026-08-07 abends veröffentlicht** (Tag `3744c38`, CI-Lauf
-`31209285839` **grün auf allen drei Jobs**). Vier Artefakte, alle mit Build-ID
-`1.8.1+3744c38`: DMG lokal · MSI + portables ZIP von **rtzbld01** · AppImage aus dem
-CI-Lauf **desselben Commits**. Live-Gegenprobe unabhängig von `publish.py` gefahren
-(Manifest, Signatur gegen die **Client**-Bytes aus `UpdateKeys.hpp` mit zwei fallenden
-Gegentests, alle drei Artefakte heruntergeladen und `cmp`-identisch, `index.json` mit allen
-acht Produkten unversehrt).
+🚢 **v1.9.0 ist am 2026-08-10 veröffentlicht** (Tag `75cc7b0`, CI-Lauf `31340847602`
+**grün auf allen drei Jobs**) — koordinierter Meilenstein-Release mit MacPCAN 0.2.0 und
+RAFTNG; gegenüber 1.8.1 funktional nur QTMUX-131 („Link kopieren") neu. Vier Artefakte,
+alle **einzeln gemessen** mit Build-ID `1.9.0+75cc7b0`: DMG lokal · MSI + portables ZIP
+von **rtzbld01** (⚠️ `build_msi.cmd` verlangt jetzt die Version als Argument) · AppImage
+aus dem CI-Lauf **desselben Commits**. Upload via MacPCANs `publish.py` lief in der
+**MacPCAN-Session** (der Harness-Classifier dieser Session blockiert Credential-Sourcen +
+Upload — nicht umgehen, sondern an den Koordinator melden, genau so gelöst).
+Live-Gegenprobe unabhängig davon gefahren (Manifest, Signatur gegen die **Client**-Bytes
+aus `UpdateKeys.hpp` mit fallendem Gegentest, alle drei Artefakte heruntergeladen und
+`cmp`-identisch, `index.json`: **nur** der qtmux-Eintrag geändert, übrige sieben
+byte-gleich).
 ⚠️ **Das Selbst-Update wurde bewusst NICHT ausgelöst** — es reißt die Terminal-Sessions mit,
 und die Produktivinstanz trägt die laufende Orchestrierung. Der Owner spielt das als
 Stufe 1 durch.
