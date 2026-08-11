@@ -604,6 +604,18 @@ Produkten unversehrt — Sollwerte in
 einer älteren Instanz ist bewusst **nicht** gefahren worden: es reißt die
 Terminal-Sessions mit, und die Produktivinstanz trägt die laufende Orchestrierung.
 
+**Gebaut, wartet auf Publish: v1.9.1** (2026-08-11, Hotfix im Orchestrator-Auftrag) —
+trägt den **Windows-Updater-Fix** aus dem Hub (MacPCAN `796575f`, Pin in
+`third_party/updater/UPSTREAM.md`): msiexec lehnt Qt-Vorwärts-Slashes als Fehler 1619 ab,
+der msi-Zweig nutzt jetzt `QDir::toNativeSeparators()`; das Windows-Selbst-Update war
+damit seit der ersten Auslieferung tot. Gegenüber 1.9.0 ist das die **einzige**
+funktionale Änderung (das Startup-Check-Backlog-Paar unten blieb bewusst draußen —
+enger Hotfix-Auftrag). Alle 4 Artefakte liegen in `dist/` (AppImage aus CI-Lauf
+`31485537275`), MSI+ZIP zusätzlich auf rtzbld01; **Windows-Abnahme belegt**:
+`msiexec /a` gegen das frische MSI mit nativem Pfad → Exit 0, entpacktes `qtmux.exe`
+mit korrekter Build-ID. Publish fährt die MacPCAN-Session; SHA256-Sollwerte stehen in
+der Orchestrator-Meldung vom 2026-08-11.
+
 **Teststände:** **30** Tests (s. Dateitabelle). macOS Debug/Release je **30/30** (dort läuft
 `test_pty` mit und besteht). Linux (rtzsvr02-Container) und Windows nehmen `test_pty` per
 `-E` aus (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest`
@@ -621,10 +633,11 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-10** · Working Tree sauber, ein Arbeitsbaum, nur Branch `main`;
-**ein Doku-Commit (dieses Aufräumen) liegt ungepusht** — Push nur auf Owner-Zuruf.
-Teststand macOS Debug **30/30** und Release **30/30** (`ctest -N` = 30);
-Linux-Container und rtzbld01-Release je **29/29** (2026-08-10).
+Stand **2026-08-11** · Working Tree sauber, ein Arbeitsbaum, nur Branch `main`,
+alles gepusht (der Doku-Commit vom 2026-08-10 ging mit dem 1.9.1-Push hinaus —
+Push war vom Orchestrator beauftragt). Teststand macOS Release **30/30** (2026-08-11,
+1.9.1); Linux-Container und rtzbld01-Release je **29/29** (2026-08-10, Stand 1.9.0);
+die 1.9.1-CI ist auf allen drei Plattformen grün.
 🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` ändert ihn, und der
 Anker wäre im selben Moment falsch (2026-08-07 genau so passiert). Belastbar ist die
 Beziehung zu `origin/main`: `git log --oneline origin/main..HEAD` muss **leer** sein. Beim
