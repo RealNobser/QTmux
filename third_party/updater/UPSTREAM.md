@@ -9,11 +9,20 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `58df9e4739b1ca69af7250e4a07fea706044bdeb` |
-| Datum | 2026-08-07 |
-| Betreff | `docs: Push erfolgreich -- Guard am Draht bewaehrt, Referenzmessung abgelegt` |
+| Commit | `796575fbdd2961c6129e70f547e87e2e40b57023` |
+| Datum | 2026-08-11 |
+| Betreff | `fix(update): msiexec braucht native Pfadtrenner — Windows-Update war seit 0.2.0 tot` |
 
-Mit diesem Stand kam die **Fehler-Klassifikation** herüber (MacPCAN `9952202`,
+Mit diesem Stand kam der **msiexec-Pfadtrenner-Fix** herüber (eine Datei,
+`InstallerLauncher.cpp`): Qt liefert auf Windows Vorwärts-Slashes, msiexec'
+eigener Parser lehnt so einen Pfad als **Fehler 1619** ab („Dieses
+Installationspaket konnte nicht geöffnet werden"), obwohl das MSI intakt ist.
+Der msi-Zweig zieht den Download-Pfad jetzt per `QDir::toNativeSeparators()`
+auf Backslashes — Argumente **und** description; dmg/appimage unverändert.
+Am echten msiexec auf RTZBLD01 bewiesen (Slash→Exit 1619, nativ→Exit 0).
+Windows-Selbst-Update war damit seit der ersten Auslieferung tot.
+
+Mit dem vorigen Stand `58df9e4` (2026-08-07) kam die **Fehler-Klassifikation** herüber (MacPCAN `9952202`,
 „404 ist kein Signaturfehler"): `UpdateChecker` bildet Transportfehler jetzt über
 `classifyFailure()` auf das ab, was der Betreiber tun soll, und `ErrorKind` bekam
 dafür **`NotPublished`**. Vorher las sich ein Produkt ohne Release als
@@ -56,7 +65,7 @@ Eine Ankündigung „diese Commits fassen euren Bereich nicht an" ist deshalb ke
 Wer ihn so meldet (wie hier zunächst geschehen), schickt die anderen Konsumenten in den
 falschen Commit-Bereich.
 
-Mit dem vorigen Stand `80c19ee` (2026-08-06) kam die **Proxy-Unterstützung** herüber (MAC-36, in MacPCAN als
+Mit dem Stand davor, `80c19ee` (2026-08-06), kam die **Proxy-Unterstützung** herüber (MAC-36, in MacPCAN als
 `0934eff` eingeführt): neu `ProxyConfig.{hpp,cpp}`, dazu am `UpdateChecker`
 `setProxyConfig()`, `setProxyCredentialProvider()` und das erweiterte
 `ErrorKind`-Enum. Die QTmux-Hälfte dazu liegt in `UpdateViewModel` und

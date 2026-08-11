@@ -1,5 +1,6 @@
 #include "update/InstallerLauncher.hpp"
 
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
@@ -13,10 +14,16 @@ std::optional<LaunchPlan> installerLaunchPlan(const QString& localPath,
     const QString k = kind.toLower();
     LaunchPlan plan;
     if (k == QLatin1String("msi")) {
+        // msiexec has its OWN command-line parser and rejects a path with
+        // forward slashes as error 1619 ("This installation package could
+        // not be opened") — while the package itself is perfectly intact.
+        // Qt hands out forward slashes everywhere on Windows, so the path
+        // must be converted to native separators before it goes out.
+        const QString nativePath = QDir::toNativeSeparators(localPath);
         plan.program = QStringLiteral("msiexec");
-        plan.arguments = {QStringLiteral("/i"), localPath};
+        plan.arguments = {QStringLiteral("/i"), nativePath};
         plan.description =
-            QStringLiteral("msiexec /i \"%1\"").arg(localPath);
+            QStringLiteral("msiexec /i \"%1\"").arg(nativePath);
         return plan;
     }
     if (k == QLatin1String("dmg")) {
