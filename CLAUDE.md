@@ -485,14 +485,26 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   entstehen. Und: Die Build-ID ist eine **Anzeige**, nie eine Vergleichsgröße — in
   `UpdateViewModel::currentVersion` darf nur `1.8.0` ankommen, sonst bricht der
   Manifest-Vergleich.
-- 🔑 **Der Vendoring-Kontrakt umfasst NUR `MacPCAN/src/update/`** — und
-  [tools/check-updater-sync.sh](tools/check-updater-sync.sh) wacht seit 2026-08-06 über
-  **beides**: den Datei-Abgleich (Liste aus **beiden** Bäumen, neue und gelöschte Dateien
-  fallen auf) **und** den Kontrakt selbst. Der zweite Wächter meldet jeden `#include`, der
-  aus `update/` herausführt.
-  ⚠️ **Warum das nötig wurde:** Der Datei-Abgleich allein bemerkt eine neue Abhängigkeit
-  nach außen **nicht** — er meldet nur „ABWEICHUNG", man zieht nach, und der Compiler sagt
-  dann „file not found", ohne dass jemand den Kontrakt als Ursache erkennt.
+- 🔑 **Vendoring-Wächter [tools/check-updater-sync.sh](tools/check-updater-sync.sh)** —
+  prüft seit 2026-08-12 **drei** Kontrakte (Updater-Kern `third_party/updater/update/`,
+  CAN-Plugin-Auswahl `plugins/macpcan/vendor/`, msiexec-Smoke `installer/…smoke…`) jeweils
+  auf Byte-Identität zum Hub **und** auf Fremd-`#include`s, die den Kontrakt-Umfang
+  verlassen.
+  ⚠️ **Warum die Include-Prüfung nötig wurde:** Der Datei-Abgleich allein bemerkt eine neue
+  Abhängigkeit nach außen **nicht** — er meldet nur „ABWEICHUNG", man zieht nach, und der
+  Compiler sagt dann „file not found", ohne dass jemand den Kontrakt als Ursache erkennt.
+  🔑 **Wirkbereich (Owner-Entscheid „lokal, aber laut", 2026-08-12): Der Wächter ist ein
+  LOKALES Werkzeug und hängt bewusst NICHT in der CI.** QTmux ist öffentlich und baut auf
+  github-hosted Runnern; der Hub ist privat — ein CI-Checkout bräuchte ein Token für ein
+  privates Repo im Secret-Store eines öffentlichen (Owner hat abgelehnt). Ein CI-Schritt,
+  der mangels Hub **immer** übersprungen würde, wäre selbst ein grünes Versprechen ohne
+  Deckung (Fehlerklasse „grüner Nachweis, der nichts nachweist", Deskstarter 2026-08-12).
+  Stattdessen: (1) Ohne Hub daneben meldet das Skript **unübersehbar „NICHTS GEPRUEFT"**
+  für alle drei Kontrakte (Exit bleibt 0, damit Werkzeugketten es nicht abschalten);
+  (2) `installer/build-dmg.sh` ruft ihn **vor** jedem Release-Build auf — die einzige
+  Maschine, die DMGs baut, hat den Hub daneben, und Drift bricht dort ab. Auf den
+  Windows-/Linux-Paketwegen (rtzbld01, CI-AppImage) läuft er mangels Hub nicht — dort
+  schützt nur das Nachziehen über den Hub-Workflow.
   **Zum Hub-Paket AP8** (Profillader `DbcLoader`/`JsonLoader` wandern in den Hub):
   **QTmux ist nicht betroffen** — MacPCANs `DbcDecoder` liegt in `src/specs/`, RAFTNGs Lader
   in `src/io/`, beide außerhalb des Kontrakts; QTmux liest keine DBC-Profile. Nachziehen

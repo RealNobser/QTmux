@@ -10,7 +10,18 @@
 # neben QTmux. Auf CI-Runnern und Build-Maschinen gibt es den nicht — ein Test,
 # der dort rot wird, meldete ein Umgebungsproblem als Regression (dieselbe
 # Ueberlegung wie bei test_i18n und den fehlenden qtbase_*.qm). Ohne Quelle
-# beendet sich das Skript darum mit Exit 0 und einer Meldung.
+# beendet sich das Skript darum mit Exit 0 — aber mit einem unuebersehbaren
+# Banner, dass NICHTS geprueft wurde (ein Skip darf nicht wie ein OK aussehen).
+#
+# 🔑 Warum der Waechter bewusst NICHT in der CI haengt (Owner-Entscheid,
+# 2026-08-12): QTmux ist das einzige oeffentliche Repo der Familie und baut auf
+# github-hosted Runnern; MacPCAN ist privat. Ein Hub-Checkout in der CI braeuchte
+# ein Zugangstoken fuer ein privates Repo im Secret-Store eines OEFFENTLICHEN
+# Repos — abgelehnt. Ohne Hub kann die CI prinzipiell nie pruefen; ein
+# CI-Schritt, der immer uebersprungen wird, waere selbst ein gruenes Versprechen
+# ohne Deckung. Der Waechter ist ein LOKALES Werkzeug (Entwicklermaschine mit
+# Hub daneben) und laeuft automatisch im Release-Weg: installer/build-dmg.sh
+# ruft ihn vor dem Build auf — Drift bricht dort den Release-Build ab.
 #
 # Verwendung:
 #   tools/check-updater-sync.sh              # sucht ../MacPCAN
@@ -30,8 +41,20 @@ macpcan_root="${MACPCAN_DIR:-$here/../MacPCAN}"
 upstream="$macpcan_root/src/update"
 
 if [ ! -d "$upstream" ]; then
-    echo "check-updater-sync: keine MacPCAN-Quelle unter '$upstream' — uebersprungen."
-    echo "  (MACPCAN_DIR setzen, wenn der Checkout woanders liegt.)"
+    echo "########################################################################"
+    echo "##  check-updater-sync: NICHTS GEPRUEFT — MacPCAN-Hub nicht gefunden  ##"
+    echo "########################################################################"
+    echo "Unter '$macpcan_root' liegt kein MacPCAN-Quellbaum (erwartet: src/update/)."
+    if [ -d "$macpcan_root" ]; then
+        echo "  Das Verzeichnis existiert, enthaelt aber keine Quellen — liegt dort"
+        echo "  wirklich der Hub? (~/Projects/GitHub/MacPCAN z. B. enthaelt NUR build/.)"
+    fi
+    echo "Alle DREI Vendoring-Kontrakte bleiben damit UNGEPRUEFT:"
+    echo "  1. third_party/updater/update/               (Updater-Kern)"
+    echo "  2. plugins/macpcan/vendor/                   (CAN-Plugin-Auswahl)"
+    echo "  3. installer/msiexec-path-smoke.ps1 + smoke/ (1619-Riegel)"
+    echo "Dieser Lauf ist KEIN Nachweis von Synchronitaet. Auf einer Maschine mit"
+    echo "Hub-Checkout wiederholen oder MACPCAN_DIR=/pfad/zum/Hub setzen."
     exit 0
 fi
 

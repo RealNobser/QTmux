@@ -45,11 +45,21 @@ if [[ -z "$MACDEPLOYQT" ]]; then
 fi
 [[ -n "$MACDEPLOYQT" ]] || { echo "FEHLER: macdeployqt nicht gefunden (Qt-bin im PATH?)." >&2; exit 1; }
 
-echo "==> 1/3  Release bauen ($PRESET -> $BUILD_DIR)"
+# Vendoring-Wächter VOR dem Release-Build: Das DMG entsteht ausschließlich auf
+# der Entwicklermaschine — der einzige Ort, an dem der MacPCAN-Hub daneben liegt,
+# und der Moment, in dem Drift am teuersten ist (das Artefakt geht raus). Drift
+# bricht hier ab (Wächter-Exit 1 + set -e). Fehlt der Hub (fremde Maschine),
+# läuft der Build weiter — der Wächter meldet dann unübersehbar, dass NICHTS
+# geprüft wurde. In der CI hängt der Wächter bewusst nicht (öffentliches Repo,
+# kein Token für den privaten Hub — Begründung im Wächter-Kopf).
+echo "==> 1/4  Vendoring-Sync gegen MacPCAN prüfen"
+"$REPO/tools/check-updater-sync.sh"
+
+echo "==> 2/4  Release bauen ($PRESET -> $BUILD_DIR)"
 cmake --preset "$PRESET" -B "$BUILD_DIR" >/dev/null
 cmake --build "$BUILD_DIR"
 
-echo "==> 2/3  Bundle stagen + macdeployqt"
+echo "==> 3/4  Bundle stagen + macdeployqt"
 rm -rf "$STAGE"; mkdir -p "$STAGE"
 cp -R "$APP_SRC" "$APP"
 # -qmldir: QML-Importe auflösen; macdeployqt bündelt Qt-Frameworks + Plugins
@@ -67,7 +77,7 @@ echo "    Ad-hoc-Signatur erneuern …"
 codesign --force --deep --sign - "$APP"
 codesign -v --deep "$APP" && echo "    Signatur gültig"
 
-echo "==> 3/3  DMG bauen (hdiutil, Drag-to-Applications)"
+echo "==> 4/4  DMG bauen (hdiutil, Drag-to-Applications)"
 mkdir -p "$REPO/dist"
 rm -f "$DMG"
 DMG_ROOT="$(mktemp -d)"
