@@ -135,6 +135,20 @@ $msi = Join-Path $repo "dist\QTmux-$Version-win64.msi"
 & $wix build (Join-Path $PSScriptRoot "QTmux.wxs") -arch x64 -d "Version=$Version" -d "PayloadDir=$stage" -o $msi
 if ($LASTEXITCODE -ne 0) { throw "WiX-Build fehlgeschlagen" }
 
+# msiexec-Pfad-Smoke (1619-Riegel) gegen das FRISCH GEBAUTE MSI. Fragt msiexec
+# selbst, ob es das Paket mit nativen Trennern oeffnet (Exit 0 UND Dateien
+# entpackt) und mit Vorwaerts-Slashes ablehnt (1619) — genau der Parser-Fehler,
+# der das Windows-Selbst-Update seit der ersten Auslieferung totgelegt hatte
+# (Fix: QDir::toNativeSeparators() im vendierten Updater, MacPCAN 796575f).
+# Ein Release, dessen eigener Installer sich nicht oeffnen laesst, ist keines —
+# Fehlschlag bricht den Bau ab. Bewusst NICHT im GitHub-Actions-Job: im
+# Dienstkontext des Runners antwortet msiexec in BEIDEN Richtungen 1601, das
+# Gate waere dort blind gruen (Herkunft/Details: installer\smoke\UPSTREAM.md).
+Write-Host "==> msiexec-Pfad-Smoke (1619-Riegel)" -ForegroundColor Cyan
+$smoke = Join-Path $PSScriptRoot "msiexec-path-smoke.ps1"
+& powershell -NoProfile -ExecutionPolicy Bypass -File $smoke -Msi $msi
+if ($LASTEXITCODE -ne 0) { throw "msiexec-Pfad-Smoke fehlgeschlagen ($LASTEXITCODE) fuer $msi" }
+
 # Portable Variante (ZIP) aus demselben Staging — installationsfrei, wie in der
 # LIESMICH.txt beschrieben (entpacken + qtmux.exe starten).
 $zip = Join-Path $repo "dist\QTmux-$Version-win64-portable.zip"

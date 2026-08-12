@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Prueft, ob die aus MacPCAN vendierten Baeume noch byte-identisch zur
-# kanonischen Quelle sind. Zwei Kontrakte:
+# kanonischen Quelle sind. Drei Kontrakte:
 #   1. third_party/updater/update/  <->  MacPCAN/src/update/   (QTMUX-125, Paket E1)
 #   2. plugins/macpcan/vendor/      <->  MacPCAN/src/          (Auswahl, s. unten)
+#   3. installer/{msiexec-path-smoke.ps1,smoke/} <-> MacPCAN/platform/windows/
+#      (msiexec-Pfad-Smoke, explizite Liste, s. installer/smoke/UPSTREAM.md)
 #
 # 🔑 Warum ein Skript und kein ctest: Die Pruefung braucht einen MacPCAN-Checkout
 # neben QTmux. Auf CI-Runnern und Build-Maschinen gibt es den nicht — ein Test,
@@ -169,8 +171,50 @@ if [ "$mp_fremd" = "1" ]; then
     [ "$mode" != "update" ] && exit 1
 fi
 
+# --- Dritter Kontrakt: msiexec-Pfad-Smoke <-> MacPCAN/platform/windows/ ------
+#
+# Der 1619-Riegel in installer/build-msi.ps1 (Skript + MSI-Fixture) ist byte-
+# identisch aus MacPCAN uebernommen — Hintergrund und Ablage-Begruendung stehen
+# in installer/smoke/UPSTREAM.md. Anders als bei den zwei Kontrakten oben ist
+# die Liste hier EXPLIZIT: installer/ enthaelt ueberwiegend QTmux-Eigenes
+# (build-msi.ps1, QTmux.wxs, …), und auch installer/smoke/UPSTREAM.md ist
+# QTmux-eigen — eine Verzeichnis-Wanderung wie oben meldete lauter
+# Fehlalarme. Kommt upstream eine Datei zur Smoke-Familie hinzu, faellt das
+# beim naechsten Nachziehen im Hub auf, nicht hier; die Liste dann erweitern.
+sm_upstream="$macpcan_root/platform/windows"
+sm_files="msiexec-path-smoke.ps1
+smoke/MacPCAN-PathSmoke.msi
+smoke/marker.txt
+smoke/msi-path-smoke.wxs"
+
+sm_drift=0
+while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    a="$sm_upstream/$f"
+    b="$here/installer/$f"
+    if [ ! -f "$a" ]; then
+        echo "  SMOKE NUR VENDIERT (upstream geloescht?): $f"; sm_drift=1; continue
+    fi
+    if [ ! -f "$b" ]; then
+        echo "  SMOKE FEHLT VENDIERT:                     $f"; sm_drift=1
+        [ "$mode" = "update" ] && mkdir -p "$(dirname "$b")" && cp "$a" "$b"
+        continue
+    fi
+    ha="$(shasum -a 256 "$a" | cut -d' ' -f1)"
+    hb="$(shasum -a 256 "$b" | cut -d' ' -f1)"
+    if [ "$ha" != "$hb" ]; then
+        echo "  SMOKE ABWEICHUNG:                         $f"
+        echo "      upstream $ha"
+        echo "      vendiert $hb"
+        sm_drift=1
+        [ "$mode" = "update" ] && cp "$a" "$b"
+    fi
+done <<EOF
+$sm_files
+EOF
+
 if [ "$mode" = "update" ]; then
-    if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ]; then
+    if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ] || [ "$sm_drift" = "1" ]; then
         echo "check-updater-sync: Dateien uebernommen. UPSTREAM.md-Commit nachziehen:"
         ( cd "$macpcan_root" && git rev-parse HEAD 2>/dev/null )
         exit 0
@@ -179,7 +223,7 @@ if [ "$mode" = "update" ]; then
     exit 0
 fi
 
-if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ]; then
+if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ] || [ "$sm_drift" = "1" ]; then
     echo "check-updater-sync: DRIFT gegenueber MacPCAN. Beheben mit:"
     echo "  tools/check-updater-sync.sh --update"
     exit 1
@@ -187,4 +231,5 @@ fi
 
 echo "check-updater-sync: byte-identisch zu $upstream"
 echo "check-updater-sync: byte-identisch zu $mp_upstream (macpcan-Vendor-Auswahl)"
+echo "check-updater-sync: byte-identisch zu $sm_upstream (msiexec-Pfad-Smoke)"
 exit 0

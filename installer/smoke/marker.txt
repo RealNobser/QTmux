@@ -1,0 +1,3 @@
+Payload of the msiexec path smoke fixture. Its only job is to exist, so
+that `msiexec /a` has something to extract and the smoke can tell a
+successful extraction from a package msiexec never opened.

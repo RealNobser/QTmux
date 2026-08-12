@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fixture for the msiexec path smoke (platform/windows/msiexec-path-smoke.ps1).
+
+  This is NOT a MacPCAN installer. It is the smallest valid MSI that
+  `msiexec /a` can process, so the smoke can ask msiexec how it parses a
+  path WITHOUT depending on a full product build. Keeping it tiny and
+  checked in is what makes the gate cheap enough to run in every Windows
+  CI job: no WiX, no Qt, no PEAK SDK, no elevation.
+
+  Rebuild (WiX v5, on RTZBLD01 as user `claude`, see docs/BUILD-HOSTS.md):
+      wix build -arch x64 -o MacPCAN-PathSmoke.msi msi-path-smoke.wxs
+  The build needs marker.txt next to this file. The output is committed
+  because it is a test fixture, not a build artifact — nothing else in
+  the tree produces it.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="MacPCAN msiexec path smoke fixture"
+           Manufacturer="richartz.de"
+           Version="1.0.0"
+           UpgradeCode="55193DDE-28B5-4F17-96A5-E944ACA33FE6"
+           Scope="perMachine"
+           Compressed="yes">
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="MacPCAN-PathSmoke">
+        <Component Id="C.Marker">
+          <File Id="F.Marker" Source="marker.txt" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="Smoke marker">
+      <ComponentRef Id="C.Marker" />
+    </Feature>
+  </Package>
+</Wix>
