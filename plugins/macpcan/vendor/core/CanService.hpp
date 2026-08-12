@@ -49,6 +49,11 @@ public:
     std::uint64_t totalReceived() const noexcept;
     std::string lastError() const;
 
+    // Snapshot of the underlying driver's bus-health flag. See
+    // ICanDevice::BusStatus. Reads the driver directly — no queue mutex.
+    // Returns Unknown when the service isn't running.
+    ICanDevice::BusStatus busStatus() const noexcept;
+
 private:
     void workerLoop();
 

@@ -1,6 +1,29 @@
 #include "drivers/PcanDevice.hpp"
 
-#include <PCBUSB.h>
+// PEAK exposes an identical PCANBasic API across all three host platforms;
+// only the header name and the addressable channel count differ.
+// - macOS  : PCBUSB (mac-can.com), 8 USB channels
+// - Windows: PCANBasic.dll, 16 USB channels
+// - Linux  : libpcanbasic.so, 16 USB channels
+#ifdef __APPLE__
+#  include <PCBUSB.h>
+#elif defined(_WIN32)
+// PEAK's Windows PCANBasic.h is an ANSI-C header that relies on the Win32
+// integer types (WORD/DWORD/BYTE/UINT64) and __cdecl but does not pull in
+// <windows.h> itself — the includer must provide it first. WIN32_LEAN_AND_MEAN
+// keeps the surface small; NOMINMAX prevents the min/max macros from clashing
+// with std::min/std::max used elsewhere in this TU.
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  include <windows.h>
+#  include <PCANBasic.h>
+#else
+#  include <PCANBasic.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -14,11 +37,21 @@ namespace mac_pcan::drivers {
 namespace {
 
 // PCBUSB on macOS defines PCAN_USBBUS1..8 only (USBBUS9..16 are gated by
-// `#ifndef __APPLE__` in PCBUSB.h v0.13).
+// `#ifndef __APPLE__` in PCBUSB.h v0.13). Windows/Linux PCANBasic exposes
+// the full 16-channel set.
+#ifdef __APPLE__
 constexpr std::array<std::uint16_t, 8> kUsbChannels{
     PCAN_USBBUS1, PCAN_USBBUS2, PCAN_USBBUS3, PCAN_USBBUS4,
     PCAN_USBBUS5, PCAN_USBBUS6, PCAN_USBBUS7, PCAN_USBBUS8,
 };
+#else
+constexpr std::array<std::uint16_t, 16> kUsbChannels{
+    PCAN_USBBUS1,  PCAN_USBBUS2,  PCAN_USBBUS3,  PCAN_USBBUS4,
+    PCAN_USBBUS5,  PCAN_USBBUS6,  PCAN_USBBUS7,  PCAN_USBBUS8,
+    PCAN_USBBUS9,  PCAN_USBBUS10, PCAN_USBBUS11, PCAN_USBBUS12,
+    PCAN_USBBUS13, PCAN_USBBUS14, PCAN_USBBUS15, PCAN_USBBUS16,
+};
+#endif
 
 constexpr std::uint16_t baudCodeFor(std::uint32_t bps) {
     switch (bps) {
@@ -135,6 +168,15 @@ std::vector<core::DeviceInfo> PcanDevice::enumerate() {
             info.supportsFd = (features & FEATURE_FD_CAPABLE) != 0;
         }
 
+        // Readable without opening the channel (verified on hardware). Left
+        // unset rather than defaulted when the driver declines — 0 is a real
+        // value an unconfigured FD adapter reports.
+        DWORD deviceId = 0;
+        if (CAN_GetValue(channel, PCAN_DEVICE_ID,
+                         &deviceId, sizeof(deviceId)) == PCAN_ERROR_OK) {
+            info.deviceId = static_cast<std::uint32_t>(deviceId);
+        }
+
         result.push_back(std::move(info));
     }
     return result;
@@ -147,7 +189,7 @@ bool PcanDevice::open(const core::DeviceInfo& device, const core::BitrateConfig&
 
     const std::uint16_t handle = handleFromString(device.handle);
     if (handle == 0) {
-        lastError_ = "unknown channel handle: " + device.handle;
+        setError("unknown channel handle: " + device.handle);
         return false;
     }
 
@@ -157,9 +199,9 @@ bool PcanDevice::open(const core::DeviceInfo& device, const core::BitrateConfig&
     if (wantFd) {
         const char* bitrateStr = fdBitrateStringFor(config.nominalBps, *config.dataBps);
         if (!bitrateStr) {
-            lastError_ = "unsupported CAN-FD bitrate pair: " +
-                         std::to_string(config.nominalBps) + "/" +
-                         std::to_string(*config.dataBps);
+            setError("unsupported CAN-FD bitrate pair: " +
+                     std::to_string(config.nominalBps) + "/" +
+                     std::to_string(*config.dataBps));
             return false;
         }
         // PCBUSB takes a non-const LPSTR; the string is read-only by the
@@ -168,7 +210,7 @@ bool PcanDevice::open(const core::DeviceInfo& device, const core::BitrateConfig&
     } else {
         const std::uint16_t baud = baudCodeFor(config.nominalBps);
         if (baud == 0) {
-            lastError_ = "unsupported nominal bitrate: " + std::to_string(config.nominalBps);
+            setError("unsupported nominal bitrate: " + std::to_string(config.nominalBps));
             return false;
         }
         init = CAN_Initialize(handle, baud, 0, 0, 0);
@@ -192,7 +234,7 @@ bool PcanDevice::open(const core::DeviceInfo& device, const core::BitrateConfig&
     channel_ = handle;
     open_ = true;
     isFd_ = wantFd;
-    lastError_.clear();
+    setError({});
     return true;
 }
 
@@ -212,7 +254,7 @@ bool PcanDevice::isOpen() const {
 
 bool PcanDevice::read(core::CanFrame& out, std::chrono::milliseconds timeout) {
     if (!open_) {
-        lastError_ = "device not open";
+        setError("device not open");
         return false;
     }
 
@@ -272,7 +314,7 @@ bool PcanDevice::read(core::CanFrame& out, std::chrono::milliseconds timeout) {
 
 bool PcanDevice::write(const core::CanFrame& frame) {
     if (!open_) {
-        lastError_ = "device not open";
+        setError("device not open");
         return false;
     }
 
@@ -315,13 +357,37 @@ bool PcanDevice::write(const core::CanFrame& frame) {
 }
 
 std::string PcanDevice::lastError() const {
+    // Read under the same lock setError() writes under. Without it, polling
+    // this from the GUI while the RX worker or the replay driver assigns is
+    // a data race on a std::string — the same class of bug that aborted
+    // playback in bdc7daa, just from the reading side.
+    std::lock_guard<std::mutex> lk(errorMtx_);
     return lastError_;
 }
 
+core::ICanDevice::BusStatus PcanDevice::busStatus() const noexcept {
+    if (!open_) return core::ICanDevice::BusStatus::Unknown;
+    const TPCANStatus s = CAN_GetStatus(channel_);
+    // Priority: BUSOFF > PASSIVE > HEAVY (warning) > LIGHT > OK.
+    // PCBUSB bit-packs multiple error flags; check the worst first.
+    if (s & PCAN_ERROR_BUSOFF)     return core::ICanDevice::BusStatus::BusOff;
+    if (s & PCAN_ERROR_BUSPASSIVE) return core::ICanDevice::BusStatus::Passive;
+    if (s & (PCAN_ERROR_BUSHEAVY | PCAN_ERROR_BUSLIGHT))
+                                   return core::ICanDevice::BusStatus::Warning;
+    return core::ICanDevice::BusStatus::Ok;
+}
+
+void PcanDevice::setError(std::string text) {
+    std::lock_guard<std::mutex> lk(errorMtx_);
+    lastError_ = std::move(text);
+}
+
 void PcanDevice::recordError(unsigned long status, const char* op) {
+    // Format OUTSIDE the lock — errorText() calls into PCBUSB and we hold
+    // this mutex on the TX hot path.
     std::ostringstream os;
     os << op << " failed: 0x" << std::hex << status << " (" << errorText(status) << ")";
-    lastError_ = os.str();
+    setError(os.str());
 }
 
 }  // namespace mac_pcan::drivers

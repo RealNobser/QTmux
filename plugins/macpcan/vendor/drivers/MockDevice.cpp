@@ -7,7 +7,13 @@ MockDevice::~MockDevice() {
 }
 
 std::vector<core::DeviceInfo> MockDevice::enumerate() {
-    return {core::DeviceInfo{"MOCK_BUS1", "Mock CAN (synthetic)", true}};
+    // deviceId 1 on purpose: a *configured* id, so tests that exercise
+    // id-based matching are not accidentally passing on a factory default
+    // (0 on PCAN-USB-FD, 255 on PCAN-USB) or on an unset optional.
+    return {core::DeviceInfo{.handle = "MOCK_BUS1",
+                             .name = "Mock CAN (synthetic)",
+                             .supportsFd = true,
+                             .deviceId = 1}};
 }
 
 bool MockDevice::open(const core::DeviceInfo& /*device*/, const core::BitrateConfig& config) {

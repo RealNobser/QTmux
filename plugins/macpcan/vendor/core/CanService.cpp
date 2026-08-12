@@ -96,4 +96,23 @@ std::string CanService::lastError() const {
     return lastError_;
 }
 
+ICanDevice::BusStatus CanService::busStatus() const noexcept {
+    // CAN_GetStatus / equivalent is a read-only driver query and safe
+    // to fire while another thread is inside read()/write(). We take
+    // no queue lock to keep the GUI-tick path snappy.
+    if (!device_ || !running_.load()) return ICanDevice::BusStatus::Unknown;
+    return device_->busStatus();
+}
+
+const char* busStatusLabel(ICanDevice::BusStatus s) noexcept {
+    switch (s) {
+        case ICanDevice::BusStatus::Ok:      return "OK";
+        case ICanDevice::BusStatus::Warning: return "Warning";
+        case ICanDevice::BusStatus::Passive: return "Error-Passive";
+        case ICanDevice::BusStatus::BusOff:  return "Bus-Off";
+        case ICanDevice::BusStatus::Unknown: return "Unknown";
+    }
+    return "Unknown";
+}
+
 }  // namespace mac_pcan::core

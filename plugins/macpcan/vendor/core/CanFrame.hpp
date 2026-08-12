@@ -5,6 +5,23 @@
 
 namespace mac_pcan::core {
 
+// How many payload bytes a DLC actually addresses. Classic CAN: DLC == bytes;
+// CAN-FD: DLC is a CODED length where 9..15 map to 12/16/20/24/32/48/64.
+//
+// A free function rather than a CanFrame member only, because IdEntry
+// (IdAggregator.hpp) has to answer the same question and a second hand-rolled
+// copy of that length table is exactly how the two would drift apart. Every
+// consumer that needs a LENGTH must go through here — raw `dlc` as a byte count
+// is wrong for any FD frame above 8 bytes (RAF-137).
+inline std::uint8_t decodePayloadBytes(std::uint8_t dlc, bool fd) noexcept {
+    if (!fd || dlc <= 8) {
+        return dlc;
+    }
+    constexpr std::uint8_t fdLengths[] = {12, 16, 20, 24, 32, 48, 64};
+    const std::uint8_t idx = static_cast<std::uint8_t>(dlc - 9);
+    return idx < sizeof(fdLengths) ? fdLengths[idx] : 0;
+}
+
 struct CanFrame {
     enum Flag : std::uint32_t {
         Extended = 1u << 0,  // 29-bit identifier
@@ -32,15 +49,9 @@ struct CanFrame {
         return (id << 1) | (isExtended() ? 1u : 0u);
     }
 
-    // Number of bytes the DLC actually addresses. Classic CAN: DLC == bytes;
-    // CAN-FD: DLC is a coded length where 9..15 map to 12/16/20/24/32/48/64.
+    // Number of bytes the DLC actually addresses — see decodePayloadBytes().
     std::uint8_t payloadBytes() const noexcept {
-        if (!isFd() || dlc <= 8) {
-            return dlc;
-        }
-        constexpr std::uint8_t fdLengths[] = {12, 16, 20, 24, 32, 48, 64};
-        const std::uint8_t idx = static_cast<std::uint8_t>(dlc - 9);
-        return idx < sizeof(fdLengths) ? fdLengths[idx] : 0;
+        return decodePayloadBytes(dlc, isFd());
     }
 };
 

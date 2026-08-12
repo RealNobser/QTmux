@@ -14,6 +14,17 @@ struct DeviceInfo {
     std::string handle;    // opaque string, e.g. "PCAN_USBBUS1"
     std::string name;      // user-visible name, e.g. "PCAN-USB FD #1"
     bool supportsFd = false;
+
+    // Adapter-stored identifier (PEAK: PCAN_DEVICE_ID, set by the user in
+    // PCAN-View). Unlike the handle, it survives replugging — macOS renumbers
+    // PCAN_USBBUSn when another adapter is attached. Reported RAW, exactly as
+    // the hardware states it: adapters ship unconfigured (PCAN-USB reads 255,
+    // PCAN-USB-FD reads 0), so two identical adapters are NOT distinguishable
+    // by this alone. Judging that — uniqueness, fallbacks, mapping an id back
+    // to a device — is the consumer's policy, deliberately not done here.
+    // nullopt means the backend has no such concept (SocketCAN) or the driver
+    // would not tell us; that is distinct from a reported 0.
+    std::optional<std::uint32_t> deviceId;
 };
 
 struct BitrateConfig {
@@ -45,6 +56,22 @@ public:
     virtual bool write(const CanFrame& frame) = 0;
 
     virtual std::string lastError() const = 0;
+
+    // Bus health snapshot. Drivers that can't report it (e.g. SocketCAN
+    // via kernel netlink is a follow-up) may return Unknown. The GUI
+    // uses this to warn the user when the interface has slipped into
+    // an error state — otherwise a bus-off condition just looks like
+    // "no frames arriving".
+    enum class BusStatus : std::uint8_t {
+        Unknown = 0,   // driver can't report / device closed
+        Ok,            // bus is healthy
+        Warning,       // TX or RX error counter above the warning limit
+        Passive,       // error-passive state
+        BusOff,        // controller disabled — needs reset to recover
+    };
+    virtual BusStatus busStatus() const noexcept { return BusStatus::Unknown; }
 };
+
+const char* busStatusLabel(ICanDevice::BusStatus s) noexcept;
 
 }  // namespace mac_pcan::core
