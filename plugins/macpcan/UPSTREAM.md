@@ -10,8 +10,8 @@ Kanonische Quelle ist MacPCAN; dasselbe Einbahnstraßen-Muster wie bei
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `7ed6a646185711488f1cad8af3ee128a3e3eb696` |
-| Datum | 2026-08-11 |
+| Commit | `95717d6fc73bc274a35c5f9288da26e834e0363d` |
+| Datum | 2026-08-12 |
 
 Mit diesem Stand (Welle 0.1, 2026-08-12) wurden **7 von 8 Dateien** nachgeführt —
 das Verzeichnis war seit dem Anlegen auf dem Hub-Stand M9 (`a3448a7`) eingefroren,
@@ -26,6 +26,11 @@ Auftrags-Scope, nur der Sync):
   in der mitvendierten `CanService.cpp`),
 - Thread-Safety in `PcanDevice` (`std::atomic` für channel/open/isFd,
   Mutex-geschütztes `lastError_`).
+
+Nachzug 2026-08-13: `ICanDevice.hpp` trägt seit Hub-Commit `7356c45` einen
+**Threading-Vertrag als Kommentar** (read() und write() laufen auf verschiedenen
+Threads; veränderlicher Zustand in Implementierungen muss synchronisiert werden) —
+reine Doku, keine API-Änderung.
 
 ## Umfang des Kontrakts
 

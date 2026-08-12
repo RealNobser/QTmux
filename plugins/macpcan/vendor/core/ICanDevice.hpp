@@ -33,6 +33,15 @@ struct BitrateConfig {
     bool listenOnly = false;
 };
 
+// ⚠️ THREADING CONTRACT — read() and write() run on DIFFERENT threads.
+// CanService owns a worker thread that sits in read() in a tight loop for as
+// long as the session is open, while the host calls write() from its own
+// thread (GUI tick, REST handler, test pump). An implementation with mutable
+// state therefore has to synchronise it — MockDevice's mutex is not
+// decoration, and neither is the one in the test fakes.
+// The bill for ignoring this: a std::vector shared unlocked between the two
+// sides cost a SEGFAULT in the Linux CI container on 2026-08-12, reproducible
+// only under load and invisible on macOS.
 class ICanDevice {
 public:
     virtual ~ICanDevice() = default;
