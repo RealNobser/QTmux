@@ -294,8 +294,31 @@ public:
     /// nachgeholt, damit die Reihenfolge stimmt.
     void writeWithEnter(const QByteArray &data, int enterDelayMs);
 
+    /// Schreibt `data` als EINFÜGUNG: in Bracketed-Paste-Markern (ESC[200~ … 201~),
+    /// sofern die Zielanwendung DECSET 2004 aktiviert hat — libvterm sendet die
+    /// Marker nur dann (derselbe Weg wie der GUI-Paste). Innerhalb des Rahmens sind
+    /// eingebettete \n für die TUI inertes Paste-Material; ihre zeitbasierte
+    /// Einfüge-Heuristik ist damit aus dem Spiel (Bugreport: lange send_text-
+    /// Nutzlasten wurden gestückelt und Teile mitten im Strom abgeschickt).
+    /// ⚠️ Ein in der Nutzlast enthaltenes ESC[201~ wird ENTFERNT — es würde den
+    /// Rahmen von innen schließen, und der Rest liefe wieder als Tastendrücke
+    /// (Rahmen-Ausbruch). Test: tst_pastewrite::breakoutSequenceIsStripped.
+    void writePasted(const QByteArray &data);
+    /// writePasted + zeitlich abgesetztes Enter (QTMUX-31). Für Text-Nutzlasten
+    /// (send_text, Warteschlange); send_keys bleibt bewusst auf writeWithEnter —
+    /// Tastensequenzen in Paste-Markern wären Inhalt statt Tastendrücke.
+    void writePastedWithEnter(const QByteArray &data, int enterDelayMs);
+
     /// Standardverzögerung für das abgesetzte Enter (ms).
     static constexpr int kDefaultEnterDelayMs = 60;
+    /// Größenabhängiger Enter-Default für Text-Nutzlasten: Netz für Ziele OHNE
+    /// Bracketed Paste (altes conhost schluckt DECSET 2004 teils, bevor es uns
+    /// erreicht) — dort muss die Frist die gestückelte Zustellung überdauern.
+    /// 60 ms Basis + 1 ms je 8 Byte, gedeckelt bei 2000 ms. Nur als Default;
+    /// ein explizit übergebener Wert gewinnt unverändert.
+    static int pasteEnterDelayMs(qint64 bytes) {
+        return static_cast<int>(qMin<qint64>(kDefaultEnterDelayMs + bytes / 8, 2000));
+    }
     void resize(int cols, int rows);
 
 public slots:
@@ -326,6 +349,7 @@ signals:
 private:
     void setActivity(Activity a);
     void flushPendingEnter();                   // ausstehendes Enter jetzt senden (QTMUX-31)
+    void writeWithEnterImpl(const QByteArray &data, int enterDelayMs, bool asPaste);
     void raiseAttention();                      // setzt needsAttention (wenn inaktiv)
     void observeInput(const QByteArray &data);  // erkennt getippte Agenten-Kommandos
     void armLoginScript();                      // Fallback-Timer beim ersten Output starten

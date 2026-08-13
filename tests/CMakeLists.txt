@@ -219,6 +219,10 @@ target_link_libraries(test_sessiongroups PRIVATE qtmux_core Qt6::Test Qt6::Qml)
 qt_add_executable(test_session tst_session.cpp)
 target_link_libraries(test_session PRIVATE qtmux_core Qt6::Test)
 
+qt_add_executable(test_pastewrite tst_pastewrite.cpp)
+target_link_libraries(test_pastewrite PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_pastewrite COMMAND test_pastewrite)
+
 if(WIN32)
     # Zweiteilige Windows-Lösung gegen Konsolen-Vererbung (sonst hängen sich die
     # ConPTY-Kindshells an eine geerbte Konsole statt an die Pseudo-Konsole):

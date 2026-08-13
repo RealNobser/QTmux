@@ -1153,10 +1153,25 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   die **`provideResult`-Brücke** (`bridgedCall`) antwortet; ohne UI → „UI nicht verbunden".
   `list_profiles` liefert nur Flags, `connect_profile` löst Vault-Passwörter **intern**.
 - **QTMUX-31 (`send_text`):** Das Enter geht **zeitlich abgesetzt** raus
-  (`Session::writeWithEnter`, Vorgabe 60 ms, Tool-Parameter `enterDelayMs`). TUI-Apps
+  (`Session::writeWithEnter`, Tool-Parameter `enterDelayMs`). TUI-Apps
   (belegt mit Claude Code) werten einen in EINEM Rutsch ankommenden Block als
   Einfügevorgang → das `\r` wurde zum Zeilenumbruch im Eingabefeld statt zum Absenden,
   und der Aufruf meldete trotzdem `ok`. Regressionstest bricht bei `enterDelayMs: 0`.
+- **Paste-Rahmung für Text-Nutzlasten (`Session::writePasted`):** Lange/mehrzeilige
+  `send_text`-Nutzlasten wurden von der Ziel-TUI gestückelt gelesen und
+  **teil-abgeschickt** (zeitbasierte Einfüge-Heuristik las ein `\n` an einer
+  Chunk-Grenze als Tastendruck; QTmux selbst liefert FIFO-sauber — beide PTY-Wege
+  gemessen). Fix: `send_text` (beide Zweige), `SessionModel::sendText` und die
+  Warteschlangen-Zustellung rahmen über `startPaste()`/`endPaste()` — libvterm
+  sendet die Marker **nur bei aktivem DECSET 2004**, derselbe Weg wie der
+  GUI-Paste (`doPaste` nutzt seither ebenfalls `writePasted`). 🔑 Zwei Regeln:
+  ein eingebettetes `ESC[201~` wird **entfernt** (Rahmen-Ausbruch — sonst liefe
+  der Rest wieder als Tastendrücke; Test `tst_pastewrite` mit Mutationsprobe),
+  und der `enterDelayMs`-**Default** skaliert mit der Größe
+  (`Session::pasteEnterDelayMs`, 60 ms + 1 ms je 8 Byte, Deckel 2000 ms) als Netz
+  für Ziele ohne Modus 2004 — explizite Werte gewinnen unverändert.
+  ⚠️ `send_keys` bleibt bewusst **ungerahmt**: Tastensequenzen in Paste-Markern
+  wären Inhalt statt Tastendrücke.
 - **`send_keys` (benannte Tasten im tmux-Stil):** `send_text` transportiert nur Text —
   rohe Steuerbytes überleben den JSON-/MCP-Transport nicht (kamen als leerer String an),
   und Escape-Formen landeten als Literaltext; damit ließ sich ein TUI-Eingabefeld weder

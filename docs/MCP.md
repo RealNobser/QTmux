@@ -78,7 +78,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `rename_group` | `from`, `to?` | Bestehende **Window-Gruppe** umbenennen (alle Mitglieder) bzw. **auflösen** (leeres `to`) |
 | `move_group` | `name`, `direction` | Ganze **Window-Gruppe** als Block in der Sidebar verschieben (`direction`: `up`/`down`) |
 | `focus_session` | `id` | **Window** aktivieren, in dem die Session als Pane liegt (Window-Modell) |
-| `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard 60), `broadcast?` | Text in die Session tippen; Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt) |
+| `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard größenabhängig, s. u.), `broadcast?` | Text als **Einfügung** in die Session (Bracketed Paste, wenn die App Modus 2004 aktiviert hat); Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt) |
 | `send_keys` | `id`, `keys` (string[]), `enterDelayMs?` (Standard 60) | **Benannte Tasten** im tmux-`send-keys`-Stil: Chords (`C-u`, `M-x`, `C-M-p`), Sondertasten (Enter, Escape, Tab, BTab, Backspace, Space, Pfeile, Home/End, PageUp/PageDown, Delete, Insert, F1–F12, auch `C-Right`), Unerkanntes = Literaltext (s. u.) |
 | `queue_text` | `id`, `text?`, `clear?` | Text **einreihen** statt sofort senden: Er geht raus, sobald die Session frei ist (s. u.). Ohne `text` nur abfragen, mit `clear:true` leeren |
 | `read_screen` | `id`, `scrollback?` | Sichtbaren Bildschirm als Klartext lesen; mit `scrollback:true` zusätzlich die Historie davor |
@@ -200,9 +200,33 @@ TUI-Anwendungen (belegt mit Claude Code) werten einen Byteblock, der **in einem 
 ankommt, als Einfügevorgang. Ein darin enthaltenes `\r` wird dann zum Zeilenumbruch *im
 Eingabefeld* statt zum Absenden: bei kurzem Text (`/clear`) unauffällig, ab etwa
 Feldbreite blieb die Arbeitsanweisung stumm stehen — und der Aufruf meldete `ok`.
-Deshalb schreibt QTmux erst den Text und schickt das Enter **60 ms später** als eigenen
+Deshalb schreibt QTmux erst den Text und schickt das Enter **abgesetzt** als eigenen
 Tastendruck hinterher. Bei besonders trägen Oberflächen `enterDelayMs` erhöhen;
 `enterDelayMs: 0` stellt das alte Verhalten (alles in einem Block) wieder her.
+
+**Lange/mehrzeilige Nutzlasten kommen als EIN Paste an (Bracketed Paste).** Der
+Hintergrund ist ein realer Fehlerfall: Eine ~1500-Zeichen-Nutzlast erreichte die
+Ziel-TUI gestückelt (Pipe-Chunks, Verarbeitungspausen), deren **zeitbasierte**
+Einfüge-Heuristik las ein `\n` an einer Chunk-Grenze als echten Tastendruck Enter —
+und schickte den bis dahin empfangenen Teil ab: Mitte weg, Fragment vom Ende, kein
+Fehler. QTmux liefert nachweislich vollständig und in Ordnung (FIFO auf beiden
+PTY-Wegen); das Problem war die Deutung beim Empfänger. Seit dem Fix rahmt
+`send_text` die Nutzlast in `ESC[200~ … ESC[201~` — **genau dann, wenn die
+Zielanwendung `DECSET 2004` aktiviert hat** (dasselbe Verhalten wie ein echtes
+Terminal beim Einfügen; moderne TUIs und Shells haben den Modus an). Innerhalb des
+Rahmens sind `\n` inertes Paste-Material, und das abgesetzte Enter nach dem
+End-Marker ist eindeutig ein Tastendruck — Timing spielt keine Rolle mehr, weil
+Marker und Nutzlast denselben FIFO nehmen.
+⚠️ **Rahmen-Ausbruch:** Ein in der Nutzlast enthaltenes `ESC[201~` würde den Rahmen
+von innen schließen — es wird darum entfernt (Test
+`tst_pastewrite::breakoutSequenceIsStripped` mit Mutationsprobe).
+**Netz für Ziele ohne Modus 2004** (altes conhost reicht die Modus-Umschaltung
+teils nicht durch): Der `enterDelayMs`-**Default** skaliert mit der Größe —
+60 ms + 1 ms je 8 Byte, gedeckelt bei 2000 ms (1500 Zeichen → ~250 ms). Ein
+**explizit** übergebener Wert gewinnt unverändert. Grenze bleibt: ein Ziel **ohne**
+Modus 2004 **und** ohne tolerante Heuristik kann lange Blöcke weiterhin zerlegen —
+dort hilft nur ein größerer expliziter `enterDelayMs` oder Aufteilen (der früher
+bestätigte Workaround).
 
 ### `send_keys` — Steuertasten, die `send_text` nicht transportieren kann
 

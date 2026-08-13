@@ -556,11 +556,12 @@ void SessionModel::sendText(int row, const QString &text, bool submit, int enter
     Session *s = m_sessions.at(row);
     if (!s) return;
     const QByteArray data = text.toUtf8();
-    const int delay = enterDelayMs < 0 ? Session::kDefaultEnterDelayMs : enterDelayMs;
+    const int delay = enterDelayMs < 0 ? Session::pasteEnterDelayMs(data.size())
+                                       : enterDelayMs;
     if (submit)
-        s->writeWithEnter(data, delay);          // QTMUX-31: Enter zeitlich abgesetzt
+        s->writePastedWithEnter(data, delay);    // QTMUX-31 + Paste-Rahmung (Modus 2004)
     else
-        s->write(data);
+        s->writePasted(data);
 }
 
 // --- Prompt-Warteschlange (QTMUX-90) ---------------------------------------------

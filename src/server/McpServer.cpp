@@ -1282,12 +1282,14 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         if (args.value("enter").toBool(true)) {
             // QTMUX-31: Enter zeitlich abgesetzt — sonst schlucken TUI-Anwendungen es
             // als Teil eines vermeintlichen Einfügevorgangs (s. Session::writeWithEnter).
+            // Default größenabhängig (Netz für Ziele ohne Bracketed Paste); ein
+            // explizit übergebener Wert gewinnt unverändert.
             const int delay = args.contains(QStringLiteral("enterDelayMs"))
                                   ? args.value("enterDelayMs").toInt(Session::kDefaultEnterDelayMs)
-                                  : Session::kDefaultEnterDelayMs;
-            s->writeWithEnter(data, delay);
+                                  : Session::pasteEnterDelayMs(data.size());
+            s->writePastedWithEnter(data, delay);
         } else if (!data.isEmpty()) {
-            s->write(data);
+            s->writePasted(data);
         }
         text = QStringLiteral("ok");
         return {};

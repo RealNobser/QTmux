@@ -151,8 +151,12 @@ void Session::tryDispatchQueued() {
     const QString next = m_queue->takeNext();
     // QTMUX-31: Das Enter MUSS zeitlich abgesetzt bleiben — ein Warteschlangen-Eintrag
     // landet typischerweise in genau der Agenten-TUI, die einen Block mit \r als
-    // Einfügevorgang wertet.
-    if (!next.isEmpty()) writeWithEnter(next.toUtf8(), kDefaultEnterDelayMs);
+    // Einfügevorgang wertet. Als Paste gerahmt (Modus 2004) und mit größenabhängiger
+    // Frist, damit lange Aufträge nicht gestückelt teil-abgeschickt werden.
+    if (!next.isEmpty()) {
+        const QByteArray bytes = next.toUtf8();
+        writePastedWithEnter(bytes, pasteEnterDelayMs(bytes.size()));
+    }
 }
 
 int Session::nextId() {
@@ -452,6 +456,14 @@ void Session::write(const QByteArray &data) {
 }
 
 void Session::writeWithEnter(const QByteArray &data, int enterDelayMs) {
+    writeWithEnterImpl(data, enterDelayMs, /*asPaste=*/false);
+}
+
+void Session::writePastedWithEnter(const QByteArray &data, int enterDelayMs) {
+    writeWithEnterImpl(data, enterDelayMs, /*asPaste=*/true);
+}
+
+void Session::writeWithEnterImpl(const QByteArray &data, int enterDelayMs, bool asPaste) {
     // QTMUX-31: Das abschließende Enter darf NICHT im selben Schreibvorgang wie der
     // Text stehen. TUI-Anwendungen (belegt mit Claude Code) werten einen Byteblock,
     // der in einem Rutsch ankommt, als Einfügevorgang und behandeln ein enthaltenes
@@ -460,7 +472,10 @@ void Session::writeWithEnter(const QByteArray &data, int enterDelayMs) {
     // als eigener Tastendruck an. Genau das tat auch die bekannte Umgehung
     // (zweiter Aufruf mit leerem Text).
     flushPendingEnter();   // Reihenfolge wahren, falls noch ein Enter aussteht
-    if (!data.isEmpty()) write(data);
+    if (!data.isEmpty()) {
+        if (asPaste) writePasted(data);
+        else write(data);
+    }
     if (data.isEmpty() || enterDelayMs <= 0) {
         write(QByteArrayLiteral("\r"));   // nichts zu entzerren
         return;
@@ -468,6 +483,23 @@ void Session::writeWithEnter(const QByteArray &data, int enterDelayMs) {
     m_enterPending = true;
     // An `this` gebunden: stirbt die Session vorher, entfällt das Enter.
     QTimer::singleShot(enterDelayMs, this, [this] { flushPendingEnter(); });
+}
+
+void Session::writePasted(const QByteArray &data) {
+    if (data.isEmpty()) return;
+    // Rahmen-Ausbruch verhindern: Ein ESC[201~ IN der Nutzlast würde den Paste-
+    // Rahmen von innen schließen — der Rest liefe wieder als Tastendrücke, also
+    // exakt der Zustand, den die Rahmung beseitigt, nur unsichtbar und nur bei
+    // bestimmten Eingaben. Entfernt wird immer (auch ohne aktiven Modus 2004:
+    // getippt ergäbe die Sequenz dort ohnehin nur eine bedeutungslose CSI).
+    QByteArray clean = data;
+    clean.replace(QByteArrayLiteral("\x1b[201~"), QByteArray());
+    // startPaste()/endPaste() senden die Marker über denselben FIFO wie die
+    // Nutzlast (outputToPty → backend->write) — und NUR, wenn die Anwendung
+    // DECSET 2004 aktiviert hat. Ohne den Modus ist das hier ein normales write().
+    if (m_screen) m_screen->startPaste();
+    write(clean);
+    if (m_screen) m_screen->endPaste();
 }
 
 void Session::flushPendingEnter() {

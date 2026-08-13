@@ -1178,10 +1178,10 @@ void TerminalItem::cancelPaste() { m_pendingPaste.clear(); }
 void TerminalItem::doPaste(const QByteArray &data) {
     if (data.isEmpty()) return;
     if (m_broadcast) { emit inputForBroadcast(data); return; }
-    VtScreen *sc = screen();
-    if (sc) sc->startPaste();
-    if (m_session) m_session->write(data);
-    if (sc) sc->endPaste();
+    // Session::writePasted rahmt (Modus 2004) und entfernt ein eingebettetes
+    // ESC[201~ — eine Zwischenablage kann den End-Marker enthalten (etwa von einer
+    // Webseite untergeschoben) und bräche sonst aus dem Rahmen aus.
+    if (m_session) m_session->writePasted(data);
 }
 
 void TerminalItem::geometryChange(const QRectF &newGeo, const QRectF &oldGeo) {
