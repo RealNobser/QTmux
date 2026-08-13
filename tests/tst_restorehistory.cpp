@@ -59,6 +59,8 @@ private slots:
     void restoredMarkerWithoutHistory();
     void freshSessionHasNoMarker();
     void restoredMarkerDoesNotAccumulate();
+    void agentNoteSaysResuming();
+    void agentNoteSaysFreshAndIsFiltered();
 
 private:
     static QString rowText(const VtScreen &vt, int row);
@@ -325,6 +327,55 @@ void TestRestoreHistory::restoredMarkerDoesNotAccumulate() {
     QVERIFY2(text.contains(QStringLiteral("17:35")) && !text.contains(QStringLiteral("17:34")),
              "Es muss der NEUE Marker uebrig bleiben, nicht der alte");
     QVERIFY(text.contains(QStringLiteral("ALTER_VERLAUF"))); // Verlauf selbst unangetastet
+}
+
+// Stufe 2b: Die Kette riss 2026-08-07 STILL (leere Kennung -> kommentarlos frischer
+// Start). Deshalb sagt der Marker jetzt sichtbar, ob eine Fortsetzung angefordert
+// wurde — "angefordert", nicht "fortgesetzt": ob der Agent fuendig wird, zeigt seine
+// eigene Ausgabe darunter.
+void TestRestoreHistory::agentNoteSaysResuming() {
+    Session sess;
+    auto *fake = new FakeBackend;
+    sess.attachBackend(fake, Session::Type::Shell, 80, 24);
+    sess.setRestoredAgent(QStringLiteral("claude"), QStringLiteral("claude"),
+                          /*resuming=*/true);
+    sess.markRestored();
+    sess.resize(120, 30);
+    const QString text = sess.screenText();
+    QVERIFY2(text.contains(QStringLiteral("Fortsetzung der letzten Unterhaltung angefordert")),
+             "Fortsetzungs-Hinweis fehlt — genau die Stille, die 2026-08-07 zur "
+             "Abschaltung fuehrte");
+    QVERIFY(!text.contains(QStringLiteral("ohne bisherige Unterhaltung")));
+}
+
+void TestRestoreHistory::agentNoteSaysFreshAndIsFiltered() {
+    Session sess;
+    auto *fake = new FakeBackend;
+    sess.attachBackend(fake, Session::Type::Shell, 80, 24);
+    sess.setRestoredAgent(QStringLiteral("claude"), QStringLiteral("claude"),
+                          /*resuming=*/false);
+    sess.setPendingHistory(dumpWithLongLine(QStringLiteral("VERLAUF_X")));
+    sess.markRestored(QDateTime(QDate(2026, 8, 13), QTime(19, 0)));
+    sess.resize(120, 30);
+    const QString text = sess.screenText();
+    QVERIFY2(text.contains(QStringLiteral("startet ohne bisherige Unterhaltung")),
+             "Frisch-Start-Hinweis fehlt");
+
+    // Und die Agent-Zeile traegt dieselbe Filter-Signatur wie der Hauptmarker —
+    // sonst akkumulierte SIE ueber Neustarts, waehrend der Hauptmarker gefiltert wird.
+    const QByteArray dump2 = sess.screen()->serializeAnsi();
+    Session second;
+    auto *fakeB = new FakeBackend;
+    second.attachBackend(fakeB, Session::Type::Shell, 80, 24);
+    second.setRestoredAgent(QStringLiteral("claude"), QStringLiteral("claude"), true);
+    second.setPendingHistory(dump2);
+    second.markRestored(QDateTime(QDate(2026, 8, 13), QTime(19, 5)));
+    second.resize(120, 30);
+    const QString t2 = second.screenText();
+    QCOMPARE(t2.count(QStringLiteral("QTmux: Sitzung wiederhergestellt")), 1);
+    QCOMPARE(t2.count(QStringLiteral("QTmux: Agent")), 1);   // nur die NEUE Note
+    QVERIFY(t2.contains(QStringLiteral("Fortsetzung der letzten Unterhaltung angefordert")));
+    QVERIFY(!t2.contains(QStringLiteral("startet ohne bisherige Unterhaltung")));
 }
 
 QTEST_MAIN(TestRestoreHistory)

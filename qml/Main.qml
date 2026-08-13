@@ -528,13 +528,15 @@ ApplicationWindow {
     // unaufgefordert ein Programm los.
     property bool restoreAgents: false
     // Wie die Unterhaltung fortgesetzt wird (QTMUX-98, qtmux::ResumeMode):
-    // 0 gar nicht (Vorgabe) · 1 jüngste im Verzeichnis · 2 Auswahl beim Start ·
-    // 3 die vom Agenten gemeldete Sitzung. Bewusst eine WAHL statt eines Schalters:
-    // Wer einen Agenten je Verzeichnis fährt, ist mit 1 richtig bedient; wer mehrere
-    // im selben Ordner laufen lässt, bekäme damit überall dieselbe Unterhaltung und
-    // braucht 2 oder 3. Kann ein Agent den Modus nicht, startet er frisch — es wird
-    // NIE auf einen anderen Weg ausgewichen.
-    property int resumeAgentMode: 0
+    // 0 gar nicht · 1 jüngste im Verzeichnis (Vorgabe seit Stufe 2b, Owner-Entscheid
+    // 2026-08-13: kein Kennungs-Handschlag nötig, deterministisch — und die bekannte
+    // Schwäche „mehrere Panes im selben Ordner bekommen dieselbe" trifft nur, wer so
+    // arbeitet; dann 2 oder 3 wählen) · 2 Auswahl beim Start · 3 die vom Agenten
+    // gemeldete Sitzung. Bewusst eine WAHL statt eines Schalters. Kann ein Agent den
+    // Modus nicht, startet er frisch — es wird NIE auf einen anderen Weg ausgewichen.
+    // ⚠️ Ein BEREITS GESPEICHERTER Wert gewinnt (auch eine gespeicherte 0) — die
+    // neue Vorgabe erreicht nur Profile ohne gespeicherten Wert.
+    property int resumeAgentMode: 1
 
     // Beenden mit Rückfrage (QTMUX-41): Cmd+Q/Alt+F4 reißt sonst alle Sessions
     // samt laufender Prozesse ohne Vorwarnung mit. `quitConfirmed` schaltet die
@@ -1260,22 +1262,25 @@ ApplicationWindow {
         // bei einer wartenden Shell kommt der nie.
         const wantsAgent = window.restoreAgents && !!cfg.agentCommand
         const ref = cfg.agentSessionRef || ""
-        // ⚠️ Fortsetzen ist seit 2026-08-07 auf Owner-Anweisung ABGESCHALTET: Der Modus wird
-        // hier fest als 0 („gar nicht") übergeben, statt `window.resumeAgentMode` zu lesen.
-        // Der Agent startet also frisch im gespeicherten Arbeitsverzeichnis — genau das war
-        // zuverlässig; das Fortsetzen der Unterhaltung war es nicht (QTMUX-98 wird überarbeitet).
-        // 🔑 Der Riegel sitzt bewusst an der WIRKUNG, nicht an der Einstellung: Ein bereits
-        // gespeicherter Wert ≠ 0 wirkt damit auch dann nicht mehr, wenn er noch in den
-        // QSettings steht. Code und Vorlagen bleiben liegen, damit die Überarbeitung nicht
-        // bei null beginnt.
+        // REAKTIVIERT 2026-08-13 (Owner-Entscheid Stufe 2b, QTMUX-132): Der Riegel vom
+        // 2026-08-07 („fest 0") ist zurückgenommen. Die Stufe-2-Messung zeigte die
+        // Mechanik technisch intakt (Modus 3 tippte exakt `--resume <ref>`, echtes
+        // claude lädt Wochen alte IDs); die damalige Unzuverlässigkeit lag mit hoher
+        // Wahrscheinlichkeit an STILL reißenden Kennungs-Ketten. Konsequenz hier:
+        // Der Ehrlichkeits-Marker sagt jetzt sichtbar, ob eine Fortsetzung
+        // angefordert wurde oder der Agent frisch startet (`resuming` unten) —
+        // ein still scheiterndes Feature würde zu Recht ein zweites Mal abgeschaltet.
         const launch = wantsAgent
-            ? sessions.agentLaunchCommand(cfg.agentCommand, 0 /* ResumeMode::None */, ref) : ""
+            ? sessions.agentLaunchCommand(cfg.agentCommand, window.resumeAgentMode, ref) : ""
+        // Fortsetzung angefordert = die Vorlage hat Argumente eingefügt. Bei Modus 0
+        // oder leerer Vorlage (Agent kann es nicht) ist launch die unveränderte Zeile.
+        const resuming = wantsAgent && launch !== "" && launch !== cfg.agentCommand
         const row = (t === 1)
             ? sessions.createSshSession(cfg.host || "", cfg.sshPort || 22, cfg.user || "",
                                         cfg.identity || "", launch)
             : sessions.createShellSession(cfg.workingDir || "", cfg.program || "", launch)
         if (row >= 0 && cfg.agentCommand) {
-            if (wantsAgent) sessions.markRestoredAgent(row, cfg.agentId || "", cfg.agentCommand, ref)
+            if (wantsAgent) sessions.markRestoredAgent(row, cfg.agentId || "", cfg.agentCommand, ref, resuming)
             // Auch OHNE Wiederherstellung vormerken, sonst überschreibt das nächste
             // Beenden den gespeicherten Befehl mit Leer und ein späteres Einschalten
             // des Schalters fände nichts mehr vor.
@@ -1788,7 +1793,7 @@ ApplicationWindow {
         case "window/altScrollMode":        window.altScrollMode = i(0); break
         case "window/appClipboardWrite":    window.appClipboardWrite = b(true); break
         case "window/restoreAgents":        window.restoreAgents = b(false); break
-        case "window/resumeAgentMode":      window.resumeAgentMode = i(0); break
+        case "window/resumeAgentMode":      window.resumeAgentMode = i(1); break
         }
     }
     Connections {
@@ -2592,10 +2597,12 @@ ApplicationWindow {
                                   if (d.length === 0) { window.notifyToast(qsTr("Diese Session hat kein Arbeitsverzeichnis.")); return }
                                   App.copyToClipboard(d); window.notifyToast(qsTr("Pfad kopiert: %1").arg(d)) } },
                             { title: qsTr("Agenten beim Start wiederherstellen"), sub: "",     icon: "robot",           run: function(){ window.restoreAgents = !window.restoreAgents } },
-                            // ⚠️ Die vier „Unterhaltung fortsetzen"-Einträge sind seit 2026-08-07
-                            // entfallen (Owner-Anweisung, s. _createSessionFromCfg): Was nicht
-                            // wirkt, darf die Palette nicht anbieten — ein Eintrag, der eine
-                            // Einstellung setzt, die niemand mehr liest, ist schlimmer als keiner.
+                            // Seit 2026-08-13 wieder da (Stufe 2b, QTMUX-132): Das Fortsetzen
+                            // wirkt wieder, also darf die Palette es wieder anbieten.
+                            { title: qsTr("Unterhaltung fortsetzen: gar nicht"), sub: "",      icon: "robot",           run: function(){ window.resumeAgentMode = 0 } },
+                            { title: qsTr("Unterhaltung fortsetzen: jüngste im Verzeichnis"), sub: "", icon: "robot",   run: function(){ window.resumeAgentMode = 1 } },
+                            { title: qsTr("Unterhaltung fortsetzen: Auswahl beim Start"), sub: "", icon: "robot",       run: function(){ window.resumeAgentMode = 2 } },
+                            { title: qsTr("Unterhaltung fortsetzen: gemeldete Sitzung"), sub: "", icon: "robot",        run: function(){ window.resumeAgentMode = 3 } },
                             { title: qsTr("Design: Wie System"),         sub: "",             icon: "gear",            run: function(){ Theme.mode = Theme.System } },
                             { title: qsTr("Design: Hell"),               sub: "",             icon: "sun",             run: function(){ Theme.mode = Theme.Light } },
                             { title: qsTr("Design: Dunkel"),             sub: "",             icon: "moon",            run: function(){ Theme.mode = Theme.Dark } },

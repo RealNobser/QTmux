@@ -205,7 +205,8 @@ public:
     /// erneut persistiert werden.
     Q_INVOKABLE void markRestoredAgent(int row, const QString &agentId,
                                        const QString &commandLine,
-                                       const QString &sessionRef = {});
+                                       const QString &sessionRef = {},
+                                       bool resuming = false);
 
     /// Merkt den gespeicherten Agenten NUR im SessionConfig vor — ohne ihn zu starten.
     /// Nötig, wenn die Wiederherstellung abgeschaltet ist: sonst schriebe das Beenden

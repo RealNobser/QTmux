@@ -176,7 +176,13 @@ public:
     /// `commandLine` ist die Original-Zeile OHNE Fortsetzungs-Argumente, damit sich
     /// `--continue` über mehrere Neustarts nicht aufsummiert; die tatsächlich
     /// abgesetzte Zeile kommt als Login-Script über setLoginScript() herein.
-    void setRestoredAgent(const QString &agentId, const QString &commandLine);
+    /// `resuming` sagt, ob die Startzeile Fortsetzungs-Argumente trägt — der
+    /// Ehrlichkeits-Marker (markRestored) macht daraus eine sichtbare Zusatzzeile.
+    /// 🔑 Stufe-2b-Regel (2026-08-13): Die Kette riss 2026-08-07 STILL (leere
+    /// Kennung → kommentarlos frischer Start → „mal geht's, mal nicht"). Ob
+    /// fortgesetzt wird oder nicht, muss darum ohne Nachfrage ablesbar sein.
+    void setRestoredAgent(const QString &agentId, const QString &commandLine,
+                          bool resuming = false);
     bool needsAttention() const { return m_needsAttention; }
     Activity activity() const { return m_activity; }
     int activityInt() const { return static_cast<int>(m_activity); }
@@ -408,6 +414,9 @@ private:
     QString m_reportedHost;
     QString m_agentId;
     QString m_agentCommand;    // zuletzt erkannte Agenten-Kommandozeile (QTMUX-85)
+    // Restore-Note für den Ehrlichkeits-Marker: 0 = kein wiederhergestellter Agent,
+    // 1 = Agent startet frisch, 2 = Fortsetzung angefordert (Stufe 2b).
+    int m_agentRestoreNote = 0;
     QString m_agentSessionRef; // vom Agenten gemeldete Unterhaltungs-ID (QTMUX-98)
     QString m_group;           // Sidebar-Gruppe (QTMUX-42), leer = ohne Gruppe
     int m_windowId = -1;       // Window-Zugehörigkeit (QTMUX-83, B1), -1 = keins

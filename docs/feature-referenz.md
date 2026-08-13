@@ -470,20 +470,31 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   wird direkt exec't und bei argumentloser Angabe als Login-Shell markiert (`argv0 = "-claude"`),
   der Agent liefe ohne Shell-Umgebung und sein `exit` schlösse das Pane.
   Schalter `window/restoreAgents`, **Vorgabe AUS**.
-- ⚠️ **ABGESCHALTET seit 2026-08-07 (Owner-Anweisung, Commit `6788a82`).** Das Fortsetzen
-  arbeitete nicht zuverlässig und wird überarbeitet; **wiederhergestellt wird weiterhin**, nur
-  eben mit frischer Unterhaltung im gespeicherten Arbeitsverzeichnis. Der folgende Absatz
-  beschreibt die Mechanik, die **liegen bleibt** — Code, `AgentInfo`-Vorlagen und die sieben
-  `agentLaunchCommand`-Tests sind unangetastet, damit die Überarbeitung nicht bei null beginnt.
-  🔑 **Der Riegel sitzt an der WIRKUNG, nicht an der Einstellung:** `_createSessionFromCfg`
-  (Main.qml) übergibt den Modus fest als `0`, statt `window.resumeAgentMode` zu lesen. Ein
-  bereits gespeicherter Wert ≠ 0 wirkt damit nicht mehr — ein reines Umstellen der *Vorgabe*
-  hätte genau die Anwender nicht erreicht, die die Funktion benutzt haben, also jene, bei
-  denen sie versagte. Die vier Palette-Einträge entfallen, die Prefs-Zeile bleibt **sichtbar,
-  aber ausgegraut** (verschwände sie, sähe es aus, als hätte QTmux die Fähigkeit nie gehabt).
-  ⚠️ Nicht durch einen Test gedeckt ist der QML-Pfad selbst — `Main.qml` hat keinen Test
-  (bekannte Architekturschuld); auf C++-Seite deckt `resumeModeNoneNeverTouches` den jetzt
-  einzigen Pfad ab.
+- ✅ **REAKTIVIERT seit 2026-08-13 (Owner-Entscheid Stufe 2b, QTMUX-132)** — nach der
+  Abschaltung vom 2026-08-07 (`6788a82`, „arbeitete nicht zuverlässig"). 🔑 **Die
+  Ursachen-Rekonstruktion in Stufe 2 ergab:** Die konkrete damalige Ursache ist nirgends
+  verschriftlicht; die drei unten dokumentierten Fallen waren es nachweislich NICHT (alle
+  mit `1fc4f4d` am 2026-07-28 gefixt, zehn Tage vor der Abschaltung, Umsetzung damit
+  E2E-verifiziert). Die Mechanik ist heute nachweislich intakt (Stub bekam exakt
+  `--resume <ref>`; echtes claude lädt Wochen alte IDs). Die plausibelste Ursache war
+  eine **still reißende Kennungs-Kette** (leere/veraltete Ref → kommentarlos frischer
+  Start bzw. „No conversation found"): `set_agent_session` ist Holschuld des Agenten,
+  nimmt `sessionId` (nicht `id`!) und muss nach `/clear`/`/resume` erneut gemeldet werden.
+  **Konsequenz der Reaktivierung — die Stille ist verboten:** Der Ehrlichkeits-Marker
+  schreibt eine zweite Zeile „── QTmux: Agent — Fortsetzung der letzten Unterhaltung
+  angefordert ──" bzw. „… startet ohne bisherige Unterhaltung ──" (Signatur bewusst
+  filtergleich, `stripRestoreMarkers` räumt auch sie). „Angefordert", nicht „fortgesetzt":
+  ob der Agent fündig wird, zeigt seine Ausgabe direkt darunter — E2E-belegt steht bei
+  leerem Verzeichnis „No conversation found to continue" unmittelbar unter der Note.
+  **Vorgabe ist jetzt Modus 1** (`--continue`, deterministisch, kein Kennungs-Handschlag);
+  ein bereits GESPEICHERTER Wert gewinnt — auch eine gespeicherte 0 (Settings-Alias
+  schreibt jeden Beenden-Stand, Bestandsprofile stellen einmal per Palette/Prefs um).
+  ⚠️ **Modus-1-Randbedingung, E2E real erwischt:** „Jüngste im Verzeichnis" greift sich
+  auch die Konversation eines GERADE AKTIVEN fremden Claude im selben Ordner (die
+  Messinstanz lud die laufende Unterhaltung der bauenden Session — zwei Instanzen auf
+  einer Konversation). Im Update-Szenario (alle Worker beendet, dann Neustart) ist die
+  jüngste die richtige; parallel arbeitende Zweit-Clauden im selben Verzeichnis sind mit
+  Modus 1 tabu → dann Modus 3.
 - **Unterhaltung fortsetzen ist eine WAHL, kein Schalter (QTMUX-98):** `window/resumeAgentMode`
   = `qtmux::ResumeMode` — 0 gar nicht (Vorgabe) · 1 **jüngste** im Verzeichnis · 2 **Auswahl**
   beim Start · 3 die vom Agenten **gemeldete** Sitzung. Je Modus eine Argument-Vorlage in

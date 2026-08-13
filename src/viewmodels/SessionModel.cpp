@@ -803,11 +803,12 @@ void SessionModel::seedAgentConfig(int row, const QString &agentId,
 }
 
 void SessionModel::markRestoredAgent(int row, const QString &agentId,
-                                     const QString &commandLine, const QString &sessionRef) {
+                                     const QString &commandLine, const QString &sessionRef,
+                                     bool resuming) {
     if (row < 0 || row >= m_sessions.size()) return;
     if (commandLine.trimmed().isEmpty()) return;
     seedAgentConfig(row, agentId, commandLine, sessionRef);
-    m_sessions.at(row)->setRestoredAgent(agentId, commandLine);
+    m_sessions.at(row)->setRestoredAgent(agentId, commandLine, resuming);
     // Die alte Referenz gilt weiter, bis der Agent eine neue meldet — sonst wäre sie
     // nach dem ersten Neustart weg und der nächste könnte nicht mehr fortsetzen.
     if (!sessionRef.trimmed().isEmpty())

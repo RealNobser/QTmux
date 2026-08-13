@@ -541,9 +541,11 @@ void Session::setAgentSessionRef(const QString &ref) {
     m_agentSessionRef = ref.trimmed();
 }
 
-void Session::setRestoredAgent(const QString &agentId, const QString &commandLine) {
+void Session::setRestoredAgent(const QString &agentId, const QString &commandLine,
+                               bool resuming) {
     if (commandLine.trimmed().isEmpty()) return;
     m_agentCommand = commandLine.trimmed();
+    m_agentRestoreNote = resuming ? 2 : 1;   // für die Marker-Zusatzzeile (Stufe 2b)
 
     // Kennung und Titel sofort setzen: das Login-Script schreibt später direkt ans
     // Backend und läuft damit an observeInput vorbei — ohne diese Zeilen bliebe die
@@ -675,8 +677,24 @@ void Session::markRestored(const QDateTime &snapshotTime) {
               "Session",
               "── QTmux: Sitzung wiederhergestellt — der frühere Prozess ist beendet, "
               "es beginnt eine neue Shell ──");
-    const QByteArray marker =
+    // Stufe 2b: Bei einem wiederhergestellten Agenten sagt eine ZWEITE Zeile, ob die
+    // Unterhaltung fortgesetzt wird — die Kette riss 2026-08-07 still (leere Kennung →
+    // kommentarlos frischer Start), und genau diese Stille darf nicht zurückkommen.
+    // „Angefordert", nicht „fortgesetzt": ob der Agent wirklich fündig wird, zeigt
+    // seine eigene Ausgabe direkt darunter. Präfix „── QTmux: " bewusst identisch,
+    // damit stripRestoreMarkers auch diese Zeile vor dem nächsten Marker entfernt.
+    QString agentNote;
+    if (m_agentRestoreNote == 2)
+        agentNote = QCoreApplication::translate(
+            "Session", "── QTmux: Agent — Fortsetzung der letzten Unterhaltung angefordert ──");
+    else if (m_agentRestoreNote == 1)
+        agentNote = QCoreApplication::translate(
+            "Session", "── QTmux: Agent — startet ohne bisherige Unterhaltung ──");
+    QByteArray marker =
         QByteArrayLiteral("\r\n\x1b[0;2;3m") + text.toUtf8() + QByteArrayLiteral("\x1b[0m\r\n");
+    if (!agentNote.isEmpty())
+        marker += QByteArrayLiteral("\x1b[0;2;3m") + agentNote.toUtf8()
+                  + QByteArrayLiteral("\x1b[0m\r\n");
     if (m_historyPending) {
         // Verlauf steht noch aus (RestoreMode::Full): Marker ans Ende des Dumps —
         // er erscheint damit NACH dem Schnappschuss und VOR dem frischen Prompt
