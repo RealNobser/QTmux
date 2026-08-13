@@ -696,17 +696,22 @@ der frühere Punkt „Debug-Build von QTMUX-130" ist damit erledigt.)
    `Mode::System` an (`QLocale::system()`, EN/DE/SV); QTmux kann nur fest Deutsch/Englisch.
    RAFTNG nennt es ausdrücklich eine **Produktentscheidung**, keine technische, und liefert
    auf Zuruf. Nicht eigenmächtig übernommen.
-2. **Produktivinstanz erneuern?** Sie läuft aus `build/macos` mit `1.8.0+34449de` und hängt
-   damit zwei Releases zurück (weder 1.8.1-Fixes noch 1.9.0). Wege: Self-Update aus der App
-   (Owner-Sache, Stufe-1-Plan) oder Neubau — beides reißt alle Terminal-Sessions mit.
+2. **Produktivinstanz erneuern?** Sie läuft aus `/Applications/QTmux.app` mit
+   `1.8.1+3744c38` (gemessen 2026-08-13 via `get_server_info`) und hängt damit hinter
+   1.9.0/1.9.1 zurück. Weg: Self-Update aus der App (Owner-Sache) — reißt alle
+   Terminal-Sessions mit.
 
 #### Zustand, der nicht aus Code/Git hervorgeht
 
-- ⚠️ **Die Produktivinstanz läuft aus `build/macos`** (Port 7345, `1.8.0+34449de`, gebaut
-  2026-08-07 09:24) — dort **nicht** hineinbauen, das reißt alle Terminal-Sessions mit.
-  🔑 Sie ist damit **älter als jeder heutige Stand**. Vor jeder Diagnose an ihr die Build-ID
+- ⚠️ **Die Produktivinstanz läuft aus `/Applications/QTmux.app`** (Port 7345,
+  `1.8.1+3744c38`, gestartet 2026-08-09 — gemessen 2026-08-13 via `get_server_info` +
+  `ps`; die frühere Notiz „läuft aus `build/macos`" ist damit Geschichte, die
+  Build-Verzeichnisse sind wieder frei bebaubar, sofern `lsof` das bestätigt).
+  🔑 Sie ist **älter als jeder heutige Stand**. Vor jeder Diagnose an ihr die Build-ID
   gegen `git log` halten; PID über `lsof -nP -iTCP:7345 -sTCP:LISTEN` holen, **nie** eine
-  notierte PID verwenden (die hier eingetragene war zweimal veraltet).
+  notierte PID verwenden (die hier eingetragene war zweimal veraltet). ⚠️ `lsof` kann auf
+  dieser Maschine minutenlang hängen (Time-Machine-SMB-Mount) — `netstat -anv -p tcp |
+  grep '\.7345 .*LISTEN'` liefert dieselbe Antwort samt `qtmux:<pid>` sofort.
 - Der Workflow-Eintrag **`Trigger-Test`** (ID `328898398`) steht bleibend in
   `gh workflow list --all`, obwohl sein Branch gelöscht ist — GitHub führt ihn, solange sein
   Lauf existiert. Bewusst nicht entfernt: Lauf `#31128515520` ist der Beleg, dass der
@@ -754,13 +759,13 @@ die dauerhaften Lektionen stehen jeweils im zuständigen Fachabschnitt, nicht hi
 
 ### Maschinen-Eigenheiten (Build-Verzeichnisse)
 
-- ⚠️ **`build/macos`: die Produktivinstanz läuft daraus** (altes Binary). Verifizierte
-  Endstände sind `build/macos-test` und `build/macos-release`; Neubau von `build/macos` nur
-  mit Freigabe (vorher `lsof -nP -iTCP:7345 -sTCP:LISTEN`), er reißt sonst alle
-  Terminal-Sessions mit. 🔑 **Dauerhafte Konsequenz:** Solange die Produktivinstanz aus einem
-  Build-Verzeichnis läuft, ist „steht im Repo" **nie** gleich „ist in der App" — jede
-  Owner-Abnahme braucht eine frische Testinstanz (`QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`)
-  oder den Neubau.
+- **`build/macos` ist wieder frei** — die Produktivinstanz läuft seit 2026-08-09 aus
+  `/Applications/QTmux.app` (s. „Zustand"-Abschnitt oben; vor einem Neubau trotzdem den
+  Port-Check machen, die Regel bleibt: nie in ein Verzeichnis bauen, aus dem eine Instanz
+  läuft). Verifizierte Endstände sind `build/macos-test` und `build/macos-release`.
+  🔑 **Dauerhafte Konsequenz gilt weiter:** „steht im Repo" ist **nie** gleich „ist in
+  der App" — jede Owner-Abnahme braucht eine frische Testinstanz
+  (`QTMUX_PROFILE=test QTMUX_MCP_PORT=7346`) oder die installierte App nach einem Update.
 - **Windows, drei Build-Verzeichnisse:** `build/windows` (Debug, **hier läuft die produktive
   Instanz**) und `build/windows-release` sind die Standardpaare (Qt **6.11.1** im Cache);
   `build/windows-qt6103` ist der Nachweis gegen die CI-Version (Qt **6.10.3** via
