@@ -17,6 +17,7 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <algorithm>   // std::rotate (moveBlock)
 
 namespace qtmux {
@@ -842,16 +843,31 @@ void SessionModel::saveHistoryFor(int row, int key) const {
 
 void SessionModel::loadHistoryFor(int row, int key) const {
     if (row < 0 || row >= m_sessions.size()) return;
+    const QString path = historyDir() + QStringLiteral("/%1.ans").arg(key);
     // Gedeckelt lesen — Begründung wie oben in der Wiederherstellung.
-    const auto rd = safefile::read(historyDir() + QStringLiteral("/%1.ans").arg(key),
-                                   safefile::limits::kHistoryDump);
-    if (!rd.ok) return;
+    const auto rd = safefile::read(path, safefile::limits::kHistoryDump);
+    if (!rd.ok) {
+        // Kein Dump (nie gespeichert, gelöscht, unlesbar): Die Shell ist trotzdem
+        // frisch — der Ehrlichkeits-Marker gehört auch hierhin, nur ohne Zeit.
+        m_sessions.at(row)->markRestored();
+        return;
+    }
     // QTMUX-130: nur übergeben, nicht einspielen — die Session hält den Verlauf zurück,
     // bis das Pane vermessen ist. Hier steht die Session noch auf 80×24, der Verlauf
     // würde also auf 80 Spalten umbrochen und bliebe es (kein Scrollback-Reflow).
     QByteArray dump = rd.data;
     const int cols = historydump::takeHeader(dump);
     m_sessions.at(row)->setPendingHistory(dump, cols);
+    // Ehrlichkeits-Marker hinter den Schnappschuss (Begründung: Session::markRestored);
+    // die mtime des Dumps ist der ehrlichste verfügbare Zeitstempel des Standes.
+    m_sessions.at(row)->markRestored(QFileInfo(path).lastModified());
+}
+
+void SessionModel::markRestored(int row) const {
+    // QML-Zugang für den Modus „ohne Verlauf" (QTMUX-99): Terminal startet leer,
+    // aber die Shell ist genauso frisch — der Marker macht es sichtbar.
+    if (row < 0 || row >= m_sessions.size()) return;
+    m_sessions.at(row)->markRestored();
 }
 
 // --- Ruhezustand verhindern (QTMUX-89) ---------------------------------------

@@ -1229,6 +1229,10 @@ ApplicationWindow {
             // wieder vor.
             if (s && windows.restoresHistory(window.restoreSessionMode))
                 sessions.loadHistoryFor(row, node.paneId)
+            else if (s)
+                // Ehrlichkeits-Marker auch ohne Verlauf: Das Terminal startet leer,
+                // aber die Shell ist genauso frisch wie im Full-Modus — sichtbar machen.
+                sessions.markRestored(row)
             return { paneId: node.paneId, sessionId: s ? s.sessionId : -1 }
         }
         const kids = []

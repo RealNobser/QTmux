@@ -171,6 +171,9 @@ public:
     /// Liest <historyDir>/<key>.ans und speist ihn in den Screen ein (vor erster
     /// Backend-Ausgabe aufrufen, damit er als Scrollback nach oben rollt).
     Q_INVOKABLE void loadHistoryFor(int row, int key) const;
+    /// Ehrlichkeits-Marker ohne Verlaufs-Dump (RestoreMode::WithoutHistory) —
+    /// Begründung an Session::markRestored.
+    Q_INVOKABLE void markRestored(int row) const;
 
     /// „Bildschirm leeren" unter Erhalt des Scrollbacks (QTMUX-61). Wirkt direkt auf den
     /// Screen der Session — es wird **nichts** an die Shell geschickt: ein getipptes `clear`

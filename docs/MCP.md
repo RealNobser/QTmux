@@ -230,8 +230,12 @@ bestätigte Workaround).
 
 ### `send_keys` — Steuertasten, die `send_text` nicht transportieren kann
 
-`send_text` überträgt nur Text: **Rohe Steuerbytes überleben den JSON-/MCP-Transport
-nicht** (ein Ctrl-U-Byte kam als leerer String an), und Escape-Schreibweisen wie
+`send_text` überträgt nur Text: **Rohe Steuerbytes kommen nicht als Tastendruck an** —
+was genau mit ihnen passiert, hängt vom MCP-Client-Transport ab. Gemessen wurden beide
+Ausgänge: mancher Transport strippt das Byte (es kam ein leerer String an), ein anderer
+reicht es durch und die Ziel-TUI zeigt es als **sichtbares `^U` im Eingabefeld** — der
+Text steht dann samt Steuerzeichen-Müll da. In **beiden** Fällen meldet `send_text`
+`ok`, denn aus seiner Sicht wurde Text zugestellt. Escape-Schreibweisen wie
 `$([char]21)` landen — korrekt für „Text" — wortwörtlich im Eingabefeld. Für alles, was
 ein Tastendruck statt Text ist, gibt es `send_keys` im Stil von tmux `send-keys`:
 

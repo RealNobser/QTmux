@@ -284,6 +284,17 @@ public:
     /// Platte damit vernichten — siehe `SessionModel::saveHistoryFor`.
     bool hasPendingHistory() const { return m_historyPending; }
 
+    /// Ehrlichkeits-Marker für wiederhergestellte Sessions: schreibt eine sichtbare,
+    /// gedimmt-kursive Trennzeile in den Terminal-Puffer — nach dem wiederhergestellten
+    /// Verlauf (falls einer aussteht), sonst als erste Zeile vor dem frischen Prompt.
+    /// Grund (2026-08-13 am Neustart gemessen): `RestoreMode::Full` stellt den Verlauf
+    /// vollständig wieder her, der Prozess dahinter ist aber IMMER tot — im Test stand
+    /// „PROZESS_LEBT_PID …" im Verlauf, während nichts mehr lief. Ein Zustand, der
+    /// Kontinuität anzeigt, ohne sie zu haben; der Marker nimmt ihm die Unsichtbarkeit.
+    /// `snapshotTime` (mtime des Dumps) macht das Alter des Schnappschusses sichtbar;
+    /// ungültig = ohne Zeitangabe (Modus „ohne Verlauf" bzw. Dump fehlt).
+    void markRestored(const QDateTime &snapshotTime = QDateTime());
+
     void start(int cols, int rows);
     void write(const QByteArray &data);
 

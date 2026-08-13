@@ -55,6 +55,10 @@ private slots:
     void pendingHistoryIsReportedUntilFlushed();
     void headerRoundTrip();
     void headerlessDumpStaysValid();
+    void restoredMarkerAppearsAfterHistory();
+    void restoredMarkerWithoutHistory();
+    void freshSessionHasNoMarker();
+    void restoredMarkerDoesNotAccumulate();
 
 private:
     static QString rowText(const VtScreen &vt, int row);
@@ -235,6 +239,92 @@ void TestRestoreHistory::headerlessDumpStaysValid() {
     const QByteArray vorher = abgeschnitten;
     QCOMPARE(historydump::takeHeader(abgeschnitten), 0);
     QCOMPARE(abgeschnitten, vorher);
+}
+
+// Ehrlichkeits-Marker: Der wiederhergestellte Verlauf sieht ohne ihn vollstaendig
+// lebendig aus, obwohl der Prozess dahinter tot ist (am Neustart gemessen: eine
+// "PROZESS_LEBT"-Zeile im Verlauf, nichts lief mehr). Der Marker steht NACH dem
+// Schnappschuss und VOR der ersten frischen Backend-Ausgabe.
+void TestRestoreHistory::restoredMarkerAppearsAfterHistory() {
+    const QString line(100, QLatin1Char('X'));
+    const QByteArray dump = dumpWithLongLine(line);
+
+    Session sess;
+    auto *fake = new FakeBackend;
+    sess.attachBackend(fake, Session::Type::Shell, 80, 24);
+    sess.setPendingHistory(dump);
+    sess.markRestored(QDateTime(QDate(2026, 8, 13), QTime(14, 30)));
+    sess.resize(120, 30);
+
+    const QString text = sess.screenText();
+    QVERIFY2(text.contains(QStringLiteral("QTmux: Sitzung wiederhergestellt")),
+             "Marker fehlt im wiederhergestellten Verlauf");
+    QVERIFY2(text.contains(QStringLiteral("2026-08-13 14:30")),
+             "Zeitstempel des Schnappschusses fehlt im Marker");
+    // Reihenfolge: Verlauf zuerst, Marker danach.
+    QVERIFY(text.indexOf(line) >= 0);
+    QVERIFY(text.indexOf(QStringLiteral("QTmux:")) > text.indexOf(line));
+}
+
+// Auch im Modus "ohne Verlauf" ist die Shell frisch — Marker als erste Zeile,
+// die Backend-Ausgabe (der frische Prompt) folgt DARUNTER.
+void TestRestoreHistory::restoredMarkerWithoutHistory() {
+    Session sess;
+    auto *fake = new FakeBackend;
+    sess.attachBackend(fake, Session::Type::Shell, 80, 24);
+    sess.markRestored();                              // ohne Dump, ohne Zeit
+    sess.resize(120, 30);
+    fake->feed("FRISCHER_PROMPT$ ");
+
+    const QString text = sess.screenText();
+    const qsizetype marker = text.indexOf(QStringLiteral("QTmux: Sitzung wiederhergestellt"));
+    const qsizetype prompt = text.indexOf(QStringLiteral("FRISCHER_PROMPT"));
+    QVERIFY2(marker >= 0, "Marker fehlt im Modus ohne Verlauf");
+    QVERIFY2(prompt >= 0, "Backend-Ausgabe kam nicht durch");
+    QVERIFY2(marker < prompt, "Marker steht nicht VOR dem frischen Prompt");
+    // Ohne Zeitangabe darf auch keine stehen.
+    QVERIFY(!text.contains(QStringLiteral("Schnappschuss vom")));
+}
+
+// Gegentest: Eine NICHT wiederhergestellte Session traegt keinen Marker — sonst
+// wuerde er zur Tapete und niemand laese ihn mehr.
+void TestRestoreHistory::freshSessionHasNoMarker() {
+    Session sess;
+    auto *fake = new FakeBackend;
+    sess.attachBackend(fake, Session::Type::Shell, 80, 24);
+    sess.resize(120, 30);
+    fake->feed("FRISCHER_PROMPT$ ");
+    QVERIFY(!sess.screenText().contains(QStringLiteral("QTmux: Sitzung wiederhergestellt")));
+}
+
+// ⚠️ Beim E2E am ZWEITEN Neustart gemessen: Der eingespielte Marker wird beim
+// naechsten Beenden Teil des Schnappschusses — ohne Filter steht nach jedem
+// Neustart ein Marker mehr da (17:34 und 17:35 standen schon nebeneinander).
+// Ein Marker, der zur Tapete wird, warnt nicht mehr.
+void TestRestoreHistory::restoredMarkerDoesNotAccumulate() {
+    // Runde 1: Verlauf + Marker einspielen, dann wie beim Beenden serialisieren.
+    Session first;
+    auto *fakeA = new FakeBackend;
+    first.attachBackend(fakeA, Session::Type::Shell, 80, 24);
+    first.setPendingHistory(dumpWithLongLine(QStringLiteral("ALTER_VERLAUF")));
+    first.markRestored(QDateTime(QDate(2026, 8, 13), QTime(17, 34)));
+    first.resize(120, 30);
+    const QByteArray zweiterDump = first.screen()->serializeAnsi();
+    QVERIFY(zweiterDump.contains("QTmux: Sitzung wiederhergestellt")); // Vorbedingung
+
+    // Runde 2: derselbe Dump kommt beim naechsten Neustart zurueck.
+    Session second;
+    auto *fakeB = new FakeBackend;
+    second.attachBackend(fakeB, Session::Type::Shell, 80, 24);
+    second.setPendingHistory(zweiterDump);
+    second.markRestored(QDateTime(QDate(2026, 8, 13), QTime(17, 35)));
+    second.resize(120, 30);
+
+    const QString text = second.screenText();
+    QCOMPARE(text.count(QStringLiteral("QTmux: Sitzung wiederhergestellt")), 1);
+    QVERIFY2(text.contains(QStringLiteral("17:35")) && !text.contains(QStringLiteral("17:34")),
+             "Es muss der NEUE Marker uebrig bleiben, nicht der alte");
+    QVERIFY(text.contains(QStringLiteral("ALTER_VERLAUF"))); // Verlauf selbst unangetastet
 }
 
 QTEST_MAIN(TestRestoreHistory)

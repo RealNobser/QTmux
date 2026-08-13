@@ -388,6 +388,23 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `unknownRestoreModeFallsBackToFull` (Gegenprobe mit umgedrehter Fallback-Richtung: FAIL).
   🔑 Modus 1 lässt nur `loadHistoryFor` weg — die Dumps bleiben liegen, ein späteres „Alles"
   findet sie wieder vor.
+- **Ehrlichkeits-Marker in wiederhergestellten Sessions (`Session::markRestored`):** Nach
+  einem Neustart sieht eine `Full`-Session **vollständig lebendig** aus — Titel, Verzeichnis,
+  kompletter Verlauf — aber der Prozess dahinter ist **immer** tot (am Neustart gemessen,
+  2026-08-13: „PROZESS_LEBT_PID …" stand im Verlauf, nichts lief; das Kind stirbt bei
+  SIGTERM wie SIGKILL über den PTY-Master). Deshalb schreibt der Restore eine gedimmt-
+  kursive Trennzeile „── QTmux: Sitzung wiederhergestellt …" in den Puffer — **nach** dem
+  Schnappschuss (mit dessen mtime als Zeitstempel), im Modus „ohne Verlauf" als erste Zeile
+  ohne Zeit; in **beiden** Modi, denn die Shell ist in beiden frisch. Läuft über denselben
+  pendingHistory-Rückhalte-Mechanismus wie der Verlauf (QTMUX-130) und steht damit immer
+  VOR der ersten frischen Backend-Ausgabe.
+  ⚠️ **Der Filter ist die halbe Miete:** Der eingespielte Marker wird beim nächsten Beenden
+  Teil des Schnappschusses — ohne `stripRestoreMarkers` stünde nach jedem Neustart ein
+  Marker mehr da (beim E2E am zweiten Neustart real gemessen: 17:34 und 17:35 nebeneinander);
+  ein Marker, der zur Tapete wird, warnt nicht mehr. Die Filter-Signatur „── QTmux: " ist
+  sprachunabhängig (DE/EN identisch) und überlebt einen Sprachwechsel zwischen Neustarts.
+  Tests: `tst_restorehistory` (`restoredMarkerAppearsAfterHistory`, `…WithoutHistory`,
+  `freshSessionHasNoMarker`, `restoredMarkerDoesNotAccumulate`).
 - **Ruhezustand verhindern (QTMUX-89):** `SleepInhibitor` ([src/core/SleepInhibitor.h](src/core/SleepInhibitor.h),
   plattform-gekapselt wie `GlobalHotkey`) — macOS `IOPMAssertionCreateWithName`
   (`PreventUserIdleSystemSleep`, IOKit-Framework), Windows `SetThreadExecutionState`

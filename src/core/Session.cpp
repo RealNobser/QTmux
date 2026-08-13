@@ -642,6 +642,55 @@ void Session::setPendingHistory(const QByteArray &dump, int lastKnownCols) {
     m_historyTimer->start(kHistoryHoldMs);
 }
 
+// Entfernt frühere Ehrlichkeits-Marker aus einem Verlaufs-Dump. Ohne das
+// akkumulieren sie: Der eingespielte Marker wird beim nächsten Beenden Teil des
+// Schnappschusses, und nach zehn Neustarts stünden zehn Marker da — Tapete statt
+// Warnung (beim E2E am zweiten Neustart gemessen). Die Signatur „── QTmux: " ist
+// in beiden Sprachen identisch und überlebt auch einen Sprachwechsel dazwischen.
+static void stripRestoreMarkers(QByteArray &dump) {
+    static const QByteArray sig = QByteArrayLiteral("\xe2\x94\x80\xe2\x94\x80 QTmux: ");
+    qsizetype idx = dump.indexOf(sig);
+    while (idx >= 0) {
+        qsizetype start = dump.lastIndexOf('\n', idx);
+        start = (start < 0) ? 0 : start + 1;
+        qsizetype end = dump.indexOf('\n', idx);
+        end = (end < 0) ? dump.size() : end + 1;
+        dump.remove(start, end - start);
+        idx = dump.indexOf(sig, start);
+    }
+}
+
+void Session::markRestored(const QDateTime &snapshotTime) {
+    if (!m_screen) return;
+    // Übersetzt (i18n-Regel: jede sichtbare Zeichenkette), aber bewusst KEINE
+    // Programmausgabe-Optik: gedimmt + kursiv, Linienzeichen und das Präfix
+    // „QTmux:" markieren die Zeile als Meldung des Terminals, nicht der Shell.
+    const QString text = snapshotTime.isValid()
+        ? QCoreApplication::translate(
+              "Session",
+              "── QTmux: Sitzung wiederhergestellt — Schnappschuss vom %1, der frühere "
+              "Prozess ist beendet, darunter beginnt eine neue Shell ──")
+              .arg(snapshotTime.toString(QStringLiteral("yyyy-MM-dd HH:mm")))
+        : QCoreApplication::translate(
+              "Session",
+              "── QTmux: Sitzung wiederhergestellt — der frühere Prozess ist beendet, "
+              "es beginnt eine neue Shell ──");
+    const QByteArray marker =
+        QByteArrayLiteral("\r\n\x1b[0;2;3m") + text.toUtf8() + QByteArrayLiteral("\x1b[0m\r\n");
+    if (m_historyPending) {
+        // Verlauf steht noch aus (RestoreMode::Full): Marker ans Ende des Dumps —
+        // er erscheint damit NACH dem Schnappschuss und VOR dem frischen Prompt
+        // (die pendingOutput-Mechanik hält Backend-Ausgabe ohnehin zurück).
+        // Vorher frühere Marker entfernen, sonst wächst pro Neustart einer dazu.
+        stripRestoreMarkers(m_pendingHistory);
+        m_pendingHistory += marker;
+        return;
+    }
+    // Ohne Verlauf (RestoreMode::WithoutHistory bzw. Dump fehlt): denselben
+    // Rückhalte-Mechanismus nutzen, damit der Marker VOR dem ersten Prompt steht.
+    setPendingHistory(marker, 0);
+}
+
 void Session::flushPendingHistory() {
     if (!m_historyPending) return;
     m_historyPending = false;                  // vor dem Schreiben loeschen: inputWrite
