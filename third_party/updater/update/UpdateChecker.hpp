@@ -16,6 +16,26 @@
 // progress, and verifies the SHA-256 from the manifest on completion — a
 // mismatch deletes the file and reports an error, it never hands the caller
 // a corrupt installer.
+//
+// ⚠️ SIGNATURE ASYMMETRY — this class is NOT the pattern the ESP32 fleet
+// follows, and reading it as one leads to a wrong conclusion about them.
+// Schema-1 manifests have two consumers with different trust anchors:
+//
+//   here (desktop)   manifest.json.sig is fetched and the Ed25519 signature
+//                    over the exact manifest bytes is verified BEFORE any
+//                    field is parsed. The signature is the anchor.
+//   AstroCore (ESP32, astrocan-* channels)
+//                    does not fetch manifest.json.sig at all. It trusts TLS
+//                    for the manifest, and authenticity comes one layer
+//                    down, from the Ed25519 signature in the 96-byte trailer
+//                    of the firmware image that the bootloader checks before
+//                    committing. See AstroCAN's ota/UpdateManifest.h.
+//
+// The practical consequence sits in tools/updates/publish.py: it publishes
+// the .sig for every product because the desktop channels need it, and it
+// enforces the device's hard field limits (url ≤ 223, MAJOR.MINOR.PATCH with
+// each component ≤ 255) only on the ESP32 channels — those limits are parse
+// failures on the device and mean nothing here.
 
 #include "update/ProxyConfig.hpp"
 #include "update/UpdateManifest.hpp"

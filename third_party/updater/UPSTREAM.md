@@ -9,11 +9,23 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `796575fbdd2961c6129e70f547e87e2e40b57023` |
-| Datum | 2026-08-11 |
-| Betreff | `fix(update): msiexec braucht native Pfadtrenner — Windows-Update war seit 0.2.0 tot` |
+| Commit | `bdf7eecfffc83089a318387a1761ea05f78b587a` |
+| Datum | 2026-08-13 |
+| Betreff | `feat(log): TRC v2.0 schreibt die deklarierte Spaltenfolge, Parser liest drei Dialekte (P1.5)` |
 
-Mit diesem Stand kam der **msiexec-Pfadtrenner-Fix** herüber (eine Datei,
+Der Pin benennt den **Hub-`main`-Stand, gegen den abgeglichen wurde** — nicht den
+Commit, der die letzte inhaltliche Änderung brachte. Mit diesem Stand kam aus
+MacPCAN `5507a24` (Synergie-P1.4) der Kommentarblock **„SIGNATURE ASYMMETRY"** in
+`UpdateChecker.hpp` herüber (reiner Kommentar, null Code): Desktop verifiziert
+`manifest.json.sig` **vor** dem Parsen; die ESP32-Flotte holt die `.sig` gar nicht
+und vertraut dem Ed25519-Trailer des Firmware-Images. Für QTmux gilt der
+Desktop-Zweig; die ESP32-Feldgrenzen (`url ≤ 223` usw.) bedeuten hier nichts.
+Zwischen dem vorigen Pin `796575f` und diesem Stand hat **nur** `5507a24` das
+Verzeichnis `src/update/` berührt (per `git log 796575f..bdf7eec -- src/update/`
+gemessen) — der alte Pin war also nicht veraltet-vergessen, sondern schlicht der
+letzte Stand vor dieser einen Änderung.
+
+Mit dem Stand `796575f` (2026-08-11) kam der **msiexec-Pfadtrenner-Fix** herüber (eine Datei,
 `InstallerLauncher.cpp`): Qt liefert auf Windows Vorwärts-Slashes, msiexec'
 eigener Parser lehnt so einen Pfad als **Fehler 1619** ab („Dieses
 Installationspaket konnte nicht geöffnet werden"), obwohl das MSI intakt ist.
