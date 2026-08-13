@@ -79,6 +79,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `move_group` | `name`, `direction` | Ganze **Window-Gruppe** als Block in der Sidebar verschieben (`direction`: `up`/`down`) |
 | `focus_session` | `id` | **Window** aktivieren, in dem die Session als Pane liegt (Window-Modell) |
 | `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard 60), `broadcast?` | Text in die Session tippen; Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt) |
+| `send_keys` | `id`, `keys` (string[]), `enterDelayMs?` (Standard 60) | **Benannte Tasten** im tmux-`send-keys`-Stil: Chords (`C-u`, `M-x`, `C-M-p`), Sondertasten (Enter, Escape, Tab, BTab, Backspace, Space, Pfeile, Home/End, PageUp/PageDown, Delete, Insert, F1–F12, auch `C-Right`), Unerkanntes = Literaltext (s. u.) |
 | `queue_text` | `id`, `text?`, `clear?` | Text **einreihen** statt sofort senden: Er geht raus, sobald die Session frei ist (s. u.). Ohne `text` nur abfragen, mit `clear:true` leeren |
 | `read_screen` | `id`, `scrollback?` | Sichtbaren Bildschirm als Klartext lesen; mit `scrollback:true` zusätzlich die Historie davor |
 | `attach_controller` | `id` | Markiert die Session als steuernde **MCP-Controller**-Session (roter Tab) |
@@ -202,6 +203,37 @@ Feldbreite blieb die Arbeitsanweisung stumm stehen — und der Aufruf meldete `o
 Deshalb schreibt QTmux erst den Text und schickt das Enter **60 ms später** als eigenen
 Tastendruck hinterher. Bei besonders trägen Oberflächen `enterDelayMs` erhöhen;
 `enterDelayMs: 0` stellt das alte Verhalten (alles in einem Block) wieder her.
+
+### `send_keys` — Steuertasten, die `send_text` nicht transportieren kann
+
+`send_text` überträgt nur Text: **Rohe Steuerbytes überleben den JSON-/MCP-Transport
+nicht** (ein Ctrl-U-Byte kam als leerer String an), und Escape-Schreibweisen wie
+`$([char]21)` landen — korrekt für „Text" — wortwörtlich im Eingabefeld. Für alles, was
+ein Tastendruck statt Text ist, gibt es `send_keys` im Stil von tmux `send-keys`:
+
+```json
+{"name":"send_keys","arguments":{"id":3,"keys":["C-u","neuer Text","Enter"]}}
+```
+
+Jeder Eintrag der Liste ist eines von dreien:
+
+- **Chord** — `C-` (Ctrl), `M-`/`A-` (Alt/Meta), `S-` (Shift), auch kombiniert:
+  `C-u` (Zeile leeren), `C-c` (unterbrechen), `C-r` (History), `M-b` (Wort zurück),
+  `C-M-p`. Groß-/Kleinschreibung ist bei `C-`-Buchstaben egal (Caret-Konvention).
+- **Sondertaste** — `Enter`, `Escape`/`Esc`, `Tab`, `BTab` (=`S-Tab`), `Backspace`,
+  `Space`, `Up`/`Down`/`Left`/`Right`, `Home`, `End`, `PageUp`/`PgUp`,
+  `PageDown`/`PgDn`, `Delete`, `Insert`, `F1`–`F12` — auch mit Modifier
+  (`C-Right` = Wort vor, xterm-konform `ESC[1;5C`). `S-Enter`/`M-Enter` fügen wie am
+  Keyboard einen **Zeilenumbruch ein** (ESC CR, QTMUX-43), statt abzusenden.
+- **Literaltext** — alles Unerkannte wird getippt (tmux-Verhalten). Wer das *Wort*
+  „Enter" tippen will, nimmt `send_text`.
+
+Drei Regeln, damit kein halber Zustand entsteht: Ein **Chord mit Tippfehler** (`C-uu`)
+ist ein Fehler, und es wird **nichts** gesendet (als Literal stünde er wortwörtlich im
+Feld). Ein **Enter als letzter Eintrag** geht wie bei `send_text` zeitlich abgesetzt
+raus (`enterDelayMs`, Standard 60 ms) — sonst würde die TUI den Block als Einfügevorgang
+werten und das `\r` als Umbruch schlucken (QTMUX-31 oben). Und die Übersetzung passiert
+**vor** dem ersten Byte: entweder geht die ganze Liste raus oder gar nichts.
 
 ### Windows (Tabs) — das Bedienmodell (QTMUX-83)
 

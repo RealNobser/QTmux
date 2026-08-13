@@ -6,6 +6,7 @@
 #include "PluginHost.h"
 #include "AgentEventHub.h"
 #include "ConnectionProfile.h"
+#include "KeyEncoding.h"
 
 #include "qtmux_version.h"   // generiert aus cmake/Version.h.in (PROJECT_VERSION)
 #include "qtmux_buildid.h"   // generiert bei jedem Build (cmake/BuildId.cmake)
@@ -20,6 +21,7 @@
 #include <QJsonValue>
 #include <QTimer>
 #include <QChar>
+#include <QRegularExpression>
 #include <QSettings>
 
 namespace qtmux {
@@ -731,6 +733,23 @@ QJsonObject McpServer::toolsList() const {
                                   {"enterDelayMs", intProp("Verzögerung vor dem Enter in ms (Standard 60; 0 = sofort, im selben Block)")},
                                   {"broadcast", boolProp("an alle Sessions senden (Standard false)")}},
                       QJsonArray{"text"}));
+    tools.append(tool("send_keys",
+                      "Sendet benannte Tasten/Tastenkombinationen im tmux-send-keys-Stil an "
+                      "eine Session — für Steuerzeichen, die send_text nicht transportieren "
+                      "kann (rohe Steuerbytes überleben den JSON-Transport nicht). Jeder "
+                      "Eintrag in keys ist ein Chord ('C-u', 'C-c', 'M-x', 'C-M-p'), eine "
+                      "Sondertaste (Enter, Escape, Tab, BTab, Backspace, Space, "
+                      "Up/Down/Left/Right, Home, End, PageUp, PageDown, Delete, Insert, "
+                      "F1–F12 — auch mit Modifier, z. B. 'C-Right') oder Literaltext (alles "
+                      "Unerkannte wird getippt): [\"C-u\",\"neuer Text\",\"Enter\"]. Ein "
+                      "Enter als LETZTER Eintrag geht wie bei send_text zeitlich abgesetzt "
+                      "raus (enterDelayMs). Ein Chord, der sich nicht übersetzen lässt, ist "
+                      "ein Fehler — dann wird NICHTS gesendet.",
+                      QJsonObject{{"id", intProp("Session-ID")},
+                                  {"keys", arrProp(QStringLiteral("string"),
+                                                   QStringLiteral("Tasten/Chords/Literaltext, in Sendereihenfolge"))},
+                                  {"enterDelayMs", intProp("Verzögerung vor einem abschließenden Enter in ms (Standard 60; 0 = sofort)")}},
+                      QJsonArray{"id", "keys"}));
     tools.append(tool("queue_text",
                       "Reiht Text in die Warteschlange einer Session ein (QTMUX-90) statt ihn "
                       "sofort zu senden. Ist die Session gerade frei, geht er unmittelbar raus; "
@@ -1268,6 +1287,64 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
                                   : Session::kDefaultEnterDelayMs;
             s->writeWithEnter(data, delay);
         } else if (!data.isEmpty()) {
+            s->write(data);
+        }
+        text = QStringLiteral("ok");
+        return {};
+    }
+    if (name == "send_keys") {
+        if (!s) { isError = true; text = idProblem(); return {}; }
+        QJsonArray arr;
+        const QJsonValue kv = args.value("keys");
+        if (kv.isArray())       arr = kv.toArray();
+        else if (kv.isString()) arr.append(kv);   // Bequemlichkeit: einzelner Ausdruck
+        if (arr.isEmpty()) {
+            isError = true;
+            text = QStringLiteral("Parameter 'keys' fehlt oder ist leer (Liste von "
+                                  "Chords/Sondertasten/Literaltext).");
+            return {};
+        }
+        // Erst ALLES übersetzen, dann senden — ein unübersetzbarer Chord bricht ab,
+        // ohne dass die TUI schon halbe Eingaben gesehen hat.
+        QByteArray data;
+        QByteArray lastSeq;
+        for (const QJsonValue &v : std::as_const(arr)) {
+            const QString spec = v.toString();
+            if (spec.isEmpty()) {
+                isError = true;
+                text = QStringLiteral("Leerer Eintrag in 'keys'.");
+                return {};
+            }
+            QByteArray seq = qtmux::encodeNamedKey(spec);
+            if (seq.isEmpty()) {
+                // Sieht es wie ein Chord aus (Modifier-Präfix), ist es ein Tippfehler —
+                // als Literaltext gesendet stünde "C-uu" wortwörtlich im Eingabefeld.
+                static const QRegularExpression chordLike(
+                    QStringLiteral("^([CcMmAaSs]-)+."));
+                if (chordLike.match(spec).hasMatch()) {
+                    isError = true;
+                    text = QStringLiteral(
+                               "Unbekannte Taste: '%1'. Es wurde nichts gesendet. Erkannt "
+                               "werden C-/M-/S-Chords, Enter, Escape, Tab, BTab, Backspace, "
+                               "Space, Up/Down/Left/Right, Home, End, PageUp, PageDown, "
+                               "Delete, Insert, F1–F12.")
+                               .arg(spec);
+                    return {};
+                }
+                seq = spec.toUtf8();   // tmux-Verhalten: Unerkanntes ist Literaltext
+            }
+            data += seq;
+            lastSeq = seq;
+        }
+        // Ein abschließendes Enter geht zeitlich abgesetzt raus (QTMUX-31) — sonst
+        // wertet die TUI den Block als Einfügevorgang und das \r wird zum Umbruch.
+        if (lastSeq == QByteArrayLiteral("\r")) {
+            const int delay = args.contains(QStringLiteral("enterDelayMs"))
+                                  ? args.value("enterDelayMs").toInt(Session::kDefaultEnterDelayMs)
+                                  : Session::kDefaultEnterDelayMs;
+            data.chop(1);
+            s->writeWithEnter(data, delay);
+        } else {
             s->write(data);
         }
         text = QStringLiteral("ok");

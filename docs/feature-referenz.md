@@ -1111,7 +1111,7 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (39 Tools)
+### MCP-Server (40 Tools)
 `src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC, **Vorgabe** `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
 - **Netzzugang ist eine WAHL, und sie kostet ein Token (QTMUX-127).** Bind-Adresse:
@@ -1157,6 +1157,20 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   (belegt mit Claude Code) werten einen in EINEM Rutsch ankommenden Block als
   Einfügevorgang → das `\r` wurde zum Zeilenumbruch im Eingabefeld statt zum Absenden,
   und der Aufruf meldete trotzdem `ok`. Regressionstest bricht bei `enterDelayMs: 0`.
+- **`send_keys` (benannte Tasten im tmux-Stil):** `send_text` transportiert nur Text —
+  rohe Steuerbytes überleben den JSON-/MCP-Transport nicht (kamen als leerer String an),
+  und Escape-Formen landeten als Literaltext; damit ließ sich ein TUI-Eingabefeld weder
+  leeren (`C-u`) noch steuern (Esc, `C-c`, Pfeile). `send_keys` nimmt eine **Liste**
+  benannter Ausdrücke (`["C-u","neuer Text","Enter"]`): Chords (`C-`/`M-`/`S-`, auch
+  kombiniert), Sondertasten (Enter, Escape, Tab, BTab, Backspace, Space, Pfeile,
+  Home/End, PageUp/PageDown, Delete, Insert, F1–F12; Modifier xterm-konform als
+  CSI-Form, `C-Right` → `ESC[1;5C`), alles Unerkannte ist Literaltext (tmux-Verhalten).
+  Übersetzung Gui-frei in [KeyEncoding](../src/core/KeyEncoding.cpp)
+  (`encodeNamedKey`, Tests in `tst_keyencoding`). 🔑 Drei bewusste Regeln: **erst alles
+  übersetzen, dann senden** (ein Tippfehler-Chord bricht ab, statt dass die TUI halbe
+  Eingaben sieht — als Literal gesendet stünde `C-uu` wortwörtlich im Feld); ein
+  **abschließendes Enter** geht wie bei `send_text` zeitlich abgesetzt raus (QTMUX-31,
+  `enterDelayMs`); `S-`/`M-Enter` folgen QTMUX-43 (ESC CR = Umbruch einfügen).
 - **QTMUX-30/37 (Ereignis-Kanal — die Quelle ist das Problem, nicht der Kanal):** QTmux
   leitet **nichts** aus Bildschirm/Prozesszustand ab; ein Claude-Code-Worker meldet von sich
   aus nichts (auch keine Bell). Deshalb Ehrlichkeit statt erzwungener Ereignisse:

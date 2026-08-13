@@ -133,6 +133,82 @@ private slots:
         QCOMPARE(encodeKeyBytes(Qt::Key_Udiaeresis, Qt::NoModifier, QStringLiteral("ü")),
                  QStringLiteral("ü").toUtf8());
     }
+
+    // --- MCP send_keys: benannte Tasten im tmux-Stil (encodeNamedKey) ---------
+
+    void namedKeyCtrlChords() {
+        // Der Anlass des Bugreports: Ctrl-U (Zeile leeren) war über MCP unsendbar.
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-u")), QByteArray("\x15"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-a")), QByteArray("\x01"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-c")), QByteArray("\x03"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-r")), QByteArray("\x12"));
+        // Groß geschrieben dasselbe Steuerbyte (Caret-Konvention kennt kein Shift).
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-U")), QByteArray("\x15"));
+        // Sonderfälle der Caret-Konvention.
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-Space")), QByteArray(1, '\0'));
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-?")), QByteArray("\x7f"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-[")), QByteArray("\x1b"));
+    }
+
+    void namedKeyMetaAndCombined() {
+        QCOMPARE(encodeNamedKey(QStringLiteral("M-x")), QByteArray("\x1b" "x"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("A-x")), QByteArray("\x1b" "x")); // Alias
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-M-p")), QByteArray("\x1b\x10"));
+        // Alt+Backspace = Wort löschen in readline.
+        QCOMPARE(encodeNamedKey(QStringLiteral("M-Backspace")), QByteArray("\x1b\x7f"));
+    }
+
+    void namedKeySpecials() {
+        QCOMPARE(encodeNamedKey(QStringLiteral("Enter")), QByteArray("\r"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("Escape")), QByteArray("\x1b"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("esc")), QByteArray("\x1b")); // Case-egal
+        QCOMPARE(encodeNamedKey(QStringLiteral("Backspace")), QByteArray("\x7f"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("Tab")), QByteArray("\t"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("BTab")), QByteArray("\x1b[Z"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("S-Tab")), QByteArray("\x1b[Z"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("Space")), QByteArray(" "));
+        QCOMPARE(encodeNamedKey(QStringLiteral("Up")), QByteArray("\x1b[A"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("Home")), QByteArray("\x1b[H"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("PageDown")), QByteArray("\x1b[6~"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("PgDn")), QByteArray("\x1b[6~"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("Delete")), QByteArray("\x1b[3~"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("F1")), QByteArray("\x1bOP"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("F5")), QByteArray("\x1b[15~"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("F12")), QByteArray("\x1b[24~"));
+    }
+
+    void namedKeyEnterFollowsQtmux43() {
+        // S-/M-Enter = Umbruch einfügen (ESC CR) — dieselbe Regel wie am Keyboard.
+        QCOMPARE(encodeNamedKey(QStringLiteral("S-Enter")), QByteArray("\x1b\r"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("M-Enter")), QByteArray("\x1b\r"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-Enter")), QByteArray("\r"));
+    }
+
+    void namedKeyModifiedCursorKeys() {
+        // xterm-CSI-Modifier: 1 + Shift(1) + Alt(2) + Ctrl(4).
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-Right")), QByteArray("\x1b[1;5C"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("M-Up")), QByteArray("\x1b[1;3A"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("S-End")), QByteArray("\x1b[1;2F"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-S-Left")), QByteArray("\x1b[1;6D"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-PageUp")), QByteArray("\x1b[5;5~"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-F5")), QByteArray("\x1b[15;5~"));
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-F1")), QByteArray("\x1b[1;5P"));
+    }
+
+    void namedKeyUnknownIsEmpty() {
+        // Leere Sequenz = „kein benannter Ausdruck" — der Aufrufer entscheidet über
+        // Literal-Fallback (Wörter) bzw. Fehler (Chord-Tippfehler).
+        QCOMPARE(encodeNamedKey(QStringLiteral("Entr")), QByteArray());
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-uu")), QByteArray());
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-ü")), QByteArray());
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-Tab")), QByteArray()); // kein Standard
+        QCOMPARE(encodeNamedKey(QStringLiteral("F13")), QByteArray());
+        QCOMPARE(encodeNamedKey(QString()), QByteArray());
+        // Einzelzeichen ohne Modifier bleibt es selbst (Literal ohnehin identisch).
+        QCOMPARE(encodeNamedKey(QStringLiteral("a")), QByteArray("a"));
+        // Ein bloßes "C-" ist kein Chord.
+        QCOMPARE(encodeNamedKey(QStringLiteral("C-")), QByteArray());
+    }
 };
 
 QTEST_APPLESS_MAIN(TestKeyEncoding)
