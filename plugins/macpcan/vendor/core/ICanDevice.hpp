@@ -79,6 +79,25 @@ public:
         BusOff,        // controller disabled — needs reset to recover
     };
     virtual BusStatus busStatus() const noexcept { return BusStatus::Unknown; }
+
+    // How often this driver has recorded a failure since it was opened.
+    // Defaulted like busStatus(), so an implementation that cannot count
+    // simply stays at 0 — no existing implementer has to change.
+    //
+    // ⚠️ WHY A COUNTER AND NOT `lastError()`: a driver-side RECEIVE
+    // failure never reached anyone. CanService's worker discards
+    // `read() == false` without a word, and the error string is
+    // overwritten by the next failure, so neither occurrence nor
+    // frequency was observable. On 2026-08-15 an OTA push lost a single
+    // WIN_ACK on a demonstrably quiet bus — a second adapter listening on
+    // the same wire recorded the frame, this one did not — and every
+    // counter reachable from outside read clean. This is the counter that
+    // was missing.
+    //
+    // ⚠️ NOT the same as "frames lost": a driver may drop a frame without
+    // reporting anything. A rising count proves the receive path had
+    // trouble; a flat count proves only that the driver stayed quiet.
+    virtual std::uint64_t errorCount() const noexcept { return 0; }
 };
 
 const char* busStatusLabel(ICanDevice::BusStatus s) noexcept;

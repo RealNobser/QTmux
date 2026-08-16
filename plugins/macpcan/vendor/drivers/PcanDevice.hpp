@@ -30,6 +30,7 @@ public:
     bool write(const core::CanFrame& frame) override;
     std::string lastError() const override;
     core::ICanDevice::BusStatus busStatus() const noexcept override;
+    std::uint64_t errorCount() const noexcept override;
 
     // Translate a PCBUSB-internal channel handle name (e.g. "PCAN_USBBUS1")
     // back to the numeric handle used by the C API.
@@ -57,6 +58,13 @@ private:
     std::atomic<bool> isFd_{false};  // current session opened via CAN_InitializeFD
     mutable std::mutex errorMtx_;
     std::string lastError_;
+    // Atomic and NOT under errorMtx_: it is read from the status route
+    // while read()/write() may be recording on their own threads, and a
+    // counter must never make the error path wait on a reader.
+    // ⚠️ Counts RECORDED failures, not lost frames — see the contract on
+    // ICanDevice::errorCount(). A quiet counter is not proof of a healthy
+    // receive path, only of a silent driver.
+    std::atomic<std::uint64_t> errorCount_{0};
 };
 
 }  // namespace mac_pcan::drivers

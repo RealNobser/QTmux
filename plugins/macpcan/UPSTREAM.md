@@ -10,8 +10,8 @@ Kanonische Quelle ist MacPCAN; dasselbe Einbahnstraßen-Muster wie bei
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `95717d6fc73bc274a35c5f9288da26e834e0363d` |
-| Datum | 2026-08-12 |
+| Commit | `2c6c15e40707ba100f33e95133c1adfbbe7a4bb3` |
+| Datum | 2026-08-16 |
 
 Mit diesem Stand (Welle 0.1, 2026-08-12) wurden **7 von 8 Dateien** nachgeführt —
 das Verzeichnis war seit dem Anlegen auf dem Hub-Stand M9 (`a3448a7`) eingefroren,
@@ -31,6 +31,15 @@ Nachzug 2026-08-13: `ICanDevice.hpp` trägt seit Hub-Commit `7356c45` einen
 **Threading-Vertrag als Kommentar** (read() und write() laufen auf verschiedenen
 Threads; veränderlicher Zustand in Implementierungen muss synchronisiert werden) —
 reine Doku, keine API-Änderung.
+
+Nachzug 2026-08-16 (Vorarbeit V2 des OTA-v4-Epics): 5 Dateien nachgeführt
+(`core/CanService.{cpp,hpp}`, `core/ICanDevice.hpp`, `drivers/PcanDevice.{cpp,hpp}`),
+Ursache Hub-Commits `667c180` und `50c9578`: **Empfangsfehler-Meldeweg**
+(`ICanDevice::errorCount()`, `CanService::deviceErrors()/deviceError()` — vorher
+verwarf der Worker `read() == false` wortlos) und **RX-Supervisor**
+(`receiveStuck()`/`recoveries()` + selbsttätiger Kanal-Neustart, wenn der
+Fehlerzähler bei gleichzeitiger Frame-Stille steigt). Wieder rein **additiv**,
+in QTmux weiterhin **nicht verdrahtet**.
 
 ## Umfang des Kontrakts
 

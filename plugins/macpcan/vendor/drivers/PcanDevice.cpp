@@ -383,11 +383,19 @@ void PcanDevice::setError(std::string text) {
 }
 
 void PcanDevice::recordError(unsigned long status, const char* op) {
+    // Count BEFORE formatting: the string is overwritten by the next
+    // failure, so without this the second and every further error left no
+    // trace at all. This is the only place the driver admits to a fault.
+    errorCount_.fetch_add(1, std::memory_order_relaxed);
     // Format OUTSIDE the lock — errorText() calls into PCBUSB and we hold
     // this mutex on the TX hot path.
     std::ostringstream os;
     os << op << " failed: 0x" << std::hex << status << " (" << errorText(status) << ")";
     setError(os.str());
+}
+
+std::uint64_t PcanDevice::errorCount() const noexcept {
+    return errorCount_.load(std::memory_order_relaxed);
 }
 
 }  // namespace mac_pcan::drivers
