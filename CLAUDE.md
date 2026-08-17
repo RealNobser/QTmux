@@ -599,41 +599,34 @@ Standardweg für visuelle Abnahmen. ⚠️ Er setzt `QTMUX_NO_GPU=1` und fotogra
 **QPainter-Fallback**: Fehler im Glyph-Atlas (QTMUX-97) sind darauf **prinzipiell unsichtbar**.
 Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fallen, nicht hier.
 
-## Arbeitsstand & Wiedereinstieg (2026-08-10)
+## Arbeitsstand & Wiedereinstieg (2026-08-18)
 
 > Die EINE Stelle für den aktuellen Stand (Pflegeregeln 2–4 oben). Verlauf steht in
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.9.0** — Tag auf `75cc7b0`, alle 4 Installer, Manifest live unter
-`https://nobser.de/updates/qtmux/`; der volle Update-Zyklus ist am lebenden Objekt
-verifiziert (Details im Abschnitt „Online-Update"). Jira dual synchron bis **QTMUX-131**.
-🔑 **Belegt ist die Auslieferung selbst, nicht der Einspielweg:** Manifest, Signatur gegen
-die in `UpdateKeys.hpp` einkompilierten **Client**-Bytes, alle drei Artefakte
-heruntergeladen und **byte-identisch** (`cmp`) zu den lokalen, `index.json` mit allen acht
-Produkten unversehrt — Sollwerte in
-[docs/update-regressionsliste.md](docs/update-regressionsliste.md). Das **Selbst-Update**
-einer älteren Instanz ist bewusst **nicht** gefahren worden: es reißt die
-Terminal-Sessions mit, und die Produktivinstanz trägt die laufende Orchestrierung.
+**Ausgeliefert: v1.9.1** — Manifest live (`https://nobser.de/updates/qtmux/manifest.json`,
+`version: 1.9.1, published: 2026-08-11`; am 2026-08-18 gegengelesen). Einzige funktionale
+Änderung gegenüber 1.9.0: der **Windows-Updater-Fix** aus dem Hub (MacPCAN `796575f`, Pin
+in `third_party/updater/UPSTREAM.md`) — msiexec lehnt Qt-Vorwärts-Slashes als Fehler 1619
+ab, der msi-Zweig nutzt `QDir::toNativeSeparators()`; das Windows-Selbst-Update war bis
+dahin seit der ersten Auslieferung tot. Windows-Abnahme belegt (`msiexec /a` → Exit 0,
+Build-ID im entpackten `qtmux.exe`). Jira dual synchron bis **QTMUX-131** (Stand 2026-08-10).
+⚠️ **Ein GitHub-Release v1.9.1 existiert NICHT** — `gh release list` endet bei v1.9.0
+(gemessen 2026-08-18): Der Update-Kanal liefert 1.9.1, die Release-Seite nicht. Ob das
+Absicht ist (nur Update-Kanal) oder der `gh release create`-Schritt fehlt → Owner-Entscheid.
+Davor v1.9.0: Tag auf `75cc7b0`, alle 4 Installer, voller Update-Zyklus am lebenden Objekt
+verifiziert (macOS-Zweig); Auslieferungs-Sollwerte in
+[docs/update-regressionsliste.md](docs/update-regressionsliste.md).
 
-**Gebaut, wartet auf Publish: v1.9.1** (2026-08-11, Hotfix im Orchestrator-Auftrag) —
-trägt den **Windows-Updater-Fix** aus dem Hub (MacPCAN `796575f`, Pin in
-`third_party/updater/UPSTREAM.md`): msiexec lehnt Qt-Vorwärts-Slashes als Fehler 1619 ab,
-der msi-Zweig nutzt jetzt `QDir::toNativeSeparators()`; das Windows-Selbst-Update war
-damit seit der ersten Auslieferung tot. Gegenüber 1.9.0 ist das die **einzige**
-funktionale Änderung (das Startup-Check-Backlog-Paar unten blieb bewusst draußen —
-enger Hotfix-Auftrag). Alle 4 Artefakte liegen in `dist/` (AppImage aus CI-Lauf
-`31485537275`), MSI+ZIP zusätzlich auf rtzbld01; **Windows-Abnahme belegt**:
-`msiexec /a` gegen das frische MSI mit nativem Pfad → Exit 0, entpacktes `qtmux.exe`
-mit korrekter Build-ID. Publish fährt die MacPCAN-Session; SHA256-Sollwerte stehen in
-der Orchestrator-Meldung vom 2026-08-11.
-
-**Teststände:** **30** Tests (s. Dateitabelle). macOS Debug/Release je **30/30** (dort läuft
-`test_pty` mit und besteht). Linux (rtzsvr02-Container) und Windows nehmen `test_pty` per
-`-E` aus (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest`
-zusätzlich Qt-`bin` im PATH, sonst `0xc0000135`) — dort sind **29** zu erwarten und am
-2026-08-10 auch gemessen (rtzsvr02-Container 29/29, rtzbld01 Release 29/29 + Debug-Build
-grün). Größte Binaries: `tst_session` 24 Fälle, `tst_vtscreen` 24, `tst_agent` 20.
+**Teststände:** **31** Tests (s. Dateitabelle; per `ctest -N` am 2026-08-18 in drei
+macOS-Build-Dirs gezählt — `pastewrite` kam nach den letzten Vollmessungen hinzu). macOS
+lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
+(umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich
+Qt-`bin` im PATH, sonst `0xc0000135`) — dort eine um 1 kleinere Zahl erwarten. Aktuellste
+Grün-Messung: CI-Lauf `32078102583` (2026-08-18) auf allen drei Plattformen grün inkl.
+Test-Steps; die letzten lokalen Vollläufe (2026-08-10/11, Stand 1.9.0/1.9.1) waren
+vollzählig grün.
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
 besteht. Eine kleinere Zahl aus dem Container ist kein Widerspruch, sondern die
 Ausnahme per `-E`. **Zahl immer per `ctest -N` gegenprüfen, nie schätzen.**
@@ -645,24 +638,29 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-11** · Working Tree sauber, ein Arbeitsbaum, nur Branch `main`,
-alles gepusht (der Doku-Commit vom 2026-08-10 ging mit dem 1.9.1-Push hinaus —
-Push war vom Orchestrator beauftragt). Teststand macOS Release **30/30** (2026-08-11,
-1.9.1); Linux-Container und rtzbld01-Release je **29/29** (2026-08-10, Stand 1.9.0);
-die 1.9.1-CI ist auf allen drei Plattformen grün.
+Stand **2026-08-18** · Working Tree sauber, ein Arbeitsbaum, nur Branch `main`. Nach dem
+Aufräum-Commit dieses Stands ist genau EIN Commit ungepusht (Push wartet auf Freigabe);
+sobald er raus ist, muss `git log --oneline origin/main..HEAD` wieder **leer** sein.
 🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` ändert ihn, und der
-Anker wäre im selben Moment falsch (2026-08-07 genau so passiert). Belastbar ist die
-Beziehung zu `origin/main`: `git log --oneline origin/main..HEAD` muss **leer** sein. Beim
-Wiedereinstieg zusätzlich `git log --oneline -3` gegenlesen — die Windows-Session pusht
-ebenfalls.
+Anker wäre im selben Moment falsch (2026-08-07 genau so passiert). Beim Wiedereinstieg
+zusätzlich `git log --oneline -3` gegenlesen — die Windows-Session pusht ebenfalls.
 
-🚢 **v1.9.0**: Belege und Sollwerte stehen im Absatz „Ausgeliefert" oben — hier nur die
-drei Publish-Mechanik-Fakten, die beim nächsten Release wieder gebraucht werden:
-`build_msi.cmd` auf rtzbld01 **verlangt die Version als Argument** (sonst
-`VERSION_ARG_FEHLT`) · den **Upload** fährt die **MacPCAN-Session** als kanonischer
-Publisher (der Harness-Classifier dieser Session blockiert Credential-Sourcen + Upload —
-nicht umgehen, sondern an den Koordinator melden), das unabhängige VERIFY danach QTmux ·
-gegenüber 1.8.1 ist funktional nur QTMUX-131 („Link kopieren") neu.
+**Rolle derzeit: Standby-Worker des Orchestrators** (Session 1 im Workspace; Rückmeldungen
+als `MELDUNG QTMUX [FERTIG|FRAGE|ABBRUCH]: …` per `queue_text`). Zuletzt erledigt
+(2026-08-17/18): Betroffenheitsmessung der Vendoring-Kontrakte gegen Hub `f0e22f9` —
+0 Treffer, Wächter 3/3 „byte-identisch" (die Hub-Commits liegen in `src/ota/`,
+`src/deviceupdate/`, `app/control/` — außerhalb aller drei Kontrakte, KEIN Nachzug nötig;
+die UPSTREAM.md-Pins bleiben korrekt) · `retention-days: 7` am einzigen
+upload-artifact-Step der CI (Wirkung belegt: frisches Artefakt expires exakt +7 Tage —
+Hintergrund: die 0,5-GB-Actions-Quota war am 2026-08-17 voll, QTmux mit ~7,2 GB aus
+164 Läufen × 90-Tage-Default der Haupttäter; Owner hat alt aufgeräumt).
+
+🚢 **Publish-Mechanik fürs nächste Release:** `build_msi.cmd` auf rtzbld01 **verlangt die
+Version als Argument** (sonst `VERSION_ARG_FEHLT`) · den **Upload** fährt die
+**MacPCAN-Session** als kanonischer Publisher (der Harness-Classifier dieser Session
+blockiert Credential-Sourcen + Upload — nicht umgehen, sondern an den Koordinator melden),
+das unabhängige VERIFY danach QTmux · ⚠️ ans **GitHub-Release** denken (bei 1.9.1
+offen, s. „Ausgeliefert" oben).
 📌 **Backlog-Paar aus dem Startup-Check-Vertrag** (Koordinator-Entscheid 2026-08-07:
 **keine 1.8.2**, beides zusammen ins nächste ohnehin anstehende Paket) — Mechanik und
 Begründungen im Abschnitt „Online-Update" der Feature-Referenz:
@@ -672,7 +670,8 @@ Begründungen im Abschnitt „Online-Update" der Feature-Referenz:
 2. Drossel-Zeitstempel **vor** den Request setzen statt im Callback.
 Der Vertrag selbst war in QTmux bereits vollständig erfüllt — es wurde **nichts** nachgebaut.
 
-**Nächster Punkt: QTMUX-94** — Terminal-Ausgabe als Agenten-Kontext.
+**Nächster eigener Punkt (sobald kein Orchestrator-Auftrag anliegt): QTMUX-94** —
+Terminal-Ausgabe als Agenten-Kontext.
 - Einstieg: `VtScreen::screenText()`/Scrollback liegen fertig vor; es fehlt allein der Weg
   für den Menschen — Auswahl bzw. Bildschirm einer Session an eine **andere** Session geben.
 - Vorgehen: (1) Gui-freie Hälfte zuerst (Formatierung/Begrenzung der Übergabe, eigener
@@ -687,8 +686,7 @@ Der Vertrag selbst war in QTmux bereits vollständig erfüllt — es wurde **nic
 **Danach:** Owner-Durchklick der fertigen Tickets
 ([docs/owner-abnahmen.md](docs/owner-abnahmen.md)) · Windows-/Linux-Zweig des
 Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, pf-Installation).
-(Der Windows-**Debug**-Build aller Stände lief am 2026-08-10 auf rtzbld01, `BUILD_CHECK_OK` —
-der frühere Punkt „Debug-Build von QTMUX-130" ist damit erledigt.)
+**Wartet auf Zulieferung:** nichts Externes.
 
 ### Offene Owner-Entscheide (blockieren nichts, aber warten)
 
@@ -696,22 +694,23 @@ der frühere Punkt „Debug-Build von QTMUX-130" ist damit erledigt.)
    `Mode::System` an (`QLocale::system()`, EN/DE/SV); QTmux kann nur fest Deutsch/Englisch.
    RAFTNG nennt es ausdrücklich eine **Produktentscheidung**, keine technische, und liefert
    auf Zuruf. Nicht eigenmächtig übernommen.
-2. **Produktivinstanz erneuern?** Sie läuft aus `/Applications/QTmux.app` mit
-   `1.8.1+3744c38` (gemessen 2026-08-13 via `get_server_info`) und hängt damit hinter
-   1.9.0/1.9.1 zurück. Weg: Self-Update aus der App (Owner-Sache) — reißt alle
-   Terminal-Sessions mit.
+2. **GitHub-Release v1.9.1 nachziehen?** Der Update-Kanal liefert 1.9.1, `gh release list`
+   endet bei v1.9.0 (gemessen 2026-08-18) — Release anlegen (4 Assets, voller SHA als
+   `--target`) oder bewusst beim Update-Kanal belassen.
+   (Der frühere Punkt „Produktivinstanz erneuern?" ist erledigt: Sie läuft seit spätestens
+   2026-08-18 auf `1.9.1+b6023ae`, s. „Zustand"-Abschnitt.)
 
 #### Zustand, der nicht aus Code/Git hervorgeht
 
 - ⚠️ **Die Produktivinstanz läuft aus `/Applications/QTmux.app`** (Port 7345,
-  `1.8.1+3744c38`, gestartet 2026-08-09 — gemessen 2026-08-13 via `get_server_info` +
-  `ps`; die frühere Notiz „läuft aus `build/macos`" ist damit Geschichte, die
-  Build-Verzeichnisse sind wieder frei bebaubar, sofern `lsof` das bestätigt).
-  🔑 Sie ist **älter als jeder heutige Stand**. Vor jeder Diagnose an ihr die Build-ID
-  gegen `git log` halten; PID über `lsof -nP -iTCP:7345 -sTCP:LISTEN` holen, **nie** eine
-  notierte PID verwenden (die hier eingetragene war zweimal veraltet). ⚠️ `lsof` kann auf
-  dieser Maschine minutenlang hängen (Time-Machine-SMB-Mount) — `netstat -anv -p tcp |
-  grep '\.7345 .*LISTEN'` liefert dieselbe Antwort samt `qtmux:<pid>` sofort.
+  **`1.9.1+b6023ae`**, `buildDirty: false` — gemessen 2026-08-18 via `get_server_info` +
+  `ps` auf die PID aus `netstat`). Sie trägt die laufende Orchestrierung — nie
+  hineinbauen/updaten, ohne dass der Owner die Terminal-Sessions opfern will.
+  🔑 Vor jeder Diagnose an ihr die Build-ID gegen `git log` halten; PID über
+  `lsof -nP -iTCP:7345 -sTCP:LISTEN` holen, **nie** eine notierte PID verwenden (die hier
+  eingetragene war zweimal veraltet). ⚠️ `lsof` kann auf dieser Maschine minutenlang hängen
+  (Time-Machine-SMB-Mount) — `netstat -anv -p tcp | grep '\.7345 .*LISTEN'` liefert
+  dieselbe Antwort samt `qtmux:<pid>` sofort.
 - Der Workflow-Eintrag **`Trigger-Test`** (ID `328898398`) steht bleibend in
   `gh workflow list --all`, obwohl sein Branch gelöscht ist — GitHub führt ihn, solange sein
   Lauf existiert. Bewusst nicht entfernt: Lauf `#31128515520` ist der Beleg, dass der
