@@ -126,3 +126,7 @@ jobs:
           name: QTmux-AppImage
           path: dist/QTmux-*-x86_64.AppImage
           if-no-files-found: error
+          # Ohne Retention gilt die Repo-Vorgabe (90 Tage) — damit lief die
+          # 0,5-GB-Actions-Quota voll (2026-08-17: ~7,2 GB aus 164 Laeufen).
+          # 7 Tage reichen: Release-Assets werden zeitnah nach dem Lauf gezogen.
+          retention-days: 7
