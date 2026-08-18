@@ -605,28 +605,34 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.9.1** — Manifest live (`https://nobser.de/updates/qtmux/manifest.json`,
-`version: 1.9.1, published: 2026-08-11`; am 2026-08-18 gegengelesen). Einzige funktionale
-Änderung gegenüber 1.9.0: der **Windows-Updater-Fix** aus dem Hub (MacPCAN `796575f`, Pin
-in `third_party/updater/UPSTREAM.md`) — msiexec lehnt Qt-Vorwärts-Slashes als Fehler 1619
-ab, der msi-Zweig nutzt `QDir::toNativeSeparators()`; das Windows-Selbst-Update war bis
-dahin seit der ersten Auslieferung tot. Windows-Abnahme belegt (`msiexec /a` → Exit 0,
-Build-ID im entpackten `qtmux.exe`). Jira dual synchron bis **QTMUX-131** (Stand 2026-08-10).
-⚠️ **Ein GitHub-Release v1.9.1 existiert NICHT** — `gh release list` endet bei v1.9.0
-(gemessen 2026-08-18): Der Update-Kanal liefert 1.9.1, die Release-Seite nicht. Ob das
-Absicht ist (nur Update-Kanal) oder der `gh release create`-Schritt fehlt → Owner-Entscheid.
-Davor v1.9.0: Tag auf `75cc7b0`, alle 4 Installer, voller Update-Zyklus am lebenden Objekt
-verifiziert (macOS-Zweig); Auslieferungs-Sollwerte in
-[docs/update-regressionsliste.md](docs/update-regressionsliste.md).
+**Ausgeliefert: v1.9.2 — finaler Stand der Familien-Kampagne (2026-08-18).** Manifest live
+(`https://nobser.de/updates/qtmux/manifest.json`, `version: 1.9.2, published: 2026-08-18`;
+Publish fuhr die MacPCAN-Session, unabhängiges VERIFY hier: Manifest-sha256 aller drei
+Artefakte = Staging-Liste). **GitHub-Releases lückenlos v1.4.0–v1.9.2** — v1.9.1 wurde am
+2026-08-18 nachgezogen (⚠️ mit dem **Server**-DMG: das lokale dist/-DMG von 1.9.1 war ein
+späterer, nie publizierter Neubau mit anderer Build-ID — vor jedem Release-Nachzug die
+Artefakt-Herkunft messen, nicht dem Dateinamen glauben), v1.9.2 mit vier frischen Assets.
+Build-ID aller 1.9.2-Artefakte `1.9.2+80405c1`, **je Artefakt einzeln gemessen** (DMG
+gemountet · MSI per `msiexec /a` entpackt · ZIP per zipfile · AppImage per
+`--appimage-extract`; der Tag `v1.9.2` deckt den Commit, Messkommando `git rev-parse v1.9.2`).
+Neu gegenüber 1.9.1: MCP `send_keys` benannte Tasten · `send_text` als Bracketed Paste ·
+Restore-Marker toter Prozesse · QTMUX-98-Reaktivierung · Vendor-Syncs auf Hub-Stand.
+Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 aus dem Hub,
+Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
+lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
+[docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
+**QTMUX-132**, beidseitig **106 Done / 26 Backlog** (2026-08-18; QTMUX-64 im
+Projektabschluss geschlossen — durch QTMUX-81 abgedeckt —, QTMUX-60 mit Vermerk bewusst
+offen); Benutzerdoku beider Confluence-Instanzen trägt den 1.9.1/1.9.2-Stand.
 
 **Teststände:** **31** Tests (s. Dateitabelle; per `ctest -N` am 2026-08-18 in drei
 macOS-Build-Dirs gezählt — `pastewrite` kam nach den letzten Vollmessungen hinzu). macOS
 lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
 (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich
 Qt-`bin` im PATH, sonst `0xc0000135`) — dort eine um 1 kleinere Zahl erwarten. Aktuellste
-Grün-Messung: CI-Lauf `32078102583` (2026-08-18) auf allen drei Plattformen grün inkl.
-Test-Steps; die letzten lokalen Vollläufe (2026-08-10/11, Stand 1.9.0/1.9.1) waren
-vollzählig grün.
+Grün-Messung: CI-Lauf `32085034884` (2026-08-18, Release-Stand 1.9.2) auf allen drei
+Plattformen grün inkl. Test-Steps; die letzten lokalen Vollläufe (2026-08-10/11, Stand
+1.9.0/1.9.1) waren vollzählig grün.
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
 besteht. Eine kleinere Zahl aus dem Container ist kein Widerspruch, sondern die
 Ausnahme per `-E`. **Zahl immer per `ctest -N` gegenprüfen, nie schätzen.**
@@ -638,15 +644,20 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-08-18** · Working Tree sauber, ein Arbeitsbaum, nur Branch `main`. Nach dem
-Aufräum-Commit dieses Stands ist genau EIN Commit ungepusht (Push wartet auf Freigabe);
-sobald er raus ist, muss `git log --oneline origin/main..HEAD` wieder **leer** sein.
+Stand **2026-08-18, nach dem Familien-Schlussrelease** · Working Tree sauber, ein
+Arbeitsbaum, nur Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD`
+muss **leer** sein. **QTmux ist projektende-fertig** (Release-Endstand im
+„Ausgeliefert"-Absatz oben); Rolle: **endgültig Standby**, bis der Owner Individual-
+Entwicklung wieder aufnimmt.
 🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` ändert ihn, und der
 Anker wäre im selben Moment falsch (2026-08-07 genau so passiert). Beim Wiedereinstieg
 zusätzlich `git log --oneline -3` gegenlesen — die Windows-Session pusht ebenfalls.
 
 **Rolle derzeit: Standby-Worker des Orchestrators** (Session 1 im Workspace; Rückmeldungen
 als `MELDUNG QTMUX [FERTIG|FRAGE|ABBRUCH]: …` per `queue_text`). Zuletzt erledigt
+(2026-08-18): **Familien-Schlussrelease komplett** — v1.9.1-Release nachgezogen, v1.9.2
+gebaut/publiziert/getaggt, Jira-Abschluss (64 zu, 60 vermerkt), Benutzerdoku beider
+Confluence-Instanzen auf 1.9.2 (alles im „Ausgeliefert"-Absatz). Davor
 (2026-08-17/18): Betroffenheitsmessung der Vendoring-Kontrakte gegen Hub `f0e22f9` —
 0 Treffer, Wächter 3/3 „byte-identisch" (die Hub-Commits liegen in `src/ota/`,
 `src/deviceupdate/`, `app/control/` — außerhalb aller drei Kontrakte, KEIN Nachzug nötig;
@@ -659,8 +670,11 @@ Hintergrund: die 0,5-GB-Actions-Quota war am 2026-08-17 voll, QTmux mit ~7,2 GB 
 Version als Argument** (sonst `VERSION_ARG_FEHLT`) · den **Upload** fährt die
 **MacPCAN-Session** als kanonischer Publisher (der Harness-Classifier dieser Session
 blockiert Credential-Sourcen + Upload — nicht umgehen, sondern an den Koordinator melden),
-das unabhängige VERIFY danach QTmux · ⚠️ ans **GitHub-Release** denken (bei 1.9.1
-offen, s. „Ausgeliefert" oben).
+das unabhängige VERIFY danach QTmux · ans **GitHub-Release** denken (für 1.9.1/1.9.2
+erledigt) · 🔑 fürs nächste Mal: **Manifest + Signatur im Staging mitliefern** — der
+1.9.2-Slot lieferte nur Artefakte und der Publisher manifestierte selbst; Ergebnis war
+identisch belegt, aber der mitgelieferte Bytevergleich ist der stärkere Weg
+(Publisher-Slot-Bericht 2026-08-18).
 📌 **Backlog-Paar aus dem Startup-Check-Vertrag** (Koordinator-Entscheid 2026-08-07:
 **keine 1.8.2**, beides zusammen ins nächste ohnehin anstehende Paket) — Mechanik und
 Begründungen im Abschnitt „Online-Update" der Feature-Referenz:
@@ -694,11 +708,11 @@ Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, p
    `Mode::System` an (`QLocale::system()`, EN/DE/SV); QTmux kann nur fest Deutsch/Englisch.
    RAFTNG nennt es ausdrücklich eine **Produktentscheidung**, keine technische, und liefert
    auf Zuruf. Nicht eigenmächtig übernommen.
-2. **GitHub-Release v1.9.1 nachziehen?** Der Update-Kanal liefert 1.9.1, `gh release list`
-   endet bei v1.9.0 (gemessen 2026-08-18) — Release anlegen (4 Assets, voller SHA als
-   `--target`) oder bewusst beim Update-Kanal belassen.
-   (Der frühere Punkt „Produktivinstanz erneuern?" ist erledigt: Sie läuft seit spätestens
-   2026-08-18 auf `1.9.1+b6023ae`, s. „Zustand"-Abschnitt.)
+2. **Produktivinstanz auf 1.9.2 heben?** Sie läuft auf `1.9.1+b6023ae` und trägt die
+   laufende Orchestrierung — ein Update opfert die Terminal-Sessions. Der Online-Update-
+   Dialog bietet 1.9.2 von selbst an; der Zeitpunkt ist Owner-Sache.
+   (Der frühere Punkt „GitHub-Release v1.9.1 nachziehen?" ist erledigt: am 2026-08-18
+   nachgezogen, Historie lückenlos — s. „Ausgeliefert" oben.)
 
 #### Zustand, der nicht aus Code/Git hervorgeht
 
