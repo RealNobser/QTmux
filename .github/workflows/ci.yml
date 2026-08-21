@@ -7,6 +7,10 @@ name: CI
 on:
   push:
     branches: [main]
+    # Tag-Läufe (v*) sind die Release-Läufe: nur sie laden das AppImage-Artefakt
+    # hoch (s. Upload-Schritt unten) — der Release-Weg lädt es von dort per
+    # `gh run download <id> -n QTmux-AppImage`.
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -117,7 +121,15 @@ jobs:
           bash installer/build-appimage.sh 1.9.2
 
       - name: AppImage-Artefakt hochladen (Linux)
-        if: matrix.host == 'linux'
+        # Nur Release-Läufe (Tag v*) und manuell angestoßene Läufe laden hoch:
+        # Gemessen (2026-08-21) lud JEDER main-Push ~44 MB hoch (7,2 GB aus 164
+        # Läufen vor der ersten Räumung), konsumiert wird das Artefakt aber
+        # ausschließlich beim Release (`gh run download <id> -n QTmux-AppImage`).
+        # Vier Artefakte im 7-Tage-Fenster belegten bereits ~35 % der 0,5-GB-
+        # Account-Quota — retention-days allein war nachweislich nicht der Hebel.
+        # Der Pack-Schritt oben läuft weiter bei jedem Lauf (Wächter für
+        # build-appimage.sh und den linuxdeploy-Pin).
+        if: matrix.host == 'linux' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
         # Auf den Commit-SHA gepinnt wie die uebrigen Dritt-Actions (Tags sind
         # verschiebbar). v7 statt v6: v6 laeuft noch auf Node 20, das GitHub
         # abkuendigt. Anheben: `gh api repos/actions/upload-artifact/git/refs/tags/<tag>`.

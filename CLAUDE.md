@@ -900,8 +900,11 @@ nicht in jede Session. Hier bleiben nur die zwei Regeln, die man beim Planen ken
   (Nur ein **Force**-Push braucht das kurzzeitige Lockern der Regel, s. Git-Lektionen.)
 - **Release:** `gh release create v<ver> --target <voller SHA>` — ein **Kurz-SHA wird
   abgelehnt** (HTTP 422). Assets: DMG + MSI + portables ZIP + AppImage.
-  Das AppImage stammt aus dem CI-Lauf desselben Commits
-  (`gh run download <id> -n QTmux-AppImage`), nicht aus einem Extra-Build.
+  Das AppImage stammt aus dem CI-Lauf (`gh run download <id> -n QTmux-AppImage`),
+  nicht aus einem Extra-Build. ⚠️ **Seit 2026-08-21 laden nur noch Tag-Läufe (`v*`)
+  und `workflow_dispatch`-Läufe das Artefakt hoch** (Quota-Hebel: jeder main-Push lud
+  ~44 MB, konsumiert wurde nur der Release-Lauf) — also erst den Tag pushen, dann vom
+  **Tag-Lauf** herunterladen; der Lauf des main-Push trägt kein Artefakt mehr.
   Releases existieren ab **v1.4.0** (je 4 Assets); für 1.0.1/1.3.0 gibt es seit der
   Repo-Neuaufsetzung **weder** Releases **noch** lokale Kopien (dist/-Aufräumen 2026-08-10,
   Owner-Freigabe) — diese Binaries sind endgültig weg.
