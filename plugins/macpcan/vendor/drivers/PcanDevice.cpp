@@ -231,6 +231,20 @@ bool PcanDevice::open(const core::DeviceInfo& device, const core::BitrateConfig&
         }
     }
 
+#ifdef PCAN_ALLOW_ERROR_FRAMES
+    {
+        // Ask the driver to deliver bus error frames as PCAN_MESSAGE_ERRFRAME
+        // messages — read() maps them to CanFrame::ErrorFrame so the trace can
+        // show them. Best effort ON PURPOSE, and no recordError(): a library
+        // that rejects the parameter is stating a capability, not failing —
+        // the session is fully usable without error-frame delivery, and a
+        // recorded "failure" here would read as a receive-path fault in
+        // /api/v1/status (device_errors) on every open.
+        DWORD value = PCAN_PARAMETER_ON;
+        (void)CAN_SetValue(handle, PCAN_ALLOW_ERROR_FRAMES, &value, sizeof(value));
+    }
+#endif
+
     channel_ = handle;
     open_ = true;
     isFd_ = wantFd;
@@ -274,11 +288,18 @@ bool PcanDevice::read(core::CanFrame& out, std::chrono::milliseconds timeout) {
             status = CAN_Read(channel_, &msg, &ts);
         }
         if (status == PCAN_ERROR_OK) {
+            const std::uint32_t mtype = isFd_ ? msgFd.MSGTYPE : msg.MSGTYPE;
+            if (mtype & PCAN_MESSAGE_STATUS) {
+                // A PCAN status message is the DRIVER talking, not bus
+                // traffic — mapped as a data frame it would invent a frame
+                // with a garbage id in the trace. Bus state is polled via
+                // CAN_GetStatus in busStatus(); drop the message here.
+                continue;
+            }
             out = core::CanFrame{};
             if (isFd_) {
                 out.id  = msgFd.ID;
                 out.dlc = msgFd.DLC;
-                const std::uint32_t mtype = msgFd.MSGTYPE;
                 if (mtype & PCAN_MESSAGE_EXTENDED) out.flags |= core::CanFrame::Extended;
                 if (mtype & PCAN_MESSAGE_RTR)      out.flags |= core::CanFrame::Rtr;
                 if (mtype & PCAN_MESSAGE_FD)       out.flags |= core::CanFrame::Fd;
@@ -290,12 +311,17 @@ bool PcanDevice::read(core::CanFrame& out, std::chrono::milliseconds timeout) {
             } else {
                 out.id  = msg.ID;
                 out.dlc = msg.LEN;
-                const std::uint32_t mtype = msg.MSGTYPE;
                 if (mtype & PCAN_MESSAGE_EXTENDED) out.flags |= core::CanFrame::Extended;
                 if (mtype & PCAN_MESSAGE_RTR)      out.flags |= core::CanFrame::Rtr;
                 const std::size_t n = std::min<std::size_t>(msg.LEN, 8);
                 std::memcpy(out.data.data(), msg.DATA, n);
                 out.timestamp_us = timestampToMicroseconds(ts);
+            }
+            if (mtype & PCAN_MESSAGE_ERRFRAME) {
+                // Delivered only when open() could enable
+                // PCAN_ALLOW_ERROR_FRAMES; id/dlc/data stay exactly as the
+                // driver reported them.
+                out.flags |= core::CanFrame::ErrorFrame;
             }
             return true;
         }
@@ -396,6 +422,33 @@ void PcanDevice::recordError(unsigned long status, const char* op) {
 
 std::uint64_t PcanDevice::errorCount() const noexcept {
     return errorCount_.load(std::memory_order_relaxed);
+}
+
+core::ICanDevice::BusErrorCounters PcanDevice::busErrorCounters() const noexcept {
+    core::ICanDevice::BusErrorCounters c;
+    // tec/rec stay nullopt on EVERY platform: no PEAK API reports the
+    // controller's fault-confinement counters — the portable health signal
+    // is busStatus() (PCAN_ERROR_BUSLIGHT/HEAVY/PASSIVE/BUSOFF).
+#if defined(__APPLE__) && defined(PCAN_EXT_ERR_COUNTER)
+    // PCBUSB-only UVS extension: how many error frames the driver has seen
+    // since the channel was initialised. The header documents no width for
+    // the parameter, so probe the DWORD first (the PCANBasic convention for
+    // counters) and fall back to 64-bit; a library that rejects both simply
+    // reports nothing — never a made-up zero.
+    if (!open_) return c;
+    DWORD v32 = 0;
+    if (CAN_GetValue(channel_, PCAN_EXT_ERR_COUNTER, &v32, sizeof(v32)) ==
+        PCAN_ERROR_OK) {
+        c.errorFrames = v32;
+        return c;
+    }
+    std::uint64_t v64 = 0;
+    if (CAN_GetValue(channel_, PCAN_EXT_ERR_COUNTER, &v64, sizeof(v64)) ==
+        PCAN_ERROR_OK) {
+        c.errorFrames = v64;
+    }
+#endif
+    return c;
 }
 
 }  // namespace mac_pcan::drivers

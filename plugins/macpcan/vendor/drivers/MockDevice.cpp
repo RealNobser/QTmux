@@ -95,6 +95,27 @@ void MockDevice::failNextWrites(std::size_t count) {
     failNext_ = count;
 }
 
+void MockDevice::setBusStatus(core::ICanDevice::BusStatus status) {
+    std::lock_guard lock(mtx_);
+    busStatus_ = status;
+}
+
+void MockDevice::setBusErrorCounters(
+    const core::ICanDevice::BusErrorCounters& counters) {
+    std::lock_guard lock(mtx_);
+    busErrorCounters_ = counters;
+}
+
+core::ICanDevice::BusStatus MockDevice::busStatus() const noexcept {
+    std::lock_guard lock(mtx_);
+    return busStatus_;
+}
+
+core::ICanDevice::BusErrorCounters MockDevice::busErrorCounters() const noexcept {
+    std::lock_guard lock(mtx_);
+    return busErrorCounters_;
+}
+
 void MockDevice::enqueue(const core::CanFrame& frame) {
     {
         std::lock_guard lock(mtx_);

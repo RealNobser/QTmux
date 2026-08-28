@@ -38,6 +38,15 @@ public:
     // Test helper: make the next N write() calls return false.
     void failNextWrites(std::size_t count);
 
+    // Test helpers for the bus-health passthrough: what the setters stage
+    // here is exactly what busStatus()/busErrorCounters() report — so a
+    // test can prove the value travels device → service → controller →
+    // REST/GUI without a real adapter.
+    void setBusStatus(core::ICanDevice::BusStatus status);
+    void setBusErrorCounters(const core::ICanDevice::BusErrorCounters& counters);
+    core::ICanDevice::BusStatus busStatus() const noexcept override;
+    core::ICanDevice::BusErrorCounters busErrorCounters() const noexcept override;
+
 private:
     mutable std::mutex mtx_;
     std::condition_variable cv_;
@@ -47,6 +56,8 @@ private:
     bool open_ = false;
     std::string lastError_;
     core::BitrateConfig openedConfig_{};
+    core::ICanDevice::BusStatus busStatus_ = core::ICanDevice::BusStatus::Unknown;
+    core::ICanDevice::BusErrorCounters busErrorCounters_{};
 };
 
 }  // namespace mac_pcan::drivers

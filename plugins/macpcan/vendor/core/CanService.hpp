@@ -54,6 +54,11 @@ public:
     // Returns Unknown when the service isn't running.
     ICanDevice::BusStatus busStatus() const noexcept;
 
+    // Numeric bus-error counters straight from the driver — see
+    // ICanDevice::BusErrorCounters for which backend reports which field.
+    // {} when the service isn't running.
+    ICanDevice::BusErrorCounters busErrorCounters() const noexcept;
+
     // --- Receive-path diagnostics (2026-08-15) -------------------------
     // ⚠️ `lastError()` above is NOT the driver's current error: it only
     // ever holds an open-time or write-time failure. The worker discards

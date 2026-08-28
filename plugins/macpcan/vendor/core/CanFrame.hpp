@@ -42,11 +42,16 @@ struct CanFrame {
     bool isExtended() const noexcept { return (flags & Extended) != 0; }
     bool isFd() const noexcept       { return (flags & Fd) != 0; }
     bool isRtr() const noexcept      { return (flags & Rtr) != 0; }
+    bool isErrorFrame() const noexcept { return (flags & ErrorFrame) != 0; }
 
     // Composite key for HashMap<CAN-ID -> Aggregator-Entry>. Std and Ext
     // identifiers share the numeric range 0..0x7FF, so we must not collide.
+    // Error frames get their own bit for the same reason: their id field
+    // carries error-class bits (SocketCAN) or whatever the driver reported,
+    // which may equal a real identifier on the same bus — without the bit
+    // an error frame would fold its garbage payload into that ID's row.
     std::uint32_t aggregatorKey() const noexcept {
-        return (id << 1) | (isExtended() ? 1u : 0u);
+        return (id << 2) | (isErrorFrame() ? 2u : 0u) | (isExtended() ? 1u : 0u);
     }
 
     // Number of bytes the DLC actually addresses — see decodePayloadBytes().

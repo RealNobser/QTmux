@@ -31,6 +31,9 @@ public:
     std::string lastError() const override;
     core::ICanDevice::BusStatus busStatus() const noexcept override;
     std::uint64_t errorCount() const noexcept override;
+    // errorFrames via PCBUSB's UVS parameter PCAN_EXT_ERR_COUNTER (macOS
+    // only); tec/rec always nullopt — no PEAK API exposes them.
+    core::ICanDevice::BusErrorCounters busErrorCounters() const noexcept override;
 
     // Translate a PCBUSB-internal channel handle name (e.g. "PCAN_USBBUS1")
     // back to the numeric handle used by the C API.

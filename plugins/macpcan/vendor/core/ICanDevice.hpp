@@ -98,6 +98,29 @@ public:
     // reporting anything. A rising count proves the receive path had
     // trouble; a flat count proves only that the driver stayed quiet.
     virtual std::uint64_t errorCount() const noexcept { return 0; }
+
+    // Numeric bus-error counters, each field individually optional because
+    // the backends genuinely report DIFFERENT quantities — merging them into
+    // one mandatory pair would force somebody to invent a number:
+    //   tec/rec      — the CAN controller's transmit/receive error counters
+    //                  (ISO 11898 fault confinement). SocketCAN reports them
+    //                  via netlink (IFLA_CAN_BERR_COUNTER); PCBUSB/PCANBasic
+    //                  have no API for them on any platform.
+    //   errorFrames  — error frames the DRIVER has counted since open.
+    //                  PCBUSB (macOS) reports this via the UVS parameter
+    //                  PCAN_EXT_ERR_COUNTER; Windows PCANBasic does not.
+    // A backend that can't report a field leaves it nullopt — consumers must
+    // omit it, never substitute a made-up value. The portable signal remains
+    // busStatus() above.
+    struct BusErrorCounters {
+        std::optional<std::uint16_t> tec;
+        std::optional<std::uint16_t> rec;
+        std::optional<std::uint64_t> errorFrames;
+        bool any() const noexcept {
+            return tec.has_value() || rec.has_value() || errorFrames.has_value();
+        }
+    };
+    virtual BusErrorCounters busErrorCounters() const noexcept { return {}; }
 };
 
 const char* busStatusLabel(ICanDevice::BusStatus s) noexcept;

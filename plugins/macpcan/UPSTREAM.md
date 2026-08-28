@@ -10,8 +10,8 @@ Kanonische Quelle ist MacPCAN; dasselbe Einbahnstraßen-Muster wie bei
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `2c6c15e40707ba100f33e95133c1adfbbe7a4bb3` |
-| Datum | 2026-08-16 |
+| Commit | `7aa86c049e7f95c27a10b3f601a52b35c77e42c1` |
+| Datum | 2026-08-28 |
 
 Mit diesem Stand (Welle 0.1, 2026-08-12) wurden **7 von 8 Dateien** nachgeführt —
 das Verzeichnis war seit dem Anlegen auf dem Hub-Stand M9 (`a3448a7`) eingefroren,
@@ -40,6 +40,16 @@ verwarf der Worker `read() == false` wortlos) und **RX-Supervisor**
 (`receiveStuck()`/`recoveries()` + selbsttätiger Kanal-Neustart, wenn der
 Fehlerzähler bei gleichzeitiger Frame-Stille steigt). Wieder rein **additiv**,
 in QTmux weiterhin **nicht verdrahtet**.
+
+Nachzug 2026-08-28: alle 8 Dateien nachgeführt, Ursache Hub-Commit `0994c06`
+(MAC-44, **Bus-Status und Fehlerzähler durchgängig sichtbar**):
+`CanFrame::isErrorFrame()`, `ICanDevice::BusErrorCounters` (TEC/REC/
+Error-Frames als `std::optional`, `any()`) + `busErrorCounters()`, dazu die
+Mock-Setter `setBusStatus()`/`setBusErrorCounters()` und die PCAN-Seite. Der
+Anlass des Syncs war Hub-Commit `7aa86c0` (DiagClient-P2-Fix, MAC-63) — der
+berührt nur `src/diag`/`src/isotp`, die QTmux **nicht** vendiert; die Drift
+selbst stammt aus MAC-44 und lag seit dem 19.08. unbemerkt. Wieder rein
+**additiv**, in QTmux weiterhin **nicht verdrahtet**.
 
 ## Umfang des Kontrakts
 

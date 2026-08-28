@@ -183,6 +183,14 @@ ICanDevice::BusStatus CanService::busStatus() const noexcept {
     return device_->busStatus();
 }
 
+ICanDevice::BusErrorCounters CanService::busErrorCounters() const noexcept {
+    // Same contract as busStatus(): a read-only driver query, no queue
+    // lock, and {} (all fields nullopt) when nothing is running — callers
+    // omit missing fields instead of inventing a zero.
+    if (!device_ || !running_.load()) return {};
+    return device_->busErrorCounters();
+}
+
 std::uint64_t CanService::deviceErrors() const noexcept {
     // Deliberately NOT gated on running_: a session that has just been
     // closed still holds the count of what went wrong while it was open,
