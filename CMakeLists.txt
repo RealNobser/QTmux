@@ -373,6 +373,21 @@ target_link_libraries(qtmux PRIVATE
     Qt6::QuickControls2
 )
 
+# Plugins (QTMUX-8) -----------------------------------------------------------
+# Demo-Plugin als Beweis der Plugin-Kette + Kopiervorlage; landet in <build>/plugins.
+# 🔑 Die Plugin-Verzeichnisse stehen VOR dem i18n-Block, damit qt_add_translations
+# unten das (bedingt existierende) MacPCAN-Plugin-Target in SOURCE_TARGETS aufnehmen
+# kann — ein Target, das erst nach dem Aufruf entsteht, wäre für lupdate unsichtbar.
+# Beide Plugins hängen ihre POST_BUILD-Schritte nur ans eigene Target; auf qtmux
+# greifen sie nur per Generator-Expression zu (Auswertung zur Generierungszeit),
+# die Verschiebung ändert am Build also nichts.
+add_subdirectory(plugins/echo)
+
+# MacPCAN-Plugin (QTMUX-9): erstes echtes Plugin (CAN-Bus als Terminal-Backend).
+# Nur macOS; baut sich selbst nur, wenn die PCBUSB-Bibliothek gefunden wird
+# (sonst still übersprungen — s. plugins/macpcan/CMakeLists.txt).
+add_subdirectory(plugins/macpcan)
+
 # Übersetzungen (i18n) — .qm werden unter :/i18n/ eingebettet ----------------
 # 🔑 SOURCE_TARGETS ist Pflicht, nicht Kosmetik: Ohne die Angabe scannt lupdate ALLE
 # Targets des Projekts — auch die Tests. `tests/tst_i18n.cpp` fragt fuer QTMUX-117
@@ -384,10 +399,18 @@ target_link_libraries(qtmux PRIVATE
 # wurde es nur nicht, weil Qt die Translator in umgekehrter Installationsreihenfolge
 # befragt und qtbase zuletzt installiert wird; ein Vertauschen der beiden Zeilen in
 # main.cpp haette QTMUX-117 still zurueckgedreht.
+# 🔑 Die Plugin-Adapterschicht (plugins/macpcan, z. B. CanText.h/MacPcanPlugin.cpp)
+# muss mitgescannt werden: Das Target existiert nur bedingt (macOS + gefundene
+# PCBUSB), darum bedingte Aufnahme — ein Build ohne Plugin darf nicht brechen.
+# Der vendierte Kern (plugins/macpcan/vendor/, Namespace mac_pcan) ist Qt-frei
+# und liefert konstruktionsbedingt keine tr()-Strings in die Kataloge.
+set(qtmux_i18n_source_targets qtmux qtmux_core)
+if(TARGET qtmux_macpcan_plugin)
+    list(APPEND qtmux_i18n_source_targets qtmux_macpcan_plugin)
+endif()
 qt_add_translations(qtmux
     SOURCE_TARGETS
-        qtmux
-        qtmux_core
+        ${qtmux_i18n_source_targets}
     TS_FILES
         i18n/qtmux_de.ts
         i18n/qtmux_en.ts
@@ -505,15 +528,6 @@ if(WIN32)
                         "--screenshot weicht auf das sichtbare Fenster aus.")
     endif()
 endif()
-
-# Plugins (QTMUX-8) -----------------------------------------------------------
-# Demo-Plugin als Beweis der Plugin-Kette + Kopiervorlage; landet in <build>/plugins.
-add_subdirectory(plugins/echo)
-
-# MacPCAN-Plugin (QTMUX-9): erstes echtes Plugin (CAN-Bus als Terminal-Backend).
-# Nur macOS; baut sich selbst nur, wenn die PCBUSB-Bibliothek gefunden wird
-# (sonst still übersprungen — s. plugins/macpcan/CMakeLists.txt).
-add_subdirectory(plugins/macpcan)
 
 # Tests ----------------------------------------------------------------------
 if(QTMUX_BUILD_TESTS)
