@@ -118,7 +118,7 @@ jobs:
           QTMUX_BUILD_DIR: build
         run: |
           sudo apt-get install -y libfuse2 || true
-          bash installer/build-appimage.sh 1.9.2
+          bash installer/build-appimage.sh 1.9.3
 
       - name: AppImage-Artefakt hochladen (Linux)
         # Nur Release-Läufe (Tag v*) und manuell angestoßene Läufe laden hoch:
