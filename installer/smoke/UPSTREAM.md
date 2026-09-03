@@ -23,8 +23,12 @@ seinem MacPCAN-Submodul auf).
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `fdefedaa726a1b892a40c639a8bd4eabed685862` |
-| Datum | 2026-08-11 |
+| Commit | `c40742c5e0e5d81f884dfaae7e3cc36e91f6de29` |
+| Datum | 2026-09-03 |
+
+Abgleich 2026-09-04 (Release 1.9.3): `git log fdefeda..c40742c -- platform/windows/`
+über die vier Dateien der Liste ist **leer**, Wächter „byte-identisch" — nur
+der Pin wandert.
 
 ## Wozu das Gate
 

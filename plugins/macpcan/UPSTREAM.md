@@ -10,10 +10,18 @@ Kanonische Quelle ist MacPCAN; dasselbe Einbahnstraßen-Muster wie bei
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `7aa86c049e7f95c27a10b3f601a52b35c77e42c1` |
-| Datum | 2026-08-28 |
+| Commit | `c40742c5e0e5d81f884dfaae7e3cc36e91f6de29` |
+| Datum | 2026-09-03 |
+| Betreff | `docs: Release 0.5.0 -- HISTORY-Artefakttabelle, Belege, Statuskopf, Anker` |
 
-Mit diesem Stand (Welle 0.1, 2026-08-12) wurden **7 von 8 Dateien** nachgeführt —
+Abgleich 2026-09-04 (Release 1.9.3, Familien-Runde nach MacPCAN 0.5.0):
+Wächter 3/3 „byte-identisch" gegen den Hub-Stand `c40742c` (= Tag `v0.5.0`
+plus ein Doku-Commit), `git diff --stat 7aa86c0..c40742c` über alle acht
+vendierten Pfade **leer** — der Diag/UDS-Zug des Hubs (0.5.0) liegt in
+`src/diag`/`src/isotp`, außerhalb des Kontrakts. Kein Nachzug, nur der Pin
+wandert.
+
+Mit dem Stand `7aa86c0` (2026-08-28) (Welle 0.1, 2026-08-12) wurden **7 von 8 Dateien** nachgeführt —
 das Verzeichnis war seit dem Anlegen auf dem Hub-Stand M9 (`a3448a7`) eingefroren,
 weil der Sync-Wächter es nicht kannte. Herübergekommen sind ausschließlich
 **additive** Hub-Erweiterungen, in QTmux bewusst **nicht verdrahtet** (enger
