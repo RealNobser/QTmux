@@ -662,9 +662,12 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-132**, beidseitig **106 Done / 26 Backlog** (2026-08-18; QTMUX-64 im
-Projektabschluss geschlossen — durch QTMUX-81 abgedeckt —, QTMUX-60 mit Vermerk bewusst
-offen); Benutzerdoku beider Confluence-Instanzen trägt den 1.9.1/1.9.2-Stand.
+**QTMUX-133** (CI-Artefakt-Hebel, 2026-08-21), beidseitig **107 Done / 26 Backlog**
+(gemessen 2026-09-06 im Jira-Audit — die frühere Zeile „bis 132, 106/26" war seit dem
+21.08. veraltet; QTMUX-64 im Projektabschluss geschlossen — durch QTMUX-81 abgedeckt —,
+QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
+Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen); Benutzerdoku beider
+Confluence-Instanzen trägt den 1.9.1/1.9.2-Stand.
 
 **Teststände:** **31** Tests (s. Dateitabelle; per `ctest -N` am 2026-08-18 in drei
 macOS-Build-Dirs gezählt — `pastewrite` kam nach den letzten Vollmessungen hinzu). macOS
@@ -843,8 +846,8 @@ die dauerhaften Lektionen stehen jeweils im zuständigen Fachabschnitt, nicht hi
 
 **Offene Jira (geführt wird in Jira, hier nur Zeiger):**
 **122/123** (OSC-52-Zwischenablage · Hinweis bei App-Maus) sind seit `162f079` in `main`
-und mit 1.8.1 **ausgeliefert** — Mechanik in der Feature-Referenz; ob der Jira-Status
-dual auf Done steht, ist ungeprüft. ·
+und mit 1.8.1 **ausgeliefert** — Mechanik in der Feature-Referenz; Jira-Status dual
+**Done** (am 2026-09-06 per REST in beiden Systemen gemessen). ·
 **40** (OSC-8-Hyperlinks — deferred; bräuchte Cursor-Span-Tracking + neues `Cell`-Feld,
 teuer, da `VtScreen` den Sichtbereich lazy aus libvterm bildet) ·
 **13** (native macOS-Menü-Icons — deferred; Qt reicht `icon.source`/`icon.name` in nativen
