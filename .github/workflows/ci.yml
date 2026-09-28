@@ -11,9 +11,7 @@ on:
     # als ASSET an das (Draft-)Release des Tags; das Release-Rezept holt es per
     # `gh release download v<ver> -p 'QTmux-*-x86_64.AppImage'` (QTMUX-136).
     # Kein Actions-Artefakt mehr — dessen Quota ist account-weit (2026-09-28 voll).
-    # PROBE (QTMUX-136): `appimage-probe-*` ist VORÜBERGEHEND für genau einen
-    # Probe-Lauf zugelassen; der Folgecommit entfernt es wieder.
-    tags: ['v*', 'appimage-probe-*']
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -159,11 +157,15 @@ jobs:
     runs-on: ubuntu-latest
     # Nur Tag-Pushes; ein pull_request erreicht diesen Job nie. Der Fork-Riegel
     # steht trotzdem (Familienregel; das Repo ist öffentlich).
+    # Einmal geprobt mit dem Wegwerf-Tag appimage-probe-1 (Lauf 36484293842,
+    # 2026-09-28; Tag und Draft danach gelöscht). Zum Wiederholen
+    # `appimage-probe-*` für EINEN Commit in on.push.tags, hier im `if` und im
+    # `case` von „Version und Tag" zulassen und danach wieder entfernen.
     if: >-
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository) &&
       github.event_name == 'push' &&
-      (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/appimage-probe-'))
+      startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
@@ -178,7 +180,6 @@ jobs:
           test -n "$v" || { echo "Version nicht aus CMakeLists.txt lesbar" >&2; exit 1; }
           case "$GITHUB_REF_NAME" in
             v*) test "$GITHUB_REF_NAME" = "v$v" || { echo "Tag $GITHUB_REF_NAME != v$v (CMakeLists.txt)" >&2; exit 1; } ;;
-            appimage-probe-*) echo "PROBE-Tag (QTMUX-136) — kein echtes Release" ;;
             *) echo "unerwarteter Ref $GITHUB_REF_NAME" >&2; exit 1 ;;
           esac
           echo "version=$v" >> "$GITHUB_OUTPUT"

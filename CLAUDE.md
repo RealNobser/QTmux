@@ -306,7 +306,28 @@ C CXX)` ist Pflicht (ohne `C` → leere `vterm.lib` → Linkfehler).
 
 `.github/workflows/ci.yml`: Build + headless-Tests (`QT_QPA_PLATFORM=offscreen`) auf
 macOS/Windows/Linux; Qt via `jurplel/install-qt-action` (Module **qtserialport** +
-**qtshadertools**). Linux-Job baut zusätzlich das AppImage (Artefakt `QTmux-AppImage`).
+**qtshadertools**). Linux-Job packt zusätzlich bei jedem Lauf das AppImage (Wächter für
+`build-appimage.sh` + linuxdeploy-Pin) — **hochgeladen wird es dort nicht**.
+🔑 **Release-AppImage = GitHub-Release-Asset, KEIN Actions-Artefakt (QTMUX-136,
+2026-09-28).** Die Artefakt-Quota ist **account-weit** (alle Repos von RealNobser) und war
+am 2026-09-28 voll (EmbyStudios 0.0.4-Tag-Lauf scheiterte dreimal allein am Upload);
+Release-Assets zählen nicht dagegen. Mechanik nach EmbyStudio-Vorlage (EMB-34): eigener
+Job **`linux-release`** — nur Tag-Pushes `v*`, `needs: build`, **`contents: write` nur
+dort** (Workflow-Standard `contents: read`; `permissions` kennt keine Ausdrücke, darum ein
+eigener Job), Fork-Riegel, nur `GITHUB_TOKEN`. Er prüft Tag = `v<CMakeLists-Version>`,
+baut Release ohne Tests, packt und hängt das Image per
+[tools/rc_release_asset.py](tools/rc_release_asset.py) an das Release des Tags: fehlt es,
+entsteht ein **Draft**; ein **veröffentlichtes** Release und ein Tag auf **fremdem Commit**
+werden verweigert, danach Rücklesen (Größe + sha256-Digest). Selbsttest ohne Netz
+[tools/test_rc_release_asset.py](tools/test_rc_release_asset.py) läuft im Linux-Matrix-Job
+(Mutationsprobe: beide Verweigerungen aus → rot). Eine AppImage-**Abnahme** in der CI hat
+QTmux nicht (anders als EmbyStudio) — die Build-ID misst das Release-Rezept am
+heruntergeladenen Asset. Probe: Wegwerf-Tag `appimage-probe-1` (Lauf `36484293842`,
+4/4 grün; Draft mit Asset, sha256 in Job-Log = GitHub-Digest = Download, Build-ID
+`1.9.5+2957f31` im extrahierten Image ASCII + UTF-16, kein `-dirty`; danach Tag + Draft
+gelöscht und Zulassung entfernt) — zum Wiederholen
+`appimage-probe-*` für EINEN Commit in `on.push.tags`, im Job-`if` und im `case` von
+„Version und Tag" zulassen.
 **Windows-Tests sind seit `db52b41` blockierend** — vorher lief der Schritt mit
 `continue-on-error`, weil `test_pty` dort umgebungsbedingt fällt; damit waren aber auch alle
 übrigen Tests wirkungslos, eine echte Regression hätte den Job nie rot gemacht. Jetzt wird nur
@@ -702,8 +723,10 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 Stand **2026-09-28, nach dem Release 1.9.5** · Working Tree sauber, ein Arbeitsbaum, nur
 Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD` muss **leer** sein.
-Nichts Unreleastes an Code auf `main` seit `v1.9.5` (nur Doku-Commits;
-Messkommando `git log --oneline v1.9.5..origin/main`).
+Nichts Unreleastes an **App**-Code auf `main` seit `v1.9.5` — nur Doku und der
+CI-/Release-Umbau QTMUX-136 (AppImage als Release-Asset; das nächste Release ist das
+erste nach dem neuen Rezept, Publish-Mechanik unten; Messkommando
+`git log --oneline v1.9.5..origin/main`).
 Release-Endstand im „Ausgeliefert"-Absatz oben; Rolle: **Standby**, Arbeit kommt per
 Owner-Zuruf (Individual-Entwicklung).
 🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` ändert ihn, und der
@@ -729,7 +752,13 @@ Hintergrund: die 0,5-GB-Actions-Quota war am 2026-08-17 voll, QTmux mit ~7,2 GB 
 
 🚢 **Publish-Mechanik fürs nächste Release:** `build_msi.cmd` auf rtzbld01 **verlangt die
 Version als Argument** (sonst `VERSION_ARG_FEHLT`; Checkout dort vorher per
-`git pull --ff-only` auf den Bau-Commit, Wrapper zieht nicht selbst) · den **Upload**
+`git pull --ff-only` auf den Bau-Commit, Wrapper zieht nicht selbst) · das **AppImage**
+kommt seit QTMUX-136 aus dem **Draft-Release** des Tags, nicht mehr aus einem
+Actions-Artefakt: nach grünem Tag-Lauf (Job `linux-release`)
+`gh release download v<v> -R RealNobser/QTmux -p 'QTmux-*-x86_64.AppImage' -D dist/`
+— `gh release download` sieht Drafts; sha256 gegen die `sha256sum`-Zeile im Log des
+Jobs und gegen GitHubs `digest` halten, Build-ID am extrahierten Image messen; dieser
+**absolute** Pfad geht an `--artifact linux-x86_64=` · den **Upload**
 fährt diese Session **selbst** mit dem Hub-Werkzeug, und zwar **exakt in dieser Form**,
 sonst greift die Owner-Permission-Regel nicht (Orchestrator-Vorgabe 2026-09-28, so bei
 1.9.4 und 1.9.5 ohne Block gelaufen): `python3 /Users/nobser/Projects/_ClaudeWorkspace/MacPCAN/tools/updates/publish.py
@@ -741,8 +770,11 @@ sonst greift die Owner-Permission-Regel nicht (Orchestrator-Vorgabe 2026-09-28, 
 ist damit abgelöst; blockt der Harness doch, nicht umgehen, sondern dem Orchestrator den
 fertigen Befehl meldengültig) · Slot strikt seriell, **`index.json` per Cache-Bust VOR dem Upload sichern** und
 danach hart diffen · eigene Abnahme nie der `verify OK`-Zeile glauben (Rezept im
-„Ausgeliefert"-Absatz) · ans **GitHub-Release** denken (`--target <voller SHA>`, vier
-Assets, je Rückladung + `cmp`) · Confluence-Benutzerdoku dual (Stand-Absatz; Cloud nur
+„Ausgeliefert"-Absatz) · **GitHub-Release fertigstellen:** das Draft des Tags existiert
+schon (vom Tag-Job, trägt das AppImage) — **NICHT** `gh release create` (legte ein
+zweites Release an), sondern `gh release upload v<v> <dmg> <msi> <zip>`, Titel/Text per
+`gh release edit`, Assets je Rückladung + `cmp`, und erst **nach** Update-Server-Upload
+und eigener Abnahme `gh release edit v<v> --draft=false` · Confluence-Benutzerdoku dual (Stand-Absatz; Cloud nur
 per `curl`, urllib scheitert am Zertifikat).
 ✅ **Startup-Check-Paar mit 1.9.4 umgesetzt** (Koordinator-Entscheid 2026-08-07): Key
 `update/auto_check` **mit Migration** vom alten `update/autoCheck` (Start **und**
@@ -966,13 +998,16 @@ nicht in jede Session. Hier bleiben nur die zwei Regeln, die man beim Planen ken
   **direkt auf `main`** — ausdrückliche Vorgabe, kein Notfallweg. GitHub protokolliert das
   als „Bypassed rule violations"; das ist erwartet und kein Warnsignal.
   (Nur ein **Force**-Push braucht das kurzzeitige Lockern der Regel, s. Git-Lektionen.)
-- **Release:** `gh release create v<ver> --target <voller SHA>` — ein **Kurz-SHA wird
-  abgelehnt** (HTTP 422). Assets: DMG + MSI + portables ZIP + AppImage.
-  Das AppImage stammt aus dem CI-Lauf (`gh run download <id> -n QTmux-AppImage`),
-  nicht aus einem Extra-Build. ⚠️ **Seit 2026-08-21 laden nur noch Tag-Läufe (`v*`)
-  und `workflow_dispatch`-Läufe das Artefakt hoch** (Quota-Hebel: jeder main-Push lud
-  ~44 MB, konsumiert wurde nur der Release-Lauf) — also erst den Tag pushen, dann vom
-  **Tag-Lauf** herunterladen; der Lauf des main-Push trägt kein Artefakt mehr.
+- **Release:** Seit QTMUX-136 legt der **Tag-Lauf** das Release als **Draft** an und
+  hängt das AppImage an (Job `linux-release`, Mechanik im CI-Abschnitt). Der Release-Weg
+  holt es von dort (`gh release download v<ver> -p 'QTmux-*-x86_64.AppImage'`), hängt
+  DMG + MSI + portables ZIP per `gh release upload` an **dasselbe** Draft und
+  veröffentlicht erst nach Upload + Abnahme (`gh release edit v<ver> --draft=false`).
+  ⚠️ **Nicht mehr `gh release create`** — das Draft existiert schon, ein zweites Release
+  wäre die Folge. (Wer doch einmal ein Release ohne Tag-Job anlegt: `--target <voller
+  SHA>`, ein **Kurz-SHA wird abgelehnt**, HTTP 422.) Bis 1.9.5 kam das AppImage als
+  Actions-Artefakt (`gh run download <id> -n QTmux-AppImage`) — dieser Weg ist tot, der
+  Upload-Schritt ist entfernt.
   Releases existieren ab **v1.4.0** (je 4 Assets); für 1.0.1/1.3.0 gibt es seit der
   Repo-Neuaufsetzung **weder** Releases **noch** lokale Kopien (dist/-Aufräumen 2026-08-10,
   Owner-Freigabe) — diese Binaries sind endgültig weg.

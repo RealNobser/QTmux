@@ -16,6 +16,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.dont_write_bytecode = True  # kein tools/__pycache__ im Arbeitsbaum
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import rc_release_asset as ra  # noqa: E402
 

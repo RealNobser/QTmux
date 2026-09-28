@@ -953,19 +953,23 @@ gemessen, die Befehle laufen wörtlich.
 2. Alle drei Plattformen bauen + testen, committen, pushen, CI abwarten.
 3. Installer: `installer/build-dmg.sh <ver>` lokal · auf rtzbld01
    `C:\Tools\qtmux-build\build_msi.cmd <ver>` (Version ist **Argument** — s. Falle im
-   Arbeitsstand) · AppImage aus dem **CI-Lauf desselben Commits**
-   (`gh run download <id> -n QTmux-AppImage`).
+   Arbeitsstand) · AppImage aus dem **Draft-Release des Tags** — nach dem Tag-Push hängt
+   der CI-Job `linux-release` es dort an (QTMUX-136):
+   `gh release download v<ver> -p 'QTmux-*-x86_64.AppImage' -D dist/`. (Bis 1.9.5 war es
+   ein Actions-Artefakt; die Quota dafür ist account-weit und lief am 2026-09-28 voll.)
 4. **Am Artefakt gegenprüfen, nicht am Build-Log:** je Binary Treffer auf die neue
    Nummer **und 0 Reste der alten**. DMG mounten, ZIP entpacken, AppImage mit
    `--appimage-extract` auspacken (squashfs — ein `grep` aufs AppImage selbst findet nie
    etwas und sähe wie ein Fehler aus).
-5. Tag + `gh release create` (voller SHA!), dann
+5. DMG/MSI/ZIP per `gh release upload v<ver> …` an **dasselbe** Draft (kein
+   `gh release create` — das Draft legt der Tag-Lauf an), dann
    `UPDATES_SFTP_HOST=… python3 ../MacPCAN/tools/updates/publish.py --product qtmux
    --version <ver> --notes-de … --notes-en … --artifact <key>=<datei>,kind=<art> …
    --upload --verify`. Schlüssel und Zielpfad kennt `publish.py` als Vorgabe
    (`~/.ssh/updates_publish_ed25519`, `public_html/updates`).
 6. Gegenprobe: `curl` + `openssl pkeyutl -verify` auf die Live-Bytes und ein manueller
-   Check aus der App.
+   Check aus der App. Erst danach das GitHub-Release veröffentlichen:
+   `gh release edit v<ver> --draft=false`.
 
 🔑 **Der Zyklus-Nachweis braucht eine ÄLTERE Instanz MIT Feature** — dafür ein
 `git worktree` auf den Vor-Bump-Commit, dort ein temporäres Gerüst in `main.cpp`, das

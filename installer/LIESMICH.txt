@@ -41,8 +41,8 @@ Weitere Plattformen
   (Gebaut mit installer/build-dmg.sh.)
 - Linux: "QTmux-<Version>-x86_64.AppImage" ausführbar machen und starten:
      chmod +x QTmux-*-x86_64.AppImage && ./QTmux-*-x86_64.AppImage
-  Keine Installation nötig. (Gebaut mit installer/build-appimage.sh; in der CI
-  als Artefakt "QTmux-AppImage" verfügbar.)
+  Keine Installation nötig. (Gebaut mit installer/build-appimage.sh; Release-
+  Images hängen als Asset am GitHub-Release.)
 
 Feedback
 --------

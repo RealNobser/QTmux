@@ -197,7 +197,7 @@ WiX-Quelle: [`installer/QTmux.wxs`](installer/QTmux.wxs) (Installation nach
 Da unsigniert, warnt SmartScreen beim ersten Start („Weitere Informationen → Trotzdem ausführen").
 
 **Linux (AppImage):** Standard-Qt-Toolchain `linuxdeploy` + `linuxdeploy-plugin-qt`.
-Die CI baut das AppImage bei jedem Push und stellt es als Artefakt `QTmux-AppImage` bereit.
+Die CI baut das AppImage bei jedem Push; Release-Images hängen als Asset am jeweiligen GitHub-Release.
 
 ### Roadmap
 
@@ -393,7 +393,7 @@ WiX source: [`installer/QTmux.wxs`](installer/QTmux.wxs) (installs to `Program F
 on first launch ("More info → Run anyway").
 
 **Linux (AppImage):** the standard Qt toolchain `linuxdeploy` + `linuxdeploy-plugin-qt`.
-CI builds the AppImage on every push and publishes it as the `QTmux-AppImage` artifact.
+CI builds the AppImage on every push; release images are attached as assets to the corresponding GitHub release.
 
 ### Roadmap
 
