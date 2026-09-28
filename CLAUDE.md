@@ -601,55 +601,66 @@ Standardweg für visuelle Abnahmen. ⚠️ Er setzt `QTMUX_NO_GPU=1` und fotogra
 **QPainter-Fallback**: Fehler im Glyph-Atlas (QTMUX-97) sind darauf **prinzipiell unsichtbar**.
 Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fallen, nicht hier.
 
-## Arbeitsstand & Wiedereinstieg (2026-09-04)
+## Arbeitsstand & Wiedereinstieg (2026-09-28)
 
 > Die EINE Stelle für den aktuellen Stand (Pflegeregeln 2–4 oben). Verlauf steht in
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.9.3 — Wartungsrelease der Familien-Runde nach MacPCAN 0.5.0
-(2026-09-04, letzter Slot nach MacPCAN 0.5.0 / RAFTNG 0.9.0 / pcm-rescue+pcm-tune 0.9.0).**
-Release-Commit `d875816` (Bump aller sechs manuellen Stellen, davor `63c9fcc` Vendor-Pins
-auf Hub `c40742c` bei 0 Drift), Tag `v1.9.3` auf dem Bau-Commit. Inhalt gegenüber 1.9.2:
-CAN-Vendor auf Hub-Stand (MAC-44 Bus-Status/Fehlerzähler, `b08d875`), Plugin-Target im
-lupdate-Scan (`b9f55b8`), AppImage-Upload nur auf Tag-/Dispatch-Läufen (`f9703b1`) —
-keine funktionale Änderung an Terminal/Sessions/MCP. **Alle vier Artefakte aus `d875816`,
-Build-ID `1.9.3+d875816` je Artefakt EINZELN gemessen** (kein `-dirty`, kein `unknown`;
-liegen unter `dist/`):
+**Ausgeliefert: v1.9.4 — neues App-Icon + Startup-Check-Paar (2026-09-28, Orchestrator-
+Auftrag mit Owner-Freigabe).** Tag `v1.9.4` auf dem Bau-Commit `3987935` (Bump aller sechs
+manuellen Stellen, 15/15 Zeilen wie bei 1.9.3). Inhalt gegenüber 1.9.3: App-Icon randlos in
+der Familiensprache (`f2ac913`) · QTMUX-134 `update/auto_check` mit Migration +
+Drossel-Stempel vor dem Request (`26dcae2`) · Vendoring-Pins auf Hub `8242342` bei 0 Drift
+(`05a49d3`, kein Code-Nachzug). **Alle vier Artefakte aus `3987935`, Build-ID
+`1.9.4+3987935` je Artefakt EINZELN gemessen** (kein `-dirty`, kein `unknown`, 0 Reste
+von `1.9.3`/`d875816`; liegen unter `dist/`):
 
 | Artefakt | Bytes | SHA256 |
 |---|---|---|
-| `QTmux-1.9.3-macos.dmg` | 60 847 878 | `88775cd1c6f633fce1f5e4e181127ef3449d764dc986fc6a6893f54a9289a307` |
-| `QTmux-1.9.3-win64.msi` | 35 216 042 | `f906e7d3e3f1b32e410d9cc4cb43be9f2fc5f9c4a23218bbd396799bff9a54ff` |
-| `QTmux-1.9.3-win64-portable.zip` | 39 258 716 | `616a77323ffe1c6ad9fd2ab924fcca4b8fb9608db5056398e87ef9282d898513` |
-| `QTmux-1.9.3-x86_64.AppImage` | 44 841 464 | `f9113e015358dde6a65acb38e068528d8384a9b828cbfe6ce3e2eb7b1a84815d` |
+| `QTmux-1.9.4-macos.dmg` | 60 719 366 | `c77b5ce36932d8050140cb9d38f9d3c1946c40787ed355ddc2b6d9f86911d2db` |
+| `QTmux-1.9.4-win64.msi` | 35 224 234 | `7390bf6f2689f566eb4715c70c739228db6589b251191f2bedab68a43ceac73f` |
+| `QTmux-1.9.4-win64-portable.zip` | 39 261 477 | `188eb3da19c3a7e2633effc7b2bf6d5e8d0eb728d910b315c64fa182366c00cc` |
+| `QTmux-1.9.4-x86_64.AppImage` | 44 849 656 | `32fa09b1dc78deac811c141d7b9c91b84c5448b09a8fdf9b9ec43744c1acec44` |
 
-Messwege: DMG gemountet, Bundle mit `env -i` gestartet und `get_server_info` über einen
-eigenen MCP-Port abgefragt (`buildId 1.9.3+d875816`, `buildDirty false`; Dateiliste des
-DMG-Inhalts **identisch** zu 1.9.2, 2207 Einträge; die `/opt/homebrew`-Doppelkette ist die
-bekannte Entwicklungsrechner-Klasse aus dem DMG-Abschnitt) · MSI auf rtzbld01 per
-`msiexec /a` entpackt, Version+Hash in ASCII **und** UTF-16 je 1×, alte Version 0×,
-1423 Dateien und **Dateiliste identisch zum 1.9.2-MSI**, 1619-Smoke grün · ZIP per
-`zipfile` (1456 Einträge, `qtmux.exe` gleiche Zählung) · AppImage = CI-Artefakt des
-Tag-Laufs, auf rtzsvr02 per `--appimage-extract` (sha256 dort = lokal). Fernbau Windows
-synchron in einer per `nohup` vom Tool-Timeout entkoppelten SSH-Sitzung; ⚠️ der erste
-Lauf brach in `build-msi.ps1` mit „Build fehlgeschlagen" ab, **ohne Compiler-Ausgabe** —
-das Skript verschluckt die Configure-Ausgabe (`>nul 2>&1`), ein identischer zweiter Lauf
-baute sauber durch (Ursache nicht gemessen; bei Wiederholung Configure separat mit
-sichtbarer Ausgabe fahren, Vorlage `diag_configure.cmd` unter `C:\Tools\qtmux-build\`).
-CI Tag-Lauf `33812155857`: erster Durchgang Windows rot mit exakt dem dokumentierten
-Flake (`test_doc_duplicates`, `0xc0000142`, 29/30), main-Lauf `33812153542` desselben
-Commits komplett grün; nach `rerun --failed` alle drei Jobs `completed/success`, Test-Step
-einzeln gelesen. **Publish selbst gefahren** (`publish.py --product qtmux --upload
---verify` aus dem Hub-Checkout, `UPDATES_SFTP_HOST` aus `t-online.env` abgelesen — der
-alte Anker „Classifier blockt den Upload in dieser Session" gilt nicht mehr); eigene
-Abnahme: Manifest `1.9.3`/`2026-09-04`, Signatur gegen die Client-Bytes gültig und
-Gegentest gefallen, alle drei Artefakte per Cache-Bust zurückgeladen und `cmp` byte-gleich,
-`index.json`-Diff gegen den Vorher-Snapshot **exakt eine Zeile** (qtmux `1.9.2`→`1.9.3`),
-alle **elf** Produkte erhalten. GitHub-Release `v1.9.3` (Target voller SHA), vier Assets
-je per Rückladung `cmp`-belegt; **Release-Liste lückenlos v1.4.0–v1.9.3** (v1.9.1
-existiert — der Orchestrator-Anker „fehlt" war überholt). Benutzerdoku beider
-Confluence-Instanzen auf 1.9.3 (on-prem v21, Cloud v20, je zurückgelesen).
+Messwege wie 1.9.3: DMG gemountet, Bundle per `env -i` gestartet, `get_server_info`
+(`buildId 1.9.4+3987935`, `buildDirty false`), `qtmux.icns` im Bundle **`cmp`-gleich** zu
+`resources/appicon/qtmux.icns` (Gegenprobe: 1.9.3-Icon weicht ab), Dateiliste identisch
+zu 1.9.3 (2006 Dateien; inhaltlich weichen genau 5 ab: Icon, Binary, Echo-Plugin,
+CodeResources, Info.plist); dazu die **Migration am Artefakt** belegt (Profil mit
+`update.autoCheck = 0` → nach dem Start `update.auto_check = 0`, alter Key weg, kein
+`lastCheck`) · MSI per `msiexec /a` auf rtzbld01 (1423 Dateien, Liste identisch zu 1.9.3,
+Build-ID ASCII+UTF-16 je 1×, 1619-Smoke grün) · ZIP per `zipfile` (1456 Einträge) ·
+AppImage = CI-Artefakt des Tag-Laufs, auf rtzsvr02 extrahiert (1672 Dateien, Namen
+identisch zu 1.9.3).
+🔑 **Größenabweichungen — alle drei erklärt, keine übergangen:** (1) **DMG −128 512 B**
+trotz +45 KB Inhalt: Kontrollversuch — das byte-identische 1.9.3-Bundle erneut per
+`hdiutil … UDZO` verpackt ergab −161 KB/−181 KB gegenüber dem Original und 19,6 KB
+Streuung zwischen zwei Läufen. **hdiutil-UDZO streut bei identischem Inhalt um ~±180 KB**;
+eine DMG-Größe allein ist darum kein Befund, der Datei-/Hash-Vergleich des Inhalts ist es.
+(2) **MSI +8 192 B**: einzig `qtmux.exe` wächst (+3 072 B, eingebettetes `.ico`), der Rest
+ist Sektor-Rundung des MSI-Containers. (3) **AppImage +8 192 B**: neben Binary und PNG hat
+sich **`usr/lib/libgcrypt.so.20`** (+4 096 B) geändert — nicht aus unserem Diff, sondern
+aus dem Runner-Image (ubuntu-24.04 `20260823.283.1` → `20260920.314.1`; linuxdeploy
+bündelt die Bibliothek aus dem System-`/lib`). Ein AppImage erbt also still
+Sicherheits-Updates des Runners — gut, aber ein Grund mehr, Inhalt statt Größe zu messen.
+CI: main-Lauf `36418652538` und Tag-Lauf `36419251400` je 3/3 `success`, Test-Steps
+einzeln gelesen (diesmal ohne den Windows-Flake). **Publish selbst gefahren** in der
+Owner-Permission-Form (Rezept unten); eigene Abnahme: `index.json`-Diff **exakt eine
+Zeile** (qtmux `1.9.3`→`1.9.4`), alle **zwölf** Produkte erhalten; Manifest
+`1.9.4`/`2026-09-28`, Signatur mit dem **in QTmux eingebauten** Schlüssel
+(`UpdateKeys.hpp`, openssl `pkeyutl -rawin`) gegen die heruntergeladenen Bytes gültig,
+Gegentest (ein Byte geändert) fällt; drei Artefakte per Cache-Bust zurückgeladen und
+`cmp`-gleich. GitHub-Release `v1.9.4` (Target voller SHA, vier Assets je per Rückladung
+`cmp`-belegt). Benutzerdoku beider Confluence-Instanzen auf 1.9.4 (on-prem v22, Cloud v21,
+je zurückgelesen).
+Davor: **v1.9.3** — Wartungsrelease der Familien-Runde nach MacPCAN 0.5.0 (2026-09-04,
+`d875816`, Build-ID `1.9.3+d875816`; CAN-Vendor auf Hub-Stand MAC-44, Plugin-Target im
+lupdate-Scan, AppImage-Upload nur auf Tag-Läufen). ⚠️ Beim 1.9.3-Fernbau brach der erste
+`build-msi.ps1`-Lauf mit „Build fehlgeschlagen" **ohne Compiler-Ausgabe** ab (Configure-
+Ausgabe per `>nul 2>&1` verschluckt), ein identischer zweiter lief sauber — bei
+Wiederholung Configure separat sichtbar fahren (`diag_configure.cmd` unter
+`C:\Tools\qtmux-build\`); bei 1.9.4 trat es nicht auf.
 Davor: **v1.9.2** — finaler Stand der Familien-Kampagne (2026-08-18), Manifest
 `published: 2026-08-18`, Publish fuhr die MacPCAN-Session. GitHub-Releases — v1.9.1 wurde am
 2026-08-18 nachgezogen (⚠️ mit dem **Server**-DMG: das lokale dist/-DMG von 1.9.1 war ein
@@ -664,22 +675,21 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-133** (CI-Artefakt-Hebel, 2026-08-21), beidseitig **107 Done / 26 Backlog**
-(gemessen 2026-09-06 im Jira-Audit — die frühere Zeile „bis 132, 106/26" war seit dem
-21.08. veraltet; QTMUX-64 im Projektabschluss geschlossen — durch QTMUX-81 abgedeckt —,
+**QTMUX-134** (Startup-Check-Paar, 2026-09-28), beidseitig **108 Done / 26 offen**
+(2026-09-28 exakt gezählt — Cloud per paginierter `search/jql`; ⚠️ Clouds
+`search/approximate-count` meldete zur selben Zeit 107/27, der Index hinkt einer frischen
+Transition hinterher. Vorher 107/26 bis QTMUX-133, gemessen im Jira-Audit 2026-09-06; QTMUX-64 im Projektabschluss geschlossen — durch QTMUX-81 abgedeckt —,
 QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
-Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen); Benutzerdoku beider
-Confluence-Instanzen trägt den 1.9.1/1.9.2-Stand.
+Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 
 **Teststände:** **31** Tests (s. Dateitabelle; per `ctest -N` am 2026-08-18 in drei
 macOS-Build-Dirs gezählt — `pastewrite` kam nach den letzten Vollmessungen hinzu). macOS
 lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
 (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich
 Qt-`bin` im PATH, sonst `0xc0000135`) — dort eine um 1 kleinere Zahl erwarten. Aktuellste
-Grün-Messung: CI-Tag-Lauf `33812155857` (2026-09-04, Release-Stand 1.9.3; Windows nach
-einem `0xc0000142`-Flake per `rerun --failed` grün, 30 Tests dort) und main-Lauf
-`33812153542` desselben Commits auf allen drei Plattformen grün inkl. Test-Steps; die
-letzten lokalen Vollläufe (2026-08-10/11, Stand 1.9.0/1.9.1) waren vollzählig grün.
+Grün-Messung: CI-Tag-Lauf `36419251400` und main-Lauf `36418652538` (2026-09-28,
+Release-Stand 1.9.4) auf allen drei Plattformen grün inkl. Test-Steps; lokal am selben Tag
+31/31 in `build/macos-test` (Debug) **und** `build/macos-release`.
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
 besteht. Eine kleinere Zahl aus dem Container ist kein Widerspruch, sondern die
 Ausnahme per `-E`. **Zahl immer per `ctest -N` gegenprüfen, nie schätzen.**
@@ -691,18 +701,18 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-09-04, nach dem Release 1.9.3** (letzter Slot der Familien-Runde nach
-MacPCAN 0.5.0) · Working Tree sauber, ein Arbeitsbaum, nur Branch `main`, alles gepusht —
-`git log --oneline origin/main..HEAD` muss **leer** sein. Release-Endstand im
-„Ausgeliefert"-Absatz oben; Rolle: **Standby**, Arbeit kommt per Owner-Zuruf
-(Individual-Entwicklung).
+Stand **2026-09-28, nach dem Release 1.9.4** · Working Tree sauber, ein Arbeitsbaum, nur
+Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD` muss **leer** sein.
+Release-Endstand im „Ausgeliefert"-Absatz oben; Rolle: **Standby**, Arbeit kommt per
+Owner-Zuruf (Individual-Entwicklung).
 🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` ändert ihn, und der
 Anker wäre im selben Moment falsch (2026-08-07 genau so passiert). Beim Wiedereinstieg
 zusätzlich `git log --oneline -3` gegenlesen — die Windows-Session pusht ebenfalls.
 
 **Rolle derzeit: Standby-Worker des Orchestrators** (Session 1 im Workspace; Rückmeldungen
 als `MELDUNG QTMUX [FERTIG|FRAGE|ABBRUCH]: …` per `queue_text`). Zuletzt erledigt
-(2026-09-04): **Release 1.9.3 komplett** — Bump, Tag, CI, vier Artefakte, Publish mit
+(2026-09-28): **Release 1.9.4 komplett** inkl. QTMUX-134 (alles im „Ausgeliefert"-Absatz).
+Davor (2026-09-04): **Release 1.9.3 komplett** — Bump, Tag, CI, vier Artefakte, Publish mit
 eigener Abnahme, GitHub-Release, Confluence dual (alles im „Ausgeliefert"-Absatz). Davor
 (2026-08-18): **Familien-Schlussrelease komplett** — v1.9.1-Release nachgezogen, v1.9.2
 gebaut/publiziert/getaggt, Jira-Abschluss (64 zu, 60 vermerkt), Benutzerdoku beider
@@ -718,13 +728,16 @@ Hintergrund: die 0,5-GB-Actions-Quota war am 2026-08-17 voll, QTmux mit ~7,2 GB 
 🚢 **Publish-Mechanik fürs nächste Release:** `build_msi.cmd` auf rtzbld01 **verlangt die
 Version als Argument** (sonst `VERSION_ARG_FEHLT`; Checkout dort vorher per
 `git pull --ff-only` auf den Bau-Commit, Wrapper zieht nicht selbst) · den **Upload**
-fährt seit 1.9.3 diese Session **selbst** mit dem Hub-Werkzeug (`cd ../MacPCAN &&
-python3 tools/updates/publish.py --product qtmux --version <v> --notes-de … --notes-en …
---artifact "macos-universal=<dmg>,kind=dmg" --artifact "win-x86_64=<msi>,kind=msi"
---artifact "linux-x86_64=<AppImage>,kind=appimage" --upload --verify`,
-`UPDATES_SFTP_HOST` als Env aus `t-online.env` **abgelesen**, nie gesourct; der ältere
-Anker „Harness-Classifier blockiert den Upload hier" war am 2026-09-04 nicht mehr
-gültig) · Slot strikt seriell, **`index.json` per Cache-Bust VOR dem Upload sichern** und
+fährt diese Session **selbst** mit dem Hub-Werkzeug, und zwar **exakt in dieser Form**,
+sonst greift die Owner-Permission-Regel nicht (Orchestrator-Vorgabe 2026-09-28, so bei
+1.9.4 ohne Block gelaufen): `python3 /Users/nobser/Projects/_ClaudeWorkspace/MacPCAN/tools/updates/publish.py
+--product qtmux --version <v> --notes-de … --notes-en … --artifact
+"macos-universal=<abs. dmg>,kind=dmg" --artifact "win-x86_64=<abs. msi>,kind=msi"
+--artifact "linux-x86_64=<abs. AppImage>,kind=appimage" --sftp-host
+'nobser@nobser.de@hosting.telekom.de' --upload --verify` — **kein** `cd … &&` davor,
+**keine** Env-Zuweisung davor (der ältere Weg über `UPDATES_SFTP_HOST` aus `t-online.env`
+ist damit abgelöst; blockt der Harness doch, nicht umgehen, sondern dem Orchestrator den
+fertigen Befehl meldengültig) · Slot strikt seriell, **`index.json` per Cache-Bust VOR dem Upload sichern** und
 danach hart diffen · eigene Abnahme nie der `verify OK`-Zeile glauben (Rezept im
 „Ausgeliefert"-Absatz) · ans **GitHub-Release** denken (`--target <voller SHA>`, vier
 Assets, je Rückladung + `cmp`) · Confluence-Benutzerdoku dual (Stand-Absatz; Cloud nur
@@ -759,9 +772,9 @@ Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, p
    `Mode::System` an (`QLocale::system()`, EN/DE/SV); QTmux kann nur fest Deutsch/Englisch.
    RAFTNG nennt es ausdrücklich eine **Produktentscheidung**, keine technische, und liefert
    auf Zuruf. Nicht eigenmächtig übernommen.
-2. **Produktivinstanz auf 1.9.3 heben?** Sie läuft auf `1.9.2+80405c1` (gemessen
-   2026-09-04) und trägt die laufende Orchestrierung — ein Update opfert die
-   Terminal-Sessions. Der Online-Update-Dialog bietet 1.9.3 von selbst an; der Zeitpunkt
+2. **Produktivinstanz auf 1.9.4 heben?** Sie läuft auf `1.9.3+d875816` (gemessen
+   2026-09-28) und trägt die laufende Orchestrierung — ein Update opfert die
+   Terminal-Sessions. Der Online-Update-Dialog bietet 1.9.4 von selbst an; der Zeitpunkt
    ist Owner-Sache.
    (Der frühere Punkt „GitHub-Release v1.9.1 nachziehen?" ist erledigt: am 2026-08-18
    nachgezogen, Historie lückenlos — s. „Ausgeliefert" oben.)
@@ -769,9 +782,9 @@ Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, p
 #### Zustand, der nicht aus Code/Git hervorgeht
 
 - ⚠️ **Die Produktivinstanz läuft aus `/Applications/QTmux.app`** (Port 7345,
-  **`1.9.2+80405c1`**, `buildDirty: false` — gemessen 2026-09-04 via `get_server_info` +
-  `ps` auf die PID aus `netstat`; der Owner hatte sie also nach dem 18.08. selbst auf
-  1.9.2 gehoben). Sie trägt die laufende Orchestrierung — nie
+  **`1.9.3+d875816`**, `buildDirty: false` — gemessen 2026-09-28 via `get_server_info`;
+  der Owner hat sie nach dem 04.09. selbst auf 1.9.3 gehoben, der Anker „1.9.2" war
+  seitdem veraltet). Sie trägt die laufende Orchestrierung — nie
   hineinbauen/updaten, ohne dass der Owner die Terminal-Sessions opfern will.
   🔑 Vor jeder Diagnose an ihr die Build-ID gegen `git log` halten; PID über
   `lsof -nP -iTCP:7345 -sTCP:LISTEN` holen, **nie** eine notierte PID verwenden (die hier
