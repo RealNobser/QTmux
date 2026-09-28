@@ -9,9 +9,13 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `c40742c5e0e5d81f884dfaae7e3cc36e91f6de29` |
-| Datum | 2026-09-03 |
-| Betreff | `docs: Release 0.5.0 -- HISTORY-Artefakttabelle, Belege, Statuskopf, Anker` |
+| Commit | `8242342cfade722afdd66c670c0906ead5ab68ec` |
+| Datum | 2026-09-28 |
+| Betreff | `jira: MAC-66 guikit-instanzmasse + MAC-67 appbarchip-zeilenstil (done)` |
+
+Abgleich 2026-09-28 (Release 1.9.4): `git log c40742c..8242342 -- src/update/`
+ist **leer**, Wächter „byte-identisch" (Positiv-Gegenprobe: eine angehängte
+Zeile in `Ed25519Verify.hpp` meldet er als ABWEICHUNG). Nur der Pin wandert.
 
 Abgleich 2026-09-04 (Release 1.9.3): `git log bdf7eec..c40742c -- src/update/`
 ist **leer**, Wächter „byte-identisch" — zwischen dem vorigen Pin `bdf7eec`

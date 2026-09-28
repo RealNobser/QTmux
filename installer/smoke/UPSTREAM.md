@@ -23,8 +23,11 @@ seinem MacPCAN-Submodul auf).
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `c40742c5e0e5d81f884dfaae7e3cc36e91f6de29` |
-| Datum | 2026-09-03 |
+| Commit | `8242342cfade722afdd66c670c0906ead5ab68ec` |
+| Datum | 2026-09-28 |
+
+Abgleich 2026-09-28 (Release 1.9.4): `git log c40742c..8242342 -- platform/windows/`
+ist **leer**, Wächter „byte-identisch" — nur der Pin wandert.
 
 Abgleich 2026-09-04 (Release 1.9.3): `git log fdefeda..c40742c -- platform/windows/`
 über die vier Dateien der Liste ist **leer**, Wächter „byte-identisch" — nur

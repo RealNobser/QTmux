@@ -10,9 +10,14 @@ Kanonische Quelle ist MacPCAN; dasselbe Einbahnstraßen-Muster wie bei
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `c40742c5e0e5d81f884dfaae7e3cc36e91f6de29` |
-| Datum | 2026-09-03 |
-| Betreff | `docs: Release 0.5.0 -- HISTORY-Artefakttabelle, Belege, Statuskopf, Anker` |
+| Commit | `8242342cfade722afdd66c670c0906ead5ab68ec` |
+| Datum | 2026-09-28 |
+| Betreff | `jira: MAC-66 guikit-instanzmasse + MAC-67 appbarchip-zeilenstil (done)` |
+
+Abgleich 2026-09-28 (Release 1.9.4): Wächter 3/3 „byte-identisch" gegen
+`8242342`; `git diff --stat c40742c 8242342` über alle acht vendierten Pfade
+**leer**, während der Hub im selben Intervall 25 Dateien änderte (10 Commits,
+sämtlich außerhalb des Kontrakts). Kein Nachzug, nur der Pin wandert.
 
 Abgleich 2026-09-04 (Release 1.9.3, Familien-Runde nach MacPCAN 0.5.0):
 Wächter 3/3 „byte-identisch" gegen den Hub-Stand `c40742c` (= Tag `v0.5.0`
