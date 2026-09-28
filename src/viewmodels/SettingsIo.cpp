@@ -105,7 +105,9 @@ QStringList SettingsIo::patternsFor(const QString &category) {
                  // dabei: das ist Laufzeitzustand (wann zuletzt geprüft wurde), keine
                  // Einstellung — exportiert und woanders importiert würde er die
                  // Tagesdrosselung einer fremden Maschine erben.
-                 QStringLiteral("update/autoCheck"),
+                 // Bis 1.9.3 hieß der Schalter `update/autoCheck` — alte
+                 // Exportdateien übersetzt readFile(), s. dort.
+                 QStringLiteral("update/auto_check"),
                  QStringLiteral("update/skippedVersion"),
                  QStringLiteral("update/baseUrl"),
                  // Proxy (QTMUX-129). Die Felder decken sich mit
@@ -262,6 +264,16 @@ QVariantMap SettingsIo::readFile(const QUrl &url) {
     QVariantMap out;
     for (auto it = keys.constBegin(); it != keys.constEnd(); ++it)
         out.insert(it.key(), fromJson(it.value()));
+    // Exportdateien bis 1.9.3 tragen den Update-Schalter unter der alten
+    // Schreibweise. Ohne Übersetzung fiele er als „fremder Schlüssel" durch die
+    // Allowlist — ein exportiertes AUS käme nie an (Gegenstück zur Migration in
+    // UpdateViewModel::migrateSettings). Steht der neue Key schon drin, gewinnt er.
+    const QString legacyAutoCheck = QStringLiteral("update/autoCheck");
+    if (out.contains(legacyAutoCheck)) {
+        const QString autoCheck = QStringLiteral("update/auto_check");
+        if (!out.contains(autoCheck)) out.insert(autoCheck, out.value(legacyAutoCheck));
+        out.remove(legacyAutoCheck);
+    }
     setError(QString());
     return out;
 }

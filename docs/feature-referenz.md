@@ -802,7 +802,7 @@ Vorlage — **die Spec mitziehen**, sonst driften Beschreibung und Sache auseina
 
 **App-Seite:** [`UpdateViewModel`](src/viewmodels/UpdateViewModel.h) (Context-Property
 `Updates`, Zustandsautomat Idle/Checking/UpToDate/Available/Downloading/Ready/Failed,
-QSettings `update/autoCheck|lastCheck|skippedVersion|baseUrl`) +
+QSettings `update/auto_check|lastCheck|skippedVersion|baseUrl`; bis 1.9.3 `update/autoCheck`) +
 [`qml/dialogs/UpdateDialog.qml`](qml/dialogs/UpdateDialog.qml) + Hilfe-Menü + zwei
 Palette-Einträge + Einstellungen → Allgemein → „Aktualisierung". Start-Hook in `main.cpp`
 (3 s nach dem Start; im Screenshot-Modus nie). Basis-URL `https://nobser.de/updates`,
@@ -813,13 +813,12 @@ Produkt `qtmux` → `…/qtmux/manifest.json`.
   Netz darf nicht jeden Morgen mit einem Fehlerdialog begrüßen.
 - Der Zeitstempel wird **auch nach einem Fehlschlag** geschrieben; sonst wird aus
   „1×/Tag" bei unerreichbarem Server „bei jedem Start".
-  📌 **Umzustellen: Zeitstempel VOR den Request** (Koordinator-Entscheid 2026-08-07, dem
-  Owner ohne Veto vorgelegt — RAFTNG macht es so). Der Unterschied trifft genau einen Fall:
-  eine Antwort, die *nie* kommt (hängender Server, Anwender beendet QTmux vor dem Timeout).
-  Dann bleibt der Zeitstempel aus und der nächste Start fragt erneut. Bei einem
-  *fehlschlagenden* Request verhalten sich beide Fassungen gleich — wir schreiben ihn auch
-  nach Fehlschlag. **Kein eigener Release dafür**: geht als Paar mit der Key-Migration unten
-  ins nächste ohnehin anstehende Paket.
+  ✅ **Seit 1.9.4 steht der Zeitstempel VOR dem Request** (Koordinator-Entscheid
+  2026-08-07, RAFTNG macht es so), nicht mehr im Callback. Der Unterschied trifft genau
+  einen Fall: eine Antwort, die *nie* kommt (hängender Server, Anwender beendet QTmux vor
+  dem Timeout) — früher blieb der Stempel dann aus und der nächste Start fragte erneut.
+  Wächter `tst_updateviewmodel::throttleStampIsWrittenBeforeTheRequest` (Server nimmt an,
+  antwortet nie; Mutationsprobe „Stempel zurück in den Callback" macht ihn rot).
 
 **Vertrags-Abgleich „Beim-Start-Update-Check" (Owner-Vorgabe 2026-08-07, workspace-weit für
 alle drei Desktop-Apps):** In QTmux war der Vertrag **bereits vollständig erfüllt** — es gab
@@ -836,14 +835,19 @@ nichts zu bauen. Punkt für Punkt gemessen, nicht aus dem Code geschlossen:
 | Settings-Text mit Deckung | beschreibt, was er **tut** („Höchstens einmal am Tag und still: Gibt es nichts Neues oder ist der Server nicht erreichbar, passiert gar nichts") — keine Zusage „hält aktuell" |
 | Proxy: nie Auth-Dialog beim stillen Check | `answerProxyChallenge` prüft `m_manual`; Wächter `tst_updateviewmodel::silentStartupCheckNeverAsksForProxyCredentials` |
 
-📌 **Key-Angleichung `update/autoCheck` → `update/auto_check` — NUR mit Migration**
-(Koordinator-Entscheid 2026-08-07). RAFTNG nutzt `update/auto_check`, MacPCAN verdrahtet
-neu und übernimmt dieselbe Schreibweise; nach der Migration sind es drei von drei.
-⚠️ **Ein Angleichen ohne Migration ist keine Kosmetik, sondern ein Übergriff:** Es setzt
-jeden Anwender, der den Schalter bewusst ausgeschaltet hat, stillschweigend auf EIN zurück —
-der alte Key wird nie mehr gelesen, und niemand merkt es. **Pflichtreihenfolge:** alten Key
-lesen, Wert übernehmen, **erst dann** den neuen als führend behandeln.
-Geht als Paar mit dem Zeitstempel oben ins nächste Paket — **kein eigener Release**.
+✅ **Key-Angleichung `update/autoCheck` → `update/auto_check` — seit 1.9.4, MIT Migration**
+(Koordinator-Entscheid 2026-08-07; RAFTNG und MacPCAN nutzen dieselbe Schreibweise).
+⚠️ **Ein Angleichen ohne Migration wäre ein Übergriff gewesen:** Es hätte jeden Anwender,
+der den Schalter bewusst ausgeschaltet hat, stillschweigend auf EIN zurückgesetzt.
+Mechanik: `UpdateViewModel::migrateSettings()` läuft im Konstruktor — alten Key lesen,
+Wert übernehmen, **erst dann** gilt der neue; steht der neue schon, gewinnt er; der alte
+wird in beiden Fällen entfernt. **Zweite Tür:** Exportdateien bis 1.9.3 tragen den alten
+Key — `SettingsIo::readFile()` übersetzt ihn, sonst fiele ein exportiertes AUS als
+„fremder Schlüssel" durch die Allowlist. Wächter: `legacyOffSwitchSurvivesTheKeyMigration`,
+`keyMigrationKeepsOnAndPrefersTheNewKey`, `tst_settingsio::importTranslatesLegacyAutoCheckKey`
+(je per Mutationsprobe rot gesehen). Die zwei früher blinden Negativprüfungen des
+Start-Checks (`qWait(200)` + `count()==0`) prüfen seither **fristfrei** auf
+`stateChanged`: ein Start setzt `Checking` synchron im Aufruf.
 
 🔑 **Zwei Messfallen, beide hier hineingelaufen** — wer den Start-Check nachmisst, verliert
 sonst eine halbe Stunde an einem Messgerät, das schweigt:
@@ -852,12 +856,14 @@ sonst eine halbe Stunde an einem Messgerät, das schweigt:
    sieht dabei exakt so aus wie ein abgeschalteter Check.
 2. **QSettings ersetzt `/` durch `.`, sobald der Wert in der macOS-plist landet.** Der Key
    heißt im Code `update/lastCheck`, in `defaults read` aber **`update.lastCheck`**. Ein
-   `defaults write …  "update/autoCheck"` schreibt einen Schlüssel, den die App **nie liest**
+   `defaults write …  "update/auto_check"` schreibt einen Schlüssel, den die App **nie liest**
    — der Gegentest lief damit gegen die Vorgabe statt gegen den ausgeschalteten Schalter und
    „bestätigte" fälschlich. Erkennbar war es nur daran, dass Test und Gegentest **dasselbe**
    Ergebnis lieferten.
 
-**Beleg „Default EIN" (2026-08-07, mit scharfem Gegentest):**
+**Beleg „Default EIN" (2026-08-07, mit scharfem Gegentest; damals noch unter dem alten
+Key — ab 1.9.4 heißt er in der plist `update.auto_check`, ein gesetztes `update.autoCheck`
+wird beim Start migriert und entfernt):**
 ```bash
 # A: frische Config, Key NICHT gesetzt  -> Vorgabe muss greifen
 env -i HOME=$HOME ./build/macos-release/qtmux.app/Contents/MacOS/qtmux \

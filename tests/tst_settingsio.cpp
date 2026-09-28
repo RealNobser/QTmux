@@ -37,6 +37,7 @@ private slots:
     void resetAllKeepsWindowLayout();
     void importRejectsForeignFile();
     void importIgnoresUnknownKeysButShowsThem();
+    void importTranslatesLegacyAutoCheckKey();
 
 private:
     void seedSettings();
@@ -73,7 +74,7 @@ void tst_settingsio::seedSettings() {
     s.setValue(QStringLiteral("window/copyOnSelect"), true);
     s.setValue(QStringLiteral("window/resumeAgentMode"), 3);
     s.setValue(QStringLiteral("mcp/port"), 7346);
-    s.setValue(QStringLiteral("update/autoCheck"), false);
+    s.setValue(QStringLiteral("update/auto_check"), false);
     s.setValue(QStringLiteral("update/skippedVersion"), QStringLiteral("9.9.9"));
     s.setValue(QStringLiteral("colorSchemes/dark"), QStringLiteral("Nord"));
     s.setValue(QStringLiteral("hotkeys/toggleSidebar"), QStringLiteral("Ctrl+Shift+L"));
@@ -107,7 +108,7 @@ void tst_settingsio::allowlistCoversSettingsAndExcludesState() {
         QStringLiteral("window/pasteWarnMultiline"),
         QStringLiteral("window/restoreAgents"), QStringLiteral("window/resumeAgentMode"),
         QStringLiteral("mcp/port"),
-        QStringLiteral("update/autoCheck"), QStringLiteral("update/skippedVersion"),
+        QStringLiteral("update/auto_check"), QStringLiteral("update/skippedVersion"),
         QStringLiteral("update/baseUrl"),
         QStringLiteral("colorSchemes/dark"), QStringLiteral("colorSchemes/light"),
         QStringLiteral("colorSchemes/imported"),
@@ -134,6 +135,9 @@ void tst_settingsio::allowlistCoversSettingsAndExcludesState() {
         // exportiert und woanders importiert erbte die Maschine eine fremde
         // Tagesdrosselung (QTMUX-125).
         QStringLiteral("update/lastCheck"),
+        // Die Schreibweise bis 1.9.3 ist KEINE Einstellung mehr: Beim Start
+        // übernimmt die Migration sie, beim Import übersetzt sie readFile().
+        QStringLiteral("update/autoCheck"),
         // Der Vault liegt als Datei außerhalb von QSettings; selbst ein Schlüssel
         // unter vault/ dürfte nie exportiert werden.
         QStringLiteral("vault/hint")
@@ -345,6 +349,32 @@ void tst_settingsio::importIgnoresUnknownKeysButShowsThem() {
     QCOMPARE(s.value(QStringLiteral("window/terminalFontSize")).toInt(), 21);
     QVERIFY(!s.contains(QStringLiteral("window/zukunftsschalter")));
     QVERIFY(!s.contains(QStringLiteral("windows/size")));
+}
+
+// Eine Exportdatei bis 1.9.3 trägt den Update-Schalter als `update/autoCheck`.
+// Ein darin exportiertes AUS muss nach dem Import unter der neuen Schreibweise
+// ankommen — sonst fiele es als unbekannter Schlüssel still durch die Allowlist.
+void tst_settingsio::importTranslatesLegacyAutoCheckKey() {
+    SettingsIo io;
+    const QString path = m_dir.filePath(QStringLiteral("alt-1.9.3.json"));
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write("{ \"format\": \"qtmux-settings\", \"formatVersion\": 1, \"keys\": {"
+            " \"update/autoCheck\": false } }");
+    f.close();
+
+    const QVariantList prev = io.importPreview(QUrl::fromLocalFile(path));
+    QCOMPARE(prev.size(), 1);
+    QCOMPARE(prev.first().toMap().value(QStringLiteral("key")).toString(),
+             QStringLiteral("update/auto_check"));
+    QVERIFY(!prev.first().toMap().value(QStringLiteral("skipped")).toBool());
+
+    QCOMPARE(io.importFile(QUrl::fromLocalFile(path)),
+             QStringList{ QStringLiteral("update/auto_check") });
+    QSettings s;
+    QVERIFY(s.contains(QStringLiteral("update/auto_check")));
+    QCOMPARE(s.value(QStringLiteral("update/auto_check")).toBool(), false);
+    QVERIFY(!s.contains(QStringLiteral("update/autoCheck")));
 }
 
 QTEST_MAIN(tst_settingsio)

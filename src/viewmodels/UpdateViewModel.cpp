@@ -25,7 +25,11 @@ constexpr auto kProduct = "qtmux";
 // https://nobser.de/updates/qtmux/manifest.json ergibt sich daraus.
 constexpr auto kDefaultBaseUrl = "https://nobser.de/updates";
 
-constexpr auto kKeyAutoCheck = "update/autoCheck";
+constexpr auto kKeyAutoCheck = "update/auto_check";
+// Schreibweise bis 1.9.3. Wird beim Start genau einmal nach kKeyAutoCheck
+// übernommen (migrateSettings) — ohne diese Übernahme stünde jeder bewusst
+// abgeschaltete Schalter nach dem Update still wieder auf AN.
+constexpr auto kKeyAutoCheckLegacy = "update/autoCheck";
 constexpr auto kKeyLastCheck = "update/lastCheck";
 constexpr auto kKeySkipped   = "update/skippedVersion";
 constexpr auto kKeyBaseUrl   = "update/baseUrl";
@@ -53,9 +57,25 @@ UpdateViewModel::UpdateViewModel(QObject *parent) : QObject(parent) {
                          sys == QLatin1String("de") ? QStringLiteral("de")
                                                     : QStringLiteral("en"))
                      .toString();
+    migrateSettings(s);
 }
 
 UpdateViewModel::~UpdateViewModel() = default;
+
+// --- Migration --------------------------------------------------------------
+// Familienweit heißt der Schalter `update/auto_check` (RAFTNG, MacPCAN). Die
+// Reihenfolge ist Pflicht: ALTEN Key lesen, Wert übernehmen, erst dann gilt der
+// neue als führend. Steht der neue schon (Anwender hat nach dem Update
+// umgeschaltet), gewinnt er; der alte wird in beiden Fällen entfernt, damit ein
+// späterer Export ihn nicht wieder mitschleppt.
+void UpdateViewModel::migrateSettings(QSettings &s) {
+    const QString legacy = QLatin1String(kKeyAutoCheckLegacy);
+    if (!s.contains(legacy)) return;
+    const QString key = QLatin1String(kKeyAutoCheck);
+    if (!s.contains(key)) s.setValue(key, s.value(legacy).toBool());
+    s.remove(legacy);
+    s.sync();
+}
 
 // --- Einstellungen ----------------------------------------------------------
 bool UpdateViewModel::autoCheck() const {
@@ -258,15 +278,16 @@ void UpdateViewModel::startCheck(bool manual) {
     emit downloadProgressChanged();
     setState(Checking);
 
+    // Der Zeitstempel steht VOR dem Request, nicht im Callback: So zählt auch
+    // eine Anfrage, deren Antwort NIE kommt (hängender Server, QTmux vor dem
+    // Timeout beendet), als heutiger Versuch — und ein Fehlschlag ohnehin.
+    // Sonst würde aus „höchstens 1×/Tag" bei solchen Servern „bei jedem Start".
+    QSettings().setValue(QLatin1String(kKeyLastCheck),
+                         QDateTime::currentDateTime().toString(Qt::ISODate));
+
     rebuildChecker();
     m_checker->checkForUpdate([this, manual](std::optional<appupdate::UpdateManifest> m,
                                             QString error) {
-        // Der Zeitstempel wird auch bei einem FEHLSCHLAG geschrieben: sonst
-        // versucht es der Start-Check bei jedem Start erneut, obwohl der Server
-        // unerreichbar ist — aus „höchstens 1×/Tag" würde „bei jedem Start".
-        QSettings().setValue(QLatin1String(kKeyLastCheck),
-                             QDateTime::currentDateTime().toString(Qt::ISODate));
-
         if (!m) {
             // Still scheitern, wenn niemand danach gefragt hat.
             if (manual) {

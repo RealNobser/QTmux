@@ -398,7 +398,9 @@ Tags/Branches sind verschiebbar; das Anhebe-Rezept steht als Kommentar in der `c
 > viermal so gelöst); **gibt es keines, den Empfänger instrumentieren** — ein verbotenes
 > Ereignis setzt **sofort** ein Flag, geprüft wird das Flag statt einer Frist (RAFTNGs
 > Muster, fängt den Fall wann immer er eintritt statt nur im Zeitfenster).
-> 📌 Backlog: die zwei Stellen zusammen mit dem Startup-Check-Paar anfassen (s. Arbeitsstand).
+> ✅ Mit dem Startup-Check-Paar (1.9.4) erledigt: Beide prüfen jetzt **fristfrei** auf
+> `stateChanged` — ein Start setzt `Checking` synchron im Aufruf, also ist „kein Signal
+> direkt danach" deterministisch (Gegenprobe: Wächter im Code entfernt → rot).
 
 > **⚠️ `env.QT_VERSION` (6.10.3) ist bewusst gewählt — nicht blind hochziehen.**
 > **Nicht 6.8.x:** dessen CMake-Config verlinkt das aus dem macOS-SDK entfernte
@@ -727,13 +729,10 @@ danach hart diffen · eigene Abnahme nie der `verify OK`-Zeile glauben (Rezept i
 „Ausgeliefert"-Absatz) · ans **GitHub-Release** denken (`--target <voller SHA>`, vier
 Assets, je Rückladung + `cmp`) · Confluence-Benutzerdoku dual (Stand-Absatz; Cloud nur
 per `curl`, urllib scheitert am Zertifikat).
-📌 **Backlog-Paar aus dem Startup-Check-Vertrag** (Koordinator-Entscheid 2026-08-07:
-**keine 1.8.2**, beides zusammen ins nächste ohnehin anstehende Paket) — Mechanik und
-Begründungen im Abschnitt „Online-Update" der Feature-Referenz:
-1. Key `update/autoCheck` → **`update/auto_check`**, aber **nur mit Migration** (alten Key
-   lesen, Wert übernehmen, erst dann den neuen als führend behandeln). Ohne Migration wird
-   jeder bewusst abgeschaltete Schalter still auf EIN zurückgesetzt.
-2. Drossel-Zeitstempel **vor** den Request setzen statt im Callback.
+✅ **Startup-Check-Paar mit 1.9.4 umgesetzt** (Koordinator-Entscheid 2026-08-07): Key
+`update/auto_check` **mit Migration** vom alten `update/autoCheck` (Start **und**
+Import alter Exportdateien) und Drossel-Zeitstempel **vor** dem Request — Mechanik und
+Wächter in der Feature-Referenz „Online-Update".
 Der Vertrag selbst war in QTmux bereits vollständig erfüllt — es wurde **nichts** nachgebaut.
 
 **Nächster eigener Punkt (sobald kein Orchestrator-Auftrag anliegt): QTMUX-94** —
@@ -867,8 +866,7 @@ Signierung/Notarisierung (macOS Developer-ID, Windows Authenticode) · MacPCAN-F
 (CAN-FD, ID-Filter, Konfig-Dialog, DBC-Decoding) · optional CPack-Distro-Pakete
 (.deb/.rpm) · **LGPL-Beilagen** fürs gebündelte Qt (Lizenztext + Quellen-Hinweis) ·
 **DMG-Bundle ausdünnen** (ungenutzte Plugins raus bzw. Homebrew-`LC_RPATH` löschen, beides
-**vor** der Re-Signatur — Begründung und Messweg im DMG-Abschnitt oben) · **Startup-Check-
-Paar** (Key-Migration + Zeitstempel vor den Request, s. Arbeitsstand).
+**vor** der Re-Signatur — Begründung und Messweg im DMG-Abschnitt oben).
 
 ### Design 1a/2a (GUI-Umbau) — abgeschlossen
 

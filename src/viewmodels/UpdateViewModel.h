@@ -26,6 +26,8 @@
 
 #include <memory>
 
+class QSettings;
+
 #include "update/UpdateManifest.hpp"
 #include "update/ProxyConfig.hpp"
 #include "ProxyCredentials.h"
@@ -56,7 +58,8 @@ class UpdateViewModel : public QObject {
     /// muss als „kein Paket für dieses System" erscheinen, nicht als Fehler.
     Q_PROPERTY(bool hasPackageForThisSystem READ hasPackageForThisSystem NOTIFY resultChanged)
 
-    /// Einstellung `update/autoCheck` (Vorgabe AN).
+    /// Einstellung `update/auto_check` (Vorgabe AN; bis 1.9.3 `update/autoCheck`,
+    /// s. migrateSettings).
     Q_PROPERTY(bool autoCheck READ autoCheck WRITE setAutoCheck NOTIFY autoCheckChanged)
     /// Einstellung `update/baseUrl` — abweichend setzbar für Dry-Runs
     /// (`file:///…`-Fixturebaum oder ein lokaler `python3 -m http.server`).
@@ -92,7 +95,13 @@ public:
         Ready,         ///< heruntergeladen und SHA-256-geprüft
         Failed,        ///< Fehler, Text in `lastError`
     };
+
     Q_ENUM(State)
+
+    /// Übernimmt den Schalter aus der Schreibweise bis 1.9.3 (`update/autoCheck`)
+    /// nach `update/auto_check` und entfernt den alten Key. Läuft im Konstruktor;
+    /// öffentlich nur für den Test. Idempotent.
+    static void migrateSettings(QSettings &s);
 
     explicit UpdateViewModel(QObject *parent = nullptr);
     ~UpdateViewModel() override;

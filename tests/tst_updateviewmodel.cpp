@@ -283,11 +283,14 @@ private slots:
         QVERIFY(!stamp.isEmpty());
 
         // Zweiter Anlauf am selben Tag: die Drosselung greift, es passiert nichts.
+        // 🔑 Ohne Frist geprüft: Ein Start setzt `Checking` SYNCHRON im Aufruf
+        // (startCheck), also ist „kein stateChanged direkt danach" ein
+        // deterministischer Beleg. Das frühere qWait(200) + count()==0 war eine
+        // blinde Negativprüfung — unter Fremdlast still grün statt rot.
         UpdateViewModel vm2;
-        QSignalSpy finished(&vm2, &UpdateViewModel::checkFinished);
+        QSignalSpy states(&vm2, &UpdateViewModel::stateChanged);
         vm2.checkOnStartup();
-        QTest::qWait(200);
-        QCOMPARE(finished.count(), 0);
+        QCOMPARE(states.count(), 0);
         QCOMPARE(vm2.state(), int(UpdateViewModel::Idle));
 
         // Gestern geprüft -> wieder fällig.
@@ -302,13 +305,80 @@ private slots:
         UpdateViewModel vm;
         vm.setBaseUrl(baseFor(QStringLiteral("good")));
         vm.setAutoCheck(false);
-        QSignalSpy finished(&vm, &UpdateViewModel::checkFinished);
+        QSignalSpy states(&vm, &UpdateViewModel::stateChanged);   // fristfrei, s. oben
         vm.checkOnStartup();
-        QTest::qWait(200);
-        QCOMPARE(finished.count(), 0);
+        QCOMPARE(states.count(), 0);
         // Von Hand geht es weiterhin — der Schalter betrifft nur den Start.
         QVERIFY(runCheck(vm, true));
         QVERIFY(vm.updateAvailable());
+    }
+
+    // --- Key-Migration update/autoCheck -> update/auto_check (1.9.4) -------
+    // 🔑 Der Fall, um den es geht: Wer den Schalter bis 1.9.3 bewusst
+    // AUSgeschaltet hat, muss ihn nach dem Update weiter AUS finden. Ohne
+    // Migration läse die App den alten Key nie mehr und fiele auf die Vorgabe
+    // AN zurück — still, ohne dass es irgendwo auffiele.
+    void legacyOffSwitchSurvivesTheKeyMigration() {
+        {
+            QSettings s;
+            s.setValue(QStringLiteral("update/autoCheck"), false);
+            s.sync();
+        }
+        UpdateViewModel vm;   // der Konstruktor migriert
+        QVERIFY(!vm.autoCheck());
+        QSettings s;
+        QVERIFY(s.contains(QStringLiteral("update/auto_check")));
+        QCOMPARE(s.value(QStringLiteral("update/auto_check")).toBool(), false);
+        QVERIFY(!s.contains(QStringLiteral("update/autoCheck")));
+
+        // Und die Wirkung, nicht nur der Wert: der stille Check läuft nicht an.
+        vm.setBaseUrl(baseFor(QStringLiteral("good")));
+        QSignalSpy states(&vm, &UpdateViewModel::stateChanged);
+        vm.checkOnStartup();
+        QCOMPARE(states.count(), 0);   // ein Start setzte `Checking` synchron
+        QCOMPARE(vm.state(), int(UpdateViewModel::Idle));
+    }
+
+    // Ein bewusst EINgeschalteter alter Wert bleibt ebenso erhalten, und ein
+    // bereits gesetzter neuer Key gewinnt gegen einen Rest des alten.
+    void keyMigrationKeepsOnAndPrefersTheNewKey() {
+        {
+            QSettings s;
+            s.setValue(QStringLiteral("update/autoCheck"), true);
+            s.sync();
+        }
+        {
+            UpdateViewModel vm;
+            QVERIFY(vm.autoCheck());
+        }
+        {
+            QSettings s;
+            s.setValue(QStringLiteral("update/auto_check"), false);
+            s.setValue(QStringLiteral("update/autoCheck"), true);
+            s.sync();
+        }
+        UpdateViewModel vm;
+        QVERIFY(!vm.autoCheck());
+        QVERIFY(!QSettings().contains(QStringLiteral("update/autoCheck")));
+    }
+
+    // --- Drossel-Zeitstempel VOR dem Request (1.9.4) ------------------------
+    // Ein Server, der die Verbindung annimmt und NIE antwortet. Mit dem Stempel
+    // im Callback bliebe er aus — und der nächste Start fragte erneut. Geprüft
+    // wird unmittelbar nach dem (synchronen) Auslösen, also ohne jede Frist:
+    // es gibt kein Anker-Ereignis, auf das man warten könnte, und keins ist nötig.
+    void throttleStampIsWrittenBeforeTheRequest() {
+        QTcpServer silent;   // nimmt an, antwortet nie
+        QVERIFY(silent.listen(QHostAddress::LocalHost));
+        UpdateViewModel vm;
+        vm.setBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(silent.serverPort()));
+        QVERIFY(!QSettings().contains(QStringLiteral("update/lastCheck")));
+        vm.checkOnStartup();
+        QCOMPARE(vm.state(), int(UpdateViewModel::Checking));   // Anfrage läuft
+        const QString stamp =
+            QSettings().value(QStringLiteral("update/lastCheck")).toString();
+        QVERIFY2(!stamp.isEmpty(), "Zeitstempel fehlt, obwohl die Anfrage schon läuft");
+        QVERIFY(QDateTime::fromString(stamp, Qt::ISODate).isValid());
     }
 
     // „Version überspringen" bindet NUR den stillen Check; der Menüpunkt zeigt
