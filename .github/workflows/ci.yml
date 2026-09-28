@@ -7,13 +7,20 @@ name: CI
 on:
   push:
     branches: [main]
-    # Tag-Läufe (v*) sind die Release-Läufe: nur sie laden das AppImage-Artefakt
-    # hoch (s. Upload-Schritt unten) — der Release-Weg lädt es von dort per
-    # `gh run download <id> -n QTmux-AppImage`.
-    tags: ['v*']
+    # Tag-Läufe (v*) sind die Release-Läufe: Job `linux-release` hängt das AppImage
+    # als ASSET an das (Draft-)Release des Tags; das Release-Rezept holt es per
+    # `gh release download v<ver> -p 'QTmux-*-x86_64.AppImage'` (QTMUX-136).
+    # Kein Actions-Artefakt mehr — dessen Quota ist account-weit (2026-09-28 voll).
+    # PROBE (QTMUX-136): `appimage-probe-*` ist VORÜBERGEHEND für genau einen
+    # Probe-Lauf zugelassen; der Folgecommit entfernt es wieder.
+    tags: ['v*', 'appimage-probe-*']
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+# Standard für alle Jobs: nur lesen. Schreibrecht bekommt allein `linux-release`.
+permissions:
+  contents: read
 
 env:
   # Qt-Version bewusst gewählt (nicht beliebig aktualisierbar):
@@ -120,25 +127,104 @@ jobs:
           sudo apt-get install -y libfuse2 || true
           bash installer/build-appimage.sh 1.9.5
 
-      - name: AppImage-Artefakt hochladen (Linux)
-        # Nur Release-Läufe (Tag v*) und manuell angestoßene Läufe laden hoch:
-        # Gemessen (2026-08-21) lud JEDER main-Push ~44 MB hoch (7,2 GB aus 164
-        # Läufen vor der ersten Räumung), konsumiert wird das Artefakt aber
-        # ausschließlich beim Release (`gh run download <id> -n QTmux-AppImage`).
-        # Vier Artefakte im 7-Tage-Fenster belegten bereits ~35 % der 0,5-GB-
-        # Account-Quota — retention-days allein war nachweislich nicht der Hebel.
-        # Der Pack-Schritt oben läuft weiter bei jedem Lauf (Wächter für
-        # build-appimage.sh und den linuxdeploy-Pin).
-        if: matrix.host == 'linux' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
-        # Auf den Commit-SHA gepinnt wie die uebrigen Dritt-Actions (Tags sind
-        # verschiebbar). v7 statt v6: v6 laeuft noch auf Node 20, das GitHub
-        # abkuendigt. Anheben: `gh api repos/actions/upload-artifact/git/refs/tags/<tag>`.
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      # Das gepackte AppImage bleibt in diesem Job liegen — es wird NIRGENDS
+      # hochgeladen (QTMUX-136). Der Pack-Schritt oben läuft trotzdem bei jedem
+      # Lauf: er ist der Wächter für build-appimage.sh und den linuxdeploy-Pin.
+      # Bis 2026-09-28 stand hier ein upload-artifact-Schritt (Tag-/Dispatch-Läufe,
+      # retention 7 Tage); die Artefakt-Quota ist aber ACCOUNT-weit und war an
+      # dem Tag voll (EmbyStudios 0.0.4-Tag-Lauf scheiterte dreimal allein am
+      # Upload). Release-Images reisen seither als Release-Asset (Job unten).
+
+      # Selbsttest des Upload-Skripts (Verweigerungsfälle: veröffentlichtes
+      # Release, Tag auf fremdem Commit) — billig, darum bei jedem Lauf.
+      - name: Selbsttest rc_release_asset (Linux)
+        if: matrix.host == 'linux'
+        run: python3 tools/test_rc_release_asset.py
+
+  # ---- Release-AppImage → GitHub-Release-Asset (nur Tag-Läufe) ---------------
+  # Der EINZIGE Job mit Schreibrecht, und nur, weil er nur bei Tag-Pushes
+  # existiert: `permissions` kennt keine Ausdrücke, also bekommt der Tag einen
+  # eigenen Job (der Matrix-Job oben bleibt bei jedem Ereignis nur-lesend).
+  # Er baut Release ohne Tests neu (`needs: build` — die Tests desselben Commits
+  # sind auf allen drei Plattformen grün, bevor etwas hochgeht), packt und hängt
+  # das Image an das Release des Tags: fehlt es, entsteht ein DRAFT; ein schon
+  # veröffentlichtes Release wird verweigert, ebenso ein Tag auf fremdem Commit
+  # (tools/rc_release_asset.py, Vorlage EmbyStudio EMB-34). Nur GITHUB_TOKEN,
+  # kein PAT. Release-Assets zählen nicht zur Artefakt-Quota.
+  # Eine AppImage-Abnahme (Start/Build-ID im Image) hat die QTmux-CI bewusst
+  # NICHT — die Build-ID misst das Release-Rezept am heruntergeladenen Asset.
+  linux-release:
+    name: Linux-AppImage → Release-Asset
+    needs: build
+    runs-on: ubuntu-latest
+    # Nur Tag-Pushes; ein pull_request erreicht diesen Job nie. Der Fork-Riegel
+    # steht trotzdem (Familienregel; das Repo ist öffentlich).
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      github.event_name == 'push' &&
+      (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/appimage-probe-'))
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      # Ein v<ver>-Tag muss die Version aus CMakeLists.txt nennen — sonst hinge
+      # das Image unter dem Release einer anderen Version.
+      - name: Version und Tag
+        id: pkg
+        run: |
+          v="$(sed -n 's/^[[:space:]]*VERSION[[:space:]]*\([0-9.]*\).*/\1/p' CMakeLists.txt | head -1)"
+          test -n "$v" || { echo "Version nicht aus CMakeLists.txt lesbar" >&2; exit 1; }
+          case "$GITHUB_REF_NAME" in
+            v*) test "$GITHUB_REF_NAME" = "v$v" || { echo "Tag $GITHUB_REF_NAME != v$v (CMakeLists.txt)" >&2; exit 1; } ;;
+            appimage-probe-*) echo "PROBE-Tag (QTMUX-136) — kein echtes Release" ;;
+            *) echo "unerwarteter Ref $GITHUB_REF_NAME" >&2; exit 1 ;;
+          esac
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "AppImage für QTmux $v aus ${GITHUB_SHA::7} → Release $GITHUB_REF_NAME"
+
+      - name: Linux-Systempakete
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
+            libxcb-cursor0 libfontconfig1-dev libfreetype-dev libfuse2
+
+      # Gleicher SHA-Pin wie im Matrix-Job oben (Begründung dort).
+      - name: Qt installieren
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
-          name: QTmux-AppImage
-          path: dist/QTmux-*-x86_64.AppImage
-          if-no-files-found: error
-          # Ohne Retention gilt die Repo-Vorgabe (90 Tage) — damit lief die
-          # 0,5-GB-Actions-Quota voll (2026-08-17: ~7,2 GB aus 164 Laeufen).
-          # 7 Tage reichen: Release-Assets werden zeitnah nach dem Lauf gezogen.
-          retention-days: 7
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtserialport qtshadertools
+          cache: true
+
+      - name: Konfigurieren (Release, ohne Tests)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQTMUX_BUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
+
+      - name: Bauen
+        run: cmake --build build --parallel
+
+      # build/ und dist/ sind git-ignoriert — der Baum bleibt sauber, die
+      # Build-ID trägt kein -dirty (Statuszeile als Beleg im Log).
+      - name: AppImage packen
+        env:
+          QTMUX_BUILD_DIR: build
+        run: |
+          git status --porcelain --untracked-files=no
+          bash installer/build-appimage.sh "${{ steps.pkg.outputs.version }}"
+          ls -l dist/
+          sha256sum dist/QTmux-*-x86_64.AppImage
+
+      # Vom Skript zurückgelesen: Name, Größe und GitHubs sha256-Digest.
+      - name: AppImage → Release-Asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          python3 tools/rc_release_asset.py upload
+          --tag "$GITHUB_REF_NAME"
+          --commit "$GITHUB_SHA"
+          "dist/QTmux-${{ steps.pkg.outputs.version }}-x86_64.AppImage"
