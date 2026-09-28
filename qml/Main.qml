@@ -144,6 +144,10 @@ ApplicationWindow {
             const s = sessions.sessionAt(row)
             if (s && s.windowId >= 0) window.loadWindow(s.windowId)
         }
+        // MCP create_session: eigenes Window (Tab) SOFORT anlegen — aktiviert aber nur bei
+        // focus=true. Vorgabe ist der Hintergrund: Ein Agent darf dem tippenden Menschen
+        // nicht den Fokus wegziehen (Owner-Vorgabe 2026-09-28).
+        onSessionCreated: (row, focus) => window.openWindowWithSession(row, "", focus)
         onSetThemeRequested: (mode) => Theme.mode = mode
 
         // --- Layout-/Profil-Steuerung über MCP (QTMUX-29). Die Handler laufen
@@ -212,11 +216,10 @@ ApplicationWindow {
             window.loadWindow(id)
             mcp.provideResult(true, "ok")
         }
-        onNewWindowRequested: {
-            window.newSession()                 // neue Shell in eigenem Window (wird aktiv)
-            const w = window.activeWindowObj()
-            const ids = w ? w.sessionIds() : []
-            mcp.provideResult(true, String(ids.length ? ids[0] : -1))
+        onNewWindowRequested: (focus) => {
+            // Neue Shell in eigenem Window — aktiv nur bei focus=true (sonst Hintergrund).
+            const s = sessions.sessionAt(window.newSession(focus))
+            mcp.provideResult(true, String(s ? s.sessionId : -1))
         }
         onRenameWindowRequested: (id, name) => {
             const w = windows.windowById(id)
@@ -237,8 +240,8 @@ ApplicationWindow {
             window.closeWindowRow(row)
             mcp.provideResult(true, "ok")
         }
-        onSplitPaneRequested: (o) => {
-            const sid = window.splitPane(o === "v" ? Qt.Vertical : Qt.Horizontal)
+        onSplitPaneRequested: (o, focus) => {
+            const sid = window.splitPane(o === "v" ? Qt.Vertical : Qt.Horizontal, focus)
             mcp.provideResult(true, String(sid))
         }
         onClosePaneRequested: (paneId) => {
@@ -266,11 +269,11 @@ ApplicationWindow {
         onAssignPaneRequested: (row, paneId) => {
             mcp.provideResult(false, qsTr("assign_session entfällt im Window-Modell — nutze focus_session bzw. focus_window."))
         }
-        onConnectProfileRequested: (name) => {
+        onConnectProfileRequested: (name, focus) => {
             const p = Profiles.profile(name)
             if (!p || !p.name) { mcp.provideResult(false, qsTr("Unbekanntes Profil.")); return }
-            window.connectProfile(p)   // löst ein Vault-Passwort intern auf (wie der GUI-Klick)
-            const s = sessions.sessionAt(window.currentRow)
+            // Löst ein Vault-Passwort intern auf (wie der GUI-Klick); aktiv nur bei focus.
+            const s = sessions.sessionAt(window.connectProfile(p, focus))
             mcp.provideResult(true, String(s ? s.sessionId : -1))
         }
         Component.onCompleted: start()
@@ -285,17 +288,19 @@ ApplicationWindow {
     // beenden (s. pruneSessionsFromWindows).
     property bool _starting: true
 
-    // Extern (per MCP/C++) erzeugte Sessions haben keinen Window — sie kommen mit
-    // windowId==-1 an und würden sonst in keinem Pane sichtbar. QML-erzeugte Sessions
-    // (newSession/splitPane/openWindowWithSession) setzen windowId dagegen SYNCHRON,
-    // bevor dieser verzögerte Check läuft → nur die fensterlosen werden eingepackt.
+    // Sicherheitsnetz für fensterlose Sessions (windowId==-1): Sie wären sonst in keinem
+    // Pane sichtbar. Alle regulären Wege setzen windowId SYNCHRON (newSession/splitPane/
+    // openWindowWithSession, die Dialoge, MCP über onSessionCreated), bevor dieser
+    // verzögerte Check läuft. Was hier noch ankommt, kam an allen vorbei — es wird darum
+    // im HINTERGRUND eingepackt: Eine Session, die niemand bewusst geöffnet hat, darf den
+    // Fokus nicht an sich ziehen (Owner-Vorgabe 2026-09-28).
     function _wrapPending() {
         const ids = window._pendingWrap; window._pendingWrap = []
         for (let i = 0; i < ids.length; ++i) {
             const s = window.sessionById(ids[i])
             if (s && s.windowId < 0) {
                 const row = window.rowForSessionId(ids[i])
-                if (row >= 0) window.openWindowWithSession(row, "")   // eigenes Window (Tab)
+                if (row >= 0) window.openWindowWithSession(row, "", false)   // eigenes Window (Tab)
             }
         }
     }
@@ -611,9 +616,12 @@ ApplicationWindow {
         return list.length > 0 ? list[0].program : ""
     }
 
-    function newSession() {
+    // `activate` (Vorgabe true = GUI-Weg) steuert, ob das neue Window aktiv wird; MCP
+    // übergibt seinen focus-Wert. Gibt die Session-Zeile zurück.
+    function newSession(activate) {
         const row = sessions.createShellSession("", window.defaultShellProgram)
-        window.openWindowWithSession(row, "")   // neue Session -> eigenes Window (Tab)
+        window.openWindowWithSession(row, "", activate)   // neue Session -> eigenes Window (Tab)
+        return row
     }
     // „Session schließen" = aktives Pane schließen (beim letzten Pane das ganze Window).
     function closeCurrent() { window.closePane() }
@@ -637,8 +645,9 @@ ApplicationWindow {
 
     // Startet eine Session aus einem gespeicherten Verbindungsprofil (Connection-
     // Manager, QTMUX-7). `p` ist die Profil-Map aus Profiles.profiles / .profile().
-    function connectProfile(p) {
-        if (!p || !p.name) return
+    // `activate` wie bei newSession (Vorgabe true = GUI-Klick). Gibt die Session-Zeile zurück.
+    function connectProfile(p, activate) {
+        if (!p || !p.name) return -1
         var row
         var ls = p.loginScript || ""
         if (p.type === 1) {
@@ -651,8 +660,9 @@ ApplicationWindow {
             row = sessions.createSerialSession(p.serialPort, p.baud || 115200, ls)
         else
             row = sessions.createShellSession(p.workingDir || "", p.program || "", ls)
-        // Wie bei newSession: eigenes Window (Tab) anlegen und aktivieren.
-        window.openWindowWithSession(row, "")
+        // Wie bei newSession: eigenes Window (Tab) anlegen (und im GUI-Weg aktivieren).
+        window.openWindowWithSession(row, "", activate)
+        return row
     }
     // Öffnet den SFTP-Browser für ein SSH-Profil (löst das Vault-Passwort wie beim
     // Verbinden auf). QTMUX-7-Rest: Dateitransfer über System-sftp.
@@ -1154,17 +1164,22 @@ ApplicationWindow {
         if (w) window.loadWindow(w.windowId)
     }
 
-    // Neues Window mit genau einem Pane für die Session `row` anlegen und aktivieren.
-    function openWindowWithSession(row, name) {
+    // Neues Window mit genau einem Pane für die Session `row` anlegen und — sofern
+    // `activate` nicht ausdrücklich false ist — aktivieren. Mit false entsteht nur die
+    // Kachel in der Seitenleiste: aktives Window, aktives Pane, currentRow und der
+    // Tastaturfokus bleiben unberührt (MCP-Hintergrund-Anlage).
+    function openWindowWithSession(row, name, activate) {
         const s = sessions.sessionAt(row)
         if (!s) return -1
-        syncActiveTree()                       // bisheriges Window sichern
+        const doActivate = (activate !== false)
+        if (doActivate) syncActiveTree()       // bisheriges Window sichern
         const wr = windows.createWindow(name || "")
         const w = windows.windowAt(wr)
         const pid = window.nextPaneId++
         s.windowId = w.windowId
         w.layoutJson = JSON.stringify({ paneId: pid, sessionId: s.sessionId })
         w.activePaneId = pid
+        if (!doActivate) { window.windowsRevision++; return wr }
         window.activeWindowId = -1             // Reload erzwingen
         window.loadWindow(w.windowId)
         return wr
@@ -1522,7 +1537,9 @@ ApplicationWindow {
     // ersetzen. Hat der Eltern-Split bereits dieselbe Orientierung, wird nur ein
     // Geschwister eingefügt — saubere verschachtelte H+V-Mischungen (QTMUX-3). Die neue
     // Session gehört demselben Window. Gibt die neue sessionId zurück (für MCP).
-    function splitPane(orientation) {
+    // `activate` (Vorgabe true = GUI-Split) macht das neue Pane aktiv; mit false (MCP-
+    // Vorgabe) behält das bisherige Pane Fokus und currentRow.
+    function splitPane(orientation, activate) {
         const row = sessions.createShellSession("", window.defaultShellProgram)
         const s = sessions.sessionAt(row)
         if (s) s.windowId = window.activeWindowId
@@ -1540,8 +1557,10 @@ ApplicationWindow {
             if (f.parent) f.parent.children[f.idx] = replacement
             else window.layout = replacement
         }
-        window.activePaneId = newLeaf.paneId
-        window.currentRow = row
+        if (activate !== false) {
+            window.activePaneId = newLeaf.paneId
+            window.currentRow = row
+        }
         rebuildLayout()
         return sid
     }
@@ -3879,8 +3898,10 @@ ApplicationWindow {
 
         onAccepted: {
             if (sshHost.text.length > 0) {
-                window.currentRow = sessions.createSshSession(
-                    sshHost.text, parseInt(sshPort.text) || 22, sshUser.text, sshIdentity.text)
+                // Eigenes Window, aktiviert (GUI-Weg) — ausdrücklich, nicht über das
+                // Hintergrund-Sicherheitsnetz _wrapPending.
+                window.openWindowWithSession(sessions.createSshSession(
+                    sshHost.text, parseInt(sshPort.text) || 22, sshUser.text, sshIdentity.text), "")
             }
         }
 
@@ -3928,8 +3949,8 @@ ApplicationWindow {
         }
         onAccepted: {
             if (portCombo.currentText.length > 0) {
-                window.currentRow = sessions.createSerialSession(
-                    portCombo.currentText, parseInt(baudCombo.currentText))
+                window.openWindowWithSession(sessions.createSerialSession(   // wie SSH-Dialog
+                    portCombo.currentText, parseInt(baudCombo.currentText)), "")
             }
         }
 

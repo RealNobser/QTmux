@@ -116,7 +116,14 @@ signals:
     void tokenChanged();
     void lastErrorChanged();
     /// Vom MCP angeforderter Fokuswechsel auf eine Sidebar-Zeile (QML setzt currentRow).
+    /// Nur noch `focus_session` — das Anlegen fokussiert NICHT (s. sessionCreated).
     void focusRequested(int row);
+    /// create_session hat die Session `row` angelegt. QML packt sie in ein eigenes
+    /// Window (Tab); aktiviert wird es NUR bei `focus == true`. Vorgabe ist false:
+    /// Ein Agent, der im Hintergrund eine Session anlegt, darf dem tippenden Menschen
+    /// den Fokus nicht wegziehen — sonst landen dessen Tastendrücke in der neuen
+    /// Session (Owner-Vorgabe 2026-09-28).
+    void sessionCreated(int row, bool focus);
     /// Vom MCP angeforderter Theme-Wechsel (0=System, 1=Hell, 2=Dunkel).
     void setThemeRequested(int mode);
     // --- Layout-/Profil-Steuerung (QTMUX-29). Handler antworten via provideResult. ---
@@ -132,10 +139,11 @@ signals:
     void renameWindowRequested(int windowId, const QString &name);
     /// Ein Window samt seiner Sessions schließen.
     void closeWindowRequested(int windowId);
-    /// Ein neues Window (mit einer Shell) anlegen und aktivieren.
-    void newWindowRequested();
-    /// Aktives Pane teilen ("h" = nebeneinander, "v" = untereinander).
-    void splitPaneRequested(const QString &orientation);
+    /// Ein neues Window (mit einer Shell) anlegen; aktivieren nur bei `focus`.
+    void newWindowRequested(bool focus);
+    /// Aktives Pane teilen ("h" = nebeneinander, "v" = untereinander). Das neue Pane
+    /// wird nur bei `focus` aktiv, sonst behält das bisherige den Tastaturfokus.
+    void splitPaneRequested(const QString &orientation, bool focus);
     /// Pane schließen (paneId < 0 = aktives Pane). Schließt wie die GUI auch die Session.
     void closePaneRequested(int paneId);
     /// Ein bestehendes Pane fokussieren/aktiv setzen (nur Fokuswechsel, kein Laden).
@@ -145,9 +153,12 @@ signals:
     /// Session (Sidebar-Zeile `row`) in ein Pane laden (paneId < 0 = aktives Pane).
     void assignPaneRequested(int row, int paneId);
     /// Verbindungsprofil per Name verbinden (Vault-Auflösung passiert im QML-Weg).
-    void connectProfileRequested(const QString &name);
+    /// Das neue Window wird nur bei `focus` aktiviert.
+    void connectProfileRequested(const QString &name, bool focus);
 
 private:
+    friend class TestMcpFocus;   // tests/tst_mcpfocus.cpp ruft callTool direkt
+
     void onReadyRead(QTcpSocket *sock);
     void sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status = 200,
                       const QByteArray &extraHeaders = {});

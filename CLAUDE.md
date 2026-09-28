@@ -71,7 +71,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `.qmllint.ini` + `.vscode/settings.json` (+ generierte `.qmlls.ini`) | Editor-Diagnosen für QML: abgeschaltete Kategorien mit Begründung, Ausschluss von `build/`, Importpfade für qmlls (s. QML-Lektionen) |
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **31** ctest-Tests: 30 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, **pastewrite**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 30. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **32** ctest-Tests: 31 QtTest-Binaries (pty, vtscreen, linkdetector, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, **mcpfocus**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 31. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -682,14 +682,15 @@ Transition hinterher. Vorher 107/26 bis QTMUX-133, gemessen im Jira-Audit 2026-0
 QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
 Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 
-**Teststände:** **31** Tests (s. Dateitabelle; per `ctest -N` am 2026-08-18 in drei
-macOS-Build-Dirs gezählt — `pastewrite` kam nach den letzten Vollmessungen hinzu). macOS
+**Teststände:** **32** Tests (s. Dateitabelle; per `ctest -N` am 2026-09-28 in
+`build/macos-test` gezählt — `mcpfocus` kam mit QTMUX-135 hinzu). macOS
 lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
 (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich
 Qt-`bin` im PATH, sonst `0xc0000135`) — dort eine um 1 kleinere Zahl erwarten. Aktuellste
 Grün-Messung: CI-Tag-Lauf `36419251400` und main-Lauf `36418652538` (2026-09-28,
 Release-Stand 1.9.4) auf allen drei Plattformen grün inkl. Test-Steps; lokal am selben Tag
-31/31 in `build/macos-test` (Debug) **und** `build/macos-release`.
+31/31 in `build/macos-test` (Debug) **und** `build/macos-release`; nach QTMUX-135 lokal
+32/32 in beiden.
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
 besteht. Eine kleinere Zahl aus dem Container ist kein Widerspruch, sondern die
 Ausnahme per `-E`. **Zahl immer per `ctest -N` gegenprüfen, nie schätzen.**
@@ -703,6 +704,12 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 Stand **2026-09-28, nach dem Release 1.9.4** · Working Tree sauber, ein Arbeitsbaum, nur
 Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD` muss **leer** sein.
+**Unreleast auf `main` seit 1.9.4: QTMUX-135** — MCP-Anlage ohne Fokuswechsel
+(`create_session`/`new_window`/`connect_profile`/`split_pane` im Hintergrund, `focus`-
+Parameter; dabei `forceActiveFocus()` aus `TerminalItem::setSession` entfernt, das bei
+jedem Pane-Baum-Neuaufbau das zuletzt erzeugte Pane aktiv machte). Mechanik und
+Messung in [docs/MCP.md](docs/MCP.md) „Kein Fokuswechsel beim Anlegen"; Release/Publish
+entscheidet der Owner.
 Release-Endstand im „Ausgeliefert"-Absatz oben; Rolle: **Standby**, Arbeit kommt per
 Owner-Zuruf (Individual-Entwicklung).
 🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` ändert ihn, und der

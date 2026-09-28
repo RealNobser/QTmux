@@ -33,6 +33,27 @@ target_include_directories(test_mcpaccess PRIVATE
 target_link_libraries(test_mcpaccess PRIVATE Qt6::Test Qt6::Network)
 add_test(NAME test_mcpaccess COMMAND test_mcpaccess)
 
+# Owner-Vorgabe 2026-09-28: MCP-Anlage ohne Fokuswechsel. Prüft die Signale von
+# McpServer::callTool (kein focusRequested, focus-Wert an sessionCreated/newWindow/
+# splitPane) und das Schema. McpServer, SessionModel und WindowModel liegen im
+# QML-Modul → .cpp direkt mitkompilieren; die generierten Versions-Header brauchen
+# das qtmux_buildid-Target. Legt nur serielle Sessions auf einem nicht vorhandenen
+# Port an — startet also keinen Prozess und braucht keinen run_detached-Umweg.
+qt_add_executable(test_mcpfocus tst_mcpfocus.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpServer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpAccess.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/SessionModel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/Window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/WindowModel.cpp)
+target_include_directories(test_mcpfocus PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/plugins
+    ${CMAKE_BINARY_DIR}/generated)
+add_dependencies(test_mcpfocus qtmux_buildid)
+target_link_libraries(test_mcpfocus PRIVATE qtmux_core Qt6::Test Qt6::Qml Qt6::Network)
+add_test(NAME test_mcpfocus COMMAND test_mcpfocus)
+
 # QTMUX-96: Scanner fuer Projekt-Befehle/Skills — arbeitet auf echten QTemporaryDirs.
 qt_add_executable(test_projectcommands tst_projectcommands.cpp)
 target_link_libraries(test_projectcommands PRIVATE qtmux_core Qt6::Test)
@@ -198,7 +219,7 @@ add_test(NAME test_updateviewmodel COMMAND test_updateviewmodel)
 # WIN32_EXECUTABLE (Konsolen-Vererbung an Kindshells) gilt hier nicht — beide
 # Tests starten keine Prozesse.
 if(WIN32)
-    set_target_properties(test_updater test_updateviewmodel test_mcpaccess
+    set_target_properties(test_updater test_updateviewmodel test_mcpaccess test_mcpfocus
                           PROPERTIES WIN32_EXECUTABLE FALSE)
 endif()
 

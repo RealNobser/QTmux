@@ -243,7 +243,12 @@ void TerminalItem::setSession(QObject *session) {
         // entprellt weiter (QTMUX-86). Sonst stünde dieselbe Regel an zwei Stellen — und
         // die zweite (geometryChange) hatte sie früher nicht.
         recomputeGrid();
-        forceActiveFocus();
+        // Bewusst KEIN forceActiveFocus() mehr (stand hier seit Phase 0, als es genau ein
+        // Terminal gab): Mit Splits zog beim Neuaufbau des Pane-Baums jedes Item den Fokus
+        // an sich, das zuletzt erzeugte gewann und wurde über onActiveFocusChanged
+        // (SplitNode.qml) zum aktiven Pane — ein MCP-split_pane machte so das neue Pane
+        // aktiv, ein Window-Wechsel vergaß das gemerkte. Wer den Fokus bekommt, entscheidet
+        // allein activePaneId (SplitNode Component.onCompleted + focusActivePane).
     }
     m_geomDirty = true;   // neuer Inhalt
     emit sessionChanged();

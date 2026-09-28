@@ -71,7 +71,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | Tool | Argumente | Zweck |
 |---|---|---|
 | `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification, workingDir, progress*) |
-| `create_session` | `type` ("shell"/"serial"/"ssh"/"plugin"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?`, `pluginId?`, `typeId?`, `loginScript?` | Session in einem **neuen Window** (Tab) anlegen → gibt neue **id** zurück (Pane *im* aktiven Window: `split_pane`) |
+| `create_session` | `type` ("shell"/"serial"/"ssh"/"plugin"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?`, `pluginId?`, `typeId?`, `loginScript?`, `focus?` (Standard false) | Session in einem **neuen Window** (Tab) anlegen — **im Hintergrund**, der Fokus bleibt, wo er ist (s. „Kein Fokuswechsel") → gibt neue **id** zurück (Pane *im* aktiven Window: `split_pane`) |
 | `close_session` | `id` | Session schließen |
 | `set_session_group` | `id`, `group?` | Das **Window** dieser Session einer Sidebar-Gruppe zuordnen; leerer/fehlender `group` nimmt es heraus (Window-Modell) |
 | `set_window_group` | `windowId`, `group?` | Ein **Window** (Tab) direkt einer Sidebar-Gruppe zuordnen (leer = ohne Gruppe) |
@@ -97,19 +97,19 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `set_agent_session` | `ref`, `sessionId?` | Eigene Unterhaltungs-Kennung melden, damit QTmux dich beim nächsten Start damit fortsetzen kann (s. u.) |
 | `wait_for_events` | `sessionId?`, `afterSeq?`, `timeoutMs?` | **Long-Poll**: blockiert bis ein abonniertes Ereignis vorliegt/Timeout |
 | `get_layout` | `windowId?` | `{layout, windowId, activePaneId, sessions}` — Baum des **aktiven** (oder per `windowId` gewählten) Windows plus Pane-Zuordnung (s. u.) |
-| `split_pane` | `orientation` ("h"/"v") | Aktives Pane **im aktiven Window** teilen (neue Shell im neuen Pane, wird aktiv) → neue **Session-id** |
+| `split_pane` | `orientation` ("h"/"v"), `focus?` (Standard false) | Aktives Pane **im aktiven Window** teilen (neue Shell im neuen Pane; das **bisherige** Pane bleibt aktiv, mit `focus:true` das neue) → neue **Session-id** |
 | `close_pane` | `paneId?` | Pane **mitsamt Session** schließen (GUI-Semantik); ohne `paneId` das aktive Pane |
 | `focus_pane` | `paneId` | Bestehendes Pane **aktiv** setzen (reiner Fokuswechsel, ohne die Session zu ändern) |
 | `zoom_pane` | `paneId?` | Pane maximieren („zoomen"); ohne/`-1` = Zoom aufheben |
 | `list_windows` | – | Alle **Windows** (Tabs): `{windowId, title, group, paneCount, active, sessionIds}` |
 | `focus_window` | `windowId` | Window aktivieren (ganzes Layout umschalten) |
-| `new_window` | – | Neues Window (Tab) mit einer Shell → gibt neue **Session-id** zurück |
+| `new_window` | `focus?` (Standard false) | Neues Window (Tab) mit einer Shell, im Hintergrund → gibt neue **Session-id** zurück |
 | `rename_window` | `windowId`, `name?` | Window umbenennen (leerer `name` = automatischer Titel) |
 | `close_window` | `windowId` | Window **samt aller** seiner Sessions/Panes schließen |
 | `assign_session` | `id`, `paneId?` | **VERALTET** (Window-Modell): kein „Session in Pane laden" mehr → nutze `focus_session`/`focus_window` |
 | `get_server_info` | – | Wie ist dieser Server erreichbar: `version`, `bindAddress`, `port`, `listening`, `networkAccess`, `authRequired`, `tokenConfigured` — **ohne** das Token; **nur lesend** (s. Sicherheit) |
 | `list_profiles` | – | Gespeicherte Verbindungsprofile; **ohne Geheimniswerte** (nur `hasPasswordSecret`/`hasLoginScript`-Flags) |
-| `connect_profile` | `name` | Profil verbinden — ein Vault-Passwort wird **intern** aufgelöst (nie über MCP ausgegeben) → neue **Session-id** |
+| `connect_profile` | `name`, `focus?` (Standard false) | Profil verbinden (eigenes Window, im Hintergrund) — ein Vault-Passwort wird **intern** aufgelöst (nie über MCP ausgegeben) → neue **Session-id** |
 
 `activity` (Sidebar-Ring): 0=untätig (dim), 1=läuft/beschäftigt (grün), 2=wartet (amber),
 3=Fehler (rot), 4=geschlossen (grau). Setzbar vom Agenten über `set_activity`; bei Shells
@@ -271,6 +271,33 @@ aktiven Window, `focus_window`/`focus_session` schalten das ganze Layout um. Ses
 bleiben stabil per **Session-`id`** adressierbar (`send_text`/`read_screen`/…), egal in
 welchem Window sie liegen. `list_windows` gibt die Übersicht, `get_layout` den Baum eines
 Windows (Standard: das aktive; `windowId` wählt ein anderes).
+
+### Kein Fokuswechsel beim Anlegen (QTMUX-135, Owner-Vorgabe 2026-09-28)
+
+Alle Werkzeuge, die eine Session erzeugen — `create_session` (alle vier Typen),
+`new_window`, `connect_profile`, `split_pane` —, arbeiten **im Hintergrund**: aktives
+Window, aktives Pane und Tastaturfokus bleiben exakt, wie sie waren, die App wird nicht
+in den Vordergrund geholt. Die neue Session erscheint nur als Kachel am Ende der
+Seitenleiste bzw. (bei `split_pane`) als weiteres Pane im sichtbaren Layout.
+**Grund:** Tippt der Mensch gerade in einer Session, landeten seine Tastendrücke sonst in
+der frisch angelegten — ein Agent „funkt dazwischen".
+
+- **`focus: true`** holt das alte Verhalten ausdrücklich zurück (Window aktivieren bzw.
+  neues Pane aktiv setzen). Gedacht für Aufrufer, die die Session dem Menschen bewusst
+  vorlegen wollen; der Standard bleibt `false`. Wer eine bestehende Session zeigen will,
+  nimmt wie bisher `focus_session`/`focus_window`/`focus_pane`.
+- Eine eigene „ungesehen"-Markierung gibt es bewusst **nicht**: `needsAttention` heißt
+  „Agent wartet/fragt" und speist Statusleisten-Zähler und Dock-Hüpfen — eine frische
+  Session damit zu markieren, wäre die nächste Störung.
+- Das **menschliche** Anlegen (Menü, Tastenkürzel, Palette, Dialoge, Profil-Klick,
+  GUI-Split) aktiviert unverändert.
+
+Belegt am laufenden Objekt (isolierte Instanz, 2026-09-28): vorher (1.9.4) wechselte jedes
+der vier Werkzeuge das aktive Window bzw. Pane, nachher keines; die `focus:true`-Gegenprobe
+schaltet. Beim Nachziehen fiel eine zweite Ursache auf: `TerminalItem::setSession` holte
+sich den Tastaturfokus selbst, sodass bei **jedem** Neuaufbau des Pane-Baums das zuletzt
+erzeugte Pane aktiv wurde (auch ein Window-Wechsel vergaß dadurch das gemerkte Pane).
+Test: `test_mcpfocus` (C++-Hälfte: Signale und focus-Werte, Schema).
 
 ### `get_layout` — Baum **und** unsichtbare Sessions (QTMUX-33)
 

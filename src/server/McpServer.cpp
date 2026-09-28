@@ -660,7 +660,10 @@ QJsonObject McpServer::toolsList() const {
                       "progress).",
                       {}, {}));
     tools.append(tool("create_session",
-                      "Erstellt eine Session in einem NEUEN Window (Tab) und aktiviert es. "
+                      "Erstellt eine Session in einem NEUEN Window (Tab) — im HINTERGRUND: "
+                      "aktives Window, aktive Session und Tastaturfokus bleiben unverändert, "
+                      "die neue Session erscheint nur in der Seitenleiste (mit focus=true "
+                      "wird ihr Window aktiviert). "
                       "type: 'shell' (Standard), 'ssh', 'serial' oder 'plugin'. Je nach Typ die "
                       "passenden Felder füllen (siehe unten). Gibt die neue Session-ID zurück. "
                       "(Für ein Pane IM aktiven Window: split_pane.)",
@@ -679,7 +682,8 @@ QJsonObject McpServer::toolsList() const {
                                   {"pluginId", strProp("plugin: Plugin-ID (siehe list_plugins)")},
                                   {"typeId", strProp("plugin: Backend-Typ-ID des Plugins (siehe list_plugins)")},
                                   // Gemeinsam
-                                  {"loginScript", strProp("optional: Befehle nach Verbindungsaufbau (eine Zeile = ein Befehl)")}},
+                                  {"loginScript", strProp("optional: Befehle nach Verbindungsaufbau (eine Zeile = ein Befehl)")},
+                                  {"focus", boolProp("Window der neuen Session aktivieren (Standard false = Hintergrund)")}},
                       {}));
     tools.append(tool("close_session", "Schließt eine Session per ID.",
                       QJsonObject{{"id", intProp("Session-ID")}}, QJsonArray{"id"}));
@@ -804,10 +808,12 @@ QJsonObject McpServer::toolsList() const {
                       {}));
     tools.append(tool("split_pane",
                       "Teilt das aktive Pane IM AKTIVEN WINDOW (wie die GUI-Splits): erzeugt eine "
-                      "neue Shell-Session im neuen Pane (wird aktiv) und liefert deren Session-ID. "
-                      "Anders als create_session (das ein neues Window öffnet) bleibt der Split im "
-                      "selben Window.",
-                      QJsonObject{{"orientation", strProp("'h' = nebeneinander | 'v' = untereinander")}},
+                      "neue Shell-Session im neuen Pane und liefert deren Session-ID. Das "
+                      "bisherige Pane BEHÄLT den Tastaturfokus (mit focus=true wird das neue "
+                      "aktiv). Anders als create_session (das ein neues Window öffnet) bleibt "
+                      "der Split im selben Window.",
+                      QJsonObject{{"orientation", strProp("'h' = nebeneinander | 'v' = untereinander")},
+                                  {"focus", boolProp("neues Pane aktiv setzen (Standard false)")}},
                       QJsonArray{"orientation"}));
     tools.append(tool("close_pane",
                       "Schließt ein Pane MITSAMT seiner Session (GUI-Semantik). Ohne paneId "
@@ -838,9 +844,11 @@ QJsonObject McpServer::toolsList() const {
                       QJsonObject{{"windowId", intProp("Window-ID (siehe list_windows)")}},
                       QJsonArray{"windowId"}));
     tools.append(tool("new_window",
-                      "Öffnet ein neues Window (Tab) mit einer Shell-Session und aktiviert es. "
+                      "Öffnet ein neues Window (Tab) mit einer Shell-Session — im Hintergrund, "
+                      "das aktive Window bleibt (mit focus=true wird das neue aktiviert). "
                       "Liefert die Session-ID der neuen Shell.",
-                      {}, {}));
+                      QJsonObject{{"focus", boolProp("neues Window aktivieren (Standard false)")}},
+                      {}));
     tools.append(tool("rename_window",
                       "Benennt ein Window um. Leerer/fehlender 'name' stellt den automatischen "
                       "Titel (Titel des aktiven Panes) wieder her.",
@@ -870,8 +878,10 @@ QJsonObject McpServer::toolsList() const {
     tools.append(tool("connect_profile",
                       "Verbindet ein gespeichertes Profil (wie der Verbinden-Klick im "
                       "Connection-Manager, inkl. interner Vault-Passwort-Auflösung) und "
-                      "liefert die neue Session-ID.",
-                      QJsonObject{{"name", strProp("Profilname (siehe list_profiles)")}},
+                      "liefert die neue Session-ID. Das neue Window öffnet im Hintergrund "
+                      "(mit focus=true wird es aktiviert).",
+                      QJsonObject{{"name", strProp("Profilname (siehe list_profiles)")},
+                                  {"focus", boolProp("neues Window aktivieren (Standard false)")}},
                       QJsonArray{"name"}));
     // Inter-Agenten-Benachrichtigung: ein Agent in einer Session wird benachrichtigt,
     // wenn ein Agent in einer ANDEREN Session fertig ist oder eine Frage hat.
@@ -1158,7 +1168,9 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         }
         if (row < 0) { isError = true; text = QStringLiteral("Erstellung fehlgeschlagen."); return {}; }
         auto *s = static_cast<Session *>(m_sessions->sessionAt(row));
-        emit focusRequested(row);
+        // Bewusst KEIN focusRequested: Der Fokus bleibt, wo der Mensch gerade tippt.
+        // QML packt die Session synchron in ein Window und aktiviert es nur auf Wunsch.
+        emit sessionCreated(row, args.value("focus").toBool(false));
         text = QString::number(s ? s->id() : -1);
         return {};
     }
@@ -1416,7 +1428,8 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         return {};
     }
     if (name == "new_window") {
-        bridgedCall([this] { emit newWindowRequested(); }, isError, text);
+        const bool focus = args.value("focus").toBool(false);
+        bridgedCall([this, focus] { emit newWindowRequested(focus); }, isError, text);
         return {};
     }
     if (name == "rename_window") {
@@ -1439,7 +1452,8 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             text = QStringLiteral("orientation muss 'h' oder 'v' sein.");
             return {};
         }
-        bridgedCall([this, &o] { emit splitPaneRequested(o); }, isError, text);
+        const bool focus = args.value("focus").toBool(false);
+        bridgedCall([this, &o, focus] { emit splitPaneRequested(o, focus); }, isError, text);
         return {};
     }
     if (name == "close_pane") {
@@ -1509,8 +1523,11 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             return {};
         }
         // Über den QML-Weg verbinden (window.connectProfile): löst das Vault-Passwort
-        // intern auf und lädt die Session ins aktive Pane — exakt wie der GUI-Klick.
-        bridgedCall([this, &pname] { emit connectProfileRequested(pname); }, isError, text);
+        // intern auf und öffnet ein eigenes Window — wie der GUI-Klick, nur ohne es
+        // zu aktivieren (außer bei focus=true).
+        const bool focus = args.value("focus").toBool(false);
+        bridgedCall([this, &pname, focus] { emit connectProfileRequested(pname, focus); },
+                    isError, text);
         return {};
     }
 
