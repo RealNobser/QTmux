@@ -298,6 +298,9 @@ schaltet. Beim Nachziehen fiel eine zweite Ursache auf: `TerminalItem::setSessio
 sich den Tastaturfokus selbst, sodass bei **jedem** Neuaufbau des Pane-Baums das zuletzt
 erzeugte Pane aktiv wurde (auch ein Window-Wechsel vergaß dadurch das gemerkte Pane).
 Test: `test_mcpfocus` (C++-Hälfte: Signale und focus-Werte, Schema).
+**Ausgeliefert mit 1.9.5**; dort am gemounteten DMG-Bundle (`1.9.5+a98df26`) erneut belegt:
+`create_session` ohne `focus` lässt aktives Window/Pane stehen, die `focus:true`-Gegenprobe
+schaltet.
 
 ### `get_layout` — Baum **und** unsichtbare Sessions (QTMUX-33)
 

@@ -607,53 +607,52 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.9.4 — neues App-Icon + Startup-Check-Paar (2026-09-28, Orchestrator-
-Auftrag mit Owner-Freigabe).** Tag `v1.9.4` auf dem Bau-Commit `3987935` (Bump aller sechs
-manuellen Stellen, 15/15 Zeilen wie bei 1.9.3). Inhalt gegenüber 1.9.3: App-Icon randlos in
-der Familiensprache (`f2ac913`) · QTMUX-134 `update/auto_check` mit Migration +
-Drossel-Stempel vor dem Request (`26dcae2`) · Vendoring-Pins auf Hub `8242342` bei 0 Drift
-(`05a49d3`, kein Code-Nachzug). **Alle vier Artefakte aus `3987935`, Build-ID
-`1.9.4+3987935` je Artefakt EINZELN gemessen** (kein `-dirty`, kein `unknown`, 0 Reste
-von `1.9.3`/`d875816`; liegen unter `dist/`):
+**Ausgeliefert: v1.9.5 — MCP-Anlage ohne Fokuswechsel (2026-09-28, Orchestrator-Auftrag
+mit Owner-Freigabe).** Tag `v1.9.5` (annotiert) auf dem Bau-Commit `a98df26` (Bump aller
+sechs manuellen Stellen, 15/15 Zeilen). Inhalt gegenüber 1.9.4: allein **QTMUX-135**
+(`0090c77`). Vendoring: Hub `origin/main` = Pin `8242342`, Wächter 3/3 byte-identisch →
+0 Drift, kein Nachzug. **Alle vier Artefakte aus `a98df26`, Build-ID `1.9.5+a98df26` je
+Artefakt EINZELN gemessen** (kein `-dirty`, kein `unknown`, 0 Reste von
+`1.9.4`/`3987935`; liegen unter `dist/`):
 
 | Artefakt | Bytes | SHA256 |
 |---|---|---|
-| `QTmux-1.9.4-macos.dmg` | 60 719 366 | `c77b5ce36932d8050140cb9d38f9d3c1946c40787ed355ddc2b6d9f86911d2db` |
-| `QTmux-1.9.4-win64.msi` | 35 224 234 | `7390bf6f2689f566eb4715c70c739228db6589b251191f2bedab68a43ceac73f` |
-| `QTmux-1.9.4-win64-portable.zip` | 39 261 477 | `188eb3da19c3a7e2633effc7b2bf6d5e8d0eb728d910b315c64fa182366c00cc` |
-| `QTmux-1.9.4-x86_64.AppImage` | 44 849 656 | `32fa09b1dc78deac811c141d7b9c91b84c5448b09a8fdf9b9ec43744c1acec44` |
+| `QTmux-1.9.5-macos.dmg` | 60 940 324 | `f0cfdcc55de509442f1d660151beb7277b328224e2315c3ae648a096059d4205` |
+| `QTmux-1.9.5-win64.msi` | 35 224 234 | `41002bf09df67a56587df7771977007c67cfb0a3e66b70432d0a69c56168cdea` |
+| `QTmux-1.9.5-win64-portable.zip` | 39 263 420 | `b8b15752cc71bae7e78112c6b2de13d222b3c3d895c82aa73ff6d1472dec7ad8` |
+| `QTmux-1.9.5-x86_64.AppImage` | 44 853 752 | `6080566252b70d24f8f80508af383c0882000c3968935c1a36740f2015954be6` |
 
-Messwege wie 1.9.3: DMG gemountet, Bundle per `env -i` gestartet, `get_server_info`
-(`buildId 1.9.4+3987935`, `buildDirty false`), `qtmux.icns` im Bundle **`cmp`-gleich** zu
-`resources/appicon/qtmux.icns` (Gegenprobe: 1.9.3-Icon weicht ab), Dateiliste identisch
-zu 1.9.3 (2006 Dateien; inhaltlich weichen genau 5 ab: Icon, Binary, Echo-Plugin,
-CodeResources, Info.plist); dazu die **Migration am Artefakt** belegt (Profil mit
-`update.autoCheck = 0` → nach dem Start `update.auto_check = 0`, alter Key weg, kein
-`lastCheck`) · MSI per `msiexec /a` auf rtzbld01 (1423 Dateien, Liste identisch zu 1.9.3,
-Build-ID ASCII+UTF-16 je 1×, 1619-Smoke grün) · ZIP per `zipfile` (1456 Einträge) ·
-AppImage = CI-Artefakt des Tag-Laufs, auf rtzsvr02 extrahiert (1672 Dateien, Namen
-identisch zu 1.9.3).
-🔑 **Größenabweichungen — alle drei erklärt, keine übergangen:** (1) **DMG −128 512 B**
-trotz +45 KB Inhalt: Kontrollversuch — das byte-identische 1.9.3-Bundle erneut per
-`hdiutil … UDZO` verpackt ergab −161 KB/−181 KB gegenüber dem Original und 19,6 KB
-Streuung zwischen zwei Läufen. **hdiutil-UDZO streut bei identischem Inhalt um ~±180 KB**;
-eine DMG-Größe allein ist darum kein Befund, der Datei-/Hash-Vergleich des Inhalts ist es.
-(2) **MSI +8 192 B**: einzig `qtmux.exe` wächst (+3 072 B, eingebettetes `.ico`), der Rest
-ist Sektor-Rundung des MSI-Containers. (3) **AppImage +8 192 B**: neben Binary und PNG hat
-sich **`usr/lib/libgcrypt.so.20`** (+4 096 B) geändert — nicht aus unserem Diff, sondern
-aus dem Runner-Image (ubuntu-24.04 `20260823.283.1` → `20260920.314.1`; linuxdeploy
-bündelt die Bibliothek aus dem System-`/lib`). Ein AppImage erbt also still
-Sicherheits-Updates des Runners — gut, aber ein Grund mehr, Inhalt statt Größe zu messen.
-CI: main-Lauf `36418652538` und Tag-Lauf `36419251400` je 3/3 `success`, Test-Steps
-einzeln gelesen (diesmal ohne den Windows-Flake). **Publish selbst gefahren** in der
-Owner-Permission-Form (Rezept unten); eigene Abnahme: `index.json`-Diff **exakt eine
-Zeile** (qtmux `1.9.3`→`1.9.4`), alle **zwölf** Produkte erhalten; Manifest
-`1.9.4`/`2026-09-28`, Signatur mit dem **in QTmux eingebauten** Schlüssel
-(`UpdateKeys.hpp`, openssl `pkeyutl -rawin`) gegen die heruntergeladenen Bytes gültig,
-Gegentest (ein Byte geändert) fällt; drei Artefakte per Cache-Bust zurückgeladen und
-`cmp`-gleich. GitHub-Release `v1.9.4` (Target voller SHA, vier Assets je per Rückladung
-`cmp`-belegt). Benutzerdoku beider Confluence-Instanzen auf 1.9.4 (on-prem v22, Cloud v21,
-je zurückgelesen).
+Messwege: DMG gemountet, `codesign --verify --deep --strict` grün, Bundle per `env -i` als
+Zweitinstanz (Profil `rel195`, Port 7351) gestartet → `get_server_info`
+`1.9.5+a98df26`/`buildDirty false`; **Kern am Artefakt belegt:** `create_session` ohne
+`focus` → aktives Window 1/Pane 1 unverändert (Windows 1→2), Gegenprobe `focus:true` →
+Wechsel auf Window 3 wird gesehen · MSI per `msiexec /a` auf rtzbld01 (1423 Dateien,
+Build-ID ASCII+UTF-16 je 1×, `vcruntime140`/`msvcp140` vorhanden, 1619-Smoke grün) · ZIP per
+`zipfile` (1456 Einträge) · AppImage = CI-Artefakt des Tag-Laufs, auf rtzsvr02 extrahiert
+(1672 Dateien, Namen identisch zu 1.9.4).
+🔑 **Größenabweichungen gegenüber 1.9.4 — alle am Inhalt erklärt:** MSI **±0** (`qtmux.exe`
++3 072 B verschwindet in der Sektor-Rundung) · ZIP **+1 943 B** = exakt die komprimierte
+Differenz von `qtmux.exe` (einzige geänderte Datei) · AppImage **+4 096 B** = `usr/bin/qtmux`
+(+4 096; Echo-Plugin gleich groß, anderer Hash) · DMG **+220 958 B** bei nur **+96 B** Inhalt
+(2006 Dateien, nur Binary und Info.plist weichen ab). ⚠️ **Der frühere Anker „hdiutil-UDZO
+streut ~±180 KB" war zu eng:** Kontrollversuch mit dem `build-dmg.sh`-Rezept — das
+byte-identische 1.9.4-Bundle ergab 61 867 279 / 60 752 145 B, das 1.9.5-Bundle
+59 841 129 / 60 698 641 B. **Die Streuung reicht bis ~2 MB**; eine DMG-Größe ist nie ein
+Befund, nur der Datei-/Hash-Vergleich des gemounteten Inhalts.
+CI: main-Lauf `36469834976` und Tag-Lauf `36470615988` je 3/3 `success`, Test-Steps einzeln
+gelesen, `test_mcpfocus` in jedem der sechs Jobs als `Passed` im Log belegt (macOS/Linux
+32/32, Windows 31/31 ohne `test_pty`; kein Windows-Flake). Publish in der
+Owner-Permission-Form ohne Harness-Block; eigene Abnahme: `index.json`-Diff **exakt eine
+Zeile** (qtmux `1.9.4`→`1.9.5`), zwölf Produkte erhalten; Manifest `1.9.5`/`2026-09-28`,
+Signatur mit dem eingebauten Schlüssel gegen die heruntergeladenen Bytes gültig, Gegentest
+(ein Byte geändert) fällt; drei Artefakte per Cache-Bust zurückgeladen und `cmp`-gleich.
+GitHub-Release `v1.9.5` (Target voller SHA, vier Assets je per Rückladung `cmp`-belegt).
+Benutzerdoku dual auf 1.9.5 (on-prem v23, Cloud v22, je zurückgelesen).
+Davor: **v1.9.4** — neues App-Icon + Startup-Check-Paar QTMUX-134 (2026-09-28, `3987935`,
+Build-ID `1.9.4+3987935`; Artefakttabelle in der Git-Historie dieser Datei, `932e484`).
+Dauerhaft daraus: ein AppImage erbt still Bibliotheken des Runner-Images (dort
+`usr/lib/libgcrypt.so.20` +4 096 B nach Image-Wechsel `20260823.283.1` → `20260920.314.1`,
+linuxdeploy bündelt aus dem System-`/lib`) — Inhalt messen, nicht Größe.
 Davor: **v1.9.3** — Wartungsrelease der Familien-Runde nach MacPCAN 0.5.0 (2026-09-04,
 `d875816`, Build-ID `1.9.3+d875816`; CAN-Vendor auf Hub-Stand MAC-44, Plugin-Target im
 lupdate-Scan, AppImage-Upload nur auf Tag-Läufen). ⚠️ Beim 1.9.3-Fernbau brach der erste
@@ -687,10 +686,9 @@ Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
 (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich
 Qt-`bin` im PATH, sonst `0xc0000135`) — dort eine um 1 kleinere Zahl erwarten. Aktuellste
-Grün-Messung: CI-Tag-Lauf `36419251400` und main-Lauf `36418652538` (2026-09-28,
-Release-Stand 1.9.4) auf allen drei Plattformen grün inkl. Test-Steps; lokal am selben Tag
-31/31 in `build/macos-test` (Debug) **und** `build/macos-release`; nach QTMUX-135 lokal
-32/32 in beiden.
+Grün-Messung: CI-Tag-Lauf `36470615988` und main-Lauf `36469834976` (2026-09-28,
+Release-Stand 1.9.5) auf allen drei Plattformen grün inkl. Test-Steps (32/31/32); lokal
+nach QTMUX-135 32/32 in `build/macos-test` (Debug) **und** `build/macos-release`.
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
 besteht. Eine kleinere Zahl aus dem Container ist kein Widerspruch, sondern die
 Ausnahme per `-E`. **Zahl immer per `ctest -N` gegenprüfen, nie schätzen.**
@@ -702,14 +700,10 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-09-28, nach dem Release 1.9.4** · Working Tree sauber, ein Arbeitsbaum, nur
+Stand **2026-09-28, nach dem Release 1.9.5** · Working Tree sauber, ein Arbeitsbaum, nur
 Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD` muss **leer** sein.
-**Unreleast auf `main` seit 1.9.4: QTMUX-135** — MCP-Anlage ohne Fokuswechsel
-(`create_session`/`new_window`/`connect_profile`/`split_pane` im Hintergrund, `focus`-
-Parameter; dabei `forceActiveFocus()` aus `TerminalItem::setSession` entfernt, das bei
-jedem Pane-Baum-Neuaufbau das zuletzt erzeugte Pane aktiv machte). Mechanik und
-Messung in [docs/MCP.md](docs/MCP.md) „Kein Fokuswechsel beim Anlegen"; Release/Publish
-entscheidet der Owner.
+Nichts Unreleastes an Code auf `main` seit `v1.9.5` (nur Doku-Commits;
+Messkommando `git log --oneline v1.9.5..origin/main`).
 Release-Endstand im „Ausgeliefert"-Absatz oben; Rolle: **Standby**, Arbeit kommt per
 Owner-Zuruf (Individual-Entwicklung).
 🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` ändert ihn, und der
@@ -718,7 +712,8 @@ zusätzlich `git log --oneline -3` gegenlesen — die Windows-Session pusht eben
 
 **Rolle derzeit: Standby-Worker des Orchestrators** (Session 1 im Workspace; Rückmeldungen
 als `MELDUNG QTMUX [FERTIG|FRAGE|ABBRUCH]: …` per `queue_text`). Zuletzt erledigt
-(2026-09-28): **Release 1.9.4 komplett** inkl. QTMUX-134 (alles im „Ausgeliefert"-Absatz).
+(2026-09-28): **Release 1.9.5 komplett** (QTMUX-135) und davor am selben Tag
+**Release 1.9.4** inkl. QTMUX-134 (beides im „Ausgeliefert"-Absatz).
 Davor (2026-09-04): **Release 1.9.3 komplett** — Bump, Tag, CI, vier Artefakte, Publish mit
 eigener Abnahme, GitHub-Release, Confluence dual (alles im „Ausgeliefert"-Absatz). Davor
 (2026-08-18): **Familien-Schlussrelease komplett** — v1.9.1-Release nachgezogen, v1.9.2
@@ -737,7 +732,7 @@ Version als Argument** (sonst `VERSION_ARG_FEHLT`; Checkout dort vorher per
 `git pull --ff-only` auf den Bau-Commit, Wrapper zieht nicht selbst) · den **Upload**
 fährt diese Session **selbst** mit dem Hub-Werkzeug, und zwar **exakt in dieser Form**,
 sonst greift die Owner-Permission-Regel nicht (Orchestrator-Vorgabe 2026-09-28, so bei
-1.9.4 ohne Block gelaufen): `python3 /Users/nobser/Projects/_ClaudeWorkspace/MacPCAN/tools/updates/publish.py
+1.9.4 und 1.9.5 ohne Block gelaufen): `python3 /Users/nobser/Projects/_ClaudeWorkspace/MacPCAN/tools/updates/publish.py
 --product qtmux --version <v> --notes-de … --notes-en … --artifact
 "macos-universal=<abs. dmg>,kind=dmg" --artifact "win-x86_64=<abs. msi>,kind=msi"
 --artifact "linux-x86_64=<abs. AppImage>,kind=appimage" --sftp-host
@@ -779,10 +774,11 @@ Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, p
    `Mode::System` an (`QLocale::system()`, EN/DE/SV); QTmux kann nur fest Deutsch/Englisch.
    RAFTNG nennt es ausdrücklich eine **Produktentscheidung**, keine technische, und liefert
    auf Zuruf. Nicht eigenmächtig übernommen.
-2. **Produktivinstanz auf 1.9.4 heben?** Sie läuft auf `1.9.3+d875816` (gemessen
+2. **Produktivinstanz auf 1.9.5 heben?** Sie läuft auf `1.9.3+d875816` (gemessen
    2026-09-28) und trägt die laufende Orchestrierung — ein Update opfert die
-   Terminal-Sessions. Der Online-Update-Dialog bietet 1.9.4 von selbst an; der Zeitpunkt
-   ist Owner-Sache.
+   Terminal-Sessions. Der Online-Update-Dialog bietet 1.9.5 von selbst an; der Zeitpunkt
+   ist Owner-Sache. Erst danach wirkt QTMUX-135 für den Orchestrator (bis dahin zieht
+   jedes `create_session` dem Owner den Fokus).
    (Der frühere Punkt „GitHub-Release v1.9.1 nachziehen?" ist erledigt: am 2026-08-18
    nachgezogen, Historie lückenlos — s. „Ausgeliefert" oben.)
 
