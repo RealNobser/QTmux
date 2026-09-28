@@ -1,23 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Familiensprache (MacPCAN/RAFTNG/EmbyStudio): randloses Squircle rx 229 auf
+       1024, vertikaler Verlauf, topshine/bottomshade, dünne Glanzkante oben.
+       Kein eingebauter Rand — die Kachelgröße normalisiert das System bzw.
+       sie ist auf Windows/Linux die volle Leinwand. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#2c3149"/>
       <stop offset="1" stop-color="#12141d"/>
+    </linearGradient>
+    <linearGradient id="topshine" x1="512" y1="0" x2="512" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bottomshade" x1="512" y1="700" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.28"/>
     </linearGradient>
     <linearGradient id="cur" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#5ad1ff"/>
       <stop offset="1" stop-color="#3b9dff"/>
     </linearGradient>
   </defs>
-  <rect x="96" y="96" width="832" height="832" rx="190" fill="url(#bg)"/>
-  <rect x="96" y="96" width="832" height="832" rx="190" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="3"/>
-  <!-- Status-Ring: 3 gleichmäßige Bögen (Agenten: laufend/aktiv/wartend) -->
-  <g fill="none" stroke-width="50" stroke-linecap="round">
-    <path d="M 584.5 241.5 A 280 280 0 0 1 782.5 584.5" stroke="#3ddc84"/>
-    <path d="M 710 710 A 280 280 0 0 1 314 710" stroke="#3b9dff"/>
-    <path d="M 241.5 584.5 A 280 280 0 0 1 439.5 241.5" stroke="#f5a524"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#bg)"/>
+  <!-- Glanz/Schatten als eigene Squircles statt clip-path: der QtSvg-Renderer von
+       generate.sh wertet clip-path nicht aus, die Ecken wären sonst nicht transparent. -->
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#topshine)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#bottomshade)"/>
+  <!-- Status-Ring: 3 gleichmäßige Bögen à 90° mit 30° Lücke (Agenten: laufend/aktiv/wartend),
+       r 350 um (512,512); Motiv-bbox ≈ 124..900 (≈ 76 % der Kachel) -->
+  <g fill="none" stroke-width="76" stroke-linecap="round">
+    <path d="M 602.6 173.9 A 350 350 0 0 1 850.1 602.6" stroke="#3ddc84"/>
+    <path d="M 759.5 759.5 A 350 350 0 0 1 264.5 759.5" stroke="#3b9dff"/>
+    <path d="M 173.9 602.6 A 350 350 0 0 1 421.4 173.9" stroke="#f5a524"/>
   </g>
   <!-- Prompt-Chevron + Cursor im Zentrum -->
-  <path d="M 406 426 L 532 512 L 406 598" fill="none" stroke="#eef1f8" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="576" y="566" width="104" height="42" rx="12" fill="url(#cur)"/>
+  <path d="M 364 392 L 540 512 L 364 632" fill="none" stroke="#eef1f8" stroke-width="76" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="598" y="588" width="148" height="58" rx="16" fill="url(#cur)"/>
+  <!-- dünne Glanzkante oben (wie MacPCAN/RAFTNG) -->
+  <path d="M 229 8 Q 8 8 8 229" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/>
+  <path d="M 795 8 Q 1016 8 1016 229" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/>
 </svg>

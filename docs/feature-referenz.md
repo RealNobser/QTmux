@@ -1093,7 +1093,16 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   als UTF-16BE ab — `"qtbase_de".encode("utf-16-be")` im Binary zählen ist damit der
   belastbare A/B-Beleg für die Einbettung (vorher 0, nachher 1).
 - App-Icon: `resources/appicon/` (SVG → icns/ico/png via `generate.sh` + Qt-`svgrender`-
-  Mini-Tool, da kein rsvg/inkscape auf den Maschinen).
+  Mini-Tool, da kein rsvg/inkscape auf den Maschinen). Seit 2026-09-28 **randlos** in der
+  Familiensprache (Squircle `rx 229` auf 1024 wie MacPCAN/RAFTNG/EmbyStudio, Motiv-bbox
+  ≈ 76 %); vorher belegte die Kachel nur 82 % der Leinwand und wirkte auf Windows/Linux/
+  macOS ≤ 15 echt ~20 % kleiner als die Geschwister.
+  ⚠️ **Der `svgrender` (QtSvg) wertet `clip-path` nicht aus** — per Clip begrenzte
+  Überlagerungen laufen über die Ecken, die dann nicht transparent sind (gemessen: Alpha 46
+  statt 0). Eine reine Alpha-bbox-Prüfung zeigt das **nicht** (100 % stimmt trotzdem);
+  Messgerät ist das Alpha in den Ecken. Deshalb Überlagerungen selbst als `rx 229`-Rechteck.
+  ⚠️ Kein `setWindowIcon` unter macOS — das Dock-Icon liefe sonst an der
+  System-Normalisierung von macOS 26 vorbei und wäre größer als alle anderen.
 
 ### macOS-Spezifika
 - **Sprache:** Translator + `singletonInstance(App)` VOR `loadFromModule` installieren;
