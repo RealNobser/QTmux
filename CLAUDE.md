@@ -695,8 +695,9 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-135** (MCP-Anlage ohne Fokuswechsel, 2026-09-28), beidseitig **109 Done / 26 offen**
-(2026-09-28 nach QTMUX-135 exakt gezählt, beide paginiert; bis QTMUX-134 waren es 108/26 — Cloud per paginierter `search/jql`; ⚠️ Clouds
+**QTMUX-136** (AppImage als Release-Asset, 2026-09-28), beidseitig **110 Done / 26 offen**
+(2026-09-28 nach QTMUX-136 exakt gezählt, beide paginiert über alle 136 Tickets; nach QTMUX-135
+waren es 109/26, bis QTMUX-134 108/26 — Cloud per paginierter `search/jql`; ⚠️ Clouds
 `search/approximate-count` meldete zur selben Zeit 107/27, der Index hinkt einer frischen
 Transition hinterher. Vorher 107/26 bis QTMUX-133, gemessen im Jira-Audit 2026-09-06; QTMUX-64 im Projektabschluss geschlossen — durch QTMUX-81 abgedeckt —,
 QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
