@@ -695,7 +695,8 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-136** (AppImage als Release-Asset, 2026-09-28), beidseitig **110 Done / 26 offen**
+**QTMUX-137** (Windows-App-Icon, 2026-09-29, beidseitig Done am Ticket gelesen; danach nicht
+neu gezählt — rechnerisch 111/26). Davor **110 Done / 26 offen**
 (2026-09-28 nach QTMUX-136 exakt gezählt, beide paginiert über alle 136 Tickets; nach QTMUX-135
 waren es 109/26, bis QTMUX-134 108/26 — Cloud per paginierter `search/jql`; ⚠️ Clouds
 `search/approximate-count` meldete zur selben Zeit 107/27, der Index hinkt einer frischen
@@ -724,7 +725,10 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 Stand **2026-09-28, nach dem Release 1.9.5** · Working Tree sauber, ein Arbeitsbaum, nur
 Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD` muss **leer** sein.
-Nichts Unreleastes an **App**-Code auf `main` seit `v1.9.5` — nur Doku und der
+Unreleast auf `main` seit `v1.9.5`: **QTMUX-137** (Windows-App-Icon: MSI-`<Icon>` aus der
+echten `.ico` statt der EXE, `.ico` als RC-Abhängigkeit — wirkt nur im Windows-Paket; die
+1.9.4/1.9.5-EXEs tragen noch das alte Icon mit Rand, das MSI zeigt im Startmenü ggf. ein
+weißes Blatt; Mechanik in der Feature-Referenz „App-Icon") sowie Doku und der
 CI-/Release-Umbau QTMUX-136 (AppImage als Release-Asset; das nächste Release ist das
 erste nach dem neuen Rezept, Publish-Mechanik unten; Messkommando
 `git log --oneline v1.9.5..origin/main`).
