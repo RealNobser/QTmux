@@ -1113,6 +1113,18 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   Messgerät ist das Alpha in den Ecken. Deshalb Überlagerungen selbst als `rx 229`-Rechteck.
   ⚠️ Kein `setWindowIcon` unter macOS — das Dock-Icon liefe sonst an der
   System-Normalisierung von macOS 26 vorbei und wäre größer als alle anderen.
+  🔑 **Windows bezieht das Icon an zwei Stellen, beide mit eigener Falle (QTMUX-137):**
+  (1) die EXE-Ressource (`qtmux.rc` → `IDI_ICON1`, daraus auch Taskleiste/Fenster über Qts
+  Klassen-Icon) — CMake/Ninja verfolgt die `.ico` hinter der `ICON`-Anweisung **nicht**
+  (`ninja -t deps`: `#deps 0`), ein inkrementeller Build bettete ein geändertes Icon nie ein
+  (1.9.4/1.9.5 gingen von rtzbld01 mit dem alten raus); darum `OBJECT_DEPENDS` am `.rc`.
+  (2) das MSI-`<Icon>` für Startmenü-Verknüpfung und „Apps & Features" — Windows Installer
+  legt es als `%WINDIR%\Installer\{ProductCode}\<Id>` ab, die Endung der Id entscheidet über
+  die Deutung. Stand bis 1.9.5 dort die EXE unter `qtmux.ico` (Magic `MZ`), scheiterten
+  strikte ICO-Lader (weißes Blatt), während `ExtractIconEx` den Inhalt schnüffelt und das
+  EXE-Icon zeigt — ein Shell-Rendering allein ist darum **kein** Gegenbeweis. Quelle ist jetzt
+  die echte `.ico`. Messgerät: Magic der Cache-Datei bzw. Stream `Icon.qtmux.ico` im MSI,
+  und das größte `RT_ICON` der EXE gegen die Repo-`.ico`.
 
 ### macOS-Spezifika
 - **Sprache:** Translator + `singletonInstance(App)` VOR `loadFromModule` installieren;

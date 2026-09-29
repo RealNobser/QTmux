@@ -24,8 +24,13 @@
     <MajorUpgrade DowngradeErrorMessage="Eine neuere Version von QTmux ist bereits installiert." />
     <MediaTemplate EmbedCab="yes" />
 
-    <!-- Eintrag in "Apps &amp; Features": Icon, kein Reparieren. -->
-    <Icon Id="qtmux.ico" SourceFile="$(var.PayloadDir)\qtmux.exe" />
+    <!-- Eintrag in "Apps &amp; Features": Icon, kein Reparieren.
+         Quelle ist die echte .ico, NICHT die qtmux.exe: Windows Installer legt das Icon
+         als %WINDIR%\Installer\{ProductCode}\<Id> ab und die Shell deutet die Datei nach
+         der Endung der Id. Eine EXE unter "qtmux.ico" liest Explorer als kaputtes ICO →
+         weißes Blatt an Startmenü-Verknüpfung und ARP (QTMUX-137). Die .ico hängt zudem
+         nicht davon ab, ob die EXE-Ressource aktuell ist. -->
+    <Icon Id="qtmux.ico" SourceFile="$(sys.SOURCEFILEDIR)..\resources\appicon\qtmux.ico" />
     <Property Id="ARPPRODUCTICON" Value="qtmux.ico" />
     <Property Id="ARPNOREPAIR" Value="1" Secure="yes" />
 

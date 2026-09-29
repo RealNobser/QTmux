@@ -235,6 +235,12 @@ if(APPLE)
     set(qtmux_platform_icon "${qtmux_macos_icon}")
 elseif(WIN32)
     set(qtmux_platform_icon "${CMAKE_CURRENT_SOURCE_DIR}/resources/appicon/qtmux.rc")
+    # 🔑 Die .ico ist für CMake/Ninja KEINE Abhängigkeit des .rc: der RC-Scan erfasst nur
+    # #include, nicht die Dateien hinter ICON-Anweisungen (ninja -t deps: "#deps 0").
+    # Ohne diese Zeile bettet ein inkrementeller Build ein geändertes Icon nie ein —
+    # 1.9.4/1.9.5 gingen so mit dem alten Icon raus (QTMUX-137).
+    set_source_files_properties("${qtmux_platform_icon}" PROPERTIES
+        OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/appicon/qtmux.ico")
 endif()
 
 qt_add_executable(qtmux
