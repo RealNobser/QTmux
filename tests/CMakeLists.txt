@@ -7,6 +7,12 @@ qt_add_executable(test_linkdetector tst_linkdetector.cpp)
 target_link_libraries(test_linkdetector PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_linkdetector COMMAND test_linkdetector)
 
+# QTMUX-138: „Im Finder/Explorer/Dateimanager zeigen" — Befehlsermittlung aller drei
+# Plattformen auf jedem Host + lokale Existenzprüfung.
+qt_add_executable(test_filemanagerreveal tst_filemanagerreveal.cpp)
+target_link_libraries(test_filemanagerreveal PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_filemanagerreveal COMMAND test_filemanagerreveal)
+
 qt_add_executable(test_keyencoding tst_keyencoding.cpp)
 target_link_libraries(test_keyencoding PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_keyencoding COMMAND test_keyencoding)

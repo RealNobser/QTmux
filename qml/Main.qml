@@ -398,6 +398,7 @@ ApplicationWindow {
     Menu {
         id: termContextMenu
         property string linkTarget: ""
+        property bool linkRevealable: false
         padding: 4
         onAboutToShow: window.sizeMenu(this)
         palette.window: Theme.bgElevated
@@ -412,6 +413,17 @@ ApplicationWindow {
             height: visible ? implicitHeight : 0
             icon.source: window.icon("copy")
             onTriggered: App.copyToClipboard(termContextMenu.linkTarget)
+        }
+        // QTMUX-138: nur für lokal existierende Ziele (Dateipfad, file://) — bei
+        // http/mailto gibt es nichts zu zeigen, der Eintrag fehlt dort.
+        AppMenuItem {
+            text: Qt.platform.os === "osx" ? qsTr("Im Finder zeigen")
+                : Qt.platform.os === "windows" ? qsTr("Im Explorer anzeigen")
+                : qsTr("Im Dateimanager anzeigen")
+            visible: termContextMenu.linkRevealable
+            height: visible ? implicitHeight : 0
+            icon.source: window.icon("folder")
+            onTriggered: App.revealInFileManager(termContextMenu.linkTarget)
         }
         MenuSeparator { visible: termContextMenu.linkTarget !== "" }
         AppMenuItem { action: actCopy;  icon.source: window.icon("copy") }
@@ -1063,6 +1075,8 @@ ApplicationWindow {
         // Link unter dem auslösenden Rechtsklick übernehmen (einmalig beim Öffnen —
         // das Menü ist modal, der Wert kann sich währenddessen nicht ändern).
         termContextMenu.linkTarget = term ? term.contextLinkTarget : ""
+        termContextMenu.linkRevealable = termContextMenu.linkTarget !== ""
+            && App.canRevealInFileManager(termContextMenu.linkTarget)
         termContextMenu.popup()
     }
 

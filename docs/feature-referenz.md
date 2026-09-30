@@ -164,6 +164,35 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Bewusst nur kopieren, nicht öffnen — das Öffnen bleibt die Cmd/Ctrl-Geste.
   Tests: `tst_linkdetector` + `tst_vtscreen::linkDetectionOnScreenLine`.
   **OSC 8 bewusst NICHT** — s. offene Jira (QTMUX-40).
+- **Im Finder/Explorer/Dateimanager zeigen (QTMUX-138, Owner-Wunsch 2026-09-30):** zweite
+  Geste auf erkannten Links — **macOS ⌘⌥-Klick**, **Windows/Linux Strg+Umschalt-Klick** —
+  plus Kontextmenü-Eintrag „Im Finder zeigen" / „Im Explorer anzeigen" / „Im Dateimanager
+  anzeigen" direkt unter „Link kopieren"; die Hover-Pille nennt die Geste, sobald das Ziel
+  lokal existiert. Befehle (Gui-frei in `FileManagerReveal`, Test `tst_filemanagerreveal`
+  prüft **alle drei Plattformen auf jedem Host**): macOS `open -R <pfad>` · Windows
+  `explorer.exe` mit **`/select,` und dem Pfad als getrennten Argumenten** (so quotet QProcess
+  nur den Pfad → `/select, "C:\a b\x"`; zusammengesetzt würde das Ganze gequotet und
+  Explorer öffnet nur „Dokumente") · Linux `dbus-send … FileManager1.ShowItems
+  array:string:file://…` mit Rückfall **`xdg-open <Elternordner>`**, wenn dbus-send fehlt
+  oder ≠ 0 endet. 🔑 Die file://-URI ist **vollständig** prozentkodiert (bis auf `/`) —
+  dbus-send trennt `array:string:` an **Kommas**, ein Dateiname `a,b.txt` wäre sonst zwei
+  URIs. Ordner-Links zeigen den Ordner markiert im Elternordner.
+  **Kombi-Begründung:** Die Geste enthält den Öffnen-Modifier und wird darum **vor**
+  `isLinkModifier` geprüft. macOS ⌘⌥ = die übliche „Reveal"-Kombi (⌥⌘R in Xcode/VS Code).
+  Windows/Linux **nicht Strg+Alt** (= AltGr, s. `isLinkModifier`) und **nicht Alt** (Alt+Klick
+  verschiebt unter vielen Linux-Fenstermanagern das Fenster); Shift kollidiert nicht, weil
+  ein Linksklick mit Shift keine Auswahl **erweitert** (er beginnt eine neue) und die
+  Link-Gesten ohnehin **vor** der App-Maus-Weiterleitung liegen.
+  **Sicherheit:** Pfad nur als Element der Argumentliste (`QProcess`, nie eine Shell); gezeigt
+  wird nur, was **lokal existiert** (`localPathFor`: absoluter Pfad oder file://, dann
+  `QFileInfo::exists`) — ein in einer SSH-Session ausgegebener Remote-Pfad bleibt wirkungslos,
+  sofern es ihn lokal nicht zufällig gibt (dieselbe Grenze wie beim Öffnen). Der Pfad ist
+  immer absolut; ein Dateiname `-R` wird nie Option.
+  **Nicht-Datei-Links (http/https/mailto/ftp):** die Geste tut **bewusst nichts** (Klick
+  verbraucht, keine Auswahl, **kein** Browser) — sie verlangt „zeigen", ein unverlangt
+  startender Browser wäre die Überraschung; Menüeintrag und Pillen-Hinweis fehlen dort.
+  Gemessen an der Zweitinstanz: Spion per `QDesktopServices::setUrlHandler("https")` sah
+  bei ⌘⌥ **keinen** Öffnen-Versuch, bei ⌘ allein genau einen.
 
 ### PTY-Layer
 - `UnixPty`: forkpty, O_NONBLOCK-Master. **⚠️ `write()` ist gepuffert** (`pending` +

@@ -6,6 +6,7 @@
 #include "Session.h"
 #include "VtScreen.h"
 #include "LinkDetector.h"
+#include "FileManagerReveal.h"
 
 #include <QDesktopServices>
 #include <QHoverEvent>
@@ -917,6 +918,20 @@ bool TerminalItem::isLinkModifier(Qt::KeyboardModifiers mods) {
 #endif
 }
 
+bool TerminalItem::isRevealModifier(Qt::KeyboardModifiers mods) {
+#if defined(Q_OS_MACOS)
+    // Cmd+Option — wie „Im Finder zeigen" (⌥⌘R) in Xcode/VS Code. Physisches Ctrl
+    // (MetaModifier) ausgeschlossen wie beim Öffnen.
+    return (mods & Qt::ControlModifier) && (mods & Qt::AltModifier)
+        && !(mods & Qt::MetaModifier);
+#else
+    // Ctrl+Shift. NICHT Ctrl+Alt: das ist unter Windows AltGr (s. isLinkModifier), und
+    // Alt+Klick verschiebt unter vielen Linux-Fenstermanagern das Fenster.
+    return (mods & Qt::ControlModifier) && (mods & Qt::ShiftModifier)
+        && !(mods & Qt::AltModifier);
+#endif
+}
+
 QString TerminalItem::absLineText(int absRow) const {
     VtScreen *sc = screen();
     if (!sc || absRow < 0) return {};
@@ -986,6 +1001,17 @@ bool TerminalItem::openLinkAt(const QPointF &pos) {
         return true;   // Treffer verbraucht den Klick, auch wenn das Schema abgelehnt wurde
     }
     return false;
+}
+
+bool TerminalItem::revealLinkAt(const QPointF &pos) {
+    const QString target = linkTargetAt(pos);
+    if (target.isEmpty()) return false;
+    // Nur lokal Existierendes (Dateipfad, file://). Bei http/https/mailto/ftp gibt es
+    // nichts zu zeigen — dann bewusst KEINE Aktion (auch kein Öffnen im Browser: die
+    // Geste verlangt „zeigen", ein unverlangt startender Browser wäre die Überraschung).
+    // Der Klick ist trotzdem verbraucht, damit keine Auswahl beginnt.
+    FileManagerReveal::reveal(target);
+    return true;
 }
 
 QString TerminalItem::linkTargetAt(const QPointF &pos) const {
@@ -1235,7 +1261,13 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
     // Cmd/Ctrl+Linksklick auf einen erkannten Link öffnet ihn im verknüpften Viewer —
     // lokal und VOR jeder App-Maus-Weiterleitung (analog dazu, wie Shift die Selektion
     // erzwingt). Der Modifier ist die bewusste Geste, die versehentliches Öffnen von
-    // Agenten-Output verhindert.
+    // Agenten-Output verhindert. Die „Zeigen"-Geste (QTMUX-138) enthält den Öffnen-
+    // Modifier (Cmd bzw. Ctrl) und wird darum ZUERST geprüft.
+    if (event->button() == Qt::LeftButton && isRevealModifier(event->modifiers())
+            && revealLinkAt(event->position())) {
+        event->accept();
+        return;
+    }
     if (event->button() == Qt::LeftButton && isLinkModifier(event->modifiers())
             && openLinkAt(event->position())) {
         event->accept();

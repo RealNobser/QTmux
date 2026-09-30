@@ -226,10 +226,15 @@ private:
     QString sessionCwd() const;
     /// Cmd/Ctrl-Klick-Semantik: auf macOS Cmd (Control ohne Meta), sonst Ctrl.
     static bool isLinkModifier(Qt::KeyboardModifiers mods);
+    /// „Im Dateimanager zeigen"-Geste (QTMUX-138): macOS Cmd+Option, sonst Ctrl+Shift.
+    static bool isRevealModifier(Qt::KeyboardModifiers mods);
     /// Aktualisiert die Link-Hervorhebung unter `pos` (nur bei gedrücktem Link-Modifier).
     void updateHoverLink(const QPointF &pos, Qt::KeyboardModifiers mods);
     /// Öffnet den Link unter `pos` im verknüpften Viewer (Scheme-Whitelist); true, wenn dort einer lag.
     bool openLinkAt(const QPointF &pos);
+    /// Zeigt den Link unter `pos` im Dateimanager, wenn er lokal existiert (Datei/Ordner,
+    /// file://). true, wenn dort ein Link lag — auch bei http/mailto, dann ohne Aktion.
+    bool revealLinkAt(const QPointF &pos);
     /// Ziel des Links unter `pos` (URL oder aufgelöster Dateipfad); leer, wenn dort keiner liegt.
     QString linkTargetAt(const QPointF &pos) const;
     void clearSelection();

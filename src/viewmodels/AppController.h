@@ -80,6 +80,12 @@ public:
     /// Liefert false, wenn der Pfad leer ist oder das System das Öffnen ablehnt.
     Q_INVOKABLE bool openLocalPath(const QString &path) const;
 
+    /// „Im Finder/Explorer/Dateimanager zeigen" (QTMUX-138): true, wenn `target` (Link-Ziel:
+    /// absoluter Pfad oder file://-URL) lokal existiert — steuert Kontextmenü und Pille.
+    Q_INVOKABLE bool canRevealInFileManager(const QString &target) const;
+    /// Zeigt `target` markiert im Dateimanager (Mechanik: `FileManagerReveal`, Gui-frei).
+    Q_INVOKABLE bool revealInFileManager(const QString &target) const;
+
     /// Die Befehle und Skills, die das Projekt im Arbeitsverzeichnis `workingDir`
     /// mitbringt (QTMUX-96) — für die Befehlspalette. Je Eintrag eine Map mit
     /// `name`, `description`, `source`, `agentId` und `filePath`; ausgewählt wird

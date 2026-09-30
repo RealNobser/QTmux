@@ -1,5 +1,6 @@
 #include "AppController.h"
 #include "ProjectCommands.h"
+#include "FileManagerReveal.h"
 #include "McpAccess.h"   // QTMUX-127: Portprobe auf derselben Adresse wie der Server
 #include "qtmux_buildid.h"   // generiert bei JEDEM Build aus cmake/BuildId.cmake
 #include <QSettings>
@@ -91,6 +92,14 @@ QString AppController::languageName(const QString &code) const {
 
 void AppController::copyToClipboard(const QString &text) const {
     if (auto *cb = QGuiApplication::clipboard()) cb->setText(text);
+}
+
+bool AppController::canRevealInFileManager(const QString &target) const {
+    return !FileManagerReveal::localPathFor(target).isEmpty();
+}
+
+bool AppController::revealInFileManager(const QString &target) const {
+    return FileManagerReveal::reveal(target);
 }
 
 QString AppController::homeDir() const {

@@ -375,8 +375,19 @@ Item {
                     elide: Text.ElideMiddle
                     font.pixelSize: 11
                     textFormat: Text.PlainText
-                    text: (Qt.platform.os === "osx" ? "⌘" : "Strg")
-                          + qsTr("-Klick zum Öffnen: ") + paneTerm.hoverLinkTarget
+                    // QTMUX-138: Bei lokal existierenden Zielen (Datei, Ordner, file://)
+                    // zusätzlich die „Zeigen"-Geste nennen; bei URLs gibt es nichts zu zeigen.
+                    readonly property bool revealable: paneTerm.hoverLinkTarget !== ""
+                        && App.canRevealInFileManager(paneTerm.hoverLinkTarget)
+                    text: (Qt.platform.os === "osx"
+                           ? (revealable ? qsTr("⌘-Klick öffnen · ⌘⌥-Klick im Finder zeigen: %1")
+                                         : qsTr("⌘-Klick zum Öffnen: %1"))
+                           : Qt.platform.os === "windows"
+                           ? (revealable ? qsTr("Strg-Klick öffnen · Strg+Umschalt-Klick im Explorer anzeigen: %1")
+                                         : qsTr("Strg-Klick zum Öffnen: %1"))
+                           : (revealable ? qsTr("Strg-Klick öffnen · Strg+Umschalt-Klick im Dateimanager anzeigen: %1")
+                                         : qsTr("Strg-Klick zum Öffnen: %1")))
+                          .arg(paneTerm.hoverLinkTarget)
                     color: Theme.textBright
                 }
             }
