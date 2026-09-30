@@ -152,6 +152,21 @@
   400 ms sieht Flickable keine Geschwindigkeit und verhält sich anders. (2) Ausgabe in eine
   **Datei** leiten, nicht in eine Pipe: wird der Prozess abgeschossen, geht der Pipe-Puffer
   verloren und es sieht aus, als hätte die App nichts gemeldet.
+- **Maus-Gesten am fertigen Bundle (Release 1.9.6, QTMUX-138):** Ein temporärer Hook geht am
+  Artefakt nicht — stattdessen eine kleine Dylib per **`DYLD_INSERT_LIBRARIES`** in die
+  Zweitinstanz (das Bundle ist nur ad-hoc signiert, ohne Hardened Runtime, also erlaubt).
+  Gebaut gegen die Homebrew-Qt-Header (= Bundle-Qt-Version), gelinkt **nur** mit
+  `-undefined dynamic_lookup` — `otool -L` zeigt dann keine Qt-Bibliothek, es entsteht also
+  keine zweite Qt-Kette (s. DMG-Abschnitt der CLAUDE.md). Ein Konstruktor wartet in einem
+  Thread, stellt dann per `QMetaObject::invokeMethod(qApp, …, Qt::QueuedConnection)` in den
+  GUI-Thread, sucht das sichtbare `TerminalItem` und schickt move/press/release an dessen
+  `QQuickWindow`. Das Artefakt bleibt byte-unverändert; die Wirkung misst ein unabhängiges
+  Gerät (hier die Finder-Auswahl per AppleScript — braucht nur Automation-Recht, kein AX).
+  🔑 Drei Fallen, alle gleich beim ersten Lauf getroffen: (1) Die Klasse heißt
+  **`qtmux::TerminalItem`** — `inherits("TerminalItem")` findet nichts; (2) **Cmd ist in Qt
+  `ControlModifier`** (⌘⌥ = `Control|Alt`); (3) MCP-Session-IDs sind **Zahlen** —
+  `"id":"1"` meldet „Unbekannte Session-ID: 0" und `send_text` schreibt ins Leere.
+  Beweiskraft nur mit Kontrolllauf (derselbe Klick **ohne** Modifier → Auswahl unverändert).
 - ⚠️ **Ein Nachbau ist kein Beweis — er kann am Original vorbeigehen (QTMUX-100).** Für den
   Sidebar-Drag stand ein QML-Minimalnachbau, der eine Drift zeigte; die Ursache dort war aber
   die **Zielzeile 0 bei gescrollter Liste**, nicht der eigentliche Fehler. Erst die Messung an

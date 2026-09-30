@@ -629,47 +629,64 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.9.5 — MCP-Anlage ohne Fokuswechsel (2026-09-28, Orchestrator-Auftrag
-mit Owner-Freigabe).** Tag `v1.9.5` (annotiert) auf dem Bau-Commit `a98df26` (Bump aller
-sechs manuellen Stellen, 15/15 Zeilen). Inhalt gegenüber 1.9.4: allein **QTMUX-135**
-(`0090c77`). Vendoring: Hub `origin/main` = Pin `8242342`, Wächter 3/3 byte-identisch →
-0 Drift, kein Nachzug. **Alle vier Artefakte aus `a98df26`, Build-ID `1.9.5+a98df26` je
-Artefakt EINZELN gemessen** (kein `-dirty`, kein `unknown`, 0 Reste von
-`1.9.4`/`3987935`; liegen unter `dist/`):
+**Ausgeliefert: v1.9.6 — Im Finder zeigen + Windows-App-Icon (2026-09-30, Orchestrator-
+Auftrag mit Owner-Freigabe).** Tag `v1.9.6` (annotiert) auf dem Bau-Commit `5f66f37` (Bump
+aller sechs manuellen Stellen, 15/15 Zeilen). Inhalt gegenüber 1.9.5: **QTMUX-138**
+(`565198b`+`37b110a`) und **QTMUX-137** (`1001bc0`); erstes Release nach dem neuen
+**QTMUX-136**-Rezept (AppImage als Asset des Draft-Releases, das der Tag-Job anlegt).
+Vendoring: Hub `origin/main` `cb5a0dc`, seit Pin `8242342` kein Commit in den Kontrakt-Pfaden,
+Wächter 3/3 byte-identisch → 0 Drift, kein Nachzug. **Alle vier Artefakte aus `5f66f37`,
+Build-ID `1.9.6+5f66f37` je Artefakt EINZELN gemessen** (kein `-dirty`, kein `unknown`,
+0 Reste von `1.9.5`/`a98df26`; liegen unter `dist/`):
 
 | Artefakt | Bytes | SHA256 |
 |---|---|---|
-| `QTmux-1.9.5-macos.dmg` | 60 940 324 | `f0cfdcc55de509442f1d660151beb7277b328224e2315c3ae648a096059d4205` |
-| `QTmux-1.9.5-win64.msi` | 35 224 234 | `41002bf09df67a56587df7771977007c67cfb0a3e66b70432d0a69c56168cdea` |
-| `QTmux-1.9.5-win64-portable.zip` | 39 263 420 | `b8b15752cc71bae7e78112c6b2de13d222b3c3d895c82aa73ff6d1472dec7ad8` |
-| `QTmux-1.9.5-x86_64.AppImage` | 44 853 752 | `6080566252b70d24f8f80508af383c0882000c3968935c1a36740f2015954be6` |
+| `QTmux-1.9.6-macos.dmg` | 60 756 242 | `5a3ff2c3b17a3a989be7912612e91d4beb402a0ebe2e68b3b43128fe1297f47b` |
+| `QTmux-1.9.6-win64.msi` | 31 926 954 | `b52701e96cb55bb5c9ba61a3fc6963ae32acf5d98f57510e670a6e655b04fb74` |
+| `QTmux-1.9.6-win64-portable.zip` | 39 278 260 | `11d3e82dbdd8a535c25ab3b3f8f6a233571f79cc99fb85ac2719732986dfbb72` |
+| `QTmux-1.9.6-x86_64.AppImage` | 44 866 040 | `000da38567bc04ba504c7264e968db5fa8e21f835cfb9bacc82e6a2fed0a3da3` |
 
-Messwege: DMG gemountet, `codesign --verify --deep --strict` grün, Bundle per `env -i` als
-Zweitinstanz (Profil `rel195`, Port 7351) gestartet → `get_server_info`
-`1.9.5+a98df26`/`buildDirty false`; **Kern am Artefakt belegt:** `create_session` ohne
-`focus` → aktives Window 1/Pane 1 unverändert (Windows 1→2), Gegenprobe `focus:true` →
-Wechsel auf Window 3 wird gesehen · MSI per `msiexec /a` auf rtzbld01 (1423 Dateien,
-Build-ID ASCII+UTF-16 je 1×, `vcruntime140`/`msvcp140` vorhanden, 1619-Smoke grün) · ZIP per
-`zipfile` (1456 Einträge) · AppImage = CI-Artefakt des Tag-Laufs, auf rtzsvr02 extrahiert
-(1672 Dateien, Namen identisch zu 1.9.4).
-🔑 **Größenabweichungen gegenüber 1.9.4 — alle am Inhalt erklärt:** MSI **±0** (`qtmux.exe`
-+3 072 B verschwindet in der Sektor-Rundung) · ZIP **+1 943 B** = exakt die komprimierte
-Differenz von `qtmux.exe` (einzige geänderte Datei) · AppImage **+4 096 B** = `usr/bin/qtmux`
-(+4 096; Echo-Plugin gleich groß, anderer Hash) · DMG **+220 958 B** bei nur **+96 B** Inhalt
-(2006 Dateien, nur Binary und Info.plist weichen ab). ⚠️ **Der frühere Anker „hdiutil-UDZO
-streut ~±180 KB" war zu eng:** Kontrollversuch mit dem `build-dmg.sh`-Rezept — das
-byte-identische 1.9.4-Bundle ergab 61 867 279 / 60 752 145 B, das 1.9.5-Bundle
-59 841 129 / 60 698 641 B. **Die Streuung reicht bis ~2 MB**; eine DMG-Größe ist nie ein
-Befund, nur der Datei-/Hash-Vergleich des gemounteten Inhalts.
-CI: main-Lauf `36469834976` und Tag-Lauf `36470615988` je 3/3 `success`, Test-Steps einzeln
-gelesen, `test_mcpfocus` in jedem der sechs Jobs als `Passed` im Log belegt (macOS/Linux
-32/32, Windows 31/31 ohne `test_pty`; kein Windows-Flake). Publish in der
+**Kern am fertigen Artefakt belegt:** (1) MSI-Stream `Icon.qtmux.ico` = echte ICO (Magic
+`00 00 01 00`, 30 147 B = Repo-`.ico`), in 1.9.5 war es die EXE (PE, 3 333 632 B);
+(2) größtes RT_ICON von `qtmux.exe` im MSI (per `msiexec /a` entpackt) **und** im ZIP =
+Repo-`.ico` pixelgleich (bbox 0..256, Diff 0) — Gegenprobe 1.9.5-ZIP: bbox 24..232, ≠;
+(3) DMG-Zweitinstanz (Profil `rel196`, Port 7352): ⌘⌥-Klick auf einen ausgegebenen Dateipfad
+→ Finder-Auswahl per AppleScript `IMG_0848.jpeg` → `probe.txt`; Kontrolle (Klick ohne
+Modifier) → Auswahl unverändert. Klick-Weg ohne Bedienungshilfen-Recht und ohne Eingriff ins
+Artefakt: E2E-Fallen „Maus-Gesten am fertigen Bundle".
+Weitere Messwege: DMG gemountet, `codesign --verify --deep --strict` grün · MSI 1423 Dateien,
+Build-ID ASCII+UTF-16 je 1×, `vcruntime140`/`msvcp140` vorhanden · ZIP per `zipfile` (1456
+Einträge) · AppImage aus dem Draft per `gh release download` (sha256 = Job-Log = GitHub-Digest),
+auf rtzsvr02 extrahiert (1672 Dateien, Namen identisch zu 1.9.5).
+🔑 **Größenabweichungen gegenüber 1.9.5 — alle am Inhalt erklärt:** MSI **−3 297 280 B** =
+Icon-Stream −3 303 485 B (EXE → ICO, genau QTMUX-137) + CAB +7 330 B · ZIP **+14 840 B** =
+`qtmux.exe` +14 834 (roh +33 280) + `LIESMICH.txt` +6 · AppImage **+12 288 B** = `usr/bin/qtmux`
++32 768 roh (Echo-Plugin gleich groß, anderer Hash) · DMG **−184 082 B** bei 2006 Dateien,
+nur Binary und Info.plist verschieden (hdiutil-Streuung, s. 1.9.5).
+⚠️ **Fernbau-Falle, diesmal an MIR selbst:** die gehaltene SSH-Session lief als Hintergrund-Task
+mit 1 h Limit und wurde mitten im ZIP-Schritt getötet. Das MSI war fertig (Smoke liegt davor),
+aber `Compress-Archive` hing danach als verwaister Prozess mit offenem Handle auf einem
+1,5-MB-Rumpf-ZIP (blockiert auf der toten Pipe, CPU stand). Erkannt nur an der Größe; Abhilfe:
+die drei eigenen Prozesse per Kommandozeile identifiziert und beendet, ZIP-Schritt aus
+demselben Staging wiederholt (111 s allein, 20+ min unter Parallellast). Fernbau-Task-Limit
+also **2 h** setzen und `$ProgressPreference="SilentlyContinue"` für Compress-Archive.
+CI: main-Lauf `36774337411` und Tag-Lauf `36775188600` je 3/3 `success` (Tag-Lauf zusätzlich
+`Linux-AppImage → Release-Asset` success), Test-Steps einzeln gelesen, `test_mcpfocus` und
+`test_filemanagerreveal` in jedem der sechs Jobs als `Passed` im Log belegt (macOS/Linux
+33/33, Windows 32/32 ohne `test_pty`; kein Windows-Flake). Publish in der
 Owner-Permission-Form ohne Harness-Block; eigene Abnahme: `index.json`-Diff **exakt eine
-Zeile** (qtmux `1.9.4`→`1.9.5`), zwölf Produkte erhalten; Manifest `1.9.5`/`2026-09-28`,
-Signatur mit dem eingebauten Schlüssel gegen die heruntergeladenen Bytes gültig, Gegentest
-(ein Byte geändert) fällt; drei Artefakte per Cache-Bust zurückgeladen und `cmp`-gleich.
-GitHub-Release `v1.9.5` (Target voller SHA, vier Assets je per Rückladung `cmp`-belegt).
-Benutzerdoku dual auf 1.9.5 (on-prem v23, Cloud v22, je zurückgelesen).
+Zeile** (qtmux `1.9.5`→`1.9.6`), zwölf Produkte erhalten; Manifest `1.9.6`/`2026-09-30`,
+Signatur mit dem eingebauten Schlüssel gegen die heruntergeladenen Bytes gültig (openssl,
+Rohschlüssel als SPKI), Gegentest (ein Byte geändert) fällt; drei Artefakte per Cache-Bust
+zurückgeladen und `cmp`-gleich. GitHub-Release `v1.9.6`: das Draft des Tag-Jobs um
+DMG/MSI/ZIP ergänzt, Target voller SHA, alle vier Assets je Rückladung `cmp`-gleich, erst
+danach veröffentlicht (Latest, genau ein Release). Benutzerdoku dual auf 1.9.6 inkl.
+„Im Finder zeigen" (on-prem v24, Cloud v23, je zurückgelesen).
+Davor: **v1.9.5** — MCP-Anlage ohne Fokuswechsel QTMUX-135 (2026-09-28, `a98df26`, Build-ID
+`1.9.5+a98df26`; Artefakttabelle in der Git-Historie dieser Datei). Dauerhaft daraus:
+**hdiutil-UDZO streut bis ~2 MB** bei byte-identischem Bundle (Kontrollversuch 1.9.4:
+61 867 279 / 60 752 145 B) — eine DMG-Größe ist nie ein Befund, nur der Datei-/Hash-Vergleich
+des gemounteten Inhalts.
 Davor: **v1.9.4** — neues App-Icon + Startup-Check-Paar QTMUX-134 (2026-09-28, `3987935`,
 Build-ID `1.9.4+3987935`; Artefakttabelle in der Git-Historie dieser Datei, `932e484`).
 Dauerhaft daraus: ein AppImage erbt still Bibliotheken des Runner-Images (dort
@@ -711,11 +728,9 @@ Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
 (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich
 Qt-`bin` im PATH, sonst `0xc0000135`) — dort eine um 1 kleinere Zahl erwarten. Aktuellste
-Grün-Messung: CI-Tag-Lauf `36470615988` und main-Lauf `36469834976` (2026-09-28,
-Release-Stand 1.9.5) auf allen drei Plattformen grün inkl. Test-Steps (32/31/32); lokal
-nach QTMUX-138 33/33 in `build/macos-test` (Debug) **und** `build/macos-release` (2026-09-30);
-CI-main-Lauf `36772943480` (QTMUX-138) 3/3 grün, `test_filemanagerreveal` je Job als
-`Passed` gelesen (33/32/33).
+Grün-Messung: CI-Tag-Lauf `36775188600` und main-Lauf `36774337411` (2026-09-30,
+Release-Stand 1.9.6) auf allen drei Plattformen grün inkl. Test-Steps (33/32/33); lokal
+nach QTMUX-138 33/33 in `build/macos-test` (Debug) **und** `build/macos-release` (2026-09-30).
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
 besteht. Eine kleinere Zahl aus dem Container ist kein Widerspruch, sondern die
 Ausnahme per `-E`. **Zahl immer per `ctest -N` gegenprüfen, nie schätzen.**
@@ -727,18 +742,13 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-09-30, nach QTMUX-138 (unreleast)** · Working Tree sauber, ein Arbeitsbaum, nur
-Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD` muss **leer** sein.
-Unreleast auf `main` seit `v1.9.5`: **QTMUX-138** („Im Finder/Explorer/Dateimanager
-zeigen" — ⌘⌥-Klick bzw. Strg+Umschalt-Klick + Kontextmenü; macOS an der Zweitinstanz belegt,
-Windows/Linux nur Befehlstest + CI — der echte Explorer-/D-Bus-Aufruf ist dort noch
-**nicht** am lebenden Objekt gesehen, Rezept in `docs/owner-abnahmen.md`) · **QTMUX-137** (Windows-App-Icon: MSI-`<Icon>` aus der
-echten `.ico` statt der EXE, `.ico` als RC-Abhängigkeit — wirkt nur im Windows-Paket; die
-1.9.4/1.9.5-EXEs tragen noch das alte Icon mit Rand, das MSI zeigt im Startmenü ggf. ein
-weißes Blatt; Mechanik in der Feature-Referenz „App-Icon") sowie Doku und der
-CI-/Release-Umbau QTMUX-136 (AppImage als Release-Asset; das nächste Release ist das
-erste nach dem neuen Rezept, Publish-Mechanik unten; Messkommando
-`git log --oneline v1.9.5..origin/main`).
+Stand **2026-09-30, nach Release 1.9.6** · Working Tree sauber, ein Arbeitsbaum, nur
+Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD` muss **leer** sein;
+seit `v1.9.6` nur Doku (Messkommando `git log --oneline v1.9.6..origin/main`).
+Offen aus 1.9.6: QTMUX-138 unter Windows/Linux — der echte Explorer-/D-Bus-Aufruf ist nur per
+Befehlstest + CI belegt, nicht am lebenden Objekt (Rezept `docs/owner-abnahmen.md`); das
+Windows-Icon im Startmenü/Explorer nach echter MSI-Installation ist nur am Paketinhalt
+gemessen, nicht angesehen.
 Release-Endstand im „Ausgeliefert"-Absatz oben; Rolle: **Standby**, Arbeit kommt per
 Owner-Zuruf (Individual-Entwicklung).
 🔑 **Der eigene Commit-Hash steht hier bewusst NICHT** — ein `--amend` ändert ihn, und der
@@ -747,7 +757,8 @@ zusätzlich `git log --oneline -3` gegenlesen — die Windows-Session pusht eben
 
 **Rolle derzeit: Standby-Worker des Orchestrators** (Session 1 im Workspace; Rückmeldungen
 als `MELDUNG QTMUX [FERTIG|FRAGE|ABBRUCH]: …` per `queue_text`). Zuletzt erledigt
-(2026-09-28): **Release 1.9.5 komplett** (QTMUX-135) und davor am selben Tag
+(2026-09-30): **Release 1.9.6 komplett** (QTMUX-137/138, erstes Release nach dem
+QTMUX-136-Rezept). Davor (2026-09-28): **Release 1.9.5** (QTMUX-135) und am selben Tag
 **Release 1.9.4** inkl. QTMUX-134 (beides im „Ausgeliefert"-Absatz).
 Davor (2026-09-04): **Release 1.9.3 komplett** — Bump, Tag, CI, vier Artefakte, Publish mit
 eigener Abnahme, GitHub-Release, Confluence dual (alles im „Ausgeliefert"-Absatz). Davor
@@ -818,9 +829,10 @@ Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, p
    `Mode::System` an (`QLocale::system()`, EN/DE/SV); QTmux kann nur fest Deutsch/Englisch.
    RAFTNG nennt es ausdrücklich eine **Produktentscheidung**, keine technische, und liefert
    auf Zuruf. Nicht eigenmächtig übernommen.
-2. **Produktivinstanz auf 1.9.5 heben?** Sie läuft auf `1.9.3+d875816` (gemessen
-   2026-09-28) und trägt die laufende Orchestrierung — ein Update opfert die
-   Terminal-Sessions. Der Online-Update-Dialog bietet 1.9.5 von selbst an; der Zeitpunkt
+2. **Produktivinstanz auf 1.9.6 heben?** Sie läuft auf `1.9.3+d875816` (gemessen
+   2026-09-28 per `get_server_info`; das Binary unter `/Applications` trägt am 2026-09-30
+   weiterhin `1.9.3+d875816`) und trägt die laufende Orchestrierung — ein Update opfert die
+   Terminal-Sessions. Der Online-Update-Dialog bietet 1.9.6 von selbst an; der Zeitpunkt
    ist Owner-Sache. Erst danach wirkt QTMUX-135 für den Orchestrator (bis dahin zieht
    jedes `create_session` dem Owner den Fokus).
    (Der frühere Punkt „GitHub-Release v1.9.1 nachziehen?" ist erledigt: am 2026-08-18
