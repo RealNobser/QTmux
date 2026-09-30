@@ -175,10 +175,18 @@ void TestFileManagerReveal::leadingDashStaysAPath() {
     const QString p = localPathFor(file);
     QVERIFY(!p.isEmpty());
     QVERIFY(!p.startsWith(QLatin1Char('-')));
+    // Das Argument, das den Pfad trägt, endet auf „-R" und beginnt NIE mit „-". Es ist
+    // nicht überall das letzte (Linux: dbus-send hängt „string:" an) — darum suchen.
     const auto c = commands(p, currentPlatform());
     QVERIFY(!c.isEmpty());
-    QVERIFY(c[0].arguments.last().endsWith(QLatin1String("-R")));
-    QVERIFY(!c[0].arguments.last().startsWith(QLatin1Char('-')));
+    int carriers = 0;
+    for (const QString &a : c[0].arguments) {
+        if (a.size() > 2 && a.endsWith(QLatin1String("-R"))) {
+            ++carriers;
+            QVERIFY2(!a.startsWith(QLatin1Char('-')), qPrintable(a));
+        }
+    }
+    QCOMPARE(carriers, 1);
 }
 
 QTEST_GUILESS_MAIN(TestFileManagerReveal)
