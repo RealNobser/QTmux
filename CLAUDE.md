@@ -696,7 +696,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-138** („Im Finder/Explorer zeigen", 2026-09-30, beidseitig am Ticket gelesen; davor
+**QTMUX-138** („Im Finder/Explorer zeigen", 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
 (2026-09-28 nach QTMUX-136 exakt gezählt, beide paginiert über alle 136 Tickets; nach QTMUX-135
 waren es 109/26, bis QTMUX-134 108/26 — Cloud per paginierter `search/jql`; ⚠️ Clouds
@@ -713,7 +713,9 @@ lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn p
 Qt-`bin` im PATH, sonst `0xc0000135`) — dort eine um 1 kleinere Zahl erwarten. Aktuellste
 Grün-Messung: CI-Tag-Lauf `36470615988` und main-Lauf `36469834976` (2026-09-28,
 Release-Stand 1.9.5) auf allen drei Plattformen grün inkl. Test-Steps (32/31/32); lokal
-nach QTMUX-138 33/33 in `build/macos-test` (Debug) **und** `build/macos-release` (2026-09-30).
+nach QTMUX-138 33/33 in `build/macos-test` (Debug) **und** `build/macos-release` (2026-09-30);
+CI-main-Lauf `36772943480` (QTMUX-138) 3/3 grün, `test_filemanagerreveal` je Job als
+`Passed` gelesen (33/32/33).
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
 besteht. Eine kleinere Zahl aus dem Container ist kein Widerspruch, sondern die
 Ausnahme per `-E`. **Zahl immer per `ctest -N` gegenprüfen, nie schätzen.**
