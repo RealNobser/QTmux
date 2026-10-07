@@ -458,6 +458,53 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   🔑 `Waiting` zählt bewusst **nicht** als Arbeiten: Da wartet der Agent auf einen Menschen,
   und dann darf der Rechner schlafen (Gegenprobe im Test: FAIL, wenn man es mitzählt).
   Abnahme mit `pmset -g assertions` über alle Zustände, inkl. Freigabe beim Beenden.
+- **Stillstand erkennen (QTMUX-139):** Eine Agent-Session, die sichtbar **arbeitet**, deren
+  Bildschirm aber seit `window/stallMinutes` (Vorgabe **5**, `0` = aus; Prefs „Agenten & MCP ›
+  Überwachung") **unverändert** steht, setzt `needsAttention` mit eigenem Text („Agent steht seit
+  N min still — evtl. verdeckter Systemdialog?") und löst sich selbst auf, sobald sich der
+  Bildschirm wieder bewegt. Anlass 2026-10-07: eine Claude-Session hing **4 h 48 min** in einem
+  unsichtbaren TCC-Dialog, Uhr eingefroren, 0 % CPU — QTmux zeigte nur ein altes „question".
+  Kern Gui-frei in [src/core/StallDetector.h](src/core/StallDetector.h) (Zeit injiziert), Test
+  `test_stalldetector` (Mutationsprobe: jede der neun Bedingungen einzeln entfernt → rot).
+  🔑 **Das Signal ist das EINFRIEREN, nicht die Stille.** Ein lebender Claude Code zählt seine
+  Uhr jede Sekunde hoch — **auch während ein Befehl ohne Ausgabe läuft** (gemessen 2026-10-07:
+  „Running 1 shell command · 3s…" → „· 9s…", „(3m 7s" → „(3m 13s"). Ein langer stiller Build
+  unter einem Agenten löst also **konstruktiv nicht** aus; eine Meldung heißt immer: der Agent
+  kommt nicht mehr dazu, seine Oberfläche zu zeichnen. Darum ist die Vorgabe mit 5 min knapp:
+  schon eine stehende Minute ist bei einem lebenden Agenten nie normal, die Reserve deckt kurze
+  Blockaden ab. Gewöhnliche Shells (ohne `agentId`) werden **nie** bewertet — dort wäre
+  Stille tatsächlich legitim und die Meldung bloßes Rauschen.
+  🔑 **Merkmal „arbeitet" je Agent in der Registry** (`AgentInfo::workingMarkers`, leer = keine
+  Erkennung — Registry-Linie „nie raten"): wörtliche Teilzeichenkette in den **untersten drei
+  nicht-leeren** Bildschirmzeilen. Claude Code: `esc to interrupt` (am lebenden Objekt: arbeitend
+  steht es in der Fußzeile `⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · …`, am
+  wartenden Prompt fehlt es — dort steht `✻ Cooked for 55s · done …`). Nur unten, weil weiter
+  oben dieselbe Zeile auch nach dem Beenden des Agenten noch im Bild stehen kann (Ctrl+Z,
+  darunter ein Shell-Prompt). Codex u. a. bleiben leer, bis jemand ihren Bildschirm am
+  laufenden Agenten abgelesen hat. Der wartende Prompt ist **kein** Stillstand — das deckt das
+  bestehende `question`/`done`-Ereignis ab.
+  - **Abtastung** im `SessionModel`-Takt von 5 s (`kStallTickMs`), Timer läuft nur bei
+    eingeschalteter Erkennung. Billig: Der Bildschirm kann sich nur durch Backend-Ausgabe
+    ändern — kam seit der letzten Abtastung nichts (Zähler `m_outputSeq`), werden Fingerabdruck
+    und Merkmal wiederverwendet; ein stehender Agent kostet also keinen Bildschirm-Durchlauf.
+    Uhr ist monoton (`QElapsedTimer`); eine Lücke über drei Takte (Ruhezustand, hängende
+    Event-Loop) setzt die Beobachtung neu an, statt nach dem Aufwachen „seit 2 h" zu melden.
+  - **Auch die fokussierte Session wird markiert** (anders als Bell/`question`): Fokus in QTmux
+    sagt nichts darüber, ob ein Mensch hinsieht — im Anlassfall arbeitete der Owner per Remote
+    Desktop. Fokussieren quittiert wie gewohnt (`setActive` löscht `needsAttention`), der
+    Stillstand selbst bleibt in `stalled`/`stallNote` sichtbar.
+  - **Selbstauflösung nimmt nur die EIGENE Markierung zurück** (`m_attentionFromStall`): Kommt
+    während des Stillstands ein echter Grund hinzu (Rückfrage, Bell), bleibt `needsAttention`
+    stehen.
+  - **Sichtbar:** Pane-Rand pulsiert + Dock-Hüpfen (bestehende `needsAttention`-Mechanik),
+    Statusleiste „· N steht still", Flyout-Zustandstext = `stallNote`, MCP `list_sessions`
+    `stalled` (immer) + `stalledForMs`/`stallNote` (nur bei Stillstand). Bewusst **kein**
+    `post_event`: Ein Ereignis unter der Session-ID gäbe vor, der Agent selbst habe gemeldet,
+    und überschriebe dessen `lastAgentEvent*`.
+  - Abnahme am laufenden Objekt (Zweitinstanz, Schwelle 1 min, 2026-10-07): Attrappen namens
+    `claude` per `send_keys` gestartet (so erkennt QTmux den Agenten wie echt) — eingefrorene
+    Uhr → nach ~70 s `stalled`/`needsAttention`, Uhr läuft wieder → binnen eines Takts
+    aufgelöst; „Prompt wartet" und „Uhr tickt" 15/15 Abtastungen ohne Meldung.
 - **AgentRegistry: Aliase, Kommandonamen, Unterkommando-Vorlagen (QTMUX-88):** Die Liste der
   bekannten CLIs ist **einziger Pflegeort** (nirgends im QML oder README gedoppelt — geprüft).
   `AgentInfo` hat neben `command` jetzt `aliases`, und `AgentInfo::matches()` ist die EINE Stelle,

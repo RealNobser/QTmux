@@ -13,6 +13,11 @@ qt_add_executable(test_filemanagerreveal tst_filemanagerreveal.cpp)
 target_link_libraries(test_filemanagerreveal PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_filemanagerreveal COMMAND test_filemanagerreveal)
 
+# QTMUX-139: Stillstand-Erkennung fuer Agent-Sessions — Zeit injiziert, keine echten Minuten.
+qt_add_executable(test_stalldetector tst_stalldetector.cpp)
+target_link_libraries(test_stalldetector PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_stalldetector COMMAND test_stalldetector)
+
 qt_add_executable(test_keyencoding tst_keyencoding.cpp)
 target_link_libraries(test_keyencoding PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_keyencoding COMMAND test_keyencoding)

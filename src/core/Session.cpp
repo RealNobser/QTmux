@@ -197,6 +197,7 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
                 // bedeutungslos. Gemessen wird nur, OB Bytes fließen, nie ihr Inhalt
                 // (Projektlinie QTMUX-30).
                 m_lastOutput.restart();
+                ++m_outputSeq;   // QTMUX-139: Bildschirm könnte sich geändert haben
                 scanForPasswordPrompt(data);
                 armLoginScript();
             });
@@ -235,6 +236,7 @@ void Session::setActive(bool active) {
     m_active = active;
     if (active && m_needsAttention) {
         m_needsAttention = false;
+        m_attentionFromStall = false;
         emit attentionChanged();
     }
 }
@@ -314,10 +316,73 @@ void Session::shutdown() {
 }
 
 void Session::raiseAttention() {
-    if (!m_active && !m_needsAttention) {
+    if (m_active) return;
+    // Ein anderer Grund kommt hinzu — ab jetzt darf die Auflösung eines Stillstands
+    // die Markierung nicht mehr wegnehmen (QTMUX-139).
+    m_attentionFromStall = false;
+    if (!m_needsAttention) {
         m_needsAttention = true;
         emit attentionChanged();
     }
+}
+
+void Session::sampleStall(qint64 nowMs) {
+    m_stallLastNowMs = nowMs;
+    // Agentenwechsel (oder Agent erst jetzt erkannt): alte Beobachtung verwerfen.
+    if (m_agentId != m_stallAgent) {
+        m_stallAgent = m_agentId;
+        m_stallSampledSeq = ~quint64(0);
+        if (m_stall.stalled()) { m_stall.reset(); updateStallNote(); }
+        else m_stall.reset();
+    }
+    const QStringList markers = AgentRegistry::workingMarkersFor(m_agentId);
+    if (markers.isEmpty() || !m_screen) {
+        // Kein Agent bzw. kein belegtes Merkmal: nie stillstehend.
+        if (m_stall.sample(nowMs, 0, false)) updateStallNote();
+        return;
+    }
+    if (m_stallSampledSeq != m_outputSeq) {
+        const QString text = m_screen->screenText();
+        m_stallFingerprint = screenFingerprint(text);
+        m_stallWorking = screenShowsWorking(text, markers);
+        m_stallSampledSeq = m_outputSeq;
+    }
+    const bool changed = m_stall.sample(nowMs, m_stallFingerprint, m_stallWorking);
+    if (changed) {
+        updateStallNote();
+        if (m_stall.stalled()) {
+            // 🔑 Bewusst AUCH bei der fokussierten Session (anders als Bell/Ereignis): Der
+            // Fokus innerhalb von QTmux sagt nichts darüber, ob ein Mensch hinsieht — am
+            // 2026-10-07 stand eine Session 4 h 48 min still, während der Owner per Remote
+            // Desktop arbeitete. Ein stehendes Bild sieht man einem Bildschirm nicht an.
+            if (!m_needsAttention) {
+                m_needsAttention = true;
+                m_attentionFromStall = true;
+                emit attentionChanged();
+            }
+        } else if (m_attentionFromStall && m_needsAttention) {
+            // Der Bildschirm bewegt sich wieder: selbst auflösen — aber nur, wenn die
+            // Markierung allein vom Stillstand stammt.
+            m_needsAttention = false;
+            m_attentionFromStall = false;
+            emit attentionChanged();
+        }
+    } else if (m_stall.stalled()) {
+        updateStallNote();   // Minuten mitzählen (meldet nur bei geändertem Text)
+    }
+}
+
+void Session::updateStallNote() {
+    QString note;
+    if (m_stall.stalled()) {
+        const qint64 minutes = stalledForMs() / 60000;
+        note = QCoreApplication::translate(
+                   "Session", "Agent steht seit %1 min still — evtl. verdeckter Systemdialog?")
+                   .arg(minutes);
+    }
+    if (note == m_stallNote) return;
+    m_stallNote = note;
+    emit stallChanged();
 }
 
 void Session::setActivity(Activity a) {
@@ -368,6 +433,7 @@ void Session::flagAttention(const QString &note) {
 void Session::clearAttention() {
     if (!m_needsAttention) return;
     m_needsAttention = false;
+    m_attentionFromStall = false;
     emit attentionChanged();
 }
 

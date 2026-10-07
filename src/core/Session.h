@@ -6,6 +6,7 @@
 #include <QElapsedTimer>
 
 #include "PromptQueue.h"
+#include "StallDetector.h"
 #include <memory>
 
 #include "ITerminalBackend.h"
@@ -79,6 +80,11 @@ class Session : public QObject {
     Q_PROPERTY(bool gitDetached READ gitDetached NOTIFY gitBranchChanged)
     // Anzahl eingereihter Prompts (QTMUX-90) — treibt das Zaehler-Abzeichen auf der Kachel.
     Q_PROPERTY(int queuedCount READ queuedCount NOTIFY queueChanged)
+    // Stillstand (QTMUX-139): der Agent zeigt „arbeitet", der Bildschirm steht aber seit
+    // der eingestellten Schwelle still. `stallNote` ist der Anzeigetext dazu (leer, solange
+    // nichts steht) und zählt die Minuten mit.
+    Q_PROPERTY(bool stalled READ stalled NOTIFY stallChanged)
+    Q_PROPERTY(QString stallNote READ stallNote NOTIFY stallChanged)
 public:
     enum class Type { Shell, Ssh, Serial, App };
     Q_ENUM(Type)
@@ -263,6 +269,21 @@ public:
 
     VtScreen *screen() const { return m_screen.get(); }
 
+    // --- Stillstand-Erkennung (QTMUX-139) -------------------------------------
+    /// Schwelle in ms; `<= 0` schaltet die Erkennung ab (ein bestehender Stillstand löst
+    /// sich bei der nächsten Abtastung auf). Gesetzt vom SessionModel aus der Einstellung.
+    void setStallThresholdMs(qint64 ms) { m_stall.setThresholdMs(ms); }
+    void setStallMaxGapMs(qint64 ms) { m_stall.setMaxGapMs(ms); }
+    /// Eine Abtastung im Takt des SessionModel; `nowMs` ist eine MONOTONE Uhr (kein
+    /// Wanduhr-Wert — eine Zeitumstellung darf keinen Stillstand erzeugen).
+    /// Nur Sessions mit erkanntem Agenten UND belegtem Merkmal in der AgentRegistry
+    /// werden bewertet; alles andere gilt nie als stillstehend.
+    void sampleStall(qint64 nowMs);
+    bool stalled() const { return m_stall.stalled(); }
+    /// Wie lange der Bildschirm schon unverändert steht (nur bei `stalled()`, sonst 0).
+    qint64 stalledForMs() const { return m_stall.stalled() ? m_stallLastNowMs - m_stall.unchangedSinceMs() : 0; }
+    QString stallNote() const { return m_stallNote; }
+
     /// Wiederhergestellten Scrollback übernehmen (QTMUX-130) — er wird NICHT sofort
     /// eingespielt, sondern bis zur ersten echten Terminalgröße zurückgehalten.
     ///
@@ -358,6 +379,7 @@ signals:
     void workingDirectoryChanged();
     void gitBranchChanged();
     void queueChanged();
+    void stallChanged();
     void groupChanged();
     void windowIdChanged();
     void sizeChanged();
@@ -368,6 +390,7 @@ private:
     void flushPendingEnter();                   // ausstehendes Enter jetzt senden (QTMUX-31)
     void writeWithEnterImpl(const QByteArray &data, int enterDelayMs, bool asPaste);
     void raiseAttention();                      // setzt needsAttention (wenn inaktiv)
+    void updateStallNote();                     // QTMUX-139: Text + Minuten nachführen
     void observeInput(const QByteArray &data);  // erkennt getippte Agenten-Kommandos
     void armLoginScript();                      // Fallback-Timer beim ersten Output starten
     void runLoginScript();                      // Login-Script einmalig senden
@@ -430,6 +453,21 @@ private:
     bool m_titleFromAgent = false;
     bool m_active = false;
     bool m_needsAttention = false;
+    // QTMUX-139: Stillstand-Erkennung. `m_attentionFromStall` merkt, dass die aktuelle
+    // Markierung ALLEIN vom Stillstand stammt — nur dann darf dessen Auflösung sie
+    // wieder löschen (eine inzwischen eingetroffene Rückfrage bliebe sonst unsichtbar).
+    StallDetector m_stall;
+    bool m_attentionFromStall = false;
+    QString m_stallNote;
+    qint64 m_stallLastNowMs = 0;
+    // Der Bildschirm kann sich nur durch Backend-Ausgabe ändern: Kam seit der letzten
+    // Abtastung nichts, gelten Fingerabdruck und Merkmal unverändert — ein stehender
+    // Agent kostet damit pro Takt keinen Bildschirm-Durchlauf.
+    quint64 m_outputSeq = 0;
+    quint64 m_stallSampledSeq = ~quint64(0);
+    quint64 m_stallFingerprint = 0;
+    bool m_stallWorking = false;
+    QString m_stallAgent;   // Agent der letzten Abtastung; Wechsel = neu beginnen
     bool m_mcpController = false;
     bool m_progressActive = false;
     int m_progressState = 0;     // 1=normal,2=Fehler,3=unbestimmt,4=pausiert

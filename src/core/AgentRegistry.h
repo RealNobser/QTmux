@@ -34,6 +34,14 @@ struct AgentInfo {
     QByteArray scrollUpKeys;
     QByteArray scrollDownKeys;
 
+    // --- Stillstand-Erkennung (QTMUX-139) ------------------------------------
+    // Wörtliche Teilzeichenketten, die in den UNTERSTEN Bildschirmzeilen stehen, solange
+    // der Agent arbeitet (und nur dann) — Regel in core/StallDetector.h. LEER heißt:
+    // nicht belegt → für diesen Agenten gibt es keine Stillstand-Meldung. Nur am
+    // laufenden Agenten abgelesene Werte eintragen: ein Merkmal, das auch am wartenden
+    // Prompt steht, meldete jeden Agenten in der Mittagspause als „hängt".
+    QStringList workingMarkers;
+
     /// Passt ein Kommando-Basisname (ohne Pfad und ohne .exe/.cmd/.bat) auf diesen
     /// Agenten? Vergleicht `command` UND alle `aliases`, Groß-/Kleinschreibung egal.
     bool matches(const QString &base) const;
@@ -88,6 +96,10 @@ public:
     /// hier einen Eintrag ergänzt, misst ihn vorher — ein geratenes Kürzel landet
     /// mitten in der Oberfläche des Agenten und richtet dort Schaden an.
     static QByteArray scrollKeysFor(const QString &agentId, bool up);
+
+    /// Merkmale „arbeitet gerade" des Agenten `agentId` (QTMUX-139); leer = keine
+    /// Stillstand-Erkennung für ihn.
+    static QStringList workingMarkersFor(const QString &agentId);
 };
 
 } // namespace qtmux

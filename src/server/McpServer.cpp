@@ -657,7 +657,8 @@ QJsonObject McpServer::toolsList() const {
     tools.append(tool("list_sessions",
                       "Listet alle offenen Sessions mit Status (id, title, type, activity, "
                       "agentId, needsAttention, lastNotification, mcpController, workingDir, group, "
-                      "progress).",
+                      "progress, stalled — bei stalled=true zusätzlich stalledForMs und stallNote: "
+                      "Agent zeigt „arbeitet“, Bildschirm steht seit der Schwelle still).",
                       {}, {}));
     tools.append(tool("create_session",
                       "Erstellt eine Session in einem NEUEN Window (Tab) — im HINTERGRUND: "
@@ -990,7 +991,14 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             {"progressActive", s->progressActive()},
             {"progressState", s->progressState()},
             {"progressValue", s->progressValue()},
+            // QTMUX-139: immer vorhanden, damit ein Orchestrator nicht zwischen
+            // „steht nicht" und „alte QTmux-Fassung kennt das Feld nicht" raten muss.
+            {"stalled", s->stalled()},
         };
+        if (s->stalled()) {
+            o.insert("stalledForMs", static_cast<double>(s->stalledForMs()));
+            o.insert("stallNote", s->stallNote());
+        }
         // Jüngstes Agenten-Ereignis dieser Session als Quelle (für Polling-Clients).
         const AgentEventHub::Event ev = AgentEventHub::instance()->latestFrom(s->id());
         if (ev.seq > 0) {

@@ -221,6 +221,7 @@ Window {
             { cat: "eingabe",          key: "eingabe.maus",          label: qsTr("Mausrad in Vollbild-Anwendungen"),   keywords: "maus mausrad scrollen scroll rad wheel vollbild alternate screen codex less vim pfeiltasten 1007" },
             { cat: "agenten",          key: "agenten.restore",       label: qsTr("Agenten beim Start wiederherstellen"), keywords: "agent wiederherstellen neustart restore claude codex starten sitzung" },
             { cat: "agenten",          key: "agenten.restore",       label: qsTr("Unterhaltung fortsetzen"),           keywords: "fortsetzen continue resume unterhaltung konversation agent auswahl gemeldet juengste" },
+            { cat: "agenten",          key: "agenten.stall",         label: qsTr("Stillstand melden"),                 keywords: "stillstand haengt haengen eingefroren freeze stall agent dialog systemdialog tcc aufmerksamkeit minuten ueberwachung" },
             { cat: "agenten",          key: "agenten.notifications", label: qsTr("Benachrichtigungen"),                keywords: "agent benachrichtigung abo matrix ereignis subscribe" },
             { cat: "agenten",          key: "agenten.mcp",           label: qsTr("MCP-Server"),                        keywords: "mcp server port agenten steuerung 127.0.0.1 netzwerk lan bind adresse token bearer fernsteuerung 0.0.0.0" },
             { cat: "verbindungen",     key: "verbindungen.list",     label: qsTr("Verbindungsprofile"),                keywords: "verbindung profil ssh seriell sftp profile" },

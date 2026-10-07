@@ -38,6 +38,42 @@ SessionModel::SessionModel(QObject *parent) : QAbstractListModel(parent) {
         }
     });
     m_cwdPoll->start();
+
+    // QTMUX-139: Stillstand-Erkennung. Eigener, trägerer Takt als das CWD-Polling.
+    m_stallClock.start();
+    m_stallPoll = new QTimer(this);
+    m_stallPoll->setInterval(kStallTickMs);
+    connect(m_stallPoll, &QTimer::timeout, this, &SessionModel::sampleStalls);
+    if (m_stallMinutes > 0) m_stallPoll->start();
+}
+
+void SessionModel::setStallMinutes(int minutes) {
+    minutes = qMax(0, minutes);
+    if (minutes == m_stallMinutes) return;
+    m_stallMinutes = minutes;
+    emit stallMinutesChanged();
+    // Bestehende Sessions sofort umstellen; beim Abschalten EINE Abtastung, damit ein
+    // laufender Stillstand sich auflöst, bevor der Takt stehen bleibt.
+    sampleStalls();
+    if (m_stallMinutes > 0) { if (!m_stallPoll->isActive()) m_stallPoll->start(); }
+    else m_stallPoll->stop();
+}
+
+void SessionModel::sampleStalls() {
+    const qint64 now = m_stallClock.elapsed();
+    for (Session *s : m_sessions) {
+        s->setStallThresholdMs(qint64(m_stallMinutes) * 60000);
+        // Lücke über drei Takte = Rechner schlief bzw. Event-Loop stand → neu ansetzen.
+        s->setStallMaxGapMs(3 * kStallTickMs);
+        s->sampleStall(now);
+    }
+}
+
+int SessionModel::stalledCount() const {
+    int n = 0;
+    for (Session *s : m_sessions)
+        if (s && s->stalled()) ++n;
+    return n;
 }
 
 int SessionModel::rowCount(const QModelIndex &parent) const {
@@ -114,6 +150,7 @@ void SessionModel::wireSession(Session *s, int row) {
     connect(s, &Session::workingDirectoryChanged, this, refresh);
     connect(s, &Session::gitBranchChanged, this, refresh);   // QTMUX-58
     connect(s, &Session::queueChanged, this, refresh);      // QTMUX-90
+    connect(s, &Session::stallChanged, this, refresh);      // QTMUX-139
 
     // Ruhezustands-Sperre an den Aktivitätszustand koppeln (QTMUX-89). Bewusst eine
     // eigene Verbindung statt eines Anhängsels an `refresh`: Die Sidebar-Aktualisierung
@@ -126,6 +163,7 @@ void SessionModel::wireSession(Session *s, int row) {
     // wie oben — die Zähler sollen auch dann stimmen, wenn an `refresh` etwas geändert
     // wird. `countersChanged` ist der Bindungsanker für die Statusleiste.
     connect(s, &Session::activityChanged, this, &SessionModel::countersChanged);
+    connect(s, &Session::stallChanged, this, &SessionModel::countersChanged);   // QTMUX-139
 
     // Steigt die Aufmerksamkeit, das Fenster informieren (Dock-/Taskbar-Alert).
     connect(s, &Session::attentionChanged, this, [this, s]() {

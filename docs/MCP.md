@@ -70,7 +70,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 
 | Tool | Argumente | Zweck |
 |---|---|---|
-| `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification, workingDir, progress*) |
+| `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification, workingDir, progress*, stalled — s. „Stillstand") |
 | `create_session` | `type` ("shell"/"serial"/"ssh"/"plugin"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?`, `pluginId?`, `typeId?`, `loginScript?`, `focus?` (Standard false) | Session in einem **neuen Window** (Tab) anlegen — **im Hintergrund**, der Fokus bleibt, wo er ist (s. „Kein Fokuswechsel") → gibt neue **id** zurück (Pane *im* aktiven Window: `split_pane`) |
 | `close_session` | `id` | Session schließen |
 | `set_session_group` | `id`, `group?` | Das **Window** dieser Session einer Sidebar-Gruppe zuordnen; leerer/fehlender `group` nimmt es heraus (Window-Modell) |
@@ -118,6 +118,18 @@ mit OSC-133-Integration automatisch (Prompt=untätig, Kommando=läuft, Exit≠0=
 `list_sessions` liefert zusätzlich `mcpController` (true = roter Controller-Tab), `group`
 (Sidebar-Gruppe, leer = ohne) sowie — falls die Session bereits ein Agenten-Ereignis
 erzeugt hat — `lastAgentEventKind`, `lastAgentEventText`, `lastAgentEventSeq`.
+
+**Stillstand (QTMUX-139):** `stalled` steht **immer** im Objekt (so muss ein Orchestrator
+nicht raten, ob „fehlt" heißt „steht nicht" oder „alte QTmux-Fassung"). `true` heißt: Der
+Agent zeigt „arbeitet" (bei Claude Code `esc to interrupt` in der Fußzeile), sein Bildschirm
+steht aber seit der eingestellten Schwelle (`window/stallMinutes`, Vorgabe 5 min) still — ein
+lebender Agent zählt seine Uhr jede Sekunde hoch, auch bei Befehlen ohne Ausgabe. Dann
+zusätzlich `stalledForMs` (Dauer der unveränderten Strecke) und `stallNote` (Anzeigetext,
+z. B. „Agent steht seit 12 min still — evtl. verdeckter Systemdialog?"); `needsAttention` wird
+gesetzt — auch bei der fokussierten Session. Löst sich selbst auf, sobald sich der Bildschirm
+wieder ändert. Es entsteht bewusst **kein** Agenten-Ereignis (`lastAgentEvent*` bleibt das,
+was der Agent selbst gemeldet hat). Typische Ursache: ein verdeckter Systemdialog
+(macOS-TCC), der den Agenten-Prozess blockiert. Mechanik: Feature-Referenz.
 
 ### `set_session_group` — zusammengehörige Worker sichtbar machen (QTMUX-42)
 

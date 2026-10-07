@@ -534,6 +534,12 @@ ApplicationWindow {
     property bool preventSleep: false
     onPreventSleepChanged: sessions.preventSleep = preventSleep
 
+    // Stillstand-Erkennung (QTMUX-139): Minuten, nach denen ein Agent, der „arbeitet"
+    // zeigt, dessen Bildschirm aber stillsteht, Aufmerksamkeit anfordert. 0 = aus.
+    // Vorgabe = SessionModel::kDefaultStallMinutes (Begründung in der Feature-Referenz).
+    property int stallMinutes: 5
+    onStallMinutesChanged: sessions.stallMinutes = stallMinutes
+
     // Umfang der Wiederherstellung beim Start (QTMUX-99, qtmux::RestoreMode):
     // 0 gar nicht · 1 ohne Verlauf · 2 alles (Vorgabe = bisheriges Verhalten).
     // Die Regeln stehen Gui-frei in RestoreMode.h; abgefragt wird ausschließlich über
@@ -1003,6 +1009,8 @@ ApplicationWindow {
     function sidebarStateText(sid) {
         const s = sid >= 0 ? window.sessionById(sid) : null
         if (!s) return ""
+        // Ein Stillstand (QTMUX-139) bringt seinen eigenen, schon datierten Text mit.
+        if (s.stalled) return s.stallNote
         const label = s.needsAttention ? qsTr("braucht Aufmerksamkeit")
                     : s.activity === 0 ? qsTr("untätig")
                     : s.activity === 1 ? qsTr("arbeitet")
@@ -1696,6 +1704,7 @@ ApplicationWindow {
         // und nicht nur über onPreventSleepChanged: Entspricht der gespeicherte Wert der
         // Vorgabe, feuert beim Start gar kein Änderungssignal.
         sessions.preventSleep = window.preventSleep
+        sessions.stallMinutes = window.stallMinutes   // QTMUX-139, derselbe Grund
         window.restoreWindows()
         window._starting = false   // ab jetzt darf ein leerer Fensterstand beenden
     }
@@ -1759,6 +1768,7 @@ ApplicationWindow {
         property alias confirmQuit: window.confirmQuit
         property alias restoreSessionMode: window.restoreSessionMode
         property alias preventSleep: window.preventSleep
+        property alias stallMinutes: window.stallMinutes
         property alias restoreAgents: window.restoreAgents
         property alias resumeAgentMode: window.resumeAgentMode
         property alias collapsedGroups: window.collapsedGroupsJson
@@ -1815,6 +1825,7 @@ ApplicationWindow {
         case "window/restoreSessionMode":   window.restoreSessionMode = i(2); break
         case "window/quakeMode":            window.quakeMode = b(false); break
         case "window/preventSleep":         window.preventSleep = b(false); break
+        case "window/stallMinutes":         window.stallMinutes = i(5); break
         case "window/terminalFontFamily":   window.terminalFontFamily = s(""); break
         case "window/terminalFontSize":     window.terminalFontSize = i(13); break
         case "window/terminalLigatures":    window.terminalLigatures = b(false); break
@@ -2303,9 +2314,10 @@ ApplicationWindow {
                     let t = qsTr("%1 Sessions").arg(sessions.count)
                     if (sessions.waitingCount > 0) t += " · " + qsTr("%1 wartet").arg(sessions.waitingCount)
                     if (sessions.errorCount > 0)   t += " · " + qsTr("%1 Fehler").arg(sessions.errorCount)
+                    if (sessions.stalledCount > 0) t += " · " + qsTr("%1 steht still").arg(sessions.stalledCount)
                     return t
                 }
-                tip: qsTr("Sessions insgesamt, wartend, mit Fehler")
+                tip: qsTr("Sessions insgesamt, wartend, mit Fehler, stillstehend")
             }
 
             // 3) Rastergröße des aktiven Panes (QTMUX-120). Verschwindet, wenn keine

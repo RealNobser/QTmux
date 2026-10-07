@@ -24,7 +24,12 @@ const QList<AgentInfo> &AgentRegistry::all() {
          .displayName = QStringLiteral("Claude Code"),
          .resumeLastArgs = QStringLiteral("--continue"),
          .resumePickArgs = QStringLiteral("--resume"),
-         .resumeIdArgs   = QStringLiteral("--resume {id}")},
+         .resumeIdArgs   = QStringLiteral("--resume {id}"),
+         // QTMUX-139, am lebenden Claude Code abgelesen (2026-10-07): arbeitend steht
+         // in der untersten Zeile „⏵⏵ auto mode on (shift+tab to cycle) · esc to
+         // interrupt · …", darüber die Spinnerzeile mit laufender Uhr; am Prompt
+         // wartend fehlt die Zeichenkette („✻ Cooked for 55s · done 8:35 PM").
+         .workingMarkers = {QStringLiteral("esc to interrupt")}},
 
         // Codex fortsetzt über ein UNTERKOMMANDO, nicht über ein Flag: `codex resume`
         // zeigt den Picker, `--last` nimmt die jüngste, ein positionales SESSION_ID die
@@ -201,6 +206,13 @@ QByteArray AgentRegistry::scrollKeysFor(const QString &agentId, bool up) {
     if (agentId.isEmpty()) return {};
     for (const AgentInfo &a : all())
         if (a.id == agentId) return up ? a.scrollUpKeys : a.scrollDownKeys;
+    return {};
+}
+
+QStringList AgentRegistry::workingMarkersFor(const QString &agentId) {
+    if (agentId.isEmpty()) return {};
+    for (const AgentInfo &a : all())
+        if (a.id == agentId) return a.workingMarkers;
     return {};
 }
 

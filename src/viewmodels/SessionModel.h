@@ -4,6 +4,7 @@
 #include <QList>
 #include <QVariantList>
 #include <QVariantMap>
+#include <QElapsedTimer>
 #include <qqmlintegration.h>
 
 #include "SleepInhibitor.h"   // Mitglied, daher vollständige Definition nötig
@@ -31,6 +32,11 @@ class SessionModel : public QAbstractListModel {
     // dieselbe Quelle wie der Zustandstext des Flyouts.
     Q_PROPERTY(int waitingCount READ waitingCount NOTIFY countersChanged)
     Q_PROPERTY(int errorCount READ errorCount NOTIFY countersChanged)
+    // Stillstand-Erkennung (QTMUX-139): Schwelle in Minuten, 0 = aus. Persistiert als
+    // `window/stallMinutes` (QML-Settings, wie `preventSleep`); `stalledCount` zählt die
+    // gerade stillstehenden Agent-Sessions für die Statusleiste.
+    Q_PROPERTY(int stallMinutes READ stallMinutes WRITE setStallMinutes NOTIFY stallMinutesChanged)
+    Q_PROPERTY(int stalledCount READ stalledCount NOTIFY countersChanged)
 public:
     enum Roles {
         TitleRole = Qt::UserRole + 1,
@@ -238,7 +244,21 @@ public:
     /// Kann diese Plattform das überhaupt? (Linux: derzeit nein.)
     Q_INVOKABLE bool sleepInhibitSupported() const;
 
+    // --- Stillstand-Erkennung (QTMUX-139) -----------------------------------------
+    /// Takt der Abtastung. 5 s: Die Schwelle liegt im Minutenbereich, eine Abtastung je
+    /// Sekunde brächte nichts; die Uhr des Agenten tickt aber jede Sekunde, also sieht
+    /// JEDE Abtastung eines lebenden Agenten einen neuen Bildschirm.
+    static constexpr int kStallTickMs = 5000;
+    /// Vorgabe der Schwelle in Minuten (Begründung in der Feature-Referenz).
+    static constexpr int kDefaultStallMinutes = 5;
+    int stallMinutes() const { return m_stallMinutes; }
+    void setStallMinutes(int minutes);
+    int stalledCount() const;
+    /// Eine Abtastung aller Sessions sofort (sonst im Takt von kStallTickMs).
+    void sampleStalls();
+
 signals:
+    void stallMinutesChanged();
     void preventSleepChanged();
     /// Die Sperre wurde gesetzt oder freigegeben.
     void sleepInhibitedChanged();
@@ -298,6 +318,9 @@ private:
     QList<Session *> m_sessions;
     QList<SessionConfig> m_configs;   // parallel zu m_sessions
     QTimer *m_cwdPoll = nullptr;      // pollt das Arbeitsverzeichnis aller Sessions
+    QTimer *m_stallPoll = nullptr;    // QTMUX-139: läuft nur bei eingeschalteter Erkennung
+    QElapsedTimer m_stallClock;       // monotone Uhr für die Abtastungen
+    int m_stallMinutes = kDefaultStallMinutes;
 
     /// Sperre nachführen: bei jedem Aktivitätswechsel, beim Anlegen/Schließen einer
     /// Session und beim Umlegen des Schalters. Idempotent — setActive prüft selbst.

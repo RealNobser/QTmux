@@ -139,6 +139,7 @@ QStringList SettingsIo::patternsFor(const QString &category) {
     if (category == QLatin1String("agenten"))
         return { QStringLiteral("window/restoreAgents"),
                  QStringLiteral("window/resumeAgentMode"),
+                 QStringLiteral("window/stallMinutes"),      // QTMUX-139
                  QStringLiteral("mcp/port"),
                  // QTMUX-127: Die Bind-Adresse ist eine Einstellung und darf mit —
                  // `mcp/token` NICHT: Ein Export ist eine Datei zum Weitergeben, und

@@ -139,6 +139,38 @@ CatPage {
         }
     }
 
+    // --- Stillstand erkennen (QTMUX-139) ---
+    // Feste Stufen statt freier Zahl: keine Eingabeprüfung nötig, und ein importierter
+    // Wert außerhalb der Liste wird angehängt statt still als „leer" zu erscheinen.
+    PrefAnchor {
+        settingKey: "agenten.stall"
+        page: page
+        PrefGroup {
+            title: qsTr("Überwachung")
+            PrefRow {
+                id: stallRow
+                readonly property var steps: {
+                    const base = [0, 1, 2, 5, 10, 15, 30, 60]
+                    const cur = page.host.app.stallMinutes
+                    return base.indexOf(cur) >= 0 ? base : base.concat([cur]).sort((a, b) => a - b)
+                }
+                title: qsTr("Stillstand melden")
+                description: qsTr("Zeigt ein Agent „arbeitet“, steht sein Bildschirm aber so lange still, "
+                                + "fordert die Session Aufmerksamkeit an — ein lebender Agent zählt seine "
+                                + "Uhr jede Sekunde hoch, auch während ein Befehl ohne Ausgabe läuft. "
+                                + "Typische Ursache: ein verdeckter Systemdialog. Erkannt werden nur "
+                                + "Agenten mit bekanntem Arbeits-Merkmal (derzeit Claude Code).")
+                controlWidth: 140
+                AppComboBox {
+                    Layout.fillWidth: true
+                    model: stallRow.steps.map(m => m === 0 ? qsTr("Aus") : qsTr("nach %1 min").arg(m))
+                    currentIndex: stallRow.steps.indexOf(page.host.app.stallMinutes)
+                    onActivated: (i) => page.host.app.stallMinutes = stallRow.steps[i]
+                }
+            }
+        }
+    }
+
     // --- Agenten-Benachrichtigungen (Matrix) ---
     PrefAnchor { settingKey: "agenten.notifications"; page: page
     ColumnLayout {

@@ -81,6 +81,8 @@ add_library(qtmux_core STATIC
     src/core/AgentEventHub.cpp
     src/core/PromptQueue.h
     src/core/PromptQueue.cpp
+    src/core/StallDetector.h
+    src/core/StallDetector.cpp
     src/core/ProxyCredentials.h
     src/core/ProxyCredentials.cpp
     src/core/SafeFileRead.h
