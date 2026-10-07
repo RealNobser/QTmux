@@ -1140,6 +1140,19 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   Genau daran hing der Sidebar-Chevron im Dunkel-Design (er benutzte `layer.effect` **ohne**
   brightness). Und: **positive `rotation` dreht im Uhrzeigersinn** (y zeigt nach unten) — aus
   `caret-down` wird „links" bei **+90**, nicht bei −90.
+- **Neues Icon = SVG nach `resources/icons/` + Eintrag in `QTMUX_ICON_FILES`** (Haupt-
+  `CMakeLists.txt`, QTMUX-141). Quelle ist `@phosphor-icons/core`, Gewicht **regular**
+  (die Dateien dort byte-identisch übernehmen; MIT, NOTICE deckt das Set ab). Fehlt der
+  Eintrag, rendert das Menü/der Knopf **still ohne Icon** — einziges Signal ist eine
+  `IconImage: Cannot open`-Warnung beim Start (so bei „Im Finder zeigen" von 1.9.6 bis
+  QTMUX-141). Der Pfad wird in `icon(name)`/`iconSrc(name)` **zusammengesetzt**, ein
+  wörtliches `grep <name>.svg` findet den Verweis also nicht.
+  🔑 **Wächter `test_icons`** bettet dieselbe Variable ein und zieht alle Namen aus dem
+  Quelltext: Literale in `icon(…)`/`iconSrc(…)` (auch Ternaries), Datenfelder `icon: "…"`,
+  String-Literale in Icon-Namensfunktionen (`function …Icon…(…)`, z. B. `profileIcon`,
+  `sidebarIconFor`) und wörtliche `qrc:/icons/…svg`-Pfade in QML und C++. Eine Icon-Quelle,
+  die sich darauf nicht zurückführen lässt (`icon(someVar)`), ist **selbst rot** — dann den
+  Namen literal machen oder den Test erweitern, nie die Prüfung lockern.
 - **Menüs (Design 1a, Stufe 4):** ein Menü enthält **Befehle, keine Zustände**; checkbar sind
   nur die drei Ansichtsumschalter (Seitenleiste, Statusleiste, Broadcast). Was ein Menü
   verlässt, muss in **Einstellungen UND Palette** landen (QTMUX-46) — die Palette bekommt

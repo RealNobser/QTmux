@@ -345,10 +345,10 @@ qt_add_shaders(qtmux "terminal_shaders"
 # Phosphor-Icons (SVG) unter qrc:/icons/<name>.svg einbetten. Sie werden über
 # das Qt-icon-System (icon.source + icon.color) in Toolbar UND Menüs genutzt;
 # in nativen macOS-Menüs landet das getönte Icon als auto-angepasstes Template.
-qt_add_resources(qtmux "icons"
-    PREFIX "/icons"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons"
-    FILES
+# Die Liste steht in EINER Variablen, weil tests/ (test_icons) dieselben Dateien
+# einbettet und gegen alle Icon-Verweise im QML/C++ prüft — eine zweite Liste dort
+# würde genau die Drift verdecken, die der Test finden soll (QTMUX-141).
+set(QTMUX_ICON_FILES
         resources/icons/plus.svg
         resources/icons/x.svg
         resources/icons/terminal-window.svg
@@ -372,6 +372,13 @@ qt_add_resources(qtmux "icons"
         resources/icons/bookmark.svg
         resources/icons/key.svg
         resources/icons/eye.svg
+        resources/icons/folder.svg
+)
+list(TRANSFORM QTMUX_ICON_FILES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
+qt_add_resources(qtmux "icons"
+    PREFIX "/icons"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons"
+    FILES ${QTMUX_ICON_FILES}
 )
 
 target_link_libraries(qtmux PRIVATE

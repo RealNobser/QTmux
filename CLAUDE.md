@@ -73,7 +73,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/StallDetector.{h,cpp}` | Gui-frei: Stillstand-Erkennung (QTMUX-139) — Agent zeigt „arbeitet" (Merkmal `AgentInfo::workingMarkers`), Bildschirm steht seit N min still → `needsAttention`; Mechanik in der Feature-Referenz |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **34** ctest-Tests: 33 QtTest-Binaries (pty, vtscreen, linkdetector, **filemanagerreveal**, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, **stalldetector**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 33. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **35** ctest-Tests: 34 QtTest-Binaries (pty, vtscreen, linkdetector, **filemanagerreveal**, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, **icons**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 34. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -739,8 +739,8 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-140** (139 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket
-gelesen, QTMUX-141 existiert in keinem System; davor QTMUX-138 „Im Finder/Explorer zeigen",
+**QTMUX-141** (Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
 (2026-09-28 nach QTMUX-136 exakt gezählt, beide paginiert über alle 136 Tickets; nach QTMUX-135
@@ -750,9 +750,10 @@ Transition hinterher. Vorher 107/26 bis QTMUX-133, gemessen im Jira-Audit 2026-0
 QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
 Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 
-**Teststände:** **34** Tests (s. Dateitabelle; per `ctest -N` am 2026-10-07 in
-`build/macos-test` gezählt — `stalldetector` kam mit QTMUX-139 hinzu, davor
-`filemanagerreveal` mit QTMUX-138). macOS
+**Teststände:** **35** Tests (s. Dateitabelle; per `ctest -N` am 2026-10-08 in
+`build/macos-test` gezählt — `icons` kam mit QTMUX-141 hinzu, davor `stalldetector` mit
+QTMUX-139; lokal nach QTMUX-141 35/35 in `build/macos-test` **und** `build/macos-release`;
+die CI-Zahlen unten stammen noch von 1.9.7). macOS
 lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
 (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich
 Qt-`bin` im PATH, sonst `0xc0000135`) — dort eine um 1 kleinere Zahl erwarten. Aktuellste
@@ -776,12 +777,12 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 Stand **2026-10-07, nach Release 1.9.7** · Working Tree sauber, ein Arbeitsbaum, nur
 Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD` muss **leer** sein;
-seit `v1.9.7` nur Doku (Messkommando `git log --oneline v1.9.7..origin/main`).
+seit `v1.9.7` Doku plus **QTMUX-141** (unreleased, Messkommando
+`git log --oneline v1.9.7..origin/main`): fehlendes `folder.svg` für „Im Finder zeigen"
+(seit 1.9.6 ohne Icon + Startwarnung) nachgetragen, Wächter `test_icons` gegen die ganze
+Klasse — Mechanik in der Feature-Referenz (QML-/Theming-Lektionen).
 Offen aus 1.9.7: ob die TCC-Ordnerdialoge nach dem Owner-Update wirklich nur noch EINMAL
-kommen, ist erst am nächsten Update (1.9.8) am lebenden Objekt belegbar. ⚠️ Nebenbefund
-(seit 1.9.6, nicht behoben): der Kontextmenü-Eintrag „Im Finder zeigen" verweist auf
-`qrc:/icons/folder.svg`, das in `resources/icons/` fehlt → Eintrag ohne Icon +
-`IconImage: Cannot open`-Warnung beim Start (`qml/Main.qml`, `window.icon("folder")`).
+kommen, ist erst am nächsten Update (1.9.8) am lebenden Objekt belegbar.
 Offen aus 1.9.6: QTMUX-138 unter Windows/Linux — der echte Explorer-/D-Bus-Aufruf ist nur per
 Befehlstest + CI belegt, nicht am lebenden Objekt (Rezept `docs/owner-abnahmen.md`); das
 Windows-Icon im Startmenü/Explorer nach echter MSI-Installation ist nur am Paketinhalt

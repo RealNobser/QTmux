@@ -13,6 +13,20 @@ qt_add_executable(test_filemanagerreveal tst_filemanagerreveal.cpp)
 target_link_libraries(test_filemanagerreveal PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_filemanagerreveal COMMAND test_filemanagerreveal)
 
+# QTMUX-141: Jeder Icon-Verweis im QML/C++ (auch zusammengesetzte über icon(name))
+# muss als Ressource existieren. Bettet dieselbe Liste ein wie die App
+# (QTMUX_ICON_FILES im Haupt-CMakeLists) — eine eigene Liste hier verdeckte die Drift.
+qt_add_executable(test_icons tst_icons.cpp)
+target_link_libraries(test_icons PRIVATE Qt6::Core Qt6::Test)
+target_compile_definitions(test_icons PRIVATE
+    QTMUX_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
+qt_add_resources(test_icons "test_icons_res"
+    PREFIX "/icons"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/../resources/icons"
+    FILES ${QTMUX_ICON_FILES}
+)
+add_test(NAME test_icons COMMAND test_icons)
+
 # QTMUX-139: Stillstand-Erkennung fuer Agent-Sessions — Zeit injiziert, keine echten Minuten.
 qt_add_executable(test_stalldetector tst_stalldetector.cpp)
 target_link_libraries(test_stalldetector PRIVATE qtmux_core Qt6::Test)
