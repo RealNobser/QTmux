@@ -33,7 +33,8 @@
 # Zertifikat nicht hat. TCC braucht sie nicht. Verhalten der Apps bleibt wie
 # bei der bisherigen Ad-hoc-Signatur.
 #
-# ⚠️ Keine GUI-Dialoge: entsperrt wird per Passwort-Argument, die
+# ⚠️ Keine GUI-Dialoge: entsperrt wird mit dem Passwort aus der Datei (über
+# stdin an `security -i`, nie als Argument), die
 # Partitionsliste des Schlüssels erlaubt codesign (gesetzt beim Anlegen,
 # codesign-identity-create.sh). Jeder security/codesign-Aufruf läuft mit
 # hartem Zeitlimit; ein Zeitablauf ist ein ABBRUCH, keine Entwarnung.
@@ -128,9 +129,19 @@ elif [[ ! -f "$KC" ]]; then
 elif [[ ! -r "$PWFILE" ]]; then
     fallback "Passwortdatei fehlt oder ist nicht lesbar ($PWFILE)"
 else
+    # Das Passwort geht über stdin an `security -i`, NIE als Argument: argv ist
+    # für jeden lokalen Prozess per `ps` lesbar. printf ist ein Shell-Builtin,
+    # erzeugt also selbst keinen Prozess mit dem Passwort in der Kommandozeile.
+    # `security -i` endet bei falschem Passwort mit Exit ≠ 0 (gemessen: 51).
+    pw="$(cat "$PWFILE")"
+    case "$pw" in *'"'*|*'\'*|*$'\n'*)
+        echo "FEHLER: Passwortdatei enthält \" oder \\ oder Zeilenumbruch — für security -i ungeeignet." >&2
+        exit 1 ;;
+    esac
     set +e
-    t 20 security unlock-keychain -p "$(cat "$PWFILE")" "$KC"; rc=$?
+    printf 'unlock-keychain -p "%s" "%s"\n' "$pw" "$KC" | t 20 security -i >/dev/null; rc=$?
     set -e
+    unset pw
     [[ "$rc" = 142 ]] && timeout_abort "security unlock-keychain"
     if [[ "$rc" != 0 ]]; then
         fallback "Schlüsselbund ließ sich nicht entsperren (Exit $rc)"

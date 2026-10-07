@@ -96,10 +96,17 @@ QT_QPA_PLATFORM=offscreen ./build/macos/qtmux.app/Contents/MacOS/qtmux   # headl
 
 **DMG:** `installer/build-dmg.sh [version]` — baut `macos-release` (oder `QTMUX_BUILD_DIR`,
 wenn aus `macos-release` gerade eine Instanz läuft), `macdeployqt -qmldir=qml`
-(self-contained inkl. Plugins/PCBUSB), dann **ad-hoc-Re-Signatur** (`codesign --force --deep
---sign -` — macdeployqt schreibt rpaths NACH seiner Signatur um → ungültig; Apple Silicon
-startet nur signiert), `hdiutil`-DMG → `dist/QTmux-<ver>-macos.dmg`. Nicht notarisiert
-(Early-Adopter): Rechtsklick→Öffnen bzw. `xattr -dr com.apple.quarantine`. macdeployqt-
+(self-contained inkl. Plugins/PCBUSB), dann **Re-Signatur mit der Familien-Identität**
+(`installer/macos/sign-bundle.sh`, aus MacPCAN vendiert, Kontrakt 4 im Sync-Wächter; innen →
+außen, kein `--deep` — macdeployqt schreibt rpaths NACH seiner Signatur um → ungültig; Apple
+Silicon startet nur signiert), `hdiutil`-DMG → `dist/QTmux-<ver>-macos.dmg`. Seit 2026-10-07
+ist die Designated Requirement build-unabhängig (`certificate root = H"015c9a18…"` statt
+`cdhash`) — sonst verwarf TCC nach JEDEM Update alle Ordner-Erlaubnisse, und TCC rechnet jeden
+Prozess in einer QTmux-Session QTmux zu (Agent-Session 4 h 48 min an einem unsichtbaren
+Downloads-Dialog). Ohne Schlüsselbund unter `~/.keys/codesign/` LAUTER Rückfall auf ad-hoc;
+**Release-Bau mit `FAMILY_CODESIGN=require`**. Mechanik/Identität/Wiederherstellung:
+MacPCAN `docs/codesign.md`. Nicht notarisiert, keine Hardened Runtime
+(Early-Adopter): Quarantäne per „Dennoch öffnen“ bzw. `xattr -dr com.apple.quarantine`. macdeployqt-
 `ERROR` zu QtVirtualKeyboard/Multimedia/Pdf bricht den Build nicht — **harmlos ist er aber
 nur auf einer Maschine ohne Homebrew-Qt** (2026-08-07 an 1.8.1 gemessen, gilt seit
 mindestens 1.8.0 unverändert):
@@ -511,8 +518,9 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   `UpdateViewModel::currentVersion` darf nur `1.8.0` ankommen, sonst bricht der
   Manifest-Vergleich.
 - 🔑 **Vendoring-Wächter [tools/check-updater-sync.sh](tools/check-updater-sync.sh)** —
-  prüft seit 2026-08-12 **drei** Kontrakte (Updater-Kern `third_party/updater/update/`,
-  CAN-Plugin-Auswahl `plugins/macpcan/vendor/`, msiexec-Smoke `installer/…smoke…`) jeweils
+  prüft **vier** Kontrakte (seit 2026-08-12 Updater-Kern `third_party/updater/update/`,
+  CAN-Plugin-Auswahl `plugins/macpcan/vendor/`, msiexec-Smoke `installer/…smoke…`; seit
+  2026-10-07 die macOS-Signatur `installer/macos/sign-bundle.sh`) jeweils
   auf Byte-Identität zum Hub **und** auf Fremd-`#include`s, die den Kontrakt-Umfang
   verlassen.
   ⚠️ **Warum die Include-Prüfung nötig wurde:** Der Datei-Abgleich allein bemerkt eine neue
@@ -774,7 +782,11 @@ upload-artifact-Step der CI (Wirkung belegt: frisches Artefakt expires exakt +7 
 Hintergrund: die 0,5-GB-Actions-Quota war am 2026-08-17 voll, QTmux mit ~7,2 GB aus
 164 Läufen × 90-Tage-Default der Haupttäter; Owner hat alt aufgeräumt).
 
-🚢 **Publish-Mechanik fürs nächste Release:** `build_msi.cmd` auf rtzbld01 **verlangt die
+🚢 **Publish-Mechanik fürs nächste Release:** DMG mit
+`FAMILY_CODESIGN=require installer/build-dmg.sh <v>` bauen und am gemounteten DMG
+`codesign -d -r- QTmux.app` → `certificate root = H"015c9a18…"` (kein `cdhash`) belegen; der
+**erste** so signierte Release löst die TCC-Ordner-Dialoge beim Owner noch EINMAL aus (DR wechselt
+einmalig), danach nicht mehr · `build_msi.cmd` auf rtzbld01 **verlangt die
 Version als Argument** (sonst `VERSION_ARG_FEHLT`; Checkout dort vorher per
 `git pull --ff-only` auf den Bau-Commit, Wrapper zieht nicht selbst) · das **AppImage**
 kommt seit QTMUX-136 aus dem **Draft-Release** des Tags, nicht mehr aus einem
