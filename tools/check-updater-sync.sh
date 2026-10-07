@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Prueft, ob die aus MacPCAN vendierten Baeume noch byte-identisch zur
-# kanonischen Quelle sind. Drei Kontrakte:
+# kanonischen Quelle sind. Vier Kontrakte:
 #   1. third_party/updater/update/  <->  MacPCAN/src/update/   (QTMUX-125, Paket E1)
 #   2. plugins/macpcan/vendor/      <->  MacPCAN/src/          (Auswahl, s. unten)
 #   3. installer/{msiexec-path-smoke.ps1,smoke/} <-> MacPCAN/platform/windows/
 #      (msiexec-Pfad-Smoke, explizite Liste, s. installer/smoke/UPSTREAM.md)
+#   4. installer/macos/sign-bundle.sh <-> MacPCAN/platform/macos/sign-bundle.sh
+#      (macOS-Signatur mit Familien-Identitaet, seit 2026-10-07)
 #
 # 🔑 Warum ein Skript und kein ctest: Die Pruefung braucht einen MacPCAN-Checkout
 # neben QTmux. Auf CI-Runnern und Build-Maschinen gibt es den nicht — ein Test,
@@ -49,10 +51,11 @@ if [ ! -d "$upstream" ]; then
         echo "  Das Verzeichnis existiert, enthaelt aber keine Quellen — liegt dort"
         echo "  wirklich der Hub? (~/Projects/GitHub/MacPCAN z. B. enthaelt NUR build/.)"
     fi
-    echo "Alle DREI Vendoring-Kontrakte bleiben damit UNGEPRUEFT:"
+    echo "Alle VIER Vendoring-Kontrakte bleiben damit UNGEPRUEFT:"
     echo "  1. third_party/updater/update/               (Updater-Kern)"
     echo "  2. plugins/macpcan/vendor/                   (CAN-Plugin-Auswahl)"
     echo "  3. installer/msiexec-path-smoke.ps1 + smoke/ (1619-Riegel)"
+    echo "  4. installer/macos/sign-bundle.sh            (macOS-Signatur)"
     echo "Dieser Lauf ist KEIN Nachweis von Synchronitaet. Auf einer Maschine mit"
     echo "Hub-Checkout wiederholen oder MACPCAN_DIR=/pfad/zum/Hub setzen."
     exit 0
@@ -236,8 +239,35 @@ done <<EOF
 $sm_files
 EOF
 
+# --- Vierter Kontrakt: macOS-Signatur <-> MacPCAN/platform/macos/ -----------
+#
+# installer/build-dmg.sh signiert das Bundle mit der Familien-Identitaet ueber
+# installer/macos/sign-bundle.sh — byte-identisch zu MacPCANs
+# platform/macos/sign-bundle.sh (Hub liefert die Mechanik, seit 2026-10-07;
+# Doku MacPCAN/docs/codesign.md). Eine einzelne Datei, darum eine explizite
+# Zuordnung statt einer Verzeichnis-Wanderung.
+sg_drift=0
+sg_a="$macpcan_root/platform/macos/sign-bundle.sh"
+sg_b="$here/installer/macos/sign-bundle.sh"
+if [ ! -f "$sg_a" ]; then
+    echo "  SIGN NUR VENDIERT (upstream geloescht?): installer/macos/sign-bundle.sh"; sg_drift=1
+elif [ ! -f "$sg_b" ]; then
+    echo "  SIGN FEHLT VENDIERT:                     installer/macos/sign-bundle.sh"; sg_drift=1
+    [ "$mode" = "update" ] && mkdir -p "$(dirname "$sg_b")" && cp -p "$sg_a" "$sg_b"
+else
+    ha="$(shasum -a 256 "$sg_a" | cut -d' ' -f1)"
+    hb="$(shasum -a 256 "$sg_b" | cut -d' ' -f1)"
+    if [ "$ha" != "$hb" ]; then
+        echo "  SIGN ABWEICHUNG:                         installer/macos/sign-bundle.sh"
+        echo "      upstream $ha"
+        echo "      vendiert $hb"
+        sg_drift=1
+        [ "$mode" = "update" ] && cp -p "$sg_a" "$sg_b"
+    fi
+fi
+
 if [ "$mode" = "update" ]; then
-    if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ] || [ "$sm_drift" = "1" ]; then
+    if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ] || [ "$sm_drift" = "1" ] || [ "$sg_drift" = "1" ]; then
         echo "check-updater-sync: Dateien uebernommen. UPSTREAM.md-Commit nachziehen:"
         ( cd "$macpcan_root" && git rev-parse HEAD 2>/dev/null )
         exit 0
@@ -246,7 +276,7 @@ if [ "$mode" = "update" ]; then
     exit 0
 fi
 
-if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ] || [ "$sm_drift" = "1" ]; then
+if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ] || [ "$sm_drift" = "1" ] || [ "$sg_drift" = "1" ]; then
     echo "check-updater-sync: DRIFT gegenueber MacPCAN. Beheben mit:"
     echo "  tools/check-updater-sync.sh --update"
     exit 1
@@ -255,4 +285,5 @@ fi
 echo "check-updater-sync: byte-identisch zu $upstream"
 echo "check-updater-sync: byte-identisch zu $mp_upstream (macpcan-Vendor-Auswahl)"
 echo "check-updater-sync: byte-identisch zu $sm_upstream (msiexec-Pfad-Smoke)"
+echo "check-updater-sync: byte-identisch zu $sg_a (macOS-Signatur)"
 exit 0

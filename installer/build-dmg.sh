@@ -16,8 +16,9 @@
 #
 # Ergebnis: dist/QTmux-<Version>-macos.dmg  (dist/ ist git-ignoriert).
 #
-# Signierung/Notarisierung: bewusst NICHT (Early-Adopter-Build, wie das
-# unsignierte Windows-MSI). Folge: Gatekeeper-Quarantäne — Nutzer öffnen das
+# Apple-Signierung/Notarisierung: bewusst NICHT (Early-Adopter-Build, wie das
+# unsignierte Windows-MSI); signiert wird mit der selbst ausgestellten
+# Familien-Identität (MacPCAN docs/codesign.md). Folge: Gatekeeper-Quarantäne — Nutzer öffnen das
 # Programm beim ersten Mal per Rechtsklick → „Öffnen" bzw. entfernen das
 # Quarantäne-Attribut (`xattr -dr com.apple.quarantine /Applications/QTmux.app`).
 set -euo pipefail
@@ -71,11 +72,15 @@ cp -R "$APP_SRC" "$APP"
 
 # macdeployqt schreibt rpaths NACH seiner internen Ad-hoc-Signatur um → die Signatur
 # einzelner mitkopierter dylibs (z. B. libbrotlicommon) wird ungültig, und auf Apple
-# Silicon startet ein Bundle ohne gültige Signatur nicht. Daher das gesamte Bundle
-# selbst ad-hoc neu signieren (Signatur "-"; KEINE Notarisierung — Early-Adopter).
-echo "    Ad-hoc-Signatur erneuern …"
-codesign --force --deep --sign - "$APP"
-codesign -v --deep "$APP" && echo "    Signatur gültig"
+# Silicon startet ein Bundle ohne gültige Signatur nicht. Daher das gesamte Bundle neu
+# signieren — innen → außen mit der Familien-Identität (stabile Designated Requirement:
+# macOS-Datenschutz-Erlaubnisse überleben Updates; ad-hoc verlor sie bei JEDEM Update, und
+# TCC rechnet jeden Prozess in einer QTmux-Session QTmux zu). Fehlt der Schlüsselbund,
+# fällt das Skript LAUT auf ad-hoc zurück; Release-Bau mit FAMILY_CODESIGN=require.
+# installer/macos/sign-bundle.sh ist aus MacPCAN vendiert (Kontrakt 4 im Sync-Wächter).
+# KEINE Notarisierung, keine Hardened Runtime (Shells/PTYs laufen wie bisher).
+echo "    Signatur (Familien-Identität, sonst ad-hoc mit Warnung) …"
+"$REPO/installer/macos/sign-bundle.sh" "$APP"
 
 echo "==> 4/4  DMG bauen (hdiutil, Drag-to-Applications)"
 mkdir -p "$REPO/dist"
