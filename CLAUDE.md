@@ -737,8 +737,9 @@ Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
 (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich
 Qt-`bin` im PATH, sonst `0xc0000135`) — dort eine um 1 kleinere Zahl erwarten. Aktuellste
-Grün-Messung: CI-Tag-Lauf `36775188600` und main-Lauf `36774337411` (2026-09-30,
-Release-Stand 1.9.6) auf allen drei Plattformen grün inkl. Test-Steps (33/32/33); lokal
+Grün-Messung: main-Lauf `37670220323` (2026-10-07, QTMUX-139) auf allen drei Plattformen
+grün, `test_stalldetector` in jedem Job-Log als `Passed` (macOS 34/34, Linux 34/34,
+Windows 33/33); davor CI-Tag-Lauf `36775188600` (Release-Stand 1.9.6, 33/32/33); lokal
 nach QTMUX-139 34/34 in `build/macos-test` (Debug) **und** `build/macos-release` (2026-10-07).
 🔑 Der **CI**-Linux-Job ist nicht der rtzsvr02-Container: dort läuft `test_pty` mit und
 besteht. Eine kleinere Zahl aus dem Container ist kein Widerspruch, sondern die
