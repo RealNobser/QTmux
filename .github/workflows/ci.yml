@@ -123,7 +123,7 @@ jobs:
           QTMUX_BUILD_DIR: build
         run: |
           sudo apt-get install -y libfuse2 || true
-          bash installer/build-appimage.sh 1.9.7
+          bash installer/build-appimage.sh 1.9.8
 
       # Das gepackte AppImage bleibt in diesem Job liegen — es wird NIRGENDS
       # hochgeladen (QTMUX-136). Der Pack-Schritt oben läuft trotzdem bei jedem
