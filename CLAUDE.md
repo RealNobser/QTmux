@@ -756,7 +756,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-143** (Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+**QTMUX-144** (check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
@@ -809,6 +809,10 @@ zum weißen Blatt) + vendierter Riegel `installer/msi-shortcut-icon-check.ps1` i
 `build-msi.ps1` — Mechanik in der Feature-Referenz am QTMUX-137-Absatz. ⚠️ Release-Notes
 des nächsten Releases: „Ein bereits angeheftetes Symbol nach DIESEM Update einmal neu
 anheften; danach übersteht es jedes Update."
+Dazu **QTMUX-144** (2026-10-10, Orchestrator-Auftrag, Voraussetzung für 1.9.8): der
+Vendoring-Wächter meldete mit relativem `MACPCAN_DIR` „byte-identisch" ohne Messung —
+behoben, Exit 2 für Werkzeugfehler, Positivkontrolle, Selbsttest `test_check_updater_sync`
+(Mechanik im Abschnitt „Vendoring-Wächter" unter Konventionen).
 Offen aus 1.9.7: ob die TCC-Ordnerdialoge nach dem Owner-Update wirklich nur noch EINMAL
 kommen, ist erst am nächsten Update (1.9.8) am lebenden Objekt belegbar.
 Offen aus 1.9.6: QTMUX-138 unter Windows/Linux — der echte Explorer-/D-Bus-Aufruf ist nur per
