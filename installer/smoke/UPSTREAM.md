@@ -1,11 +1,12 @@
 # Vendiert: msiexec-Pfad-Smoke (1619-Riegel)
 
-Vier Dateien sind **byte-identisch** aus MacPCAN übernommen — dasselbe
+Fünf Dateien sind **byte-identisch** aus MacPCAN übernommen — dasselbe
 Einbahnstraßen-Muster wie `third_party/updater/` und `plugins/macpcan/vendor/`:
 
 | QTmux | MacPCAN (kanonische Quelle) |
 |---|---|
 | `installer/msiexec-path-smoke.ps1` | `platform/windows/msiexec-path-smoke.ps1` |
+| `installer/msi-shortcut-icon-check.ps1` | `platform/windows/msi-shortcut-icon-check.ps1` |
 | `installer/smoke/MacPCAN-PathSmoke.msi` | `platform/windows/smoke/MacPCAN-PathSmoke.msi` |
 | `installer/smoke/marker.txt` | `platform/windows/smoke/marker.txt` |
 | `installer/smoke/msi-path-smoke.wxs` | `platform/windows/smoke/msi-path-smoke.wxs` |
@@ -23,8 +24,14 @@ seinem MacPCAN-Submodul auf).
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `8242342cfade722afdd66c670c0906ead5ab68ec` |
-| Datum | 2026-09-28 |
+| Commit | `e53ec8462894a26a833fc795d99afd69d86196ce` |
+| Datum | 2026-10-10 |
+
+Abgleich 2026-10-10 (QTMUX-143): `git log 8242342..e53ec84 -- platform/windows/`
+nennt genau `e53ec84` (MAC-74) — er bringt `msi-shortcut-icon-check.ps1` neu
+hinzu (Verknüpfungs-Symbol-Riegel, aufgerufen in `build-msi.ps1`) und lässt die
+vier bisherigen Dateien unberührt; Wächter „byte-identisch", die Datei ist in
+seiner Liste ergänzt (fehlt sie oder weicht sie ab: Exit 1, beides geprobt).
 
 Abgleich 2026-09-28 (Release 1.9.4): `git log c40742c..8242342 -- platform/windows/`
 ist **leer**, Wächter „byte-identisch" — nur der Pin wandert.

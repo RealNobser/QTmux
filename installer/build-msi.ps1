@@ -149,6 +149,21 @@ $smoke = Join-Path $PSScriptRoot "msiexec-path-smoke.ps1"
 & powershell -NoProfile -ExecutionPolicy Bypass -File $smoke -Msi $msi
 if ($LASTEXITCODE -ne 0) { throw "msiexec-Pfad-Smoke fehlgeschlagen ($LASTEXITCODE) fuer $msi" }
 
+# Verknuepfungs-Symbol-Riegel (QTMUX-143): keine Verknuepfung darf ihr Symbol aus
+# der MSI-Icon-Tabelle beziehen. Ein solches liegt in C:\Windows\Installer\
+# {ProductCode}\, das jedes Update loescht -- eine an die Taskleiste angeheftete
+# Kopie zeigt danach ein weisses Blatt (gemessen 2026-10-10, 1.9.6 -> 1.9.7).
+# Liest die Shortcut-Tabelle DIESES Pakets; aus MacPCAN vendiert (Kontrakt 3,
+# installer\smoke\UPSTREAM.md). Rot loescht das MSI.
+Write-Host "==> Verknuepfungs-Symbol-Riegel" -ForegroundColor Cyan
+$iconGate = Join-Path $PSScriptRoot "msi-shortcut-icon-check.ps1"
+& powershell -NoProfile -ExecutionPolicy Bypass -File $iconGate -Msi $msi -MinShortcuts 1
+if ($LASTEXITCODE -ne 0) {
+    $gateExit = $LASTEXITCODE
+    Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue
+    throw "Verknuepfungs-Symbol-Riegel fehlgeschlagen ($gateExit) fuer $msi -- MSI geloescht"
+}
+
 # Portable Variante (ZIP) aus demselben Staging — installationsfrei, wie in der
 # LIESMICH.txt beschrieben (entpacken + qtmux.exe starten).
 $zip = Join-Path $repo "dist\QTmux-$Version-win64-portable.zip"

@@ -29,7 +29,9 @@
          als %WINDIR%\Installer\{ProductCode}\<Id> ab und die Shell deutet die Datei nach
          der Endung der Id. Eine EXE unter "qtmux.ico" liest Explorer als kaputtes ICO →
          weißes Blatt an Startmenü-Verknüpfung und ARP (QTMUX-137). Die .ico hängt zudem
-         nicht davon ab, ob die EXE-Ressource aktuell ist. -->
+         nicht davon ab, ob die EXE-Ressource aktuell ist.
+         NUR für ARP — die Verknüpfung unten trägt bewusst KEIN Icon= (QTMUX-143). -->
+
     <Icon Id="qtmux.ico" SourceFile="$(sys.SOURCEFILEDIR)..\resources\appicon\qtmux.ico" />
     <Property Id="ARPPRODUCTICON" Value="qtmux.ico" />
     <Property Id="ARPNOREPAIR" Value="1" Secure="yes" />
@@ -56,8 +58,7 @@
       <Component Id="StartMenuShortcut" Guid="*">
         <Shortcut Id="QTmuxStartMenu" Name="QTmux"
                   Target="[INSTALLFOLDER]qtmux.exe"
-                  WorkingDirectory="INSTALLFOLDER"
-                  Icon="qtmux.ico" />
+                  WorkingDirectory="INSTALLFOLDER" />
         <RemoveFolder Id="RemoveShortcutFolder" On="uninstall" />
         <RegistryValue Root="HKMU" Key="Software\QTmux\QTmux"
                        Name="installed" Type="integer" Value="1" KeyPath="yes" />

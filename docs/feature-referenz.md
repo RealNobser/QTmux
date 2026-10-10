@@ -1261,6 +1261,14 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   EXE-Icon zeigt — ein Shell-Rendering allein ist darum **kein** Gegenbeweis. Quelle ist jetzt
   die echte `.ico`. Messgerät: Magic der Cache-Datei bzw. Stream `Icon.qtmux.ico` im MSI,
   und das größte `RT_ICON` der EXE gegen die Repo-`.ico`.
+  (3) **Die Startmenü-Verknüpfung trägt seit QTMUX-143 KEIN `Icon=` mehr** — das MSI-Icon
+  oben gilt nur noch für ARP. Grund (2026-10-10 auf rtzbld01 gemessen, 1.9.6 → 1.9.7): ein
+  Tabellen-Icon liegt im `{ProductCode}`-Ordner, den jedes Update löscht; die an die
+  Taskleiste **angeheftete** Kopie der Verknüpfung behält den toten Pfad → weißes Blatt nach
+  jedem Update. Ohne `Icon=` schreibt Windows Installer `IconLocation ,0`, und die Shell nimmt
+  Symbol 0 der `qtmux.exe`. Riegel `installer/msi-shortcut-icon-check.ps1` (aus MacPCAN
+  vendiert) liest im gebauten MSI die Shortcut-Tabelle. Wer VOR dem ersten Update mit dem Fix
+  angeheftet hat, muss einmal neu anheften. Regel und Messung: MacPCAN `docs/SHARED.md`.
 
 ### macOS-Spezifika
 - **Sprache:** Translator + `singletonInstance(App)` VOR `loadFromModule` installieren;

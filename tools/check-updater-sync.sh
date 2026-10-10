@@ -3,8 +3,9 @@
 # kanonischen Quelle sind. Vier Kontrakte:
 #   1. third_party/updater/update/  <->  MacPCAN/src/update/   (QTMUX-125, Paket E1)
 #   2. plugins/macpcan/vendor/      <->  MacPCAN/src/          (Auswahl, s. unten)
-#   3. installer/{msiexec-path-smoke.ps1,smoke/} <-> MacPCAN/platform/windows/
-#      (msiexec-Pfad-Smoke, explizite Liste, s. installer/smoke/UPSTREAM.md)
+#   3. installer/{msiexec-path-smoke.ps1,msi-shortcut-icon-check.ps1,smoke/}
+#      <-> MacPCAN/platform/windows/ (msiexec-Pfad-Smoke + Verknuepfungs-
+#      Symbol-Riegel, explizite Liste, s. installer/smoke/UPSTREAM.md)
 #   4. installer/macos/sign-bundle.sh <-> MacPCAN/platform/macos/sign-bundle.sh
 #      (macOS-Signatur mit Familien-Identitaet, seit 2026-10-07)
 #
@@ -55,6 +56,7 @@ if [ ! -d "$upstream" ]; then
     echo "  1. third_party/updater/update/               (Updater-Kern)"
     echo "  2. plugins/macpcan/vendor/                   (CAN-Plugin-Auswahl)"
     echo "  3. installer/msiexec-path-smoke.ps1 + smoke/ (1619-Riegel)"
+    echo "     + installer/msi-shortcut-icon-check.ps1    (Verknuepfungs-Symbol)"
     echo "  4. installer/macos/sign-bundle.sh            (macOS-Signatur)"
     echo "Dieser Lauf ist KEIN Nachweis von Synchronitaet. Auf einer Maschine mit"
     echo "Hub-Checkout wiederholen oder MACPCAN_DIR=/pfad/zum/Hub setzen."
@@ -209,6 +211,7 @@ fi
 # beim naechsten Nachziehen im Hub auf, nicht hier; die Liste dann erweitern.
 sm_upstream="$macpcan_root/platform/windows"
 sm_files="msiexec-path-smoke.ps1
+msi-shortcut-icon-check.ps1
 smoke/MacPCAN-PathSmoke.msi
 smoke/marker.txt
 smoke/msi-path-smoke.wxs"
