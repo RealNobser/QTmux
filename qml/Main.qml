@@ -2290,8 +2290,8 @@ ApplicationWindow {
                 dotColor: {
                     const st = window.windowRunState(actWin)
                     return window.windowAttention(actWin) ? Theme.accent
-                         : st === 1 ? "#46d369" : st === 2 ? "#f5c451"
-                         : st === 3 ? "#e5534b" : st === 4 ? "#5a5d6a" : Theme.textDim
+                         : st === 1 ? Theme.ok : st === 2 ? Theme.warn
+                         : st === 3 ? Theme.danger : st === 4 ? Theme.muted : Theme.textDim
                 }
                 label: {
                     if (actSid < 0) return qsTr("keine Session")
@@ -2346,10 +2346,10 @@ ApplicationWindow {
                 label: !mcp.listening ? qsTr("MCP aus")
                      : mcp.networkAccess ? qsTr("MCP LAN :%1").arg(mcp.port)
                                          : qsTr("MCP :%1").arg(mcp.port)
-                // Amber wie „wartet" in Feld 2 — Statusfarben sind die bewusste
-                // Ausnahme von der Regel „Chrome-Farben nur über Theme.*".
+                // Amber wie „wartet" in Feld 2. Als TEXT muss warn hier >= 4,5:1 auf
+                // bgSidebar UND sidebarHover halten (Vertrag in Theme.h, QTMUX-142).
                 labelColor: !mcp.listening ? Theme.textDim
-                          : mcp.networkAccess ? "#f5c451" : Theme.accent
+                          : mcp.networkAccess ? Theme.warn : Theme.accent
                 tip: !mcp.listening
                      ? qsTr("Klick: MCP-Server starten · Rechtsklick: Einstellungen")
                      : (mcp.networkAccess
@@ -3444,7 +3444,7 @@ ApplicationWindow {
                         Rectangle {
                             visible: tile.controller
                             width: 3; radius: 1.5
-                            color: "#e5534b"
+                            color: Theme.danger
                             anchors.left: parent.left
                             anchors.leftMargin: tile.groupIndent
                             anchors.verticalCenter: parent.verticalCenter
@@ -3469,10 +3469,10 @@ ApplicationWindow {
                                 // implicit-Werte sind das, woraus das Layout die Größe ableitet.
                                 implicitWidth: 10; implicitHeight: 10; radius: 5
                                 color: tile.attention ? Theme.accent
-                                     : tile.aggState === 1 ? "#46d369"
-                                     : tile.aggState === 2 ? "#f5c451"
-                                     : tile.aggState === 3 ? "#e5534b"
-                                     : tile.aggState === 4 ? "#5a5d6a"
+                                     : tile.aggState === 1 ? Theme.ok
+                                     : tile.aggState === 2 ? Theme.warn
+                                     : tile.aggState === 3 ? Theme.danger
+                                     : tile.aggState === 4 ? Theme.muted
                                      : Theme.textDim
                                 SequentialAnimation on opacity {
                                     running: tile.attention && !App.reduceMotion
@@ -3637,10 +3637,10 @@ ApplicationWindow {
                                 anchors.rightMargin: 2
                                 anchors.topMargin: 2
                                 color: tile.attention ? Theme.accent
-                                     : tile.aggState === 1 ? "#46d369"
-                                     : tile.aggState === 2 ? "#f5c451"
-                                     : tile.aggState === 3 ? "#e5534b"
-                                     : tile.aggState === 4 ? "#5a5d6a"
+                                     : tile.aggState === 1 ? Theme.ok
+                                     : tile.aggState === 2 ? Theme.warn
+                                     : tile.aggState === 3 ? Theme.danger
+                                     : tile.aggState === 4 ? Theme.muted
                                      : Theme.textDim
                                 border.width: 1.5
                                 border.color: tile.selected ? Theme.sidebarSelected : Theme.bgSidebar
@@ -3700,10 +3700,10 @@ ApplicationWindow {
                                         implicitWidth: 8; implicitHeight: 8; radius: 4
                                         Layout.alignment: Qt.AlignVCenter
                                         color: tile.attention ? Theme.accent
-                                             : tile.aggState === 1 ? "#46d369"
-                                             : tile.aggState === 2 ? "#f5c451"
-                                             : tile.aggState === 3 ? "#e5534b"
-                                             : tile.aggState === 4 ? "#5a5d6a"
+                                             : tile.aggState === 1 ? Theme.ok
+                                             : tile.aggState === 2 ? Theme.warn
+                                             : tile.aggState === 3 ? Theme.danger
+                                             : tile.aggState === 4 ? Theme.muted
                                              : Theme.textDim
                                     }
                                     Text {
@@ -4343,7 +4343,7 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
                 Label {
                     text: sftpDialog.lastError !== "" ? sftpDialog.lastError : sftpClient.status
-                    color: sftpDialog.lastError !== "" ? "#e5534b" : Theme.textDim
+                    color: sftpDialog.lastError !== "" ? Theme.danger : Theme.textDim
                     font.pixelSize: 11
                     elide: Text.ElideRight
                     Layout.maximumWidth: 320
@@ -4392,7 +4392,7 @@ ApplicationWindow {
             TextField { id: cpOld; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: qsTr("Aktuelles Master-Passwort") }
             TextField { id: cpNew; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: qsTr("Neues Master-Passwort") }
             TextField { id: cpConfirm; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: qsTr("Neues Passwort bestätigen") }
-            Text { visible: vaultChangePwDialog.err.length > 0; text: vaultChangePwDialog.err; color: "#e0a040"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            Text { visible: vaultChangePwDialog.err.length > 0; text: vaultChangePwDialog.err; color: Theme.warn; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
             Button {
                 text: qsTr("Ändern")
                 onClicked: {

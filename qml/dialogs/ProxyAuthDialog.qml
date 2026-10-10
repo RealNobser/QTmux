@@ -60,7 +60,7 @@ AppDialog {
             Layout.fillWidth: true
             visible: dlg.retry
             wrapMode: Text.WordWrap
-            color: "#e5534b"   // wie im UpdateDialog — Theme hat keine Fehlerfarbe
+            color: Theme.danger
             text: qsTr("Die letzte Anmeldung wurde abgelehnt. Es wird bewusst nur EIN Versuch "
                        + "je Eingabe unternommen — mehrere Fehlversuche sperren in einer "
                        + "Firmenumgebung das Benutzerkonto.")

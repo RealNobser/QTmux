@@ -94,8 +94,8 @@ AppDialog {
         Rectangle {
             Layout.fillWidth: true
             visible: Updates.isDowngrade
-            color: Qt.rgba(0.9, 0.33, 0.29, 0.14)
-            border.color: "#e5534b"
+            color: Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.14)
+            border.color: Theme.danger
             border.width: 1
             radius: 6
             implicitHeight: downgradeText.implicitHeight + 16
@@ -104,7 +104,7 @@ AppDialog {
                 anchors.fill: parent
                 anchors.margins: 8
                 wrapMode: Text.WordWrap
-                color: "#e5534b"
+                color: Theme.textBright   // Signal tragen Rand + Tönung (QTMUX-142)
                 font.pixelSize: 12
                 text: qsTr("Achtung: Das ist eine ÄLTERE Version als die installierte. "
                          + "Eine Rückstufung kann Einstellungen und gespeicherte Sitzungen "
@@ -183,7 +183,7 @@ AppDialog {
             Layout.fillWidth: true
             visible: Updates.lastError !== ""
             wrapMode: Text.WordWrap
-            color: "#e5534b"
+            color: Theme.danger
             font.pixelSize: 12
             text: Updates.lastError
         }

@@ -1063,6 +1063,53 @@ ausgelieferten App (openssl signiert, das vendierte Monocypher verifiziert) — 
 Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
 
 ### QML-/Theming-Lektionen
+- **Statusfarben (QTMUX-142, 2026-10-10):** `Theme.ok`/`warn`/`danger`/`muted` (Namen nach
+  dem Hub-`KitTheme`; `muted` = „geschlossen"; „info" gibt es bewusst nicht — Aufmerksamkeit
+  ist `Theme.accent`). Vorher standen die **Dunkel**-Literale `#46d369`/`#f5c451`/`#e5534b`/
+  `#e0a040`/`#5a5d6a` an 27 Stellen im QML und galten auch im hellen Design („MCP LAN" in
+  `#f5c451` auf der Statusleiste `#F2F2F2`: **1,45 : 1**). Ein fester Hell- und ein
+  Dunkel-Wert je Rolle; welcher gilt, entscheidet die **Helligkeit der Hauptfläche**
+  (`statusDark()`, Rec.-601-Luma < 0,5), nicht der App-Modus — ein dunkles Schema in der
+  Hell-Auswahl bekommt so trotzdem die Dunkel-Werte.
+  **Vertrag** (`tests/tst_statuscolors.cpp`, Kommentar in `Theme.h`), Flächen aus dem Theme
+  selbst: als Punkt/Rand **≥ 3 : 1** gegen `bgSidebar`, `sidebarHover`, `sidebarSelected`,
+  `bgElevated` (Statusleiste, Kacheln, Flyout, Controller-Tab); `warn` als **Text ≥ 4,5 : 1**
+  gegen `bgMain` (Einstellungen), `bgSidebar` + `sidebarHover` (MCP-Feld, auch gehovert),
+  `bgElevated` (Dialoge); `danger` als Text ≥ 4,5 : 1 gegen `bgElevated`. `ok`/`muted` sind
+  nur als Punkt geprüft — wer sie als Text einsetzt, erweitert zuerst den Vertrag.
+  **Rechenweg:** CIELAB-Farbton des Dunkel-Literals festhalten; ein Raster über L*
+  (0,1er-Schritte) und Buntheit (0–140 % des Originals) liefert den Wert mit **kleinstem
+  ΔE2000 zum Literal**, der jede Grenze mit **+0,05 Abstand** hält (exakt auf der Grenze
+  kippte `#128839` durch Rundung auf 2,99). Hält das Literal schon, bleibt es.
+  | Rolle | Dunkel (alt → neu) | Hell (neu) | ΔE zum Literal dunkel / hell | knappste Fläche dunkel · hell |
+  |---|---|---|---|---|
+  | ok | `#46D369` (unverändert) | `#078737` | 0 / 22,7 | 5,23 `sidebarSelected` · 3,05 `sidebarSelected` |
+  | warn | `#F5C451` (unverändert) | `#765B0D` | 0 / 36,3 | Text 6,41 `sidebarHover` · Text 4,55 `sidebarHover` |
+  | danger | `#E5534B` → `#FD6F63` | `#BE3432` | 7,8 / 11,7 | Text 4,55 `bgElevated` · Text 4,55 `bgElevated` |
+  | muted | `#5A5D6A` → `#898C9C` | `#5A5D6A` | 18,8 / 0 | 3,05 `sidebarSelected` · 4,31 `sidebarSelected` |
+  Farbton gehalten (Lab-h° alt → neu): ok 145,3 → 145,2 · warn 84,8 → 85,4 · danger 32,2 →
+  32,3/32,1. Auch **dunkel** verfehlten vorher `danger` als Dialogtext (3,38 : 1) und `muted`
+  als Punkt (1,56 : 1 auf `sidebarSelected`). `#e0a040` (Warn-Amber der Einstellungen und
+  des Vault-Dialogs) ist in `warn` aufgegangen.
+  🔑 **Downgrade-Kasten im UpdateDialog: Schrift `textBright`, Rand + 14-%-Tönung `danger`.**
+  Rote Schrift auf der eigenen roten Tönung hätte `danger` dunkel auf `#FD9386` (ΔE 15,
+  lachsfarben) und hell auf `#A4312D` gezwungen — für einen selten sichtbaren Kasten
+  hätten alle Statuspunkte ihr Rot verloren. Das Signal tragen Rand und Fläche.
+  ⚠️ **Gilt für die Standardschemata „QTmux Hell/Dunkel".** Die festen Paare halten auf
+  den helleren Dunkel-Schemata nicht alles (gerechnet, knappste Werte: Nord danger 2,73,
+  muted 2,24; Dracula danger 2,90, muted 2,38; One Dark danger 2,87, muted 2,36; Gruvbox
+  muted 2,83; Solarized Dark muted 2,91) — überall aber **≥ dem alten Literal**, also keine
+  Verschlechterung. Abhilfe wäre eine Ableitung je Schema (dieselbe Suche zur Laufzeit) —
+  nicht beauftragt. ⚠️ `muted` und `textDim` (Zustand „Start") liegen dunkel nur ΔE 3,3
+  auseinander; „Start" ist kurzlebig, darum hingenommen.
+  🔒 **Wächter** `noColorLiteralsInQml`: kein Hex-Literal, kein numerisches
+  `Qt.rgba/rgb/hsla/hsva/hsl/hsv(…)` und keine benannte Farbe außer `"transparent"` in
+  `qml/`; Allowlist nur die Modal-Abdunklung `#88000000` (`AppDialog.qml`), jeder Eintrag
+  muss beim Scan GEFUNDEN werden. Gegenproben eingebaut (`oldLiteralsFailContract`: die
+  alten Literale fallen im hellen Design durch; `patternPositiveControl`: das Muster trifft
+  die alten Formen und lässt `Theme.*` durch) und von Hand gefahren: Hell-`warn` auf
+  `#F5C451` → `contract(hell)` rot (8 Verletzungen); `"#f5c451"` zurück in `Main.qml:2352`
+  → Wächter rot.
 - ⚠️ **`Array.isArray(control.model)` ist im Delegate IMMER `false`** — auch wenn das Model
   ein JS-Array ist (2026-08-07 gemessen, Anwenderbefund). Die `model`-Property reicht den
   Wert als **QVariant** durch; beim Auslesen ist er kein JS-Array mehr. In

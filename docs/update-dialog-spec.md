@@ -127,13 +127,13 @@ erscheinen und verschwinden, sie tauschen nie die Plätze:
 |---|---|---|---|
 | 1 | **Versionszeile** | 14 px | `textBright` |
 | 2 | **Veröffentlichungszeile** | 11 px | `textDim` |
-| 3 | **Downgrade-Warnung** (Kasten) | 12 px | `#e5534b` auf `rgba(230,84,74,0.14)`, Rand `#e5534b`, Radius 6, Innenabstand 8, Höhe = Text + 16 |
+| 3 | **Downgrade-Warnung** (Kasten) | 12 px | `textBright` auf `danger` mit 14 % Deckkraft, Rand `danger`, Radius 6, Innenabstand 8, Höhe = Text + 16 (bis QTMUX-142: Schrift `#e5534b` auf `rgba(230,84,74,0.14)` — rote Schrift auf eigener roter Tönung trägt keine 4,5 : 1, ohne das Rot ins Lachsfarbene zu ziehen) |
 | 4 | **„kein Paket für dieses System"** | 12 px | `textDim` |
 | 5 | **Abschnittstitel „Was ist neu"** | 11 px fett, 6 px Abstand nach oben | `textDim` |
 | 6 | **Anmerkungen** (rollbar, max. **200 px** hoch, sonst Inhaltshöhe + 8) | 12 px | `textBright` |
 | 7 | **Fortschritt**: Balken + Zeile darunter, Abstand 4 px | 11 px | `textDim` |
 | 8 | **„kann sich nicht selbst ersetzen"** | 12 px | `textDim` |
-| 9 | **Fehlertext** | 12 px | `#e5534b` |
+| 9 | **Fehlertext** | 12 px | `danger` (bis QTMUX-142 `#e5534b`) |
 | 10 | **Betriebssystem-Hinweis** | 11 px | `textDim` |
 | 11 | **Knopfreihe**, Abstand 8 px, 4 px nach oben | — | — |
 
@@ -581,10 +581,11 @@ aufgefallen.
    alles andere bestimmt seine Höhe aus dem umbrochenen Text. Eine feste Dialoghöhe bricht
    spätestens bei einer langen Fehlermeldung oder einer Übersetzung mit längeren Wörtern.
 2. **Blöcke ausblenden, nicht umsortieren.** Die Reihenfolge ist über alle Zustände gleich.
-3. **Zwei Signalfarben sind fest** (`#e5534b` für Warnung/Fehler, dieselbe Farbe auf 14 %
-   Fläche für den Downgrade-Kasten) — alles andere leitet sich aus dem Farbschema ab. Beim
-   Nachbau bedeutet das: eine Palette, aus der der Dialog seine Farben *bezieht*, statt
-   hart gesetzter Werte.
+3. **Die Signalfarbe ist die Statusrolle `danger`** (Fehlertext, Rand und 14-%-Fläche des
+   Downgrade-Kastens; dessen Schrift ist `textBright`) — seit QTMUX-142 mit eigenem Hell-
+   und Dunkel-Wert (`#BE3432`/`#FD6F63`), vorher fest `#e5534b` in beiden Designs (hell als
+   Text nur 2,99 : 1). Beim Nachbau bedeutet das: eine Palette, aus der der Dialog seine
+   Farben *bezieht*, statt hart gesetzter Werte — `KitTheme::danger` im Hub.
 4. **Der Dateipfad wird in der MITTE elidiert.** Am Ende zu kürzen versteckt den Dateinamen,
    und genau der ist die Information.
 5. **Esc schließt, Klick außerhalb schließt.** Es gibt keinen Zustand, in dem der Dialog

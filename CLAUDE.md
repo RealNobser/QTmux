@@ -57,7 +57,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/core/FileManagerReveal.{h,cpp}` | Gui-frei: „Im Finder/Explorer/Dateimanager zeigen" — Befehl je Plattform + lokale Existenzprüfung (QTMUX-138, Mechanik in der Feature-Referenz) |
 | `src/core/Session.{h,cpp}` | Backend + VtScreen; Activity/Attention/Progress; Login-Script; SSH-Passwort-Auto-Fill |
 | `src/viewmodels/SessionModel.{h,cpp}` | QAbstractListModel Sidebar; Persistenz/Restore; CWD-Vererbung |
-| `src/viewmodels/Theme.{h,cpp}` | QML-Singleton `Theme.*`; leitet ALLE Chrome-Farben aus dem aktiven Color-Scheme ab |
+| `src/viewmodels/Theme.{h,cpp}` | QML-Singleton `Theme.*`; leitet ALLE Chrome-Farben aus dem aktiven Color-Scheme ab; Statusrollen `ok/warn/danger/muted` mit festem Hell-/Dunkel-Paar (QTMUX-142, Vertrag in `Theme.h`) |
 | `src/viewmodels/AppController.{h,cpp}` | QML-Singleton `App.*`: Sprache, `shortcutText`, `keyChord`, Clipboard |
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
@@ -73,7 +73,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/StallDetector.{h,cpp}` | Gui-frei: Stillstand-Erkennung (QTMUX-139) — Agent zeigt „arbeitet" (Merkmal `AgentInfo::workingMarkers`), Bildschirm steht seit N min still → `needsAttention`; Mechanik in der Feature-Referenz |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **35** ctest-Tests: 34 QtTest-Binaries (pty, vtscreen, linkdetector, **filemanagerreveal**, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, **icons**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 34. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **36** ctest-Tests: 35 QtTest-Binaries (pty, vtscreen, linkdetector, **filemanagerreveal**, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, **statuscolors**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 35. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -739,7 +739,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-141** (Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+**QTMUX-142** (Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
@@ -750,9 +750,9 @@ Transition hinterher. Vorher 107/26 bis QTMUX-133, gemessen im Jira-Audit 2026-0
 QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
 Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 
-**Teststände:** **35** Tests (s. Dateitabelle; per `ctest -N` am 2026-10-08 in
-`build/macos-test` gezählt — `icons` kam mit QTMUX-141 hinzu, davor `stalldetector` mit
-QTMUX-139; lokal nach QTMUX-141 35/35 in `build/macos-test` **und** `build/macos-release`;
+**Teststände:** **36** Tests (s. Dateitabelle; per `ctest -N` am 2026-10-10 in
+`build/macos-test` gezählt — `statuscolors` kam mit QTMUX-142 hinzu, davor `icons` mit
+QTMUX-141; lokal nach QTMUX-142 36/36 in `build/macos-test` **und** `build/macos-release`;
 die CI-Zahlen unten stammen noch von 1.9.7). macOS
 lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
 (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich
@@ -780,7 +780,11 @@ Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD` muss **le
 seit `v1.9.7` Doku plus **QTMUX-141** (unreleased, Messkommando
 `git log --oneline v1.9.7..origin/main`): fehlendes `folder.svg` für „Im Finder zeigen"
 (seit 1.9.6 ohne Icon + Startwarnung) nachgetragen, Wächter `test_icons` gegen die ganze
-Klasse — Mechanik in der Feature-Referenz (QML-/Theming-Lektionen).
+Klasse — Mechanik in der Feature-Referenz (QML-/Theming-Lektionen). Dazu **QTMUX-142**
+(2026-10-10, Orchestrator-Auftrag aus der Design-Inventur): Statusfarben als Theme-Rollen
+mit Hell-/Dunkel-Paar statt Dunkel-Literalen, Kontrastvertrag + Literal-Wächter
+`test_statuscolors` — Werte, Rechenweg und Grenzen (andere Schemata) in der
+Feature-Referenz „Statusfarben".
 Offen aus 1.9.7: ob die TCC-Ordnerdialoge nach dem Owner-Update wirklich nur noch EINMAL
 kommen, ist erst am nächsten Update (1.9.8) am lebenden Objekt belegbar.
 Offen aus 1.9.6: QTMUX-138 unter Windows/Linux — der echte Explorer-/D-Bus-Aufruf ist nur per
@@ -998,7 +1002,8 @@ Siebenstufiger Umbau (Original im Claude-Design-Projekt
 `ab66e9b5-053b-4e81-9e4a-c45752fd42d1`, über `DesignSync` `get_file`); Stufen und Commits
 stehen in der Git-Historie, die Mechanik in der Feature-Referenz.
 **Randbedingungen (dauerhaft):** Qt Quick Controls **Basic**, keine neuen Effekte,
-Chrome-Farben nur über `Theme.*` (Ausnahme: Statusfarben), jede neue Zeichenkette in `qsTr`
+Chrome-Farben nur über `Theme.*` — seit QTMUX-142 auch die Statusfarben (`Theme.ok/warn/danger/muted`;
+der Wächter `test_statuscolors` lehnt Farbliterale in `qml/` ab), jede neue Zeichenkette in `qsTr`
 + beiden `.ts`.
 **Bewusste Abweichungen von der Anweisung** (Begründungen in der Feature-Referenz): keine
 macOS-Menü-Rollen (QtQuick.Controls kennt sie nicht) · Umbenennen/Gruppe wirken aufs

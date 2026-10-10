@@ -174,7 +174,7 @@ CatPage {
                         Text {
                             visible: page.capConflict.length > 0
                             text: qsTr("Bereits belegt von: %1").arg(page.host.app.hotkeyLabel(page.capConflict))
-                            color: "#e0a040"   // Warn-Amber (kein Theme-Token vorhanden)
+                            color: Theme.warn
                             font.pixelSize: 11
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap

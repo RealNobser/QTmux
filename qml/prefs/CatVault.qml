@@ -45,7 +45,7 @@ CatPage {
         Text {
             visible: page.vaultError.length > 0
             text: page.vaultError
-            color: "#e0a040"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap
+            color: Theme.warn; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap
         }
         Button {
             id: vaultPrimaryBtn

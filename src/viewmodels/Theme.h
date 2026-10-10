@@ -38,6 +38,13 @@ private:
     Q_PROPERTY(QColor terminalBg      READ terminalBg      NOTIFY changed)
     Q_PROPERTY(QColor terminalFg      READ terminalFg      NOTIFY changed)
     Q_PROPERTY(QColor terminalCursor  READ terminalCursor  NOTIFY changed)
+    // Statusrollen (QTMUX-142) — Namen nach dem Hub-KitTheme (ok/warn/danger), dazu
+    // `muted` für „geschlossen". Je ein fester Hell- und Dunkel-Wert; welcher gilt,
+    // entscheidet die Helligkeit der echten Hauptfläche, nicht der App-Modus.
+    Q_PROPERTY(QColor ok              READ ok              NOTIFY changed)
+    Q_PROPERTY(QColor warn            READ warn            NOTIFY changed)
+    Q_PROPERTY(QColor danger          READ danger          NOTIFY changed)
+    Q_PROPERTY(QColor muted           READ muted           NOTIFY changed)
 public:
     explicit Theme(QObject *parent = nullptr);
 
@@ -65,6 +72,19 @@ public:
     QColor terminalBg() const;
     QColor terminalFg() const;
     QColor terminalCursor() const;
+
+    // Statusrollen. Vertrag (geprüft in tst_statuscolors, beide Standardschemata):
+    // als Punkt/Rand/Fläche >= 3:1 gegen bgSidebar, sidebarHover, sidebarSelected und
+    // bgElevated; warn zusätzlich als TEXT >= 4,5:1 gegen bgMain, bgSidebar,
+    // sidebarHover und bgElevated, danger als TEXT >= 4,5:1 gegen bgElevated.
+    // ok/muted sind nur als Punkt geprüft — wer sie als Text einsetzt, erweitert
+    // zuerst den Vertrag im Test.
+    QColor ok() const;
+    QColor warn() const;
+    QColor danger() const;
+    QColor muted() const;
+    /// true = Dunkel-Werte der Statusrollen (Hauptfläche dunkel, Rec.-601-Luma < 0,5).
+    bool statusDark() const;
 
 signals:
     void changed();

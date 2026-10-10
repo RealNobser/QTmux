@@ -27,6 +27,17 @@ qt_add_resources(test_icons "test_icons_res"
 )
 add_test(NAME test_icons COMMAND test_icons)
 
+# QTMUX-142: Statusfarben als Theme-Rollen — Kontrastvertrag beider Designs gegen die
+# echten Flächen (Theme.cpp mitkompiliert, liegt im QML-Modul) + Wächter gegen
+# Farbliterale in qml/. Braucht Qt6::Gui (Theme fragt die StyleHints) und offscreen.
+qt_add_executable(test_statuscolors tst_statuscolors.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/Theme.cpp)
+target_include_directories(test_statuscolors PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels)
+target_compile_definitions(test_statuscolors PRIVATE
+    QTMUX_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
+target_link_libraries(test_statuscolors PRIVATE qtmux_core Qt6::Gui Qt6::Qml Qt6::Test)
+add_test(NAME test_statuscolors COMMAND test_statuscolors)
+
 # QTMUX-139: Stillstand-Erkennung fuer Agent-Sessions — Zeit injiziert, keine echten Minuten.
 qt_add_executable(test_stalldetector tst_stalldetector.cpp)
 target_link_libraries(test_stalldetector PRIVATE qtmux_core Qt6::Test)

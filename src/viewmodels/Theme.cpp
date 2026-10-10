@@ -108,4 +108,21 @@ QColor Theme::terminalBg() const     { return QColor::fromRgb(ColorSchemeRegistr
 QColor Theme::terminalFg() const     { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().fg); }
 QColor Theme::terminalCursor() const { return QColor::fromRgb(ColorSchemeRegistry::instance()->currentScheme().cursor); }
 
+// --- Statusrollen (QTMUX-142) -------------------------------------------------
+// Vorher standen die Dunkel-Literale (#46d369/#f5c451/#e5534b/#e0a040/#5a5d6a) direkt
+// im QML und galten auch im hellen Design: „MCP LAN" in #f5c451 auf der Statusleiste
+// #F2F2F2 = 1,45:1. Die Werte sind GERECHNET (CIELAB-Farbton des Dunkel-Literals fest,
+// Helligkeit/Buntheit mit kleinstem ΔE2000 zum Literal, bis jede Vertragsgrenze aus
+// Theme.h hält, mit 0,05 Abstand gegen Rundung; Rechenweg und Tabelle: docs/feature-referenz.md „Statusfarben").
+// Dunkel bleiben ok/warn unverändert; danger und muted verfehlten auch dort (3,38:1
+// als Dialogtext bzw. 1,56:1 als Punkt) und sind aufgehellt.
+bool Theme::statusDark() const {
+    const QColor bg = bgMain();
+    return (0.299 * bg.redF() + 0.587 * bg.greenF() + 0.114 * bg.blueF()) < 0.5;
+}
+QColor Theme::ok() const     { return statusDark() ? QColor(0x46D369) : QColor(0x078737); }
+QColor Theme::warn() const   { return statusDark() ? QColor(0xF5C451) : QColor(0x765B0D); }
+QColor Theme::danger() const { return statusDark() ? QColor(0xFD6F63) : QColor(0xBE3432); }
+QColor Theme::muted() const  { return statusDark() ? QColor(0x898C9C) : QColor(0x5A5D6A); }
+
 } // namespace qtmux
