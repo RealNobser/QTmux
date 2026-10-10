@@ -298,6 +298,21 @@ else()
     add_test(NAME test_sessiongroups COMMAND test_sessiongroups)
 endif()
 
+# --- Selbsttest des Vendoring-Wächters (QTMUX-144) ---------------------------
+# Prüft tools/check-updater-sync.sh an Attrappen-Bäumen — braucht keinen
+# MacPCAN-Hub und läuft darum auch in der CI. Der Wächter selbst bleibt lokal
+# (Begründung im Skriptkopf). Nur mit bash: Auf Windows gibt es im ctest-Weg
+# keins (System32\bash.exe wäre der WSL-Starter), und der Wächter läuft dort
+# ohnehin nie (kein Hub, das DMG entsteht nur auf dem Mac).
+if(NOT WIN32)
+    find_program(QTMUX_BASH bash)
+    if(QTMUX_BASH)
+        add_test(NAME test_check_updater_sync
+            COMMAND ${QTMUX_BASH} "${CMAKE_CURRENT_SOURCE_DIR}/test_check_updater_sync.sh"
+                    "${CMAKE_SOURCE_DIR}/tools/check-updater-sync.sh")
+    endif()
+endif()
+
 # --- Doku-Wächter (QTMUX-34) ------------------------------------------------
 # Findet doppelte Überschriften, wie sie entstehen, wenn beim Kompaktieren einer
 # langen Markdown-Datei ein Block eingefügt statt ersetzt wird. Reines CMake-Skript,

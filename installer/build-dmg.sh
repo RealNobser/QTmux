@@ -49,10 +49,12 @@ fi
 # Vendoring-Wächter VOR dem Release-Build: Das DMG entsteht ausschließlich auf
 # der Entwicklermaschine — der einzige Ort, an dem der MacPCAN-Hub daneben liegt,
 # und der Moment, in dem Drift am teuersten ist (das Artefakt geht raus). Drift
-# bricht hier ab (Wächter-Exit 1 + set -e). Fehlt der Hub (fremde Maschine),
-# läuft der Build weiter — der Wächter meldet dann unübersehbar, dass NICHTS
-# geprüft wurde. In der CI hängt der Wächter bewusst nicht (öffentliches Repo,
-# kein Token für den privaten Hub — Begründung im Wächter-Kopf).
+# (Wächter-Exit 1) und jeder Werkzeugfehler (Exit 2, z. B. ein gesetzter, aber
+# falscher MACPCAN_DIR — QTMUX-144) brechen hier ab (set -e). Fehlt der Hub am
+# Standardort (fremde Maschine), läuft der Build weiter — der Wächter meldet
+# dann unübersehbar, dass NICHTS geprüft wurde. In der CI hängt der Wächter
+# bewusst nicht (öffentliches Repo, kein Token für den privaten Hub — Begründung
+# im Wächter-Kopf).
 echo "==> 1/4  Vendoring-Sync gegen MacPCAN prüfen"
 "$REPO/tools/check-updater-sync.sh"
 

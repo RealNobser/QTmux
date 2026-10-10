@@ -73,7 +73,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/StallDetector.{h,cpp}` | Gui-frei: Stillstand-Erkennung (QTMUX-139) — Agent zeigt „arbeitet" (Merkmal `AgentInfo::workingMarkers`), Bildschirm steht seit N min still → `needsAttention`; Mechanik in der Feature-Referenz |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **36** ctest-Tests: 35 QtTest-Binaries (pty, vtscreen, linkdetector, **filemanagerreveal**, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, **statuscolors**) + `test_doc_duplicates` (reines CMake-Skript). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 35. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **37** ctest-Tests: 35 QtTest-Binaries (pty, vtscreen, linkdetector, **filemanagerreveal**, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, **statuscolors**) + `test_doc_duplicates` (reines CMake-Skript) + `test_check_updater_sync` (bash-Skripttest des Vendoring-Wächters, QTMUX-144 — **nicht auf Windows**). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 36. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -532,12 +532,29 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   privates Repo im Secret-Store eines öffentlichen (Owner hat abgelehnt). Ein CI-Schritt,
   der mangels Hub **immer** übersprungen würde, wäre selbst ein grünes Versprechen ohne
   Deckung (Fehlerklasse „grüner Nachweis, der nichts nachweist", Deskstarter 2026-08-12).
-  Stattdessen: (1) Ohne Hub daneben meldet das Skript **unübersehbar „NICHTS GEPRUEFT"**
-  für alle drei Kontrakte (Exit bleibt 0, damit Werkzeugketten es nicht abschalten);
+  Stattdessen: (1) Ohne Hub am Standardort `../MacPCAN` meldet das Skript **unübersehbar
+  „NICHTS GEPRUEFT"** für alle vier Kontrakte (Exit bleibt 0, damit Werkzeugketten es nicht
+  abschalten);
   (2) `installer/build-dmg.sh` ruft ihn **vor** jedem Release-Build auf — die einzige
   Maschine, die DMGs baut, hat den Hub daneben, und Drift bricht dort ab. Auf den
   Windows-/Linux-Paketwegen (rtzbld01, CI-AppImage) läuft er mangels Hub nicht — dort
   schützt nur das Nachziehen über den Hub-Workflow.
+  🔴 **Bis QTMUX-144 (2026-10-10) war der Wächter selbst ein grüner Nachweis ohne Messung:**
+  Mit **relativem** `MACPCAN_DIR` scheiterte ein `cd` in der Dateilisten-Gruppe
+  `{ cd vendiert && find; cd upstream && find; }` — das zweite `cd` löste den Pfad gegen das
+  schon gewechselte Verzeichnis auf, der Fehler ging im `;` unter. Die Hub-Hälfte der Liste
+  fehlte, eine im Hub **neue** Datei blieb unsichtbar (auch für `--update`), Ausgabe
+  „byte-identisch", Exit 0. Seitdem gilt **Exit 0 = alle vier Kontrakte gemessen · 1 = Drift/
+  Fremd-Include · 2 = Werkzeugfehler** (gesetzter, aber unbrauchbarer `MACPCAN_DIR`, `cd`/
+  `find`/`cmp`/`grep`/`cp` gescheitert, unbekanntes Argument wie `--updte`, **0 verglichene
+  Dateien** in einem Kontrakt — die Positivkontrolle; die Erfolgszeilen nennen die Zahl, am
+  2026-10-10 17/8/5/1). Ein relativer `MACPCAN_DIR` gilt gegen das **Aufrufverzeichnis**
+  (Unix-Konvention; so las ihn die Existenzprüfung schon immer) und wird sofort absolut;
+  `CDPATH` wird verworfen. Verglichen wird per `cmp` (Exit 2 = Fehler) statt zweier Hashes,
+  deren leere Werte bei einer unlesbaren Datei „gleich" waren. Selbsttest
+  `test_check_updater_sync` (Attrappen-Bäume, kein Hub nötig → läuft in der CI auf macOS/Linux);
+  gegen den alten Code fallen 11 von 18 Fällen, darunter genau „relativ + neue Datei",
+  „Pfad existiert nicht", „leerer Vendor-Baum".
   **Zum Hub-Paket AP8** (Profillader `DbcLoader`/`JsonLoader` wandern in den Hub):
   **QTmux ist nicht betroffen** — MacPCANs `DbcDecoder` liegt in `src/specs/`, RAFTNGs Lader
   in `src/io/`, beide außerhalb des Kontrakts; QTmux liest keine DBC-Profile. Nachziehen
@@ -750,9 +767,11 @@ Transition hinterher. Vorher 107/26 bis QTMUX-133, gemessen im Jira-Audit 2026-0
 QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
 Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 
-**Teststände:** **36** Tests (s. Dateitabelle; per `ctest -N` am 2026-10-10 in
-`build/macos-test` gezählt — `statuscolors` kam mit QTMUX-142 hinzu, davor `icons` mit
-QTMUX-141; lokal nach QTMUX-142 36/36 in `build/macos-test` **und** `build/macos-release`;
+**Teststände:** **37** Tests auf macOS/Linux, **36** auf Windows (s. Dateitabelle; per
+`ctest -N` am 2026-10-10 in einem frisch konfigurierten macOS-Baum gezählt —
+`check_updater_sync` kam mit QTMUX-144 hinzu und entsteht nur mit bash, also nicht auf
+Windows; davor `statuscolors` mit QTMUX-142, `icons` mit QTMUX-141; lokal nach QTMUX-142
+36/36 in `build/macos-test` **und** `build/macos-release`;
 die CI-Zahlen unten stammen noch von 1.9.7). macOS
 lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
 (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich

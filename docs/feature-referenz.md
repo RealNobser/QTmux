@@ -859,7 +859,8 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 Kern **byte-identisch aus MacPCAN vendiert** (`third_party/updater/update/`, Namespace
 `appupdate`, Target **`qtmux_updater`** = STATIC + Qt6::Core/Network). Bewusst **nicht** in
 `qtmux_core` — der bleibt Qt6::Core-only. Abgleich `tools/check-updater-sync.sh`
-(`--update` zieht nach), Herkunft/Pin in
+(`--update` zieht nach; Exit-Codes, Positivkontrolle und relative `MACPCAN_DIR` im
+CLAUDE.md-Abschnitt „Vendoring-Wächter", QTMUX-144), Herkunft/Pin in
 [third_party/updater/UPSTREAM.md](third_party/updater/UPSTREAM.md).
 🔑 **Die Kopie liegt in einem Verzeichnis namens `update`**, weil sich der Kern selbst mit
 dem Präfix `update/` inkludiert; flach vendiert müsste man jede `#include`-Zeile ändern und
