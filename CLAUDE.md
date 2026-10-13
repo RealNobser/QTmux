@@ -73,7 +73,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/StallDetector.{h,cpp}` | Gui-frei: Stillstand-Erkennung (QTMUX-139) — Agent zeigt „arbeitet" (Merkmal `AgentInfo::workingMarkers`), Bildschirm steht seit N min still → `needsAttention`; Mechanik in der Feature-Referenz |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **37** ctest-Tests: 35 QtTest-Binaries (pty, vtscreen, linkdetector, **filemanagerreveal**, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, **statuscolors**) + `test_doc_duplicates` (reines CMake-Skript) + `test_check_updater_sync` (bash-Skripttest des Vendoring-Wächters, QTMUX-144 — **nicht auf Windows**). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 36. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **43** ctest-Tests: 36 QtTest-Binaries (pty, vtscreen, linkdetector, **filemanagerreveal**, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, statuscolors, **combowidth**) + **5 × `I18n.*`** (Anrede-Wächter [tools/i18n/check_address.py](tools/i18n/check_address.py) + vier Positivproben, QTMUX-145 — brauchen Python 3, ohne Python entsteht ein roter ERROR-Test statt eines stillen Fehlens) + `test_doc_duplicates` (reines CMake-Skript) + `test_check_updater_sync` (bash-Skripttest des Vendoring-Wächters, QTMUX-144 — **nicht auf Windows**). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 42. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -610,6 +610,10 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
   (PowerShell, Bash, …) bleiben unübersetzt. Neben den eigenen `.qm` wird **`qtbase_<lang>`**
   eingebettet und geladen (QTMUX-117) — sonst bleiben Qts eigene Texte englisch, allen voran
   die Standardknöpfe; Mechanik in den QML-/Theming-Lektionen.
+  🔑 **Anrede: Sie** (Owner-Entscheid 2026-10-13, familienweit, QTMUX-145) — Wächter
+  `I18n.GermanAddressesWithSie` prüft Katalog UND Quelltext-Literale. Weil Deutsch die
+  Quellsprache ist, ändert jede Umformulierung den Schlüssel: `<source>` in **beiden** `.ts`
+  mit umbenennen, sonst verliert lupdate die englische Übersetzung (Feature-Referenz).
   🔑 **`SOURCE_TARGETS` ist Pflicht, nicht Kosmetik (2026-07-31).** Ohne die Angabe scannt
   lupdate **alle** Targets — auch `tests/`. `tst_i18n.cpp` fragt für QTMUX-117 gezielt
   Qt-eigene Texte ab (Kontext **`QPlatformTheme`**: „Cancel"/„OK"/„Save"/„Close"), und
@@ -753,7 +757,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-144** (check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+**QTMUX-145** (deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-13 dual angelegt, In Arbeit; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
@@ -764,8 +768,9 @@ Transition hinterher. Vorher 107/26 bis QTMUX-133, gemessen im Jira-Audit 2026-0
 QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
 Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 
-**Teststände:** **37** Tests auf macOS/Linux, **36** auf Windows (s. Dateitabelle; per
-`ctest -N` am 2026-10-10 in einem frisch konfigurierten macOS-Baum gezählt —
+**Teststände:** **43** Tests auf macOS/Linux, **42** auf Windows (s. Dateitabelle; per
+`ctest -N` am 2026-10-13 gezählt — `combowidth` + fünf `I18n.*` kamen mit QTMUX-145 hinzu,
+lokal 43/43 in frisch angelegtem Debug- **und** Release-Baum; davor am 2026-10-10 37 —
 `check_updater_sync` kam mit QTMUX-144 hinzu und entsteht nur mit bash, also nicht auf
 Windows; davor `statuscolors` mit QTMUX-142, `icons` mit QTMUX-141; lokal vor dem
 1.9.8-Bump 37/37 in `build/macos-release`). macOS
@@ -791,9 +796,17 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-10-10, nach Release 1.9.8** · Working Tree sauber, ein Arbeitsbaum, nur
-Branch `main`, alles gepusht — `git log --oneline origin/main..HEAD` muss **leer** sein;
-seit `v1.9.8` nur Doku (Messkommando `git log --oneline v1.9.8..origin/main`). Die vier
+Stand **2026-10-13: QTMUX-145** (deutsche Oberfläche siezt + Wächter; Proxy-Art-Auswahl
+fiel zur Caret-Pille zusammen → `AppComboBox` misst den längsten Eintrag + `test_combowidth`)
+lokal committet, **unreleased**; Push nur nach Orchestrator-Freigabe (geteilte Runner) —
+ungepusht ist, was `git log --oneline origin/main..HEAD` zeigt. Jira QTMUX-145 bleibt „In
+Arbeit“, bis CI gelesen ist. ⚠️ **`build/macos-test` und `build/macos-release` sind
+verschmutzt** (2026-10-13 gemessen): inkrementell gebaut stürzen `test_windowmodel`/
+`test_sessiongroups` (+ `test_mcpfocus` in Debug) mit SIGSEGV, derselbe Arbeitsbaum und der
+Ausgangsstand `ead87a3` frisch gebaut sind grün — vor der nächsten Messung dort neu anlegen
+(Verdacht, ungemessen: Homebrew-Qt-Revision 6.11.2_1 vom 2026-10-10 nach dem letzten Vollbau).
+Davor (2026-10-10, nach Release 1.9.8) lag seit `v1.9.8` nur Doku auf `main` (Messkommando
+`git log --oneline v1.9.8..origin/main`). Die vier
 Tickets QTMUX-141…144 sind mit 1.9.8 ausgeliefert (Mechanik je in der Feature-Referenz bzw.
 im Abschnitt „Vendoring-Wächter"). Folgekandidat aus dem 1.9.8-Release: harter CRT-Riegel in
 `installer/build-msi.ps1` nach RAFTNG-Vorlage RAF-181 (Ticket nur auf Zuruf).

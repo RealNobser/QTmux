@@ -234,7 +234,7 @@ ApplicationWindow {
             // wird das bewusst NICHT getan: ein aufräumender Agent würde sonst QTmux samt
             // seiner eigenen Sitzung beenden. Stattdessen ein klarer Hinweis.
             if (windows.count <= 1) {
-                mcp.provideResult(false, qsTr("Letztes Fenster: Schließen würde QTmux beenden — über MCP nicht möglich. Nutze close_pane/close_session oder beende die App in der Oberfläche."))
+                mcp.provideResult(false, qsTr("Letztes Fenster: Schließen würde QTmux beenden — über MCP nicht möglich. Nutzen Sie close_pane/close_session, oder beenden Sie die App in der Oberfläche."))
                 return
             }
             window.closeWindowRow(row)
@@ -267,7 +267,7 @@ ApplicationWindow {
         // fest zu genau einem Window/Pane, es gibt kein „Session in ein Pane laden" mehr.
         // Bewusst als klarer Hinweis statt still zu scheitern (endgültige Deprecation: Stufe 4).
         onAssignPaneRequested: (row, paneId) => {
-            mcp.provideResult(false, qsTr("assign_session entfällt im Window-Modell — nutze focus_session bzw. focus_window."))
+            mcp.provideResult(false, qsTr("assign_session entfällt im Window-Modell — nutzen Sie focus_session bzw. focus_window."))
         }
         onConnectProfileRequested: (name, focus) => {
             const p = Profiles.profile(name)

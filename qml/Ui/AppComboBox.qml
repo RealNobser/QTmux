@@ -8,6 +8,17 @@ ComboBox {
     id: cb
     implicitHeight: 32
     font.pixelSize: 13
+    // Eigene Breite aus dem LÄNGSTEN Eintrag (QTMUX-145). Der Basic-Stil holt seine
+    // Mindestbreite aus dem Hintergrund (implicitWidth 140) — unser Rectangle hat keine,
+    // und die Standard-Politik misst nur den gerade angezeigten Text über ein TextField,
+    // das hier implicitWidth 0 meldet. Gemessen an der Proxy-Art (HTTP/SOCKS5, eine Box
+    // ohne Layout-Breite): implicitWidth 14 = nur der Caret, Text unsichtbar, Caret bei
+    // x = −10 links außerhalb der Pille. Boxen mit Layout.fillWidth in fester Breite
+    // merkten davon nichts; jede Box ohne Breitenangabe fiel so zusammen.
+    implicitContentWidthPolicy: ComboBox.WidestText
+    // Rechts Platz für den Caret samt seinem Rand (indicator.x unten: 10 px), damit
+    // der längste Eintrag nicht unter dem Caret verschwindet.
+    rightPadding: indicator.width + 16
     background: Rectangle {
         radius: 6
         color: Theme.bgElevated

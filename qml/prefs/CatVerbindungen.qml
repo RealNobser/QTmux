@@ -126,7 +126,7 @@ CatPage {
             wrapMode: Text.WordWrap
             color: Theme.textDim
             font.pixelSize: 12
-            text: qsTr("Noch keine Profile. Lege mit „Neu …“ eine wiederverwendbare Verbindung an.")
+            text: qsTr("Noch keine Profile. Legen Sie mit „Neu …“ eine wiederverwendbare Verbindung an.")
         }
       }
     }

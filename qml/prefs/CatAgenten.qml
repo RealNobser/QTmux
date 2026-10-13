@@ -115,7 +115,7 @@ CatPage {
                     case 1: return qsTr("Der Agent nimmt die JÜNGSTE Unterhaltung seines Arbeitsverzeichnisses. "
                                       + "Richtig, solange dort nur ein Agent arbeitet — laufen mehrere im selben "
                                       + "Ordner, bekommen sie alle dieselbe.")
-                    case 2: return qsTr("Der Agent öffnet beim Start seine eigene Auswahlliste; du entscheidest je "
+                    case 2: return qsTr("Der Agent öffnet beim Start seine eigene Auswahlliste; Sie entscheiden je "
                                       + "Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur "
                                       + "Claude Code eine solche Liste an.")
                     case 3: return qsTr("Genau die Unterhaltung, die der Agent zuletzt selbst gemeldet hat "

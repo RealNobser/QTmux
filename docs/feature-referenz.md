@@ -1122,6 +1122,37 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   🔑 **Regel: `modelData` FRAGEN, nicht den Modelltyp raten.** Es ist bei Array-Models
   gesetzt und bei rollenbasierten Models `undefined`:
   `modelData?.[textRole] ?? model?.[textRole] ?? ""`.
+- ⚠️ **Eine `AppComboBox` ohne Layout-Breite fiel zur Caret-Pille zusammen** (QTMUX-145,
+  Owner-Befund 2026-10-13 an der Proxy-Art HTTP/SOCKS5). Gemessen in der laufenden App:
+  `implicitWidth 14` = `implicitContentWidth 0` + `rightPadding 14` (nur der Caret),
+  `implicitBackgroundWidth 0`, Caret bei `x = −10` links **außerhalb** der Pille — obwohl die
+  Zeile 767 px breit war. Ursache: Der Basic-Stil holt seine Mindestbreite aus dem
+  **Hintergrund** (`implicitWidth: 140`); unser eigenes Rectangle hat keine, und die
+  Standard-Politik misst den Text über ein `TextField`, das hier `implicitWidth 0` meldet.
+  Die übrigen zwölf Verwendungen merkten nichts, weil alle `Layout.fillWidth` in einer Zeile
+  fester Breite (`controlWidth`) bzw. in einem Dialog fester Breite stehen.
+  🔑 **Behoben in der Komponente, nicht an der Stelle:** `implicitContentWidthPolicy:
+  ComboBox.WidestText` (Breite aus dem **längsten** Eintrag, auch wenn der kürzere angezeigt
+  wird) + `rightPadding: indicator.width + 16` (Caret samt 10-px-Rand frei — vorher lief der
+  Text bis unter den Caret). Fest bemessene Boxen sehen vorher/nachher gleich aus.
+  Wächter `test_combowidth`: lädt die **echte** `AppComboBox.qml` in ein Attrappen-Modul
+  (Theme-Stub, Caret-SVG als Ressource) und verlangt, dass der längste Eintrag vor dem Caret
+  endet und der Caret in der Box liegt; Positivkontrolle „Caret hat Breite“. Mutationen:
+  ohne `WidestText` → Breite 30, ohne `rightPadding` → Text endet 8 px unter dem Caret,
+  Ausgangsstand → Breite 14 / Caret −10 (= App-Messung), fehlendes SVG → Positivkontrolle rot.
+- 🔑 **Die deutsche Oberfläche siezt** (Owner-Entscheid 2026-10-13, familienweit; QTMUX-145).
+  Weil Deutsch die **Quellsprache** ist, stehen die Texte als Schlüssel in `qsTr()` — eine
+  Umformulierung ändert den Schlüssel. Wer nur die QML ändert, bekommt von lupdate einen
+  `vanished`-Eintrag plus einen **unübersetzten** neuen: die englische Übersetzung geht
+  verloren. Darum den `<source>` in **beiden** `.ts` mit umbenennen (in `qtmux_de.ts` auch die
+  Übersetzung); danach muss lupdate „0 new“ melden und die `.ts` byte-gleich lassen.
+  Wächter `I18n.GermanAddressesWithSie` ([tools/i18n/check_address.py](tools/i18n/check_address.py),
+  nach der EmbyStudio-Vorlage) prüft den Katalog **und** jedes Prosa-Literal unter `qml/`,
+  `src/`, `plugins/` (ohne `vendor/`) — also auch die MCP-Werkzeugbeschreibungen, die nie
+  durch lupdate laufen, und einen neuen `qsTr`-Text vor dem nächsten lupdate. Vertrag
+  `I18N-GUARD OK` 0 / `FAIL` 1 / `ERROR` 3, Selbstprüfung + Mindestmengen, je Klasse eine
+  Probe `I18n.ProbeDu*TurnsRed`. Formen: „Sie entscheiden je Pane“, „Legen Sie … fest“,
+  „Nutzen Sie …“, „von Ihnen“; auch `docs/MCP.md` und `shell-integration/README.md` siezen.
 - 🔑 **Ein Sprachwechsel baut die MenuBar NICHT neu auf** (2026-08-07 mit Erzeugungs-/
   Zerstörungs-Hooks gemessen): Es entsteht kein neues `MenuBar`- oder `Menu`-Objekt und
   keines wird zerstört — `applyLanguage()` tauscht die Translator und ruft

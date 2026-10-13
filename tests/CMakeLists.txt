@@ -38,6 +38,20 @@ target_compile_definitions(test_statuscolors PRIVATE
 target_link_libraries(test_statuscolors PRIVATE qtmux_core Qt6::Gui Qt6::Qml Qt6::Test)
 add_test(NAME test_statuscolors COMMAND test_statuscolors)
 
+# QTMUX-145: AppComboBox bringt ihre Breite selbst mit (längster Eintrag + Caret). Lädt
+# die echte qml/Ui/AppComboBox.qml in ein Attrappen-Modul; das Caret-SVG liegt wie in
+# der App unter :/icons. Braucht offscreen (setzt der Test selbst, falls nicht gesetzt).
+qt_add_executable(test_combowidth tst_combowidth.cpp)
+target_compile_definitions(test_combowidth PRIVATE
+    QTMUX_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
+target_link_libraries(test_combowidth PRIVATE Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Svg Qt6::Test)
+qt_add_resources(test_combowidth "test_combowidth_res"
+    PREFIX "/icons"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/../resources/icons"
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/../resources/icons/caret-down.svg"
+)
+add_test(NAME test_combowidth COMMAND test_combowidth)
+
 # QTMUX-139: Stillstand-Erkennung fuer Agent-Sessions — Zeit injiziert, keine echten Minuten.
 qt_add_executable(test_stalldetector tst_stalldetector.cpp)
 target_link_libraries(test_stalldetector PRIVATE qtmux_core Qt6::Test)
@@ -143,6 +157,42 @@ if(_qtmux_qtbase_qm)
         FILES ${_qtmux_qtbase_qm}
     )
     add_test(NAME test_i18n COMMAND test_i18n)
+endif()
+
+# QTMUX-145: Die deutsche Oberfläche siezt. tools/i18n/check_address.py prüft
+# jede Übersetzung von i18n/qtmux_de.ts UND — weil Deutsch die Quellsprache ist —
+# jedes Prosa-Literal unter qml/, src/, plugins/ (auch die MCP-Beschreibungen,
+# die nie durch lupdate laufen) auf du/dein/dich/dir, Du-Verbformen und
+# Du-Imperative. Vertrag: „I18N-GUARD OK“ Exit 0 · „FAIL“ Exit 1 · „ERROR“
+# Exit 3 (Werkzeugfehler, Selbstprüfung fällt, zu wenig gelesen). Je Klasse
+# eine Positivprobe, die einen Du-Text einspeist und die FAIL-Zeile verlangen
+# muss; ERROR passt auf keine Probe. Ohne Python wird der Test nicht still
+# weggelassen, sondern als roter ERROR angelegt.
+find_package(Python3 3.9 COMPONENTS Interpreter)
+set(_qtmux_address "${CMAKE_SOURCE_DIR}/tools/i18n/check_address.py")
+if(Python3_Interpreter_FOUND)
+    add_test(NAME I18n.GermanAddressesWithSie
+        COMMAND "${Python3_EXECUTABLE}" "${_qtmux_address}")
+    set_tests_properties(I18n.GermanAddressesWithSie PROPERTIES
+        PASS_REGULAR_EXPRESSION "I18N-GUARD OK: German address"
+        FAIL_REGULAR_EXPRESSION "I18N-GUARD (FAIL|ERROR)")
+    foreach(_class Pronoun Verb Imperative Source)
+        string(TOLOWER "${_class}" _arg)
+        if(_arg STREQUAL "source")
+            set(_where "probe '[^\n]*\\(imperative ")
+        else()
+            set(_where "probe '[^\n]*\\(${_arg} ")
+        endif()
+        add_test(NAME I18n.ProbeDu${_class}TurnsRed
+            COMMAND "${Python3_EXECUTABLE}" "${_qtmux_address}" --probe ${_arg})
+        set_tests_properties(I18n.ProbeDu${_class}TurnsRed PROPERTIES
+            PASS_REGULAR_EXPRESSION "I18N-GUARD FAIL: German address: ${_where}")
+    endforeach()
+else()
+    add_test(NAME I18n.GermanAddressesWithSie COMMAND ${CMAKE_COMMAND} -E echo
+        "I18N-GUARD ERROR: German address: no Python 3 interpreter found")
+    set_tests_properties(I18n.GermanAddressesWithSie PROPERTIES
+        FAIL_REGULAR_EXPRESSION "I18N-GUARD ERROR")
 endif()
 
 # QTMUX-38: Shell-Helfer aus der Ressource an einen stabilen Ort schreiben. Der Test

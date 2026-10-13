@@ -94,7 +94,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `needs_attention` | `text?`, `sessionId?` | Explizit Aufmerksamkeit anfordern (Kachel pulst) — für „blockiert/brauche Mensch" |
 | `clear_attention` | `sessionId?` | Aufmerksamkeits-Markierung wieder löschen |
 | `set_activity` | `state`, `sessionId?` | Dauer-Zustand für den Sidebar-Ring: `idle`(dim)/`busy`(grün)/`waiting`(amber)/`error`(rot) |
-| `set_agent_session` | `ref`, `sessionId?` | Eigene Unterhaltungs-Kennung melden, damit QTmux dich beim nächsten Start damit fortsetzen kann (s. u.) |
+| `set_agent_session` | `ref`, `sessionId?` | Eigene Unterhaltungs-Kennung melden, damit QTmux Sie beim nächsten Start damit fortsetzen kann (s. u.) |
 | `wait_for_events` | `sessionId?`, `afterSeq?`, `timeoutMs?` | **Long-Poll**: blockiert bis ein abonniertes Ereignis vorliegt/Timeout |
 | `get_layout` | `windowId?` | `{layout, windowId, activePaneId, sessions}` — Baum des **aktiven** (oder per `windowId` gewählten) Windows plus Pane-Zuordnung (s. u.) |
 | `split_pane` | `orientation` ("h"/"v"), `focus?` (Standard false) | Aktives Pane **im aktiven Window** teilen (neue Shell im neuen Pane; das **bisherige** Pane bleibt aktiv, mit `focus:true` das neue) → neue **Session-id** |
@@ -106,7 +106,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `new_window` | `focus?` (Standard false) | Neues Window (Tab) mit einer Shell, im Hintergrund → gibt neue **Session-id** zurück |
 | `rename_window` | `windowId`, `name?` | Window umbenennen (leerer `name` = automatischer Titel) |
 | `close_window` | `windowId` | Window **samt aller** seiner Sessions/Panes schließen |
-| `assign_session` | `id`, `paneId?` | **VERALTET** (Window-Modell): kein „Session in Pane laden" mehr → nutze `focus_session`/`focus_window` |
+| `assign_session` | `id`, `paneId?` | **VERALTET** (Window-Modell): kein „Session in Pane laden" mehr → nutzen Sie `focus_session`/`focus_window` |
 | `get_server_info` | – | Wie ist dieser Server erreichbar: `version`, `bindAddress`, `port`, `listening`, `networkAccess`, `authRequired`, `tokenConfigured` — **ohne** das Token; **nur lesend** (s. Sicherheit) |
 | `list_profiles` | – | Gespeicherte Verbindungsprofile; **ohne Geheimniswerte** (nur `hasPasswordSecret`/`hasLoginScript`-Flags) |
 | `connect_profile` | `name`, `focus?` (Standard false) | Profil verbinden (eigenes Window, im Hintergrund) — ein Vault-Passwort wird **intern** aufgelöst (nie über MCP ausgegeben) → neue **Session-id** |
@@ -152,25 +152,25 @@ Der Gruppenname ist frei wählbar; er wird mit der Sitzungsliste **persistiert**
 Gruppe müssen zusammenhängen) — eine Session kann dadurch ihre Zeile wechseln, ihre
 `id` bleibt.
 
-### `set_agent_session` — deine Unterhaltung über einen Neustart retten (QTMUX-98)
+### `set_agent_session` — Ihre Unterhaltung über einen Neustart retten (QTMUX-98)
 
-QTmux kann deine Sitzungen wiederherstellen: Es merkt sich die getippte Agenten-Kommandozeile
+QTmux kann Ihre Sitzungen wiederherstellen: Es merkt sich die getippte Agenten-Kommandozeile
 je Pane und setzt sie beim nächsten Start erneut ab. **Welche Unterhaltung** dabei fortgesetzt
-wird, hängt an einer Einstellung des Anwenders — und der genaueste Weg braucht dich:
+wird, hängt an einer Einstellung des Anwenders — und der genaueste Weg braucht Sie:
 
 ```jsonc
-{"name":"set_agent_session","arguments":{"ref":"<deine Unterhaltungs-ID>"}}
+{"name":"set_agent_session","arguments":{"ref":"<Ihre Unterhaltungs-ID>"}}
 ```
 
-QTmux legt `ref` an deinem Pane ab, persistiert sie und startet dich beim nächsten Mal mit
+QTmux legt `ref` an Ihrem Pane ab, persistiert sie und startet Sie beim nächsten Mal mit
 genau dieser Unterhaltung (z. B. `claude --resume <ref>`, `opencode --session <ref>`).
 
-**Warum du das melden musst und QTmux es nicht selbst herausfindet** — alle vier naheliegenden
+**Warum Sie das melden müssen und QTmux es nicht selbst herausfindet** — alle vier naheliegenden
 Wege wurden gemessen und scheitern: Ein Server kann seinen Client nicht anrufen, und ein
-beschäftigter Agent pollt nicht; in die PTY zu tippen landet in deinem Eingabefeld und die
-Antwort wäre Bildschirm-Raterei; deine Verlaufsdatei hältst du nicht offen (`lsof` findet
-nichts); und deine Session-Variable setzt du erst zur **Laufzeit**, sie ist von außen am
-Prozess nicht sichtbar. QTmux leitet deshalb nichts ab — du meldest, genau wie bei den
+beschäftigter Agent pollt nicht; in die PTY zu tippen landet in Ihrem Eingabefeld und die
+Antwort wäre Bildschirm-Raterei; Ihre Verlaufsdatei halten Sie nicht offen (`lsof` findet
+nichts); und Ihre Session-Variable setzen Sie erst zur **Laufzeit**, sie ist von außen am
+Prozess nicht sichtbar. QTmux leitet deshalb nichts ab — Sie melden, genau wie bei den
 Ereignissen.
 
 ⚠️ **Nach jedem Wechsel erneut melden.** `/resume` und `/clear` ändern die Kennung mitten im
@@ -178,7 +178,7 @@ Betrieb; ohne neue Meldung zeigt QTmux auf die alte Unterhaltung. Am besten beim
 nach jedem Wechsel. Ein leerer `ref` löscht die Zuordnung.
 
 Ohne Meldung ist das kein Fehler: Der Anwender kann stattdessen „jüngste Unterhaltung im
-Verzeichnis" oder „Auswahl beim Start" wählen — dann startest du eben ohne diese Angabe.
+Verzeichnis" oder „Auswahl beim Start" wählen — dann starten Sie eben ohne diese Angabe.
 
 ## Sessions steuern: zwei Fallen, die Erfolg melden
 
@@ -456,7 +456,7 @@ mit einem Fehler — ein selbstgebauter Wächter würde daraus eine heiße Schle
 Mit `--sessions`/`--kinds` **ersetzt** es das Abo der Session, ohne Filter lässt es ein
 vorhandenes unangetastet.
 
-> **Nimm auch hier das Skript, nicht einen `curl`-Einzeiler.** Drei Fallstricke stecken
+> **Nehmen Sie auch hier das Skript, nicht einen `curl`-Einzeiler.** Drei Fallstricke stecken
 > darin, jeder einzelne sorgt für einen Wächter, der stumm nichts meldet:
 > `timeoutMs` **muss unter** dem HTTP-Timeout liegen (sonst schneidet der Client den
 > Long-Poll ab, bevor der Server antwortet); `nextSeq` muss **immer** fortgeschrieben
@@ -519,7 +519,7 @@ QTmux-Shell und wird an den Agenten samt Hook-Subprozess vererbt) sowie `$QTMUX_
 }
 ```
 
-> **Nimm das Skript, nicht einen `curl`-Einzeiler im Hook.** Der Aufruf braucht sonst eine
+> **Nehmen Sie das Skript, nicht einen `curl`-Einzeiler im Hook.** Der Aufruf braucht sonst eine
 > dreifach verschachtelte Maskierung (JSON im JSON in der Shell); geht dabei etwas schief,
 > feuert der Hook **still** nicht — und das sieht für den Controller exakt so aus wie
 > „gerade passiert nichts". Genau diese Sorte Stille steckte hinter QTMUX-30.

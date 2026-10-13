@@ -20,7 +20,7 @@ anderen Session **fertig** ist oder eine **Frage** hat).
 ## Woher bekomme ich diese Dateien?
 
 **Als Anwender einer Installation** (DMG, MSI, portables ZIP, AppImage) stecken sie **im
-Programm** — hol sie dir an einen stabilen Ort:
+Programm** — holen Sie sie an einen stabilen Ort:
 
 ```bash
 qtmux --install-shell-integration            # Standardziel (s. Tabelle)
@@ -89,7 +89,7 @@ Beispiel — Claude Code, `~/.claude/settings.json` (oder projektlokal `.claude/
 }
 ```
 
-macOS/Linux analog mit `qtmux-emit.sh done "Aufgabe erledigt"`. **Nimm in beiden Fällen
+macOS/Linux analog mit `qtmux-emit.sh done "Aufgabe erledigt"`. **Nehmen Sie in beiden Fällen
 das Skript, nicht einen `curl`-Einzeiler im Hook**: Der bräuchte eine dreifach
 verschachtelte Maskierung (JSON in JSON in der Shell), und geht die schief, feuert der
 Hook **still** nicht — für den Empfänger ununterscheidbar von „gerade passiert nichts".

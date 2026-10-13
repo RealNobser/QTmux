@@ -30,7 +30,7 @@ CatPage {
         }
         PrefRow {
             title: qsTr("Schriftgröße")
-            description: qsTr("Wirkt auf alle Sessions; einzelne Fenster zoomst du mit Strg/Cmd +/−.")
+            description: qsTr("Wirkt auf alle Sessions; einzelne Fenster zoomen Sie mit Strg/Cmd +/−.")
             SpinBox {
                 from: 6; to: 40
                 value: page.host.app.terminalFontSize

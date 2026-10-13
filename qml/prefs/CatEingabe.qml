@@ -24,7 +24,7 @@ CatPage {
             }
             PrefRow {
                 title: qsTr("Rechtsklick fügt ein")
-                description: qsTr("Statt des Kontextmenüs — dieses erreichst du dann über die Menüleiste.")
+                description: qsTr("Statt des Kontextmenüs — dieses erreichen Sie dann über die Menüleiste.")
                 AppSwitch {
                     checked: page.host.app.rightClickPaste
                     onToggled: page.host.app.rightClickPaste = checked

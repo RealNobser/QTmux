@@ -24,7 +24,7 @@ CatPage {
         spacing: 10
         Text {
             text: Vault.exists ? qsTr("Der Vault ist gesperrt. Master-Passwort eingeben:")
-                               : qsTr("Noch kein Vault vorhanden. Lege ein Master-Passwort fest:")
+                               : qsTr("Noch kein Vault vorhanden. Legen Sie ein Master-Passwort fest:")
             color: Theme.textBright; Layout.fillWidth: true; wrapMode: Text.WordWrap
         }
         TextField {

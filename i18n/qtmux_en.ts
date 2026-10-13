@@ -172,7 +172,7 @@
     </message>
     <message>
         <location filename="../qml/prefs/CatAgenten.qml" line="118"/>
-        <source>Der Agent öffnet beim Start seine eigene Auswahlliste; du entscheidest je Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur Claude Code eine solche Liste an.</source>
+        <source>Der Agent öffnet beim Start seine eigene Auswahlliste; Sie entscheiden je Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur Claude Code eine solche Liste an.</source>
         <translation>The agent opens its own picker at startup; you decide per pane. Nothing is guessed, but it costs a click. Currently only Claude Code offers such a list.</translation>
     </message>
     <message>
@@ -411,7 +411,7 @@
     </message>
     <message>
         <location filename="../qml/prefs/CatAllgemein.qml" line="163"/>
-        <source>„System“ übernimmt, was das Betriebssystem vorgibt — im Firmennetz meist das Richtige, ohne dass du etwas eintragen musst. „Direkt“ umgeht den Proxy bewusst; das hilft, wenn eine hinterlegte Konfigurationsdatei nicht erreichbar ist. „Manuell“ nutzt die Angaben darunter.</source>
+        <source>„System“ übernimmt, was das Betriebssystem vorgibt — im Firmennetz meist das Richtige, ohne dass Sie etwas eintragen müssen. „Direkt“ umgeht den Proxy bewusst; das hilft, wenn eine hinterlegte Konfigurationsdatei nicht erreichbar ist. „Manuell“ nutzt die Angaben darunter.</source>
         <translation>“System” uses whatever the operating system provides — usually the right thing on a corporate network, with nothing to type in. “Direct” deliberately bypasses the proxy, which helps when a configured auto-config file is unreachable. “Manual” uses the settings below.</translation>
     </message>
     <message>
@@ -566,7 +566,7 @@
     </message>
     <message>
         <location filename="../qml/prefs/CatAllgemein.qml" line="245"/>
-        <source>Der Rechner bleibt wach, solange mindestens eine Session „beschäftigt“ meldet — und nur dann. Wartet ein Agent auf eine Antwort von dir, darf der Rechner schlafen. Der Bildschirm wird nicht wachgehalten.</source>
+        <source>Der Rechner bleibt wach, solange mindestens eine Session „beschäftigt“ meldet — und nur dann. Wartet ein Agent auf eine Antwort von Ihnen, darf der Rechner schlafen. Der Bildschirm wird nicht wachgehalten.</source>
         <translation>The computer stays awake while at least one session reports “busy” — and only then. If an agent is waiting for your answer, the computer may sleep. The display is not kept awake.</translation>
     </message>
     <message>
@@ -628,7 +628,7 @@
     </message>
     <message>
         <location filename="../qml/prefs/CatEingabe.qml" line="27"/>
-        <source>Statt des Kontextmenüs — dieses erreichst du dann über die Menüleiste.</source>
+        <source>Statt des Kontextmenüs — dieses erreichen Sie dann über die Menüleiste.</source>
         <translation>Instead of the context menu — you can still reach it from the menu bar.</translation>
     </message>
     <message>
@@ -914,7 +914,7 @@
     </message>
     <message>
         <location filename="../qml/prefs/CatTerminal.qml" line="33"/>
-        <source>Wirkt auf alle Sessions; einzelne Fenster zoomst du mit Strg/Cmd +/−.</source>
+        <source>Wirkt auf alle Sessions; einzelne Fenster zoomen Sie mit Strg/Cmd +/−.</source>
         <translation>Applies to all sessions; zoom individual windows with Ctrl/Cmd +/−.</translation>
     </message>
     <message>
@@ -982,7 +982,7 @@
     </message>
     <message>
         <location filename="../qml/prefs/CatVault.qml" line="27"/>
-        <source>Noch kein Vault vorhanden. Lege ein Master-Passwort fest:</source>
+        <source>Noch kein Vault vorhanden. Legen Sie ein Master-Passwort fest:</source>
         <translation>No vault yet. Set a master password:</translation>
     </message>
     <message>
@@ -1125,7 +1125,7 @@
     </message>
     <message>
         <location filename="../qml/prefs/CatVerbindungen.qml" line="129"/>
-        <source>Noch keine Profile. Lege mit „Neu …“ eine wiederverwendbare Verbindung an.</source>
+        <source>Noch keine Profile. Legen Sie mit „Neu …“ eine wiederverwendbare Verbindung an.</source>
         <translation>No profiles yet. Create a reusable connection with “New …”.</translation>
     </message>
 </context>
@@ -1300,10 +1300,6 @@
         <translation type="vanished">Delete</translation>
     </message>
     <message>
-        <source>Noch keine Profile. Lege mit „Neu …“ eine wiederverwendbare Verbindung an.</source>
-        <translation type="vanished">No profiles yet. Create a reusable connection with “New …”.</translation>
-    </message>
-    <message>
         <location filename="../qml/Main.qml" line="4014"/>
         <source>Verbindungsprofil</source>
         <translation>Connection Profile</translation>
@@ -1431,7 +1427,7 @@ source .venv/bin/activate</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="237"/>
-        <source>Letztes Fenster: Schließen würde QTmux beenden — über MCP nicht möglich. Nutze close_pane/close_session oder beende die App in der Oberfläche.</source>
+        <source>Letztes Fenster: Schließen würde QTmux beenden — über MCP nicht möglich. Nutzen Sie close_pane/close_session, oder beenden Sie die App in der Oberfläche.</source>
         <translation>Last window: closing it would quit QTmux — not possible via MCP. Use close_pane/close_session, or quit the app from the user interface.</translation>
     </message>
     <message>
@@ -1443,7 +1439,7 @@ source .venv/bin/activate</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="270"/>
-        <source>assign_session entfällt im Window-Modell — nutze focus_session bzw. focus_window.</source>
+        <source>assign_session entfällt im Window-Modell — nutzen Sie focus_session bzw. focus_window.</source>
         <translation>assign_session is obsolete in the window model — use focus_session or focus_window.</translation>
     </message>
     <message>
@@ -2010,10 +2006,6 @@ Click: stop MCP server · Right-click: settings</translation>
         <translation type="vanished">The vault is locked. Enter the master password:</translation>
     </message>
     <message>
-        <source>Noch kein Vault vorhanden. Lege ein Master-Passwort fest:</source>
-        <translation type="vanished">No vault yet. Set a master password:</translation>
-    </message>
-    <message>
         <source>Master-Passwort</source>
         <translation type="vanished">Master password</translation>
     </message>
@@ -2385,10 +2377,6 @@ Version %1</translation>
     <message>
         <source>Agenten-Benachrichtigungen</source>
         <translation type="vanished">Agent notifications</translation>
-    </message>
-    <message>
-        <source>Wähle je Session, ob sie über Ereignisse der anderen Sessions benachrichtigt wird. Feinere Quell-Filter sind über die MCP-Schnittstelle verfügbar.</source>
-        <translation type="vanished">Choose for each session whether it is notified about events from the other sessions. Finer source filters are available via the MCP interface.</translation>
     </message>
     <message>
         <source>#%1 · %2</source>

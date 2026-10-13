@@ -862,7 +862,7 @@ QJsonObject McpServer::toolsList() const {
                       QJsonArray{"windowId"}));
     tools.append(tool("assign_session",
                       "VERALTET (Window-Modell, QTMUX-83): Es gibt kein „Session in ein Pane "
-                      "laden“ mehr — jede Session gehört fest zu einem Window/Pane. Nutze "
+                      "laden“ mehr — jede Session gehört fest zu einem Window/Pane. Nutzen Sie "
                       "focus_session (Window der Session aktivieren) bzw. focus_window. Der "
                       "Aufruf meldet nur noch einen Hinweis.",
                       QJsonObject{{"id", intProp("Session-ID")},
@@ -934,13 +934,13 @@ QJsonObject McpServer::toolsList() const {
                                   {"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
                       QJsonArray{"state"}));
     tools.append(tool("set_agent_session",
-                      "Meldet die Kennung DEINER laufenden Unterhaltung (z. B. die eigene "
-                      "Session-/Conversation-ID). QTmux legt sie an deinem Pane ab und startet "
-                      "dich beim naechsten Programmstart mit genau dieser Unterhaltung wieder - "
+                      "Meldet die Kennung IHRER laufenden Unterhaltung (z. B. die eigene "
+                      "Session-/Conversation-ID). QTmux legt sie an Ihrem Pane ab und startet "
+                      "Sie beim naechsten Programmstart mit genau dieser Unterhaltung wieder - "
                       "sofern der Anwender 'Unterhaltung fortsetzen: gemeldete Sitzung' gewaehlt "
-                      "hat. QTmux kann die ID NICHT selbst ermitteln (du bist ein fremdes "
-                      "Programm im PTY), und sie aendert sich bei /resume oder /clear: melde sie "
-                      "darum beim Start und nach jedem Wechsel erneut. Leerer Wert loescht sie.",
+                      "hat. QTmux kann die ID NICHT selbst ermitteln (Sie sind ein fremdes "
+                      "Programm im PTY), und sie aendert sich bei /resume oder /clear: melden Sie "
+                      "sie darum beim Start und nach jedem Wechsel erneut. Leerer Wert loescht sie.",
                       QJsonObject{{"ref", strProp("Kennung der Unterhaltung (undurchsichtige Zeichenkette)")},
                                   {"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
                       QJsonArray{"ref"}));

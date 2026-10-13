@@ -172,8 +172,8 @@
     </message>
     <message>
         <location filename="../qml/prefs/CatAgenten.qml" line="118"/>
-        <source>Der Agent öffnet beim Start seine eigene Auswahlliste; du entscheidest je Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur Claude Code eine solche Liste an.</source>
-        <translation>Der Agent öffnet beim Start seine eigene Auswahlliste; du entscheidest je Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur Claude Code eine solche Liste an.</translation>
+        <source>Der Agent öffnet beim Start seine eigene Auswahlliste; Sie entscheiden je Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur Claude Code eine solche Liste an.</source>
+        <translation>Der Agent öffnet beim Start seine eigene Auswahlliste; Sie entscheiden je Pane. Es wird nichts geraten, kostet aber einen Klick. Derzeit bietet nur Claude Code eine solche Liste an.</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatAgenten.qml" line="121"/>
@@ -411,8 +411,8 @@
     </message>
     <message>
         <location filename="../qml/prefs/CatAllgemein.qml" line="163"/>
-        <source>„System“ übernimmt, was das Betriebssystem vorgibt — im Firmennetz meist das Richtige, ohne dass du etwas eintragen musst. „Direkt“ umgeht den Proxy bewusst; das hilft, wenn eine hinterlegte Konfigurationsdatei nicht erreichbar ist. „Manuell“ nutzt die Angaben darunter.</source>
-        <translation>„System“ übernimmt, was das Betriebssystem vorgibt — im Firmennetz meist das Richtige, ohne dass du etwas eintragen musst. „Direkt“ umgeht den Proxy bewusst; das hilft, wenn eine hinterlegte Konfigurationsdatei nicht erreichbar ist. „Manuell“ nutzt die Angaben darunter.</translation>
+        <source>„System“ übernimmt, was das Betriebssystem vorgibt — im Firmennetz meist das Richtige, ohne dass Sie etwas eintragen müssen. „Direkt“ umgeht den Proxy bewusst; das hilft, wenn eine hinterlegte Konfigurationsdatei nicht erreichbar ist. „Manuell“ nutzt die Angaben darunter.</source>
+        <translation>„System“ übernimmt, was das Betriebssystem vorgibt — im Firmennetz meist das Richtige, ohne dass Sie etwas eintragen müssen. „Direkt“ umgeht den Proxy bewusst; das hilft, wenn eine hinterlegte Konfigurationsdatei nicht erreichbar ist. „Manuell“ nutzt die Angaben darunter.</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatAllgemein.qml" line="169"/>
@@ -572,8 +572,8 @@ ame</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatAllgemein.qml" line="245"/>
-        <source>Der Rechner bleibt wach, solange mindestens eine Session „beschäftigt“ meldet — und nur dann. Wartet ein Agent auf eine Antwort von dir, darf der Rechner schlafen. Der Bildschirm wird nicht wachgehalten.</source>
-        <translation>Der Rechner bleibt wach, solange mindestens eine Session „beschäftigt“ meldet — und nur dann. Wartet ein Agent auf eine Antwort von dir, darf der Rechner schlafen. Der Bildschirm wird nicht wachgehalten.</translation>
+        <source>Der Rechner bleibt wach, solange mindestens eine Session „beschäftigt“ meldet — und nur dann. Wartet ein Agent auf eine Antwort von Ihnen, darf der Rechner schlafen. Der Bildschirm wird nicht wachgehalten.</source>
+        <translation>Der Rechner bleibt wach, solange mindestens eine Session „beschäftigt“ meldet — und nur dann. Wartet ein Agent auf eine Antwort von Ihnen, darf der Rechner schlafen. Der Bildschirm wird nicht wachgehalten.</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatAllgemein.qml" line="249"/>
@@ -634,8 +634,8 @@ ame</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatEingabe.qml" line="27"/>
-        <source>Statt des Kontextmenüs — dieses erreichst du dann über die Menüleiste.</source>
-        <translation>Statt des Kontextmenüs — dieses erreichst du dann über die Menüleiste.</translation>
+        <source>Statt des Kontextmenüs — dieses erreichen Sie dann über die Menüleiste.</source>
+        <translation>Statt des Kontextmenüs — dieses erreichen Sie dann über die Menüleiste.</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatEingabe.qml" line="34"/>
@@ -920,8 +920,8 @@ ame</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatTerminal.qml" line="33"/>
-        <source>Wirkt auf alle Sessions; einzelne Fenster zoomst du mit Strg/Cmd +/−.</source>
-        <translation>Wirkt auf alle Sessions; einzelne Fenster zoomst du mit Strg/Cmd +/−.</translation>
+        <source>Wirkt auf alle Sessions; einzelne Fenster zoomen Sie mit Strg/Cmd +/−.</source>
+        <translation>Wirkt auf alle Sessions; einzelne Fenster zoomen Sie mit Strg/Cmd +/−.</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatTerminal.qml" line="41"/>
@@ -988,8 +988,8 @@ ame</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatVault.qml" line="27"/>
-        <source>Noch kein Vault vorhanden. Lege ein Master-Passwort fest:</source>
-        <translation>Noch kein Vault vorhanden. Lege ein Master-Passwort fest:</translation>
+        <source>Noch kein Vault vorhanden. Legen Sie ein Master-Passwort fest:</source>
+        <translation>Noch kein Vault vorhanden. Legen Sie ein Master-Passwort fest:</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatVault.qml" line="34"/>
@@ -1131,8 +1131,8 @@ ame</translation>
     </message>
     <message>
         <location filename="../qml/prefs/CatVerbindungen.qml" line="129"/>
-        <source>Noch keine Profile. Lege mit „Neu …“ eine wiederverwendbare Verbindung an.</source>
-        <translation>Noch keine Profile. Lege mit „Neu …“ eine wiederverwendbare Verbindung an.</translation>
+        <source>Noch keine Profile. Legen Sie mit „Neu …“ eine wiederverwendbare Verbindung an.</source>
+        <translation>Noch keine Profile. Legen Sie mit „Neu …“ eine wiederverwendbare Verbindung an.</translation>
     </message>
 </context>
 <context>
@@ -1306,10 +1306,6 @@ ame</translation>
         <translation type="vanished">Löschen</translation>
     </message>
     <message>
-        <source>Noch keine Profile. Lege mit „Neu …“ eine wiederverwendbare Verbindung an.</source>
-        <translation type="vanished">Noch keine Profile. Lege mit „Neu …“ eine wiederverwendbare Verbindung an.</translation>
-    </message>
-    <message>
         <location filename="../qml/Main.qml" line="4014"/>
         <source>Verbindungsprofil</source>
         <translation>Verbindungsprofil</translation>
@@ -1437,8 +1433,8 @@ source .venv/bin/activate</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="237"/>
-        <source>Letztes Fenster: Schließen würde QTmux beenden — über MCP nicht möglich. Nutze close_pane/close_session oder beende die App in der Oberfläche.</source>
-        <translation>Letztes Fenster: Schließen würde QTmux beenden — über MCP nicht möglich. Nutze close_pane/close_session oder beende die App in der Oberfläche.</translation>
+        <source>Letztes Fenster: Schließen würde QTmux beenden — über MCP nicht möglich. Nutzen Sie close_pane/close_session, oder beenden Sie die App in der Oberfläche.</source>
+        <translation>Letztes Fenster: Schließen würde QTmux beenden — über MCP nicht möglich. Nutzen Sie close_pane/close_session, oder beenden Sie die App in der Oberfläche.</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="249"/>
@@ -1449,8 +1445,8 @@ source .venv/bin/activate</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="270"/>
-        <source>assign_session entfällt im Window-Modell — nutze focus_session bzw. focus_window.</source>
-        <translation>assign_session entfällt im Window-Modell — nutze focus_session bzw. focus_window.</translation>
+        <source>assign_session entfällt im Window-Modell — nutzen Sie focus_session bzw. focus_window.</source>
+        <translation>assign_session entfällt im Window-Modell — nutzen Sie focus_session bzw. focus_window.</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="274"/>
@@ -2016,10 +2012,6 @@ Klick: MCP-Server stoppen · Rechtsklick: Einstellungen</translation>
         <translation type="vanished">Der Vault ist gesperrt. Master-Passwort eingeben:</translation>
     </message>
     <message>
-        <source>Noch kein Vault vorhanden. Lege ein Master-Passwort fest:</source>
-        <translation type="vanished">Noch kein Vault vorhanden. Lege ein Master-Passwort fest:</translation>
-    </message>
-    <message>
         <source>Master-Passwort</source>
         <translation type="vanished">Master-Passwort</translation>
     </message>
@@ -2401,10 +2393,6 @@ Version %1</translation>
     <message>
         <source>Agenten-Benachrichtigungen</source>
         <translation type="vanished">Agenten-Benachrichtigungen</translation>
-    </message>
-    <message>
-        <source>Wähle je Session, ob sie über Ereignisse der anderen Sessions benachrichtigt wird. Feinere Quell-Filter sind über die MCP-Schnittstelle verfügbar.</source>
-        <translation type="vanished">Wähle je Session, ob sie über Ereignisse der anderen Sessions benachrichtigt wird. Feinere Quell-Filter sind über die MCP-Schnittstelle verfügbar.</translation>
     </message>
     <message>
         <source>#%1 · %2</source>

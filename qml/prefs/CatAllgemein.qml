@@ -161,8 +161,8 @@ CatPage {
                 // Warum „System“ die Vorgabe ist, gehört hierhin: Im Firmenumfeld
                 // steht der Proxy meist schon per WPAD/Systemeinstellung.
                 description: qsTr("„System“ übernimmt, was das Betriebssystem vorgibt — im "
-                                + "Firmennetz meist das Richtige, ohne dass du etwas eintragen "
-                                + "musst. „Direkt“ umgeht den Proxy bewusst; das hilft, wenn eine "
+                                + "Firmennetz meist das Richtige, ohne dass Sie etwas eintragen "
+                                + "müssen. „Direkt“ umgeht den Proxy bewusst; das hilft, wenn eine "
                                 + "hinterlegte Konfigurationsdatei nicht erreichbar ist. „Manuell“ "
                                 + "nutzt die Angaben darunter.")
                 SegmentedControl {
@@ -244,7 +244,7 @@ CatPage {
                 description: page.host.sessions.sleepInhibitSupported()
                              ? qsTr("Der Rechner bleibt wach, solange mindestens eine Session "
                                   + "„beschäftigt“ meldet — und nur dann. Wartet ein Agent auf eine "
-                                  + "Antwort von dir, darf der Rechner schlafen. Der Bildschirm wird "
+                                  + "Antwort von Ihnen, darf der Rechner schlafen. Der Bildschirm wird "
                                   + "nicht wachgehalten.")
                              : qsTr("Auf dieser Plattform noch nicht verfügbar.")
                 rowEnabled: page.host.sessions.sleepInhibitSupported()
