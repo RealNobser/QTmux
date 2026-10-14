@@ -757,7 +757,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-146** (Update-Dialog ohne Rechtsklick-Rat, 2026-10-14 dual angelegt, In Arbeit; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+**QTMUX-146** (Update-Dialog ohne Rechtsklick-Rat + Hub-`quarantineState`, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
@@ -797,7 +797,7 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-🔄 **2026-10-14: QTMUX-146 in Arbeit (Orchestrator-Auftrag, Owner-Freigabe).** Der
+✅ **2026-10-14: QTMUX-146 gepusht, unreleased (Orchestrator-Auftrag, Owner-Freigabe).** Der
 Update-Dialog riet unter macOS zu „Rechtsklick → „Öffnen““ — seit macOS 15 wirkungslos, und
 der Update-Download trägt gemessen keine Quarantäne (Messung + Wächter: Feature-Referenz
 „Online-Update“). Neu: `UpdateViewModel::installHint` / `qtmux::updatehint` sagt je Plattform,
@@ -806,8 +806,10 @@ Wächter in `tst_updateviewmodel` (6 neue Fälle) mit sechs Mutationsproben rot.
 auf `aa73f21` (MAC-94) vendiert: neu `Quarantine.{hpp,cpp}`, `appupdate::quarantineState`
 trägt die Messung (`Unreadable` → keine Abhilfe, aber `qWarning`); Wächter 19/8/5/1,
 UPSTREAM.md-Pin + Abgleich. Frische Bäume `build/w146b` (Debug) + `build/w146r2` (Release)
-je 43/43. **Offen bis zum Abschluss:** EIN Push (vorher CI-Messung + `MELDUNG QTMUX [ANSAGE
-CI]`), CI-Jobs einzeln lesen, Jira dual Done. Bilder vorher/nachher
+je 43/43. Gepusht 0931170..d1ad0d3 (10:39:39, Messung der vier Repos davor angesagt); CI
+`38536691210` macOS 43/43, Windows 41/41, Linux 43/43 (je Job: Checkout d1ad0d3,
+`Quarantine.cpp` gebaut, `test_updateviewmodel` Passed); Jira QTMUX-146 dual Done am Ticket
+gelesen. Bilder vorher/nachher
 liegen außerhalb des Repos (Pfad in der Meldung an den Orchestrator). Mit dem nächsten Release
 in der Benutzerdoku (dual) den Satz „Der Dialog blendet diesen Hinweis von sich aus ein“
 ersetzen — er beschreibt bis dahin korrekt 1.9.8.
