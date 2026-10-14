@@ -10,10 +10,9 @@ import QTmux
 // 🔑 Kein `standardButtons`: die Beschriftungen hängen am Zustand („Herunterladen"
 // ist etwas anderes als „Installieren …"), und „Überspringen" hat in Qts
 // Standardsatz kein Gegenstück.
-// 🔑 Der Hinweis auf SmartScreen/Gatekeeper steht FEST im Dialog, nicht nur bei
-// Fehlern: Die Pakete sind nicht signiert/notarisiert (Early-Adopter), und die
-// Warnung des Betriebssystems erscheint erst NACH dem Download — wer sie dort
-// zum ersten Mal sieht, hält den Download für kompromittiert.
+// 🔑 Unter den Knöpfen steht, was „Installieren …“ auf diesem System tut
+// (QTMUX-146). Bis 1.9.8 stand dort fest ein Gatekeeper-Rat — gemessen trägt der
+// Update-Download aber gar keine Quarantäne; Begründung in UpdateViewModel.h.
 AppDialog {
     id: dlg
     width: 540
@@ -188,25 +187,20 @@ AppDialog {
             text: Updates.lastError
         }
 
-        // --- Hinweis auf die Betriebssystem-Warnung -------------------------------
+        // --- Was „Installieren …“ tut (QTMUX-146) --------------------------------
+        // Der Text kommt aus dem ViewModel (`updatehint`): je Plattform, was der
+        // Knopf tut, und „Dennoch öffnen“ NUR, wenn die geladene Datei die
+        // macOS-Quarantäne gemessen trägt. Ein Rechtsklick-Rat steht hier nie
+        // wieder — Begründung und Messung in UpdateViewModel.h.
         Label {
+            objectName: "updateInstallHint"
             Layout.fillWidth: true
-            visible: Updates.state === dlg.stAvailable || Updates.state === dlg.stReady
+            visible: (Updates.state === dlg.stAvailable || Updates.state === dlg.stReady)
+                     && Updates.installHint !== ""
             wrapMode: Text.WordWrap
             color: Theme.textDim
             font.pixelSize: 11
-            text: Qt.platform.os === "windows"
-                  ? qsTr("Hinweis: Das Paket ist nicht signiert. Windows SmartScreen meldet "
-                       + "beim Start „Der Computer wurde geschützt“ — über „Weitere "
-                       + "Informationen“ → „Trotzdem ausführen“ fortfahren. QTmux prüft den "
-                       + "Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.")
-                  : Qt.platform.os === "osx"
-                  ? qsTr("Hinweis: Das Paket ist nicht notariell beglaubigt. macOS Gatekeeper "
-                       + "verweigert den ersten Start — die App im Finder mit Rechtsklick → "
-                       + "„Öffnen“ starten. QTmux prüft den Download selbst über eine "
-                       + "Ed25519-Signatur und eine SHA-256-Summe.")
-                  : qsTr("Hinweis: Das Paket ist nicht signiert. QTmux prüft den Download "
-                       + "selbst über eine Ed25519-Signatur und eine SHA-256-Summe.")
+            text: Updates.installHint
         }
 
         // --- Knöpfe ---------------------------------------------------------------

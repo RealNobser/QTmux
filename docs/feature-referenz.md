@@ -966,6 +966,40 @@ Entwickler-Build, gibt es nichts zu ersetzen. Der Dialog blendet „Installieren
 und nennt stattdessen den Pfad der geprüften Datei (`canLaunchInstaller()`). Aufgefallen ist
 das erst am **Linux-Build** — auf macOS/Windows gibt es den Fall nicht.
 
+🔑 **Der Update-Download trägt KEINE Quarantäne — darum kein Gatekeeper-Rat im Dialog
+(QTMUX-146, gemessen 2026-10-14).** Bis 1.9.8 riet der Dialog fest zu „Rechtsklick →
+„Öffnen““. Das war doppelt falsch: Seit macOS 15 gibt der Rechtsklick nichts mehr frei (nur
+Systemeinstellungen › Datenschutz & Sicherheit › „Dennoch öffnen“), und auf diesem Weg gibt es
+nichts freizugeben. Download-Weg: `UpdateViewModel::download()` →
+`appupdate::UpdateChecker::downloadArtifact` (vendiert, schreibt per `QFile`), kein eigener
+Weg in C++/QML. Gemessen mit einem Messprogramm auf genau diesem Code:
+
+| Fall | Quelle | geladene Datei |
+|---|---|---|
+| `file://`, Quarantäne an der Quelle gesetzt | `com.apple.quarantine` + `com.apple.provenance` | nur `com.apple.provenance` |
+| HTTPS vom Produktions-Update-Server (1.9.8-DMG, sha256 = Manifest) | — | nur `com.apple.provenance` |
+| App per `ditto` aus dem eingehängten DMG kopiert | — | 0 von 2538 Einträgen mit Quarantäne |
+| **Positivkontrolle:** dasselbe DMG mit gesetzter Quarantäne, eingehängt, App per `ditto` kopiert | Quarantäne | **2538 von 2538** mit Quarantäne |
+
+⚠️ **Im eingehängten Volume selbst ist `xattr -r` blind** — es zählte 0 auch beim
+quarantänierten DMG (die Markierung hängt am Mount, nicht an den Dateien). Tragfähig ist nur
+die Zählung NACH dem Kopieren. Am lebenden Objekt bestätigt: alle sieben DMGs, die der
+Updater einer echten Installation über die Versionen 1.8.1…1.9.8 geladen hatte, tragen keine
+Quarantäne, die installierte App ebenso wenig. Die Info.plist hat kein
+`LSFileQuarantineEnabled`, das Bundle keine Sandbox-Entitlements — sonst setzte macOS die
+Markierung an jede geschriebene Datei. Der Finder-Zug in „Programme“ selbst ist nicht
+automatisierbar (kein Bedienungshilfen-Recht); `ditto` ist das Ersatzmaß.
+Deshalb sagt der Hinweis jetzt, was „Installieren …“ je Plattform tut (`open <dmg>` ·
+`msiexec /i` eines `perMachine`-MSI, also UAC mit unbekanntem Herausgeber · Selbstersetzung
+des AppImage mit `.old` daneben), und nennt „Dennoch öffnen“ nur, wenn die geladene Datei die
+Quarantäne an der Datei gemessen trägt (`updatehint::afterDownload`). Windows: `QFile` schreibt
+keinen `Zone.Identifier`, SmartScreen bewertet nur Dateien mit dieser Markierung — abgeleitet,
+nicht unter Windows gemessen. Wächter in `tst_updateviewmodel`: kein Rechtsklick-Rat in den
+lebenden Katalogeinträgen beider Sprachen, alle übersetzt; Abhilfe genau bei Quarantäne
+(echtes xattr auf macOS, Probe auf jedem Runner); die Messung selbst läuft bei jedem
+macOS-Lauf mit (Quelle quarantäniert, Download nicht). Mutationsprobe: alter Satz zurück →
+rot; Quarantäne immer wahr → rot; Abhilfe nie angehängt → rot.
+
 🔑 **Signierte Fixtures brauchen `-text` in `.gitattributes`.** Auf der Windows-Maschine
 (`core.autocrlf=true`) machte git aus 935 Byte `manifest.json` 966 Byte — 31 eingefügte CR.
 Die Ed25519-Signatur steht über die **exakten** Bytes, also fiel `test_updateviewmodel` mit

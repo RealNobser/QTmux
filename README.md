@@ -180,9 +180,12 @@ Early-Adopter-Stand.
 | Windows | [`installer\build-msi.ps1`](installer/build-msi.ps1) `-Version 1.9.8` | `dist\QTmux-1.9.8-win64.msi` (+ portables ZIP) |
 | Linux | [`installer/build-appimage.sh`](installer/build-appimage.sh) `1.9.8` | `dist/QTmux-1.9.8-x86_64.AppImage` |
 
-**macOS (DMG):** Release-Build → `macdeployqt` → Ad-hoc-Signatur → `hdiutil`. Nicht
-notarisiert, daher beim ersten Start Rechtsklick → „Öffnen" bzw.
-`xattr -dr com.apple.quarantine /Applications/QTmux.app`. Läuft aus dem Zielverzeichnis
+**macOS (DMG):** Release-Build → `macdeployqt` → Signatur mit eigener Identität → `hdiutil`.
+Nicht notarisiert: Wurde das DMG per Browser geladen, lässt sich QTmux beim ersten Start erst
+über Systemeinstellungen › Datenschutz & Sicherheit › „Dennoch öffnen" starten (seit macOS 15
+hilft Rechtsklick → „Öffnen" nicht mehr), alternativ
+`xattr -dr com.apple.quarantine /Applications/QTmux.app`. Updates über den eingebauten
+Update-Dialog sind davon nicht betroffen — sie tragen keine Quarantäne. Läuft aus dem Zielverzeichnis
 bereits eine Instanz, lenkt `QTMUX_BUILD_DIR` den Build um.
 
 **Windows (MSI):** braucht die **freie** WiX-CLI als dotnet-Tool:
@@ -376,9 +379,11 @@ early-adopter state.
 | Windows | [`installer\build-msi.ps1`](installer/build-msi.ps1) `-Version 1.9.8` | `dist\QTmux-1.9.8-win64.msi` (+ portable ZIP) |
 | Linux | [`installer/build-appimage.sh`](installer/build-appimage.sh) `1.9.8` | `dist/QTmux-1.9.8-x86_64.AppImage` |
 
-**macOS (DMG):** release build → `macdeployqt` → ad-hoc signing → `hdiutil`. Not notarized,
-so on first launch use right-click → "Open", or
-`xattr -dr com.apple.quarantine /Applications/QTmux.app`. If an instance is already running
+**macOS (DMG):** release build → `macdeployqt` → signing with a self-issued identity →
+`hdiutil`. Not notarized: if the DMG was downloaded with a browser, the first launch needs
+System Settings › Privacy & Security › "Open Anyway" (since macOS 15, right-click → "Open"
+no longer helps), or `xattr -dr com.apple.quarantine /Applications/QTmux.app`. Updates
+through the built-in update dialog are not affected — they carry no quarantine. If an instance is already running
 from the target build directory, `QTMUX_BUILD_DIR` redirects the build.
 
 **Windows (MSI):** requires the **free** WiX CLI as a dotnet tool:

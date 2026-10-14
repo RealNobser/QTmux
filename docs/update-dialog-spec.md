@@ -134,7 +134,7 @@ erscheinen und verschwinden, sie tauschen nie die Plätze:
 | 7 | **Fortschritt**: Balken + Zeile darunter, Abstand 4 px | 11 px | `textDim` |
 | 8 | **„kann sich nicht selbst ersetzen"** | 12 px | `textDim` |
 | 9 | **Fehlertext** | 12 px | `danger` (bis QTMUX-142 `#e5534b`) |
-| 10 | **Betriebssystem-Hinweis** | 11 px | `textDim` |
+| 10 | **Installations-Hinweis** (QTMUX-146) | 11 px | `textDim` |
 | 11 | **Knopfreihe**, Abstand 8 px, 4 px nach oben | — | — |
 
 Alle Textblöcke brechen um (`WordWrap`) und füllen die Breite.
@@ -257,7 +257,7 @@ Maßstabstreu in der Reihenfolge, nicht in den Pixeln. `≡≡≡` = mehrzeilige
 │ │ - MCP-Server im Netzwerk: einstellbare Bind-Adresse …  ↕│ │
 │ └────────────────────────────────────────────────────────┘ │
 │                                                            │
-│ ≡ Hinweis: Das Paket ist nicht notariell beglaubigt. …    ≡│  11 px gedämpft
+│ ≡ „Installieren …“ öffnet das Disk-Image. Ziehen Sie …    ≡│  11 px gedämpft
 │                                                            │
 │ [ Herunterladen ]      [ Version überspringen ] [ Später ] │
 └────────────────────────────────────────────────────────────┘
@@ -283,7 +283,7 @@ Maßstabstreu in der Reihenfolge, nicht in den Pixeln. `≡≡≡` = mehrzeilige
 │ QTmux 1.8.1 ist verfügbar — installiert ist 1.8.0.         │
 │ ██████████████████████████████████████████████████████████ │  voll
 │ Heruntergeladen und geprüft: /Users/…/QTmux-1.8.1-mac.dmg  │  Mitte elidiert
-│ ≡ Hinweis: Das Paket ist nicht notariell beglaubigt. …    ≡│
+│ ≡ „Installieren …“ öffnet das Disk-Image. Ziehen Sie …    ≡│  + Abhilfe nur bei Quarantäne
 │ [ Installieren … ]                            [ Später ]   │
 ```
 
@@ -366,27 +366,25 @@ Größeneinheiten: **%1 MB** / **%1 kB** / **%1 Bytes** (EN: `%1 bytes`).
 | fertig | Heruntergeladen und geprüft: %1 | Downloaded and verified: %1 |
 | nicht startbar | QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die Datei oben ist geprüft und kann von Hand installiert werden. | QTmux is not running from an AppImage and therefore cannot replace itself. The file above has been verified and can be installed manually. |
 
-### Betriebssystem-Hinweis (fest sichtbar in `Available` und `Ready`)
+### Hinweis „Was ‚Installieren …‘ tut“ (sichtbar in `Available` und `Ready`, QTMUX-146)
 
-**Windows** — DE: Hinweis: Das Paket ist nicht signiert. Windows SmartScreen meldet beim
-Start „Der Computer wurde geschützt" — über „Weitere Informationen" → „Trotzdem ausführen"
-fortfahren. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine
-SHA-256-Summe.
-EN: Note: the package is not signed. Windows SmartScreen will report "Windows protected your
-PC" — continue via "More info" → "Run anyway". QTmux verifies the download itself with an
-Ed25519 signature and a SHA-256 checksum.
+Der Text kommt aus `UpdateViewModel::installHint` (Bausteine in `qtmux::updatehint`). Er
+besteht aus dem Satz der Plattform, dem Prüfsatz und — nur unter macOS und nur, wenn die
+**geladene Datei** `com.apple.quarantine` gemessen trägt — der Abhilfe.
 
-**macOS** — DE: Hinweis: Das Paket ist nicht notariell beglaubigt. macOS Gatekeeper
-verweigert den ersten Start — die App im Finder mit Rechtsklick → „Öffnen" starten. QTmux
-prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.
-EN: Note: the package is not notarised. macOS Gatekeeper will refuse the first launch —
-right-click the app in Finder and choose "Open". QTmux verifies the download itself with an
-Ed25519 signature and a SHA-256 checksum.
+| Baustein | DE | EN |
+|---|---|---|
+| macOS | „Installieren …“ öffnet das Disk-Image. Ziehen Sie QTmux dort in den Ordner „Programme“. | “Install …” opens the disk image. Drag QTmux into the Applications folder there. |
+| Windows | „Installieren …“ startet das Windows-Installationsprogramm. Windows fragt nach Administratorrechten und nennt den Herausgeber „Unbekannt“, weil das Paket nicht signiert ist. | “Install …” starts the Windows installer. Windows asks for administrator rights and names the publisher “Unknown” because the package is not signed. |
+| Linux, aus AppImage | „Installieren …“ ersetzt das AppImage, aus dem QTmux gestartet wurde; die bisherige Fassung bleibt als „.old“ daneben liegen. Starten Sie QTmux danach neu. | “Install …” replaces the AppImage QTmux was started from; the previous version stays next to it as “.old”. Restart QTmux afterwards. |
+| Linux, ohne AppImage | QTmux läuft nicht aus einem AppImage. Die geprüfte Datei installieren Sie nach dem Herunterladen von Hand. | QTmux is not running from an AppImage. After the download, install the verified file by hand. |
+| Prüfsatz (immer) | QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe. | QTmux verifies the download itself with an Ed25519 signature and a SHA-256 checksum. |
+| Abhilfe (nur macOS + Quarantäne) | Falls sich „QTmux“ nicht öffnen lässt, klicken Sie unter Systemeinstellungen › Datenschutz & Sicherheit auf „Dennoch öffnen“. | If “QTmux” cannot be opened, click “Open Anyway” under System Settings › Privacy & Security. |
 
-**Linux/übrige** — DE: Hinweis: Das Paket ist nicht signiert. QTmux prüft den Download selbst
-über eine Ed25519-Signatur und eine SHA-256-Summe.
-EN: Note: the package is not signed. QTmux verifies the download itself with an Ed25519
-signature and a SHA-256 checksum.
+⚠️ **Kein Rechtsklick-Rat** — bis 1.9.8 stand hier „die App im Finder mit Rechtsklick →
+„Öffnen“ starten“. Seit macOS 15 gibt dieser Weg nichts mehr frei, und der Update-Download
+trägt ohnehin keine Quarantäne (Begründung §9.3). Der Wächter in `tst_updateviewmodel`
+lehnt jeden solchen Satz im Katalog ab.
 
 ### Knöpfe
 
@@ -518,17 +516,30 @@ Fehlerpfad für beide Wege wäre die naheliegende und falsche Vereinfachung.
 unnötiger Arbeit. Deshalb steht im Einstellungstext, was der Schalter *tut*, nicht was er
 verspricht.
 
-### 9.3 Der Betriebssystem-Hinweis steht FEST, nicht nur im Fehlerfall
+### 9.3 Der Hinweis sagt, was „Installieren …“ tut — keine Sperre, die es nicht gibt (QTMUX-146)
 
-Die Pakete sind nicht signiert bzw. nicht notarisiert (Early-Adopter). Die Warnung des
-Betriebssystems erscheint erst **nach** dem Download — wer sie dort zum ersten Mal sieht,
-hält den Download für kompromittiert. Deshalb steht der Hinweis schon **vor** dem
-Herunterladen da, zusammen mit der Gegenaussage, dass QTmux **selbst** Signatur und Prüfsumme
-verifiziert. Der Anwender soll wissen: Das Betriebssystem meckert, aber geprüft ist es
-trotzdem.
+Bis 1.9.8 stand hier ein **fester** Betriebssystem-Hinweis („Gatekeeper verweigert den ersten
+Start — mit Rechtsklick → „Öffnen“ starten“, Windows entsprechend SmartScreen). Die Annahme
+dahinter: Die Warnung des Betriebssystems erscheint nach dem Download, und wer sie dort zum
+ersten Mal sieht, hält den Download für kompromittiert.
 
-Fällt weg, sobald die Pakete signiert und notarisiert sind — dann aber vollständig, nicht
-halb.
+**Gemessen 2026-10-14 trifft die Annahme den Update-Weg nicht:** Gatekeepers
+Erststart-Prüfung hängt an `com.apple.quarantine`, und eine Datei, die der vendierte
+Downloader schreibt, trägt dieses Attribut nicht — über `file://` mit gesetzter Quarantäne
+an der Quelle ebenso wie per HTTPS vom echten Update-Server, und auch die per `ditto` aus dem
+eingehängten DMG kopierte App nicht (Messweg und Zahlen: Feature-Referenz, „Online-Update“).
+Dazu kommt: Seit macOS 15 gibt Rechtsklick › Öffnen eine quarantänierte App nicht mehr frei;
+es hilft nur Systemeinstellungen › Datenschutz & Sicherheit › „Dennoch öffnen“.
+
+Deshalb sagt der Hinweis jetzt, was der Knopf **tut**, und nennt die Abhilfe nur, wenn die
+geladene Datei die Quarantäne an der Datei gemessen trägt. Der Prüfsatz (Signatur +
+Prüfsumme) bleibt — er beschreibt, was QTmux wirklich tut.
+Windows: Der Downloader schreibt per `QFile` keinen `Zone.Identifier`; SmartScreen bewertet
+nur Dateien mit dieser Markierung und bleibt daher außen vor (abgeleitet, nicht unter Windows
+gemessen). Was bleibt, ist die UAC-Rückfrage des `perMachine`-MSI mit unbekanntem Herausgeber.
+
+🔑 Für den Nachbau: Die Messung gehört **je Produkt** wiederholt — ein Produkt mit eigenem
+Download-Weg oder `LSFileQuarantineEnabled` in der Info.plist bekäme die Quarantäne sehr wohl.
 
 ### 9.4 Geführte Installation statt stillem Selbsttausch
 

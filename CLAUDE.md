@@ -757,7 +757,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-145** (deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+**QTMUX-146** (Update-Dialog ohne Rechtsklick-Rat, 2026-10-14 dual angelegt, In Arbeit; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
@@ -797,7 +797,22 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-Stand **2026-10-13: QTMUX-145** (deutsche Oberfläche siezt + Wächter; Proxy-Art-Auswahl
+🔄 **2026-10-14: QTMUX-146 in Arbeit (Orchestrator-Auftrag, Owner-Freigabe).** Der
+Update-Dialog riet unter macOS zu „Rechtsklick → „Öffnen““ — seit macOS 15 wirkungslos, und
+der Update-Download trägt gemessen keine Quarantäne (Messung + Wächter: Feature-Referenz
+„Online-Update“). Neu: `UpdateViewModel::installHint` / `qtmux::updatehint` sagt je Plattform,
+was „Installieren …“ tut, „Dennoch öffnen“ nur bei gemessener Quarantäne der geladenen Datei;
+Wächter in `tst_updateviewmodel` (5 neue Fälle) mit drei Mutationsproben rot; frische Bäume
+`build/w146` (Debug) + `build/w146r` (Release) je 43/43. **Offen:** Der Hub-Worker baut die
+Quarantäne-Prüfung in `MacPCAN/src/update/` — nach dessen Push (Hash kommt vom Orchestrator)
+`tools/check-updater-sync.sh --update`, UPSTREAM.md-Pin + Abgleich-Absatz, die lokale
+`getxattr`-Zeile in `updatehint::carriesQuarantine` durch die Hub-Funktion ersetzen, dann EIN
+Push (vorher CI-Messung + `MELDUNG QTMUX [ANSAGE CI]`) und Jira dual Done. Bilder vorher/nachher
+liegen außerhalb des Repos (Pfad in der Meldung an den Orchestrator). Mit dem nächsten Release
+in der Benutzerdoku (dual) den Satz „Der Dialog blendet diesen Hinweis von sich aus ein“
+ersetzen — er beschreibt bis dahin korrekt 1.9.8.
+
+Davor: Stand **2026-10-13: QTMUX-145** (deutsche Oberfläche siezt + Wächter; Proxy-Art-Auswahl
 fiel zur Caret-Pille zusammen → `AppComboBox` misst den längsten Eintrag + `test_combowidth`)
 gepusht und **unreleased**; CI-Lauf `38486777601` grün (Windows 41/41, macOS/Linux 43/43, die
 sechs neuen Tests je Job als `Passed` gelesen), Jira QTMUX-145 dual Done am Ticket gelesen.
@@ -910,22 +925,19 @@ Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, p
    `Mode::System` an (`QLocale::system()`, EN/DE/SV); QTmux kann nur fest Deutsch/Englisch.
    RAFTNG nennt es ausdrücklich eine **Produktentscheidung**, keine technische, und liefert
    auf Zuruf. Nicht eigenmächtig übernommen.
-2. **Produktivinstanz auf 1.9.8 heben?** Sie läuft auf `1.9.7+961d262` (2026-10-10 per
-   Inode-Bindung gemessen, s. „Zustand" unten — der Owner hat selbst auf 1.9.7 gehoben) und
-   trägt die laufende Orchestrierung — ein Update opfert die Terminal-Sessions. Der
-   Online-Update-Dialog bietet 1.9.8 von selbst an; der Zeitpunkt ist Owner-Sache. Dieses
-   Update ist zugleich der Beleg, ob die TCC-Ordnerdialoge mit der festen Signatur
-   ausbleiben (Erwartung: ja; kommen sie, steht eine zugreifende Agent-Session bis zur
-   Antwort still — QTMUX-139 meldet das).
+2. ✅ **Produktivinstanz ist auf 1.9.8** — der Owner hat über den eingebauten Updater
+   gehoben (DMG geladen 2026-10-11 11:12, Binary-ctime 11:13; s. „Zustand" unten). Offen
+   bleibt nur die Frage, ob dabei die TCC-Ordnerdialoge ausblieben — das weiß allein der
+   Owner (Erwartung: ja, die DR ist in 1.9.7 und 1.9.8 identisch gemessen).
    (Der frühere Punkt „GitHub-Release v1.9.1 nachziehen?" ist erledigt: am 2026-08-18
    nachgezogen, Historie lückenlos — s. „Ausgeliefert" oben.)
 
 #### Zustand, der nicht aus Code/Git hervorgeht
 
 - ⚠️ **Die Produktivinstanz läuft aus `/Applications/QTmux.app`** (Port 7345,
-  **`1.9.7+961d262`** — gemessen 2026-10-10 OHNE MCP-Zugriff: Binary per `strings`, und
+  **`1.9.8+58931b0`** — gemessen 2026-10-14 OHNE MCP-Zugriff: Binary per `strings`, und
   der laufende Prozess hat per `lsof -p <pid>` genau dessen Inode geladen, Prozessstart
-  10.10. 20:45 nach dem Stromausfall; der Anker „1.9.6" vom 07.10. war damit veraltet). Sie trägt
+  13.10. 10:33; der Anker „1.9.7" vom 10.10. war damit veraltet). Sie trägt
   die laufende Orchestrierung — nie hineinbauen/updaten, ohne dass der Owner die
   Terminal-Sessions opfern will.
   🔑 Vor jeder Diagnose an ihr die Build-ID gegen `git log` halten; PID über

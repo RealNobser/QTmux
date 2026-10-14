@@ -23,17 +23,87 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileInfo>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QUrl>
+#include <QXmlStreamReader>
 
 #include "UpdateViewModel.h"
+
+#if defined(Q_OS_MACOS)
+#include <sys/xattr.h>
+#endif
 
 using namespace qtmux;
 
 namespace {
+
+// QTMUX-146: Ein Rat, die App per Rechtsklick/Kontextmenü zu öffnen, darf in
+// keinem Text des Update-Dialogs mehr stehen — seit macOS 15 gibt dieser Weg
+// nichts mehr frei, und der Update-Download trägt gemessen keine Quarantäne.
+const QRegularExpression kRightClickAdvice(
+    QStringLiteral("right[- ]?click|rechte[nr]? Maustaste|Rechtsklick|context menu|"
+                   "Kontextmen|choose “Open”|choose \"Open\"|„Öffnen“"),
+    QRegularExpression::CaseInsensitiveOption);
+
+// Jede <source>/<translation> der LEBENDEN Einträge in den Kontexten des
+// Update-Dialogs einer .ts-Datei — ALLE Plattformzweige, gleich auf welchem
+// Runner der Test läuft. `vanished`/`obsolete` sind tot (QTmux behält sie als
+// Übersetzungsvorrat) und erscheinen nie in der Oberfläche; ein Satz, der wieder
+// in den Quelltext kommt, wird durch lupdate wieder lebendig und damit geprüft.
+struct TsTexts {
+    QStringList texts;
+    int messages = 0;
+    QStringList unfinished;   // Quelltexte mit leerer oder unfertiger Übersetzung
+};
+
+TsTexts updateDialogTexts(const QString &tsPath) {
+    TsTexts out;
+    QFile f(tsPath);
+    if (!f.open(QIODevice::ReadOnly)) return out;
+    QXmlStreamReader xml(&f);
+    QString context, source;
+    bool inMessage = false;
+    while (!xml.atEnd()) {
+        xml.readNext();
+        if (!xml.isStartElement()) continue;
+        if (xml.name() == QLatin1String("name")) {
+            context = xml.readElementText();
+        } else if (xml.name() == QLatin1String("message")) {
+            inMessage = context == QLatin1String("UpdateDialog")
+                        || context == QLatin1String("qtmux::UpdateViewModel");
+            source.clear();
+        } else if (inMessage && xml.name() == QLatin1String("source")) {
+            source = xml.readElementText();
+        } else if (inMessage && xml.name() == QLatin1String("translation")) {
+            const QString type = xml.attributes().value(QLatin1String("type")).toString();
+            const QString text = xml.readElementText(QXmlStreamReader::IncludeChildElements);
+            if (type == QLatin1String("vanished") || type == QLatin1String("obsolete"))
+                continue;
+            ++out.messages;
+            out.texts << source << text;
+            if (type == QLatin1String("unfinished") || text.isEmpty())
+                out.unfinished << source;
+        }
+    }
+    return out;
+}
+
+// Ein Fixture-Baum zum Mitnehmen: Kopie von `good`, damit der Test an der QUELLE
+// ein Attribut setzen kann, ohne den committeten Baum anzufassen.
+bool copyTree(const QString &from, const QString &to) {
+    QDirIterator it(from, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QString src = it.next();
+        const QString dst = to + src.mid(from.size());
+        if (!QDir().mkpath(QFileInfo(dst).path()) || !QFile::copy(src, dst)) return false;
+    }
+    return true;
+}
 
 // Dreht den Event-Loop, bis `done` kippt oder die Wache zuschlägt.
 void spinUntil(bool &done, int guardMs = 5000) {
@@ -632,6 +702,168 @@ private slots:
         QCOMPARE(spy.count(), 1);
         QCOMPARE(spy.at(0).at(0).toString(), QStringLiteral("p.local"));
         QCOMPARE(spy.at(0).at(1).toInt(), 3128);
+    }
+
+    // ---- Was „Installieren …“ tut, kein Rechtsklick-Rat (QTMUX-146) ----------
+
+    // Der Katalog in BEIDEN Sprachen, alle Plattformzweige: kein Rechtsklick-Rat.
+    // Geprüft wird die .ts (lupdate-Stand), nicht der Quelltext — dort darf ein
+    // Kommentar den alten Satz als Geschichte nennen, ohne dass der Wächter sich
+    // selbst misst.
+    void noCatalogueTextAdvisesRightClickOpen() {
+        for (const QString lang : {QStringLiteral("de"), QStringLiteral("en")}) {
+            const QString ts = QStringLiteral(QTMUX_I18N_DIR) + QStringLiteral("/qtmux_")
+                               + lang + QStringLiteral(".ts");
+            const TsTexts t = updateDialogTexts(ts);
+            // Nichts gemessen? Ein umbenannter Kontext machte den Test leer.
+            QVERIFY2(t.messages >= 40, qPrintable(QStringLiteral("%1: nur %2 Einträge")
+                                                      .arg(ts).arg(t.messages)));
+            for (const QString &text : t.texts)
+                QVERIFY2(!kRightClickAdvice.match(text).hasMatch(), qPrintable(text));
+            // Die neuen Sätze sind übersetzt — ein fehlender Eintrag bliebe sonst
+            // hinter grünem Build für immer deutsch.
+            QVERIFY2(t.unfinished.isEmpty(), qPrintable(t.unfinished.join(QLatin1Char('\n'))));
+        }
+    }
+
+    // Jede Plattform sagt, was der Knopf tut — und nennt die Abhilfe nie von sich aus.
+    void everyPlatformSaysWhatInstallDoes() {
+        using updatehint::Os;
+        const QString remedy = updatehint::gatekeeperRemedy();
+        QStringList seen;
+        const QList<QPair<Os, bool>> cases{{Os::MacOS, false}, {Os::Windows, false},
+                                           {Os::Linux, true}, {Os::Linux, false}};
+        for (const auto &[os, appImage] : cases) {
+            const QString t = updatehint::beforeInstall(os, appImage);
+            QVERIFY(!t.isEmpty());
+            QVERIFY2(!t.contains(remedy), qPrintable(t));
+            QVERIFY2(!kRightClickAdvice.match(t).hasMatch(), qPrintable(t));
+            QVERIFY2(t.contains(QStringLiteral("Ed25519")), qPrintable(t));
+            QVERIFY2(!seen.contains(t), qPrintable(t));
+            seen << t;
+        }
+        // Gilt auch für die Abhilfe selbst: der Weg über die Systemeinstellungen.
+        QVERIFY(remedy.contains(QStringLiteral("Dennoch öffnen")));
+        QVERIFY(!kRightClickAdvice.match(remedy).hasMatch());
+    }
+
+    // An der DATEI gemessen: ohne Quarantäne keine Abhilfe, mit Quarantäne (nur
+    // macOS) genau die eine, die hilft.
+    void remedyOnlyForAQuarantinedFile() {
+        using updatehint::Os;
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.path() + QStringLiteral("/QTmux-9.9.9-macos.dmg");
+        {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("dmg");
+        }
+        const QString remedy = updatehint::gatekeeperRemedy();
+        QVERIFY(!updatehint::carriesQuarantine(path));
+        QCOMPARE(updatehint::afterDownload(Os::MacOS, false, path),
+                 updatehint::beforeInstall(Os::MacOS, false));
+#if defined(Q_OS_MACOS)
+        // Ein echtes Quarantäne-Attribut, wie es ein Browser schreibt.
+        const QByteArray value("0083;6720a3c0;Safari;");
+        QCOMPARE(::setxattr(QFile::encodeName(path).constData(), "com.apple.quarantine",
+                            value.constData(), size_t(value.size()), 0, 0), 0);
+        QVERIFY(updatehint::carriesQuarantine(path));
+        const QString after = updatehint::afterDownload(Os::MacOS, false, path);
+        QVERIFY2(after.contains(remedy), qPrintable(after));
+        QVERIFY(after.startsWith(updatehint::beforeInstall(Os::MacOS, false)));
+        // Windows kennt die Abhilfe nicht, auch wenn die Datei sie trüge.
+        QVERIFY(!updatehint::afterDownload(Os::Windows, false, path).contains(remedy));
+#else
+        QSKIP("com.apple.quarantine gibt es nur unter macOS; die Bindung Datei -> "
+              "Text prüft installHintFollowsTheMeasurement auf jedem Runner");
+#endif
+    }
+
+    // DIE Messung, bei jedem macOS-Lauf: Was der Downloader schreibt, trägt keine
+    // Quarantäne — auch dann nicht, wenn die QUELLE eine trägt (es werden Bytes
+    // kopiert, keine Attribute). Und der Dialogtext sagt genau das.
+    void downloadedFileCarriesNoQuarantineAndTheHintSaysSo() {
+        QTemporaryDir tree;
+        QVERIFY(tree.isValid());
+        QVERIFY(copyTree(m_fixtures + QStringLiteral("/good"), tree.path()));
+        const QString srcDmg = tree.path() + QStringLiteral("/qtmux/9.9.9/QTmux-9.9.9-macos.dmg");
+        QVERIFY(QFile::exists(srcDmg));
+#if defined(Q_OS_MACOS)
+        const QByteArray value("0083;6720a3c0;Safari;");
+        const QByteArray src = QFile::encodeName(srcDmg);
+        QCOMPARE(::setxattr(src.constData(), "com.apple.quarantine", value.constData(),
+                            size_t(value.size()), 0, 0), 0);
+        // Positivkontrolle: die Quelle MUSS die Markierung tragen.
+        QVERIFY(::getxattr(src.constData(), "com.apple.quarantine", nullptr, 0, 0, 0) >= 0);
+#endif
+        UpdateViewModel vm;
+        vm.setBaseUrl(QUrl::fromLocalFile(tree.path()).toString());
+        QVERIFY(runCheck(vm, true));
+        QCOMPARE(vm.state(), int(UpdateViewModel::Available));
+        const bool appImage = !qEnvironmentVariableIsEmpty("APPIMAGE");
+        const auto os = updatehint::currentOs();
+        QCOMPARE(vm.installHint(), updatehint::beforeInstall(os, appImage));
+
+        QSignalSpy hintSpy(&vm, &UpdateViewModel::installHintChanged);
+        bool ready = false;
+        auto c = connect(&vm, &UpdateViewModel::stateChanged, [&] {
+            if (vm.state() == UpdateViewModel::Ready
+                || vm.state() == UpdateViewModel::Failed) ready = true;
+        });
+        vm.download();
+        spinUntil(ready);
+        disconnect(c);
+        QVERIFY2(vm.state() == UpdateViewModel::Ready, qPrintable(vm.lastError()));
+        QVERIFY(hintSpy.count() >= 1);   // QML bekommt den neuen Text mit
+        const QString got = vm.downloadedPath();
+#if defined(Q_OS_MACOS)
+        const bool quarantined =
+            ::getxattr(QFile::encodeName(got).constData(), "com.apple.quarantine",
+                       nullptr, 0, 0, 0) >= 0;
+        QFile::remove(got);
+        QVERIFY2(!quarantined,
+                 "Der Update-Download trägt com.apple.quarantine — der Hinweis im "
+                 "Update-Dialog (QTMUX-146) und seine Begründung stimmen nicht mehr");
+#endif
+        QVERIFY(!updatehint::carriesQuarantine(got));
+        QCOMPARE(vm.installHint(), updatehint::beforeInstall(os, appImage));
+        QVERIFY(!vm.installHint().contains(updatehint::gatekeeperRemedy()));
+        QFile::remove(got);
+    }
+
+    // Der Dialog fragt die DATEI: ein Download, der die Markierung trüge, bekommt
+    // die Abhilfe, einer ohne bekommt keine. Probe statt xattr, damit das auf
+    // jedem Runner läuft.
+    void installHintFollowsTheMeasurement() {
+        for (const bool quarantined : {false, true}) {
+            UpdateViewModel vm;
+            vm.setBaseUrl(baseFor(QStringLiteral("good")));
+            QVERIFY(runCheck(vm, true));
+            bool ready = false;
+            auto c = connect(&vm, &UpdateViewModel::stateChanged, [&] {
+                if (vm.state() == UpdateViewModel::Ready
+                    || vm.state() == UpdateViewModel::Failed) ready = true;
+            });
+            vm.download();
+            spinUntil(ready);
+            disconnect(c);
+            QVERIFY2(vm.state() == UpdateViewModel::Ready, qPrintable(vm.lastError()));
+
+            QString asked;
+            updatehint::setQuarantineProbeForTests([&](const QString &p) {
+                asked = p;
+                return quarantined;
+            });
+            const QString hint = vm.installHint();
+            updatehint::setQuarantineProbeForTests({});
+            QFile::remove(vm.downloadedPath());
+
+            const bool mac = updatehint::currentOs() == updatehint::Os::MacOS;
+            QCOMPARE(hint.contains(updatehint::gatekeeperRemedy()), quarantined && mac);
+            if (mac)   // nur dort wird überhaupt gefragt
+                QCOMPARE(asked, vm.downloadedPath());
+        }
     }
 };
 

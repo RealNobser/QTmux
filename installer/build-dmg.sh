@@ -18,9 +18,11 @@
 #
 # Apple-Signierung/Notarisierung: bewusst NICHT (Early-Adopter-Build, wie das
 # unsignierte Windows-MSI); signiert wird mit der selbst ausgestellten
-# Familien-Identität (MacPCAN docs/codesign.md). Folge: Gatekeeper-Quarantäne — Nutzer öffnen das
-# Programm beim ersten Mal per Rechtsklick → „Öffnen" bzw. entfernen das
-# Quarantäne-Attribut (`xattr -dr com.apple.quarantine /Applications/QTmux.app`).
+# Familien-Identität (MacPCAN docs/codesign.md). Folge: Ein per Browser geladenes DMG trägt die
+# Gatekeeper-Quarantäne — Nutzer öffnen das Programm beim ersten Mal über Systemeinstellungen ›
+# Datenschutz & Sicherheit › „Dennoch öffnen“ (seit macOS 15 hilft Rechtsklick → „Öffnen“ nicht
+# mehr) bzw. entfernen das Quarantäne-Attribut (`xattr -dr com.apple.quarantine
+# /Applications/QTmux.app`). Der eingebaute Updater lädt ohne Quarantäne (QTMUX-146).
 set -euo pipefail
 
 VERSION="${1:-1.9.8}"

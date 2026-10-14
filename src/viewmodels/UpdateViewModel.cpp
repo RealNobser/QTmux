@@ -9,10 +9,17 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QLocale>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QVersionNumber>
+
+#include <utility>
+
+#if defined(Q_OS_MACOS)
+#include <sys/xattr.h>
+#endif
 
 namespace qtmux {
 
@@ -110,6 +117,7 @@ void UpdateViewModel::setLanguage(const QString &lang) {
     if (lang.isEmpty() || lang == m_language) return;
     m_language = lang;
     emit notesChanged();
+    emit installHintChanged();   // der Hinweis folgt derselben Sprache
 }
 
 // --- Abgeleitete Anzeigewerte -----------------------------------------------
@@ -158,6 +166,100 @@ QString UpdateViewModel::launchPlanDescription() const {
 bool UpdateViewModel::canLaunchInstaller() const {
     return !launchPlanDescription().isEmpty();
 }
+
+QString UpdateViewModel::installHint() const {
+    const bool fromAppImage = !qEnvironmentVariableIsEmpty("APPIMAGE");
+    const updatehint::Os os = updatehint::currentOs();
+    return m_downloadedPath.isEmpty()
+               ? updatehint::beforeInstall(os, fromAppImage)
+               : updatehint::afterDownload(os, fromAppImage, m_downloadedPath);
+}
+
+// --- Hinweis unter dem Dialog (QTMUX-146, Begründung im Header) ---------------
+namespace updatehint {
+
+namespace {
+std::function<bool(const QString &)> &quarantineProbeOverride() {
+    static std::function<bool(const QString &)> fn;
+    return fn;
+}
+} // namespace
+
+Os currentOs() {
+#if defined(Q_OS_MACOS)
+    return Os::MacOS;
+#elif defined(Q_OS_WIN)
+    return Os::Windows;
+#else
+    return Os::Linux;
+#endif
+}
+
+QString beforeInstall(Os os, bool runsFromAppImage) {
+    QString what;
+    switch (os) {
+    case Os::MacOS:
+        // InstallerLauncher: `open <dmg>` — das DMG trägt QTmux.app und einen
+        // Verweis auf /Applications (installer/build-dmg.sh).
+        what = UpdateViewModel::tr("„Installieren …“ öffnet das Disk-Image. Ziehen Sie "
+                                   "QTmux dort in den Ordner „Programme“.");
+        break;
+    case Os::Windows:
+        // InstallerLauncher: `msiexec /i`. Das MSI installiert für alle
+        // Benutzer (installer/QTmux.wxs, Scope="perMachine") und ist nicht
+        // signiert — daher die Rückfrage mit unbekanntem Herausgeber.
+        // SmartScreen bleibt außen vor: Der Downloader schreibt die Datei per
+        // QFile ohne Zone.Identifier (abgeleitet, nicht unter Windows gemessen).
+        what = UpdateViewModel::tr("„Installieren …“ startet das Windows-Installationsprogramm. "
+                                   "Windows fragt nach Administratorrechten und nennt den "
+                                   "Herausgeber „Unbekannt“, weil das Paket nicht signiert ist.");
+        break;
+    case Os::Linux:
+        // InstallerLauncher: Selbstersetzung von $APPIMAGE, die bisherige
+        // Datei bleibt als `.old` liegen. Ohne $APPIMAGE gibt es keinen Plan.
+        what = runsFromAppImage
+                   ? UpdateViewModel::tr("„Installieren …“ ersetzt das AppImage, aus dem QTmux "
+                                         "gestartet wurde; die bisherige Fassung bleibt als "
+                                         "„.old“ daneben liegen. Starten Sie QTmux danach neu.")
+                   : UpdateViewModel::tr("QTmux läuft nicht aus einem AppImage. Die geprüfte "
+                                         "Datei installieren Sie nach dem Herunterladen von Hand.");
+        break;
+    }
+    return what + QLatin1Char(' ')
+           + UpdateViewModel::tr("QTmux prüft den Download selbst über eine "
+                                 "Ed25519-Signatur und eine SHA-256-Summe.");
+}
+
+QString gatekeeperRemedy() {
+    return UpdateViewModel::tr("Falls sich „QTmux“ nicht öffnen lässt, klicken Sie unter "
+                               "Systemeinstellungen › Datenschutz & Sicherheit auf "
+                               "„Dennoch öffnen“.");
+}
+
+bool carriesQuarantine(const QString &path) {
+    if (quarantineProbeOverride()) return quarantineProbeOverride()(path);
+#if defined(Q_OS_MACOS)
+    const QByteArray native = QFile::encodeName(path);
+    return ::getxattr(native.constData(), "com.apple.quarantine", nullptr, 0, 0,
+                      XATTR_NOFOLLOW) >= 0;
+#else
+    Q_UNUSED(path);
+    return false;
+#endif
+}
+
+QString afterDownload(Os os, bool runsFromAppImage, const QString &path) {
+    QString text = beforeInstall(os, runsFromAppImage);
+    if (os == Os::MacOS && carriesQuarantine(path))
+        text += QLatin1Char(' ') + gatekeeperRemedy();
+    return text;
+}
+
+void setQuarantineProbeForTests(std::function<bool(const QString &)> probe) {
+    quarantineProbeOverride() = std::move(probe);
+}
+
+} // namespace updatehint
 
 // --- Zustandsführung ---------------------------------------------------------
 void UpdateViewModel::setState(State s) {
@@ -275,6 +377,7 @@ void UpdateViewModel::startCheck(bool manual) {
     emit resultChanged();
     emit notesChanged();
     emit downloadedPathChanged();
+    emit installHintChanged();
     emit downloadProgressChanged();
     setState(Checking);
 
@@ -353,6 +456,7 @@ void UpdateViewModel::download() {
         }
         m_downloadedPath = std::move(localPath);
         emit downloadedPathChanged();
+        emit installHintChanged();
         m_progress = 1.0;
         emit downloadProgressChanged();
         setState(Ready);

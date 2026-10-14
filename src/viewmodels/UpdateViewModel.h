@@ -24,6 +24,7 @@
 #include <QString>
 #include <QUrl>
 
+#include <functional>
 #include <memory>
 
 class QSettings;
@@ -57,6 +58,10 @@ class UpdateViewModel : public QObject {
     /// drei (DMG/MSI/AppImage) — ein leerer Schlüssel ist trotzdem zulässig und
     /// muss als „kein Paket für dieses System" erscheinen, nicht als Fehler.
     Q_PROPERTY(bool hasPackageForThisSystem READ hasPackageForThisSystem NOTIFY resultChanged)
+    /// Was „Installieren …“ auf diesem System tut — und, NUR wenn die geladene
+    /// Datei die macOS-Quarantäne gemessen trägt, der Weg über „Dennoch öffnen“
+    /// (QTMUX-146, Begründung bei `updatehint` unten).
+    Q_PROPERTY(QString installHint READ installHint NOTIFY installHintChanged)
 
     /// Einstellung `update/auto_check` (Vorgabe AN; bis 1.9.3 `update/autoCheck`,
     /// s. migrateSettings).
@@ -119,6 +124,7 @@ public:
     QString downloadedPath() const { return m_downloadedPath; }
     QString lastError() const { return m_lastError; }
     bool hasPackageForThisSystem() const;
+    QString installHint() const;
 
     bool autoCheck() const;
     void setAutoCheck(bool on);
@@ -182,6 +188,7 @@ signals:
     void notesChanged();
     void downloadProgressChanged();
     void downloadedPathChanged();
+    void installHintChanged();
     void lastErrorChanged();
     void autoCheckChanged();
     void baseUrlChanged();
@@ -281,5 +288,50 @@ private:
     bool m_proxyRetryIsDownload = false;
     bool m_proxyRetryManual = false;
 };
+
+// ---- Hinweis unter dem Dialog: was „Installieren …“ tut (QTMUX-146) ---------
+//
+// Gemessen 2026-10-14: Eine Datei, die der vendierte Downloader schreibt, trägt
+// KEIN `com.apple.quarantine` — über `file://` mit gesetzter Quarantäne an der
+// Quelle ebenso wie per HTTPS vom echten Update-Server, und auch nach dem
+// Kopieren der App aus dem eingehängten DMG nicht (Messweg und Zahlen in der
+// Feature-Referenz, „Online-Update“). Gatekeepers Erststart-Prüfung hängt genau
+// an diesem Attribut; ein Update über diesen Dialog öffnet also ohne Rückfrage.
+// Der frühere Satz („mit Rechtsklick → „Öffnen“ starten“) war doppelt falsch: Es
+// gab hier nichts freizugeben, und seit macOS 15 gibt der Rechtsklick ohnehin
+// nichts mehr frei.
+//
+// Deshalb verspricht der Dialog keine Sperre mehr. Er sagt, was „Installieren …“
+// tut, und nur eine Datei, die die Quarantäne WIRKLICH trägt (an der Datei
+// gemessen, nie angenommen), bekommt den einen Weg, der hilft. Die Texte hängen
+// am Betriebssystem als PARAMETER, damit der Test jede Plattform auf jedem
+// Runner prüfen kann.
+namespace updatehint {
+
+enum class Os { MacOS, Windows, Linux };
+
+/// Das System, für das gebaut wurde.
+Os currentOs();
+
+/// Vor und nach dem Download: was „Installieren …“ tut. Auf Linux hängt das
+/// davon ab, ob QTmux aus einem AppImage läuft (nur dann gibt es etwas zu
+/// ersetzen).
+QString beforeInstall(Os os, bool runsFromAppImage);
+
+/// Der einzige Weg, der eine quarantänierte App seit macOS 15 öffnet.
+QString gatekeeperRemedy();
+
+/// Trägt die Datei `com.apple.quarantine`? Außerhalb von macOS immer false.
+bool carriesQuarantine(const QString &path);
+
+/// Nach dem Download: `beforeInstall`, bei einer quarantänierten Datei unter
+/// macOS ergänzt um `gatekeeperRemedy`.
+QString afterDownload(Os os, bool runsFromAppImage, const QString &path);
+
+/// Nur für Tests: ersetzt die Messung an der Datei (leer = echte Messung), damit
+/// der Pfad Datei → Dialogtext auch auf Runnern ohne xattr prüfbar ist.
+void setQuarantineProbeForTests(std::function<bool(const QString &)> probe);
+
+} // namespace updatehint
 
 } // namespace qtmux

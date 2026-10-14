@@ -37,7 +37,8 @@ Daten / Zurücksetzen
 Weitere Plattformen
 -------------------
 - macOS: "QTmux-<Version>-macos.dmg" öffnen und QTmux.app nach "Programme"
-  ziehen. Unsigniert -> beim ersten Start Rechtsklick -> "Öffnen".
+  ziehen. Nicht notarisiert -> nach einem Browser-Download beim ersten Start
+  Systemeinstellungen > Datenschutz & Sicherheit > "Dennoch öffnen".
   (Gebaut mit installer/build-dmg.sh.)
 - Linux: "QTmux-<Version>-x86_64.AppImage" ausführbar machen und starten:
      chmod +x QTmux-*-x86_64.AppImage && ./QTmux-*-x86_64.AppImage
