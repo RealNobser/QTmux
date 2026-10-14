@@ -757,7 +757,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-145** (deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-13 dual angelegt, In Arbeit; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+**QTMUX-145** (deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
@@ -770,7 +770,8 @@ Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 
 **Teststände:** **43** Tests auf macOS/Linux, **42** auf Windows (s. Dateitabelle; per
 `ctest -N` am 2026-10-13 gezählt — `combowidth` + fünf `I18n.*` kamen mit QTMUX-145 hinzu,
-lokal 43/43 in frisch angelegtem Debug- **und** Release-Baum; davor am 2026-10-10 37 —
+lokal 43/43 in frisch angelegtem Debug- **und** Release-Baum, CI-Lauf `38486777601` macOS/Linux
+43/43, Windows 41/41; davor am 2026-10-10 37 —
 `check_updater_sync` kam mit QTMUX-144 hinzu und entsteht nur mit bash, also nicht auf
 Windows; davor `statuscolors` mit QTMUX-142, `icons` mit QTMUX-141; lokal vor dem
 1.9.8-Bump 37/37 in `build/macos-release`). macOS
@@ -798,9 +799,11 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 Stand **2026-10-13: QTMUX-145** (deutsche Oberfläche siezt + Wächter; Proxy-Art-Auswahl
 fiel zur Caret-Pille zusammen → `AppComboBox` misst den längsten Eintrag + `test_combowidth`)
-lokal committet, **unreleased**; Push nur nach Orchestrator-Freigabe (geteilte Runner) —
-ungepusht ist, was `git log --oneline origin/main..HEAD` zeigt. Jira QTMUX-145 bleibt „In
-Arbeit“, bis CI gelesen ist. ⚠️ **`build/macos-test` und `build/macos-release` sind
+gepusht und **unreleased**; CI-Lauf `38486777601` grün (Windows 41/41, macOS/Linux 43/43, die
+sechs neuen Tests je Job als `Passed` gelesen), Jira QTMUX-145 dual Done am Ticket gelesen.
+`git log --oneline origin/main..HEAD` muss leer sein. Kandidat (nicht beauftragt):
+`AppComboBox` hat keinen eigenen Disabled-Zustand — in einer deaktivierten Zeile bleibt ihr
+Text voll kontrastreich, während die Textfelder daneben ausgegraut sind. ⚠️ **`build/macos-test` und `build/macos-release` sind
 verschmutzt** (2026-10-13 gemessen): inkrementell gebaut stürzen `test_windowmodel`/
 `test_sessiongroups` (+ `test_mcpfocus` in Debug) mit SIGSEGV, derselbe Arbeitsbaum und der
 Ausgangsstand `ead87a3` frisch gebaut sind grün — vor der nächsten Messung dort neu anlegen
