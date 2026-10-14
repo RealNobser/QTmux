@@ -3782,62 +3782,62 @@ ame</translation>
 <context>
     <name>qtmux::UpdateViewModel</name>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="204"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="191"/>
         <source>„Installieren …“ öffnet das Disk-Image. Ziehen Sie QTmux dort in den Ordner „Programme“.</source>
         <translation>„Installieren …“ öffnet das Disk-Image. Ziehen Sie QTmux dort in den Ordner „Programme“.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="213"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="200"/>
         <source>„Installieren …“ startet das Windows-Installationsprogramm. Windows fragt nach Administratorrechten und nennt den Herausgeber „Unbekannt“, weil das Paket nicht signiert ist.</source>
         <translation>„Installieren …“ startet das Windows-Installationsprogramm. Windows fragt nach Administratorrechten und nennt den Herausgeber „Unbekannt“, weil das Paket nicht signiert ist.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="221"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="208"/>
         <source>„Installieren …“ ersetzt das AppImage, aus dem QTmux gestartet wurde; die bisherige Fassung bleibt als „.old“ daneben liegen. Starten Sie QTmux danach neu.</source>
         <translation>„Installieren …“ ersetzt das AppImage, aus dem QTmux gestartet wurde; die bisherige Fassung bleibt als „.old“ daneben liegen. Starten Sie QTmux danach neu.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="224"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="211"/>
         <source>QTmux läuft nicht aus einem AppImage. Die geprüfte Datei installieren Sie nach dem Herunterladen von Hand.</source>
         <translation>QTmux läuft nicht aus einem AppImage. Die geprüfte Datei installieren Sie nach dem Herunterladen von Hand.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="229"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="216"/>
         <source>QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</source>
         <translation>QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="234"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="221"/>
         <source>Falls sich „QTmux“ nicht öffnen lässt, klicken Sie unter Systemeinstellungen › Datenschutz &amp; Sicherheit auf „Dennoch öffnen“.</source>
         <translation>Falls sich „QTmux“ nicht öffnen lässt, klicken Sie unter Systemeinstellungen › Datenschutz &amp; Sicherheit auf „Dennoch öffnen“.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="340"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="324"/>
         <source>Der Proxy verlangt eine Anmeldung.</source>
         <translation>Der Proxy verlangt eine Anmeldung.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="342"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="326"/>
         <source>Der Proxy hat die Anmeldung abgelehnt.</source>
         <translation>Der Proxy hat die Anmeldung abgelehnt.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="344"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="328"/>
         <source>Der Proxy %1 antwortet nicht.</source>
         <translation>Der Proxy %1 antwortet nicht.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="346"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="330"/>
         <source>Die Proxy-Einstellung des Systems ließ sich nicht ermitteln. Häufigste Ursache ist eine hinterlegte Konfigurationsdatei (PAC/WPAD), die nicht erreichbar ist — „Direkt“ umgeht sie.</source>
         <translation>Die Proxy-Einstellung des Systems ließ sich nicht ermitteln. Häufigste Ursache ist eine hinterlegte Konfigurationsdatei (PAC/WPAD), die nicht erreichbar ist — „Direkt“ umgeht sie.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="438"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="422"/>
         <source>Für dieses Betriebssystem liegt kein Paket bereit.</source>
         <translation>Für dieses Betriebssystem liegt kein Paket bereit.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="475"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="459"/>
         <source>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die geprüfte Datei liegt hier — bitte von Hand installieren:
 %1</source>
         <translation>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die geprüfte Datei liegt hier — bitte von Hand installieren:

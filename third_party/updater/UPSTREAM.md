@@ -9,9 +9,21 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `8242342cfade722afdd66c670c0906ead5ab68ec` |
-| Datum | 2026-09-28 |
-| Betreff | `jira: MAC-66 guikit-instanzmasse + MAC-67 appbarchip-zeilenstil (done)` |
+| Commit | `aa73f219aa50ceede46fd60c9409a8b406394d93` |
+| Datum | 2026-10-14 |
+| Betreff | `MAC-94: Update-Dialog ohne Rechtsklick-Rat, Hub-Mechanik quarantineState` |
+
+Abgleich 2026-10-14 (QTMUX-146): `git log 8242342..aa73f21 -- src/update/` nennt
+genau **einen** Commit, `aa73f21` (MAC-94), und der bringt nur zwei **neue** Dateien:
+`Quarantine.hpp` + `Quarantine.cpp` — `appupdate::quarantineState(path, &err)` mit den
+Zuständen Absent | Present | Unreadable | NotApplicable. Bestehende Dateien unverändert.
+Der Wächter meldete vorher Exit 1 („FEHLT VENDIERT (upstream neu)“ für beide), nach
+`--update` Exit 0 mit 19/8/5/1 verglichenen Dateien (vorher 17/8/5/1); beide Dateien
+zusätzlich per `cmp` gleich. Kein CMake-Eingriff nötig: `qtmux_updater` rastert
+`update/*.cpp` (GLOB), `Quarantine.cpp` ist damit im Target.
+QTmux nutzt die Funktion in `qtmux::updatehint` (UpdateViewModel): „Dennoch öffnen“ nur
+bei `Present`; `Unreadable` gibt KEINE Abhilfe, wird aber laut protokolliert statt als
+„keine Quarantäne“ gelesen (Begründung dort).
 
 Abgleich 2026-09-28 (Release 1.9.4): `git log c40742c..8242342 -- src/update/`
 ist **leer**, Wächter „byte-identisch" (Positiv-Gegenprobe: eine angehängte

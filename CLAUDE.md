@@ -802,12 +802,12 @@ Update-Dialog riet unter macOS zu „Rechtsklick → „Öffnen““ — seit m
 der Update-Download trägt gemessen keine Quarantäne (Messung + Wächter: Feature-Referenz
 „Online-Update“). Neu: `UpdateViewModel::installHint` / `qtmux::updatehint` sagt je Plattform,
 was „Installieren …“ tut, „Dennoch öffnen“ nur bei gemessener Quarantäne der geladenen Datei;
-Wächter in `tst_updateviewmodel` (5 neue Fälle) mit drei Mutationsproben rot; frische Bäume
-`build/w146` (Debug) + `build/w146r` (Release) je 43/43. **Offen:** Der Hub-Worker baut die
-Quarantäne-Prüfung in `MacPCAN/src/update/` — nach dessen Push (Hash kommt vom Orchestrator)
-`tools/check-updater-sync.sh --update`, UPSTREAM.md-Pin + Abgleich-Absatz, die lokale
-`getxattr`-Zeile in `updatehint::carriesQuarantine` durch die Hub-Funktion ersetzen, dann EIN
-Push (vorher CI-Messung + `MELDUNG QTMUX [ANSAGE CI]`) und Jira dual Done. Bilder vorher/nachher
+Wächter in `tst_updateviewmodel` (6 neue Fälle) mit sechs Mutationsproben rot. Hub-Updater
+auf `aa73f21` (MAC-94) vendiert: neu `Quarantine.{hpp,cpp}`, `appupdate::quarantineState`
+trägt die Messung (`Unreadable` → keine Abhilfe, aber `qWarning`); Wächter 19/8/5/1,
+UPSTREAM.md-Pin + Abgleich. Frische Bäume `build/w146b` (Debug) + `build/w146r2` (Release)
+je 43/43. **Offen bis zum Abschluss:** EIN Push (vorher CI-Messung + `MELDUNG QTMUX [ANSAGE
+CI]`), CI-Jobs einzeln lesen, Jira dual Done. Bilder vorher/nachher
 liegen außerhalb des Repos (Pfad in der Meldung an den Orchestrator). Mit dem nächsten Release
 in der Benutzerdoku (dual) den Satz „Der Dialog blendet diesen Hinweis von sich aus ein“
 ersetzen — er beschreibt bis dahin korrekt 1.9.8.

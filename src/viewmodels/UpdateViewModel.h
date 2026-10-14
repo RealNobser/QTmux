@@ -24,7 +24,6 @@
 #include <QString>
 #include <QUrl>
 
-#include <functional>
 #include <memory>
 
 class QSettings;
@@ -321,16 +320,24 @@ QString beforeInstall(Os os, bool runsFromAppImage);
 /// Der einzige Weg, der eine quarantänierte App seit macOS 15 öffnet.
 QString gatekeeperRemedy();
 
-/// Trägt die Datei `com.apple.quarantine`? Außerhalb von macOS immer false.
+/// Trägt die Datei `com.apple.quarantine`? Fragt die Hub-Mechanik
+/// `appupdate::quarantineState` (vendiert, Update/Quarantine.hpp) und ist nur bei
+/// `Present` wahr. Außerhalb von macOS (`NotApplicable`) immer false.
+/// 🔑 `Unreadable` (die Frage war nicht beantwortbar — Datei fehlt, keine Rechte,
+/// fremdes Dateisystem) ist KEIN „nein“: Die Funktion liefert zwar false, damit der
+/// Dialog nichts verspricht, was niemand gemessen hat, protokolliert den Grund aber
+/// LAUT per qWarning. Was der Dialog dann sagt, steht bei `afterDownload`.
 bool carriesQuarantine(const QString &path);
 
 /// Nach dem Download: `beforeInstall`, bei einer quarantänierten Datei unter
 /// macOS ergänzt um `gatekeeperRemedy`.
+/// Bei `Unreadable` bleibt es bei `beforeInstall` — der Text behauptet damit
+/// nichts über die Quarantäne (er sagt nur, was der Knopf tut), und die Abhilfe
+/// bleibt eine Zusage für GEMESSENES `Present`. Der realistische Fall ist eine
+/// Datei, die nach dem Download verschwand; dann scheitert „Installieren …“
+/// ohnehin sichtbar mit eigener Meldung. Tests ersetzen die Messung über
+/// `appupdate::setQuarantineProbeForTests` (Hub).
 QString afterDownload(Os os, bool runsFromAppImage, const QString &path);
-
-/// Nur für Tests: ersetzt die Messung an der Datei (leer = echte Messung), damit
-/// der Pfad Datei → Dialogtext auch auf Runnern ohne xattr prüfbar ist.
-void setQuarantineProbeForTests(std::function<bool(const QString &)> probe);
 
 } // namespace updatehint
 

@@ -33,6 +33,7 @@
 #include <QXmlStreamReader>
 
 #include "UpdateViewModel.h"
+#include "update/Quarantine.hpp"
 
 #if defined(Q_OS_MACOS)
 #include <sys/xattr.h>
@@ -818,25 +819,32 @@ private slots:
         QVERIFY(hintSpy.count() >= 1);   // QML bekommt den neuen Text mit
         const QString got = vm.downloadedPath();
 #if defined(Q_OS_MACOS)
+        // Unabhängiges Messgerät neben der Hub-Funktion: getxattr direkt.
         const bool quarantined =
             ::getxattr(QFile::encodeName(got).constData(), "com.apple.quarantine",
                        nullptr, 0, 0, 0) >= 0;
-        QFile::remove(got);
+        if (quarantined) QFile::remove(got);
         QVERIFY2(!quarantined,
                  "Der Update-Download trägt com.apple.quarantine — der Hinweis im "
                  "Update-Dialog (QTMUX-146) und seine Begründung stimmen nicht mehr");
 #endif
         QVERIFY(!updatehint::carriesQuarantine(got));
+#if defined(Q_OS_MACOS)
+        // Gemessen NEIN, nicht „nicht messbar“: Unreadable sähe im Text gleich aus.
+        QCOMPARE(appupdate::quarantineState(got), appupdate::QuarantineState::Absent);
+#endif
         QCOMPARE(vm.installHint(), updatehint::beforeInstall(os, appImage));
         QVERIFY(!vm.installHint().contains(updatehint::gatekeeperRemedy()));
         QFile::remove(got);
     }
 
-    // Der Dialog fragt die DATEI: ein Download, der die Markierung trüge, bekommt
-    // die Abhilfe, einer ohne bekommt keine. Probe statt xattr, damit das auf
-    // jedem Runner läuft.
+    // Der Dialog fragt die DATEI über die Hub-Mechanik: nur `Present` bekommt die
+    // Abhilfe, `Unreadable` keine — aber eine laute Warnung statt eines stillen
+    // „nein“. Probe statt xattr, damit das auf jedem Runner läuft.
     void installHintFollowsTheMeasurement() {
-        for (const bool quarantined : {false, true}) {
+        using QS = appupdate::QuarantineState;
+        const bool mac = updatehint::currentOs() == updatehint::Os::MacOS;
+        for (const QS state : {QS::Absent, QS::Present, QS::Unreadable, QS::NotApplicable}) {
             UpdateViewModel vm;
             vm.setBaseUrl(baseFor(QStringLiteral("good")));
             QVERIFY(runCheck(vm, true));
@@ -851,19 +859,42 @@ private slots:
             QVERIFY2(vm.state() == UpdateViewModel::Ready, qPrintable(vm.lastError()));
 
             QString asked;
-            updatehint::setQuarantineProbeForTests([&](const QString &p) {
+            appupdate::setQuarantineProbeForTests([&](const QString &p) {
                 asked = p;
-                return quarantined;
+                return state;
             });
+            if (mac && state == QS::Unreadable)   // fehlt die Warnung, fällt der Fall
+                QTest::ignoreMessage(QtWarningMsg,
+                                     QRegularExpression(QStringLiteral("nicht feststellbar")));
             const QString hint = vm.installHint();
-            updatehint::setQuarantineProbeForTests({});
+            appupdate::setQuarantineProbeForTests({});
             QFile::remove(vm.downloadedPath());
 
-            const bool mac = updatehint::currentOs() == updatehint::Os::MacOS;
-            QCOMPARE(hint.contains(updatehint::gatekeeperRemedy()), quarantined && mac);
+            QCOMPARE(hint.contains(updatehint::gatekeeperRemedy()), mac && state == QS::Present);
             if (mac)   // nur dort wird überhaupt gefragt
                 QCOMPARE(asked, vm.downloadedPath());
+            else
+                QVERIFY(asked.isEmpty());
         }
+    }
+
+    // Echte nicht beantwortbare Messung: Die Datei ist weg (der realistische Fall —
+    // jemand räumt den Download-Ordner auf). Keine Abhilfe, aber laut.
+    void unreadableFileGetsNoRemedyButAWarning() {
+#if defined(Q_OS_MACOS)
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString gone = dir.path() + QStringLiteral("/gibtesnicht.dmg");
+        QString why;
+        QCOMPARE(appupdate::quarantineState(gone, &why), appupdate::QuarantineState::Unreadable);
+        QVERIFY(!why.isEmpty());
+        QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("nicht feststellbar")));
+        const QString t = updatehint::afterDownload(updatehint::Os::MacOS, false, gone);
+        QCOMPARE(t, updatehint::beforeInstall(updatehint::Os::MacOS, false));
+#else
+        QSKIP("Unreadable gibt es nur unter macOS; anderswo antwortet die Hub-Funktion "
+              "NotApplicable (geprüft in installHintFollowsTheMeasurement)");
+#endif
     }
 };
 

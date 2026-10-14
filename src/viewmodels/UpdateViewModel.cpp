@@ -3,23 +3,17 @@
 #include "qtmux_version.h"
 
 #include "update/InstallerLauncher.hpp"
+#include "update/Quarantine.hpp"
 #include "update/UpdateChecker.hpp"
 #include "update/UpdatePolicy.hpp"
 
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
-#include <QFile>
 #include <QLocale>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QVersionNumber>
-
-#include <utility>
-
-#if defined(Q_OS_MACOS)
-#include <sys/xattr.h>
-#endif
 
 namespace qtmux {
 
@@ -178,13 +172,6 @@ QString UpdateViewModel::installHint() const {
 // --- Hinweis unter dem Dialog (QTMUX-146, Begründung im Header) ---------------
 namespace updatehint {
 
-namespace {
-std::function<bool(const QString &)> &quarantineProbeOverride() {
-    static std::function<bool(const QString &)> fn;
-    return fn;
-}
-} // namespace
-
 Os currentOs() {
 #if defined(Q_OS_MACOS)
     return Os::MacOS;
@@ -237,15 +224,16 @@ QString gatekeeperRemedy() {
 }
 
 bool carriesQuarantine(const QString &path) {
-    if (quarantineProbeOverride()) return quarantineProbeOverride()(path);
-#if defined(Q_OS_MACOS)
-    const QByteArray native = QFile::encodeName(path);
-    return ::getxattr(native.constData(), "com.apple.quarantine", nullptr, 0, 0,
-                      XATTR_NOFOLLOW) >= 0;
-#else
-    Q_UNUSED(path);
-    return false;
-#endif
+    QString why;
+    const auto state = appupdate::quarantineState(path, &why);
+    if (state == appupdate::QuarantineState::Unreadable) {
+        // Nicht still als „keine Quarantäne“ lesen — eine gescheiterte Messung ist
+        // keine negative. Der Dialog verspricht dann nichts (s. afterDownload).
+        qWarning("QTmux-Update: Quarantäne von %s nicht feststellbar (%s) — "
+                 "der Hinweis nennt deshalb keine Abhilfe",
+                 qPrintable(path), qPrintable(why));
+    }
+    return state == appupdate::QuarantineState::Present;
 }
 
 QString afterDownload(Os os, bool runsFromAppImage, const QString &path) {
@@ -253,10 +241,6 @@ QString afterDownload(Os os, bool runsFromAppImage, const QString &path) {
     if (os == Os::MacOS && carriesQuarantine(path))
         text += QLatin1Char(' ') + gatekeeperRemedy();
     return text;
-}
-
-void setQuarantineProbeForTests(std::function<bool(const QString &)> probe) {
-    quarantineProbeOverride() = std::move(probe);
 }
 
 } // namespace updatehint

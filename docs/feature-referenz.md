@@ -992,13 +992,22 @@ automatisierbar (kein Bedienungshilfen-Recht); `ditto` ist das Ersatzmaß.
 Deshalb sagt der Hinweis jetzt, was „Installieren …“ je Plattform tut (`open <dmg>` ·
 `msiexec /i` eines `perMachine`-MSI, also UAC mit unbekanntem Herausgeber · Selbstersetzung
 des AppImage mit `.old` daneben), und nennt „Dennoch öffnen“ nur, wenn die geladene Datei die
-Quarantäne an der Datei gemessen trägt (`updatehint::afterDownload`). Windows: `QFile` schreibt
+Quarantäne an der Datei gemessen trägt (`updatehint::afterDownload`). Gemessen wird über die
+Hub-Mechanik `appupdate::quarantineState` (vendiert, `Quarantine.hpp`, MAC-94): nur `Present`
+gibt die Abhilfe. ⚠️ **`Unreadable` ist kein „nein“** (Datei weg, keine Rechte, fremdes
+Dateisystem): Der Hinweis bleibt dann beim Satz, was der Knopf tut — er behauptet also nichts
+über die Quarantäne —, und QTmux protokolliert den Grund per `qWarning`. Realistisch ist eine
+Datei, die nach dem Download verschwand; dann scheitert „Installieren …“ ohnehin sichtbar.
+Windows: `QFile` schreibt
 keinen `Zone.Identifier`, SmartScreen bewertet nur Dateien mit dieser Markierung — abgeleitet,
 nicht unter Windows gemessen. Wächter in `tst_updateviewmodel`: kein Rechtsklick-Rat in den
-lebenden Katalogeinträgen beider Sprachen, alle übersetzt; Abhilfe genau bei Quarantäne
-(echtes xattr auf macOS, Probe auf jedem Runner); die Messung selbst läuft bei jedem
-macOS-Lauf mit (Quelle quarantäniert, Download nicht). Mutationsprobe: alter Satz zurück →
-rot; Quarantäne immer wahr → rot; Abhilfe nie angehängt → rot.
+lebenden Katalogeinträgen beider Sprachen, alle übersetzt; Abhilfe genau bei `Present`
+(echtes xattr auf macOS, Hub-Probe `setQuarantineProbeForTests` mit allen vier Zuständen auf
+jedem Runner); `Unreadable` ohne Abhilfe, aber mit Warnung (auch echt: verschwundene Datei);
+die Messung selbst läuft bei jedem macOS-Lauf mit (Quelle quarantäniert, Download `Absent` —
+zusätzlich per direktem `getxattr` als unabhängigem Messgerät). Mutationsproben, alle rot:
+alter Satz zurück · Quarantäne immer wahr · Abhilfe nie angehängt · alles außer `Absent`
+zählt als Quarantäne · `Unreadable` still · Hub-Messung ignoriert.
 
 🔑 **Signierte Fixtures brauchen `-text` in `.gitattributes`.** Auf der Windows-Maschine
 (`core.autocrlf=true`) machte git aus 935 Byte `manifest.json` 966 Byte — 31 eingefügte CR.
