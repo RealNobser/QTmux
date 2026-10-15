@@ -797,7 +797,7 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-🔄 **2026-10-15: QTMUX-147 — Download ersetzt den Zielnamen statt hineinzuschreiben,
+✅ **2026-10-15: QTMUX-147 — Download ersetzt den Zielnamen statt hineinzuschreiben,
 unreleased (Familien-Auftrag „0.12.3“, Owner-Freigabe).** Hub-Updater auf `f2d9ac7` (MAC-95)
 vendiert, Wächter 19/8/5/1, `ls-tree`-Vergleich blob-gleich 19/19, UPSTREAM.md-Pin +
 Abgleich. Mechanik, Messung und Wächter: Feature-Referenz „Online-Update“ (Absatz
@@ -805,9 +805,14 @@ Abgleich. Mechanik, Messung und Wächter: Feature-Referenz „Online-Update“ (
 unter Windows), 1 in `tst_updateviewmodel` (macOS); gegen den vorherigen vendierten Stand
 alle fünf rot. Kein bestehender Test hielt das alte Überschreiben fest (keiner legte eine
 Datei an den Zielnamen). Frische Bäume `build/w147` (Debug) + `build/w147r` (Release) je
-43/43. Offen beim Wiedereinstieg: CI-Lauf je Job lesen (Windows-Zeile `qInfo` von
-`aFileHeldOpenGetsAnAnswerNeverAHang` sagt, ob Windows eine offen gehaltene Datei ersetzt
-oder ablehnt), Jira dual auf Done — Messkommando `git log --oneline origin/main..HEAD`.
+43/43. Gepusht bb09375..e396055 (21:40:43, Messung der vier Repos davor angesagt); CI
+`38795855466` Linux 43/43, macOS 43/43, Windows 41/41 (je Job: Checkout e396055,
+`UpdateChecker.cpp` gebaut, `test_updater` + `test_updateviewmodel` Passed); Jira QTMUX-147
+dual Done am Ticket gelesen. ⚠️ Offen: ob Windows eine offen gehaltene Datei ersetzt oder
+ablehnt, steht NICHT im CI-Log (ctest druckt die `qInfo`-Zeile von
+`aFileHeldOpenGetsAnAnswerNeverAHang` bei Erfolg nicht) — beide Antworten erfüllen die Zusage,
+gemessen ist nur „keine Hänger, kein Rest“. 🔑 `git push` kennt kein `--ff-only` (druckt nur
+die Hilfe, pusht nichts); ein normaler Push ohne Force verweigert Nicht-Fast-Forwards ohnehin.
 
 ✅ **2026-10-14: QTMUX-146 gepusht, unreleased (Orchestrator-Auftrag, Owner-Freigabe).** Der
 Update-Dialog riet unter macOS zu „Rechtsklick → „Öffnen““ — seit macOS 15 wirkungslos, und
