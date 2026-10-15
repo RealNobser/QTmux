@@ -1009,6 +1009,32 @@ zusätzlich per direktem `getxattr` als unabhängigem Messgerät). Mutationsprob
 alter Satz zurück · Quarantäne immer wahr · Abhilfe nie angehängt · alles außer `Absent`
 zählt als Quarantäne · `Unreadable` still · Hub-Messung ignoriert.
 
+🔑 **Der Download ERSETZT den Zielnamen, er schreibt nicht hinein (QTMUX-147, Hub-Stand
+MAC-95, gemessen 2026-10-15).** Die Tabelle oben galt bis dahin nur für einen **freien**
+Namen: Der Downloader öffnete `<Download-Ordner>/<Name aus der URL>` mit
+`WriteOnly|Truncate`. Lag dort schon eine Datei gleichen Namens — derselbe Installer, früher
+per Browser geladen —, behielt sie Inode **und** `com.apple.quarantine`; der Dialog riet dann
+zu Recht zu „Dennoch öffnen“. Ein Symlink an der Stelle wurde bis in sein Ziel beschrieben,
+ein SHA-Fehler zerstörte eine ältere Datei gleichen Namens, und wer die alte Datei offen
+hatte, las plötzlich die neuen Bytes. Seitdem landen die Bytes in `<Name>.XXXXXX.part`
+daneben (`QFile` mit `NewOnly`, kein `QTemporaryFile` — dessen `close()` hält unter Windows
+das Handle offen, und `MoveFileExW` scheitert dann an jedem Download), der SHA-256 wird von
+der Platte gelesen, und erst dann ersetzt `rename()` bzw. `MoveFileExW(REPLACE_EXISTING)`
+den **Namen**. Ein Link wird ersetzt, nie durchschrieben; ein Fehler (auch ein abgelehntes
+Ersetzen, unter Windows bei einer offen gehaltenen Datei möglich) lässt die alte Datei
+unberührt und keinen `*.part`-Rest. `QSaveFile` wäre falsch: es löst einen Symlink am
+Zielnamen auf und ersetzt dessen ZIEL.
+Wächter: `tst_updater` auf allen drei Plattformen — vorhandener Name wird ersetzt (Inhalt,
+unter POSIX neues Inode; unter Windows ist das der einzige Test, der `MoveFileExW` auf einen
+besetzten Namen fährt), SHA-Fehler lässt die ältere Datei stehen, eine offen gehaltene Datei
+bekommt immer eine Antwort (Ersetzen oder Fehler mit Grund, protokolliert per `qInfo`),
+Symlink wird ersetzt (nicht unter Windows: `QFile::link` legt dort eine `.lnk` an), nach
+jedem Ausgang kein `*.part`. `tst_updateviewmodel` auf macOS: markierte Bestandsdatei im
+Download-Ordner → Download trägt keine Marke (direkt per `getxattr`), neues Inode,
+`quarantineState` = `Absent`, Hinweis ohne Abhilfe. Positivkontrolle: dieselben fünf Tests
+gegen den vorherigen vendierten Stand sind alle rot (Marke geerbt, Inode gleich, Linkziel mit
+Installer-Bytes überschrieben, ältere Datei nach SHA-Fehler leer, Haltender liest neue Bytes).
+
 🔑 **Signierte Fixtures brauchen `-text` in `.gitattributes`.** Auf der Windows-Maschine
 (`core.autocrlf=true`) machte git aus 935 Byte `manifest.json` 966 Byte — 31 eingefügte CR.
 Die Ed25519-Signatur steht über die **exakten** Bytes, also fiel `test_updateviewmodel` mit

@@ -10,11 +10,109 @@
 #include <QFileInfo>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRandomGenerator>
 #include <QUrlQuery>
 
 #include <memory>
 
+#if defined(Q_OS_WIN)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <cerrno>
+#include <cstdio>
+#endif
+
 namespace appupdate {
+
+namespace {
+
+// Puts the finished temp file in place of `finalPath` in ONE step that
+// replaces the NAME — whatever lies there: a regular file (its inode, and
+// with it every extended attribute, goes away with it) or a symlink (the
+// link is replaced, its target is never touched). On Windows a file another
+// process holds open without FILE_SHARE_DELETE cannot be replaced: that is a
+// failure with the system's reason, never a silent success.
+//
+// Why not QSaveFile, measured 2026-10-15 (docs/HISTORY.md „Downloader
+// ersetzt statt zu überschreiben“): it resolves a symlink at the target name
+// and replaces the link's TARGET — a link in the download folder would let
+// an update write a file anywhere the user can. QFile::rename() refuses an
+// existing name, and remove-then-rename would destroy the old file first.
+bool replaceName(const QString& tempPath, const QString& finalPath,
+                 QString* why)
+{
+#if defined(Q_OS_WIN)
+    const QString from = QDir::toNativeSeparators(tempPath);
+    const QString to = QDir::toNativeSeparators(finalPath);
+    if (::MoveFileExW(reinterpret_cast<const wchar_t*>(from.utf16()),
+                      reinterpret_cast<const wchar_t*>(to.utf16()),
+                      MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        return true;
+    }
+    *why = qt_error_string(static_cast<int>(::GetLastError()));
+    return false;
+#else
+    if (std::rename(QFile::encodeName(tempPath).constData(),
+                    QFile::encodeName(finalPath).constData()) == 0) {
+        return true;
+    }
+    *why = qt_error_string(errno);
+    return false;
+#endif
+}
+
+// The download's own temp file <name>.XXXXXX.part next to the target. Not a
+// QTemporaryFile: its close() keeps the native handle open until the object
+// dies (Qt reserves the name that way), and Windows refuses to rename a file
+// with an open handle — every download failed there with a sharing
+// violation (CI 38782128012, 2026-10-15; POSIX does not mind). This one is
+// created exclusively (NewOnly = O_EXCL / CREATE_NEW), close() really closes,
+// and it removes itself unless the download took its name.
+class PartFile {
+public:
+    explicit PartFile(const QString& finalPath)
+    {
+        static const char kChars[] =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        for (int attempt = 0; attempt < 16 && !m_file.isOpen(); ++attempt) {
+            QString tag;
+            for (int i = 0; i < 6; ++i) {
+                tag += QLatin1Char(kChars[QRandomGenerator::global()->bounded(62)]);
+            }
+            m_file.setFileName(finalPath + QLatin1Char('.') + tag
+                               + QStringLiteral(".part"));
+            if (m_file.open(QIODevice::WriteOnly | QIODevice::NewOnly)) break;
+            m_lastError = m_file.errorString();
+        }
+    }
+    ~PartFile()
+    {
+        if (!m_kept) discard();
+    }
+    PartFile(const PartFile&) = delete;
+    PartFile& operator=(const PartFile&) = delete;
+
+    bool isOpen() const { return m_file.isOpen(); }
+    QFile& file() { return m_file; }
+    QString path() const { return m_file.fileName(); }
+    QString lastError() const { return m_lastError; }
+    void discard()
+    {
+        m_file.close();
+        if (!m_file.fileName().isEmpty()) QFile::remove(m_file.fileName());
+    }
+    void keep() { m_kept = true; }
+
+private:
+    QFile m_file;
+    QString m_lastError;
+    bool m_kept = false;
+};
+
+}  // namespace
 
 UpdateChecker::UpdateChecker(const QUrl& baseUrl, const QString& product,
                              const QByteArray& publicKey32, QObject* parent)
@@ -291,9 +389,19 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
     }
     const QString localPath = destDir + QLatin1Char('/') + fileName;
 
-    auto file = std::make_shared<QFile>(localPath);
-    if (!file->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        callback(QString(), QStringLiteral("cannot write %1").arg(localPath));
+    // Replace, never overwrite (docs/SHARED.md „Downloader: ersetzen, nie
+    // überschreiben“). The bytes go to a temp file NEXT TO the target (same
+    // file system, so the final step is a rename) and only a verified
+    // download takes the name. Until then whatever lies at `localPath`
+    // stays exactly as it was — an abort, a network error or a hash
+    // mismatch leaves neither a half file nor a damaged old one. Writing
+    // into the existing name (WriteOnly|Truncate, the old way) kept that
+    // file's inode with a browser's com.apple.quarantine and wrote THROUGH a
+    // symlink lying there (measured, EmbyStudio EMB-280).
+    auto part = std::make_shared<PartFile>(localPath);
+    if (!part->isOpen()) {
+        callback(QString(), QStringLiteral("cannot write %1.XXXXXX.part: %2")
+                                .arg(localPath, part->lastError()));
         return;
     }
 
@@ -303,18 +411,28 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
     // Stream to disk — installers are large, buffering them in RAM helps
     // nobody.
     connect(reply, &QNetworkReply::readyRead, this,
-            [reply, file]() { file->write(reply->readAll()); });
+            [reply, part]() { part->file().write(reply->readAll()); });
     connect(reply, &QNetworkReply::finished, this,
-            [this, reply, file, localPath, expectedSha = artifact.sha256,
+            [this, reply, part, localPath, expectedSha = artifact.sha256,
              callback = std::move(callback)]() {
         finishActive(reply);
-        file->write(reply->readAll());
-        file->close();
+        QFile& file = part->file();
+        file.write(reply->readAll());
+        const bool written = file.flush() && file.error() == QFile::NoError;
+        const QString writeError = file.errorString();
+        const QString partPath = part->path();
+        file.close();  // really closed: Windows renames no open file
 
         if (reply->error() != QNetworkReply::NoError) {
-            QFile::remove(localPath);
+            part->discard();
             callback(QString(), QStringLiteral("download failed: %1")
                                     .arg(reply->errorString()));
+            return;
+        }
+        if (!written) {
+            part->discard();
+            callback(QString(), QStringLiteral("cannot write %1: %2")
+                                    .arg(partPath, writeError));
             return;
         }
 
@@ -331,7 +449,7 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
         bool hashed = false;
         QByteArray digest;
         {
-            QFile readBack(localPath);
+            QFile readBack(partPath);
             QCryptographicHash hash(QCryptographicHash::Sha256);
             hashed = readBack.open(QIODevice::ReadOnly) && hash.addData(&readBack);
             if (hashed) {
@@ -339,19 +457,27 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
             }
         }
         if (!hashed) {
-            QFile::remove(localPath);
-            callback(QString(), QStringLiteral("cannot hash %1").arg(localPath));
+            part->discard();
+            callback(QString(), QStringLiteral("cannot hash %1").arg(partPath));
             return;
         }
         const QString actual = QString::fromLatin1(digest);
         if (actual.compare(expectedSha, Qt::CaseInsensitive) != 0) {
-            QFile::remove(localPath);
+            part->discard();
             callback(QString(),
                      QStringLiteral("sha256 mismatch (expected %1, got %2) — "
                                     "file deleted")
                          .arg(expectedSha, actual));
             return;
         }
+        QString why;
+        if (!replaceName(partPath, localPath, &why)) {
+            part->discard();
+            callback(QString(), QStringLiteral("cannot replace %1: %2")
+                                    .arg(localPath, why));
+            return;
+        }
+        part->keep();  // its name is the download's now
         callback(localPath, QString());
     });
 }

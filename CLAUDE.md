@@ -757,7 +757,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-146** (Update-Dialog ohne Rechtsklick-Rat + Hub-`quarantineState`, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+**QTMUX-147** (Download ersetzt den Zielnamen statt hineinzuschreiben, Hub `f2d9ac7` vendiert, 2026-10-15 dual angelegt; davor QTMUX-146 Update-Dialog ohne Rechtsklick-Rat + Hub-`quarantineState`, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
@@ -796,6 +796,18 @@ Windows-**Debug**-Build ist dafür das einzige taugliche Messmittel (`-DQT_FORCE
 trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
+
+🔄 **2026-10-15: QTMUX-147 — Download ersetzt den Zielnamen statt hineinzuschreiben,
+unreleased (Familien-Auftrag „0.12.3“, Owner-Freigabe).** Hub-Updater auf `f2d9ac7` (MAC-95)
+vendiert, Wächter 19/8/5/1, `ls-tree`-Vergleich blob-gleich 19/19, UPSTREAM.md-Pin +
+Abgleich. Mechanik, Messung und Wächter: Feature-Referenz „Online-Update“ (Absatz
+„ERSETZT den Zielnamen“) — 4 neue Fälle in `tst_updater` (alle Plattformen, Symlink nicht
+unter Windows), 1 in `tst_updateviewmodel` (macOS); gegen den vorherigen vendierten Stand
+alle fünf rot. Kein bestehender Test hielt das alte Überschreiben fest (keiner legte eine
+Datei an den Zielnamen). Frische Bäume `build/w147` (Debug) + `build/w147r` (Release) je
+43/43. Offen beim Wiedereinstieg: CI-Lauf je Job lesen (Windows-Zeile `qInfo` von
+`aFileHeldOpenGetsAnAnswerNeverAHang` sagt, ob Windows eine offen gehaltene Datei ersetzt
+oder ablehnt), Jira dual auf Done — Messkommando `git log --oneline origin/main..HEAD`.
 
 ✅ **2026-10-14: QTMUX-146 gepusht, unreleased (Orchestrator-Auftrag, Owner-Freigabe).** Der
 Update-Dialog riet unter macOS zu „Rechtsklick → „Öffnen““ — seit macOS 15 wirkungslos, und

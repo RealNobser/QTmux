@@ -528,6 +528,9 @@ Erststart-Prüfung hängt an `com.apple.quarantine`, und eine Datei, die der ven
 Downloader schreibt, trägt dieses Attribut nicht — über `file://` mit gesetzter Quarantäne
 an der Quelle ebenso wie per HTTPS vom echten Update-Server, und auch die per `ditto` aus dem
 eingehängten DMG kopierte App nicht (Messweg und Zahlen: Feature-Referenz, „Online-Update“).
+Seit QTMUX-147 gilt das auch für einen **besetzten** Namen: Liegt im Download-Ordner schon
+eine markierte Datei gleichen Namens, ersetzt der Download sie durch eine neue Datei, statt in
+sie hineinzuschreiben — vorher erbte er ihre Marke.
 Dazu kommt: Seit macOS 15 gibt Rechtsklick › Öffnen eine quarantänierte App nicht mehr frei;
 es hilft nur Systemeinstellungen › Datenschutz & Sicherheit › „Dennoch öffnen“.
 

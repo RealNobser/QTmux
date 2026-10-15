@@ -31,6 +31,10 @@
 #include <QTemporaryDir>
 #include <QTimer>
 
+#if !defined(Q_OS_WIN)
+#include <sys/stat.h>
+#endif
+
 using namespace appupdate;
 
 namespace {
@@ -84,6 +88,26 @@ void spinUntil(bool &done, int guardMs = 5000) {
         loop.processEvents(QEventLoop::AllEvents, 20);
 }
 
+// Reste der Download-Zwischendatei <Name>.XXXXXX.part — nach JEDEM Ausgang
+// (Erfolg, Hash-Fehler, abgelehntes Ersetzen) muss die Liste leer sein.
+QStringList partFiles(const QString &dir) {
+    return QDir(dir).entryList({QStringLiteral("*.part")},
+                               QDir::Files | QDir::Hidden | QDir::System);
+}
+
+QByteArray contentOf(const QString &path) {
+    QFile f(path);
+    return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+}
+
+#if !defined(Q_OS_WIN)
+// Inode des NAMENS selbst (lstat: ein Symlink zählt als er selbst). 0 = fehlt.
+quint64 inodeOf(const QString &path) {
+    struct stat st;
+    return ::lstat(QFile::encodeName(path).constData(), &st) == 0 ? quint64(st.st_ino) : 0;
+}
+#endif
+
 } // namespace
 
 class TestUpdater : public QObject {
@@ -130,6 +154,38 @@ private:
     }
 
     QUrl base() const { return QUrl::fromLocalFile(m_tree.path()); }
+
+    // Prüft das Manifest von `product` und lädt dessen Artefakt nach `destDir` —
+    // der ganze Weg bis zum fertigen Ersetzen des Zielnamens. `finished == false`
+    // heißt: die Wache (je Schritt 5 s) ist abgelaufen, der Weg hängt.
+    struct Fetch {
+        bool finished = false;
+        QString path;
+        QString error;
+    };
+    Fetch fetchInto(const QString &product, const QString &destDir) {
+        Fetch r;
+        UpdateChecker checker(base(), product, m_key.pub);
+        bool checked = false;
+        std::optional<UpdateManifest> manifest;
+        checker.checkForUpdate([&](std::optional<UpdateManifest> m, QString e) {
+            manifest = std::move(m); r.error = std::move(e); checked = true;
+        });
+        spinUntil(checked);
+        if (!checked) return r;
+        const auto art = manifest ? manifest->currentArtifact() : std::nullopt;
+        if (!art) {
+            r.finished = true;
+            r.error = QStringLiteral("kein Artefakt: ") + r.error;
+            return r;
+        }
+        r.error.clear();
+        checker.downloadArtifact(*art, destDir, [&](QString p, QString e) {
+            r.path = std::move(p); r.error = std::move(e); r.finished = true;
+        });
+        spinUntil(r.finished);
+        return r;
+    }
 
 private slots:
     void initTestCase() {
@@ -307,6 +363,118 @@ private slots:
         QVERIFY(localPath.isEmpty());
         QVERIFY(dlError.contains(QStringLiteral("sha256")));
         QCOMPARE(QDir(dest.path()).entryList(QDir::Files).size(), 0);
+    }
+
+    // --- Ersetzen statt Überschreiben (QTMUX-147, Hub-Stand MAC-95) ----------
+    // Bis QTMUX-147 öffnete der Downloader den Zielnamen mit WriteOnly|Truncate:
+    // eine dort liegende Datei behielt ihr Inode (unter macOS samt einer
+    // Quarantäne-Marke, die ein Browser gesetzt hatte), ein Symlink wurde bis in
+    // sein Ziel beschrieben. Seitdem landen die Bytes in <Name>.XXXXXX.part und
+    // erst ein geprüfter Download ersetzt den NAMEN. Die Regel hat sich
+    // geändert; der Zweck der Wächter bleibt: der Aufrufer bekommt genau den
+    // Installer, den das Manifest beschreibt — und sonst nichts verändert sich.
+
+    // Ein vorhandener Name wird ersetzt: neue Bytes, neue Datei, kein Rest. Läuft
+    // auf allen drei Plattformen — unter Windows ist das der Weg
+    // MoveFileExW(REPLACE_EXISTING), den ein Download in einen leeren Ordner
+    // (checkerVerifiesParsesAndDownloads) nie fährt.
+    void downloadReplacesAnExistingFileOfTheSameName() {
+        QTemporaryDir dest;
+        QVERIFY(dest.isValid());
+        const QString target = dest.path() + QStringLiteral("/QTmux-9.9.9.pkgtest");
+        QVERIFY(writeFile(target, QByteArray("FRUEHERER-DOWNLOAD")));
+#if !defined(Q_OS_WIN)
+        const quint64 before = inodeOf(target);
+        QVERIFY(before != 0);
+#endif
+        const Fetch r = fetchInto(QStringLiteral("qtmux"), dest.path());
+        QVERIFY2(r.finished, "Download kam nicht zurück (Wache abgelaufen)");
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QCOMPARE(r.path, target);
+        QCOMPARE(contentOf(target), m_payload);
+#if !defined(Q_OS_WIN)
+        // Gleicher Inhalt käme auch beim Überschreiben heraus — erst das Inode
+        // unterscheidet „ersetzt“ von „hineingeschrieben“.
+        QVERIFY2(inodeOf(target) != before,
+                 "Der Zielname trägt noch die alte Datei: überschrieben statt ersetzt");
+#endif
+        QCOMPARE(partFiles(dest.path()), QStringList());
+    }
+
+    // Ein Symlink am Zielnamen wird ersetzt; sein Ziel bleibt unberührt. Sonst
+    // könnte ein Link im Download-Ordner ein Update an jede beschreibbare Stelle
+    // lenken.
+    void downloadReplacesASymlinkNotItsTarget() {
+#if defined(Q_OS_WIN)
+        QSKIP("QFile::link legt unter Windows eine .lnk-Verknüpfung an, keinen Symlink; "
+              "ein echter Symlink braucht dort ein Recht, das ein Runner nicht zusichert");
+#else
+        QTemporaryDir dest, elsewhere;
+        QVERIFY(dest.isValid() && elsewhere.isValid());
+        const QString victim = elsewhere.path() + QStringLiteral("/fremd.bin");
+        QVERIFY(writeFile(victim, QByteArray("FREMDE-DATEI")));
+        const QString target = dest.path() + QStringLiteral("/QTmux-9.9.9.pkgtest");
+        QVERIFY(QFile::link(victim, target));
+        QVERIFY(QFileInfo(target).isSymLink());   // Positivkontrolle: der Link liegt
+        const Fetch r = fetchInto(QStringLiteral("qtmux"), dest.path());
+        QVERIFY2(r.finished, "Download kam nicht zurück (Wache abgelaufen)");
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QCOMPARE(contentOf(victim), QByteArray("FREMDE-DATEI"));
+        QVERIFY2(!QFileInfo(target).isSymLink(), "Der Link liegt noch am Zielnamen");
+        QCOMPARE(contentOf(target), m_payload);
+        QCOMPARE(partFiles(dest.path()), QStringList());
+#endif
+    }
+
+    // Falscher SHA: der NEUE Download fliegt weg, ein ÄLTERER gleichen Namens
+    // bleibt, wie er war. (Früher war er nach dem Truncate schon zerstört.)
+    void shaMismatchLeavesAnOlderFileUntouched() {
+        QTemporaryDir dest;
+        QVERIFY(dest.isValid());
+        const QString target = dest.path() + QStringLiteral("/QTmux-9.9.9.pkgtest");
+        QVERIFY(writeFile(target, QByteArray("FRUEHERER-DOWNLOAD")));
+        const Fetch r = fetchInto(QStringLiteral("shamismatch"), dest.path());
+        QVERIFY2(r.finished, "Download kam nicht zurück (Wache abgelaufen)");
+        QVERIFY(r.path.isEmpty());
+        QVERIFY2(r.error.contains(QStringLiteral("sha256")), qPrintable(r.error));
+        QCOMPARE(contentOf(target), QByteArray("FRUEHERER-DOWNLOAD"));
+        QCOMPARE(partFiles(dest.path()), QStringList());
+    }
+
+    // Jemand hält die alte Datei offen (unter Windows z. B. ein noch laufender
+    // Installer oder ein Virenscanner). Zusage: IMMER eine Antwort — Ersetzen
+    // oder ein Fehler mit Grund —, nie ein Hänger, nie ein *.part-Rest, und wer
+    // die alte Datei offen hat, liest weiter die alten Bytes. Welche Antwort
+    // Windows gibt, hängt an den Freigabe-Flags des Haltenden; der Test
+    // protokolliert sie, statt sie zu raten.
+    void aFileHeldOpenGetsAnAnswerNeverAHang() {
+        QTemporaryDir dest;
+        QVERIFY(dest.isValid());
+        const QString target = dest.path() + QStringLiteral("/QTmux-9.9.9.pkgtest");
+        QVERIFY(writeFile(target, QByteArray("OFFEN-GEHALTEN")));
+        QFile holder(target);
+        QVERIFY(holder.open(QIODevice::ReadOnly));
+        const Fetch r = fetchInto(QStringLiteral("qtmux"), dest.path());
+        QVERIFY2(r.finished, "Download kam nicht zurück (Wache abgelaufen)");
+        // Der Haltende sieht seine Datei unverändert (beim alten Überschreiben
+        // las er hier den neuen Inhalt).
+        QCOMPARE(holder.readAll(), QByteArray("OFFEN-GEHALTEN"));
+        holder.close();
+        if (r.error.isEmpty()) {
+            qInfo("offen gehaltene Datei: Name ersetzt");
+            QCOMPARE(r.path, target);
+            QCOMPARE(contentOf(target), m_payload);
+        } else {
+            qInfo("offen gehaltene Datei: abgelehnt — %s", qPrintable(r.error));
+            QVERIFY2(r.error.contains(QStringLiteral("cannot replace")), qPrintable(r.error));
+            QVERIFY(r.path.isEmpty());
+            QCOMPARE(contentOf(target), QByteArray("OFFEN-GEHALTEN"));
+        }
+#if !defined(Q_OS_WIN)
+        // POSIX ersetzt einen Namen auch bei offenem Handle.
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+#endif
+        QCOMPARE(partFiles(dest.path()), QStringList());
     }
 
     // --- Installer-Start ----------------------------------------------------

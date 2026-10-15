@@ -36,6 +36,7 @@
 #include "update/Quarantine.hpp"
 
 #if defined(Q_OS_MACOS)
+#include <sys/stat.h>
 #include <sys/xattr.h>
 #endif
 
@@ -836,6 +837,71 @@ private slots:
         QCOMPARE(vm.installHint(), updatehint::beforeInstall(os, appImage));
         QVERIFY(!vm.installHint().contains(updatehint::gatekeeperRemedy()));
         QFile::remove(got);
+    }
+
+    // QTMUX-147: Liegt im Download-Ordner schon eine Datei GLEICHEN Namens mit
+    // Quarantäne-Marke (derselbe Installer, früher per Browser geladen), trug der
+    // Update-Download sie bis QTMUX-147 weiter — der Downloader schrieb in die
+    // vorhandene Datei hinein (Truncate behält Inode und Attribute), und der
+    // Dialog riet dann zu Recht zu „Dennoch öffnen“. Seitdem ersetzt er den
+    // Namen: neue Datei, keine geerbte Marke, kein Rat. Der Zweck bleibt der von
+    // downloadedFileCarriesNoQuarantineAndTheHintSaysSo; neu ist nur, dass das
+    // auch für einen BESETZTEN Namen gilt.
+    void downloadOverAMarkedFileOfTheSameNameReplacesItAndTheHintSaysSo() {
+#if defined(Q_OS_MACOS)
+        const QString target = QDir(UpdateViewModel().downloadDir())
+                                   .filePath(QStringLiteral("QTmux-9.9.9-macos.dmg"));
+        QVERIFY(QDir().mkpath(QFileInfo(target).absolutePath()));
+        QFile::remove(target);
+        {
+            QFile f(target);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("frueher per Browser geladen");
+        }
+        const QByteArray name = QFile::encodeName(target);
+        const QByteArray value("0083;6720a3c0;Safari;");
+        QCOMPARE(::setxattr(name.constData(), "com.apple.quarantine", value.constData(),
+                            size_t(value.size()), 0, 0), 0);
+        struct stat before {};
+        QCOMPARE(::lstat(name.constData(), &before), 0);
+        // Positivkontrolle: diese Datei hätte der Dialog mit Abhilfe beschrieben.
+        QVERIFY(updatehint::afterDownload(updatehint::Os::MacOS, false, target)
+                    .contains(updatehint::gatekeeperRemedy()));
+
+        UpdateViewModel vm;
+        vm.setBaseUrl(baseFor(QStringLiteral("good")));
+        QVERIFY(runCheck(vm, true));
+        bool ready = false;
+        auto c = connect(&vm, &UpdateViewModel::stateChanged, [&] {
+            if (vm.state() == UpdateViewModel::Ready
+                || vm.state() == UpdateViewModel::Failed) ready = true;
+        });
+        vm.download();
+        spinUntil(ready);
+        disconnect(c);
+        QVERIFY2(vm.state() == UpdateViewModel::Ready, qPrintable(vm.lastError()));
+        QCOMPARE(vm.downloadedPath(), target);
+
+        // Unabhängige Messgeräte neben der Hub-Funktion: getxattr und lstat.
+        const bool quarantined =
+            ::getxattr(name.constData(), "com.apple.quarantine", nullptr, 0, 0, 0) >= 0;
+        struct stat after {};
+        QCOMPARE(::lstat(name.constData(), &after), 0);
+        // Der Hinweis wird an der LIEGENDEN Datei gemessen — gemessen „nein“, nicht
+        // „nicht feststellbar“ (Unreadable sähe im Text gleich aus).
+        const auto state = appupdate::quarantineState(target);
+        const QString hint = vm.installHint();
+        QFile::remove(target);
+        QVERIFY2(!quarantined, "Der Update-Download hat die Marke der alten Datei geerbt");
+        QVERIFY2(after.st_ino != before.st_ino,
+                 "Der Download schrieb in die vorhandene Datei, statt den Namen zu ersetzen");
+        QCOMPARE(state, appupdate::QuarantineState::Absent);
+        QVERIFY(!hint.contains(updatehint::gatekeeperRemedy()));
+        QCOMPARE(hint, updatehint::beforeInstall(updatehint::Os::MacOS, false));
+#else
+        QSKIP("com.apple.quarantine gibt es nur unter macOS; das Ersetzen selbst prüft "
+              "test_updater auf jedem Runner");
+#endif
     }
 
     // Der Dialog fragt die DATEI über die Hub-Mechanik: nur `Present` bekommt die

@@ -11,9 +11,15 @@
 // A browser writes it; the hub downloader does not (measured 2026-10-14,
 // docs/HISTORY.md „Update-Dialog: Quarantäne gemessen statt vermutet“ — a
 // plain QFile from a process without LSFileQuarantineEnabled, over file://
-// AND over https). So a dialog that promises a Gatekeeper block on every
-// update is wrong, and since macOS 15 its old remedy („right-click › Open")
-// unblocks nothing anyway. The rule (docs/SHARED.md): name the remedy
+// AND over https). Until 2026-10-15 that held only for a FRESH name: the
+// downloader wrote INTO a file already lying there (WriteOnly|Truncate),
+// which kept that file's inode and with it a browser's mark, and it wrote
+// through a symlink. Since then it replaces the name with a new file
+// (UpdateChecker.cpp, replaceName) — no inherited mark — but the file can
+// still be marked by others afterwards, so the dialog keeps asking THIS
+// function instead of assuming. A dialog that promises a Gatekeeper block
+// on every update is wrong, and since macOS 15 its old remedy („right-click
+// › Open") unblocks nothing anyway. The rule (docs/SHARED.md): name the remedy
 // („Open Anyway" under System Settings › Privacy & Security) ONLY for a file
 // this function measured as Present. The WORDING stays with each product —
 // the hub delivers the mechanics, never the sentence.

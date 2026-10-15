@@ -9,9 +9,28 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `aa73f219aa50ceede46fd60c9409a8b406394d93` |
-| Datum | 2026-10-14 |
-| Betreff | `MAC-94: Update-Dialog ohne Rechtsklick-Rat, Hub-Mechanik quarantineState` |
+| Commit | `f2d9ac75544c4d3cf575b14aedf2e8415d9a69b9` |
+| Datum | 2026-10-15 |
+| Betreff | `MAC-95: Windows-Download repariert (QFile NewOnly statt QTemporaryFile), Riegel gegen Haenger` |
+
+Abgleich 2026-10-15 (QTMUX-147): `git log aa73f21..f2d9ac7 -- src/update/` nennt
+**zwei** Commits, `7eeb0e8` (MAC-95/96/97) und `f2d9ac7` (MAC-95, Windows-Fix). Geändert
+sind drei Dateien, keine neue: `UpdateChecker.cpp`, `UpdateChecker.hpp` (Kopfkommentar)
+und `Quarantine.hpp` (nur Kommentar). **Verhalten:** `downloadArtifact` schreibt nicht mehr
+mit `WriteOnly|Truncate` in den Zielnamen, sondern in `<Name>.XXXXXX.part` daneben
+(`QFile` + `NewOnly`), prüft den SHA-256 von der Platte und ersetzt erst dann den NAMEN
+(`rename()` bzw. `MoveFileExW(REPLACE_EXISTING)`). Folgen: Eine Datei gleichen Namens
+vererbt weder Inode noch `com.apple.quarantine`, ein Symlink wird ersetzt statt
+durchschrieben, ein Fehler lässt die ältere Datei unberührt und keinen `*.part`-Rest; unter
+Windows kann das Ersetzen einer offen gehaltenen Datei scheitern — dann mit Grund
+(„cannot replace …“), nie still. Der Zwischenstand `7eeb0e8` nutzte `QTemporaryFile` und
+scheiterte unter Windows an JEDEM Download (Handle nach `close()` offen) — darum gepinnt
+auf `f2d9ac7`, den ersten Hub-Stand mit grüner Windows-CI. Der Wächter meldete vorher Exit 1
+(„ABWEICHUNG“ für genau diese drei Dateien), nach `--update` Exit 0 mit 19/8/5/1
+verglichenen Dateien; zusätzlich `git ls-tree -r f2d9ac7 src/update/` gegen
+`git hash-object` der vendierten Dateien blob-gleich (19/19). Kein CMake-Eingriff.
+Wirkung in QTmux gemessen und als Wächter festgehalten: Feature-Referenz „Online-Update“
+(`tst_updater`, `tst_updateviewmodel`).
 
 Abgleich 2026-10-14 (QTMUX-146): `git log 8242342..aa73f21 -- src/update/` nennt
 genau **einen** Commit, `aa73f21` (MAC-94), und der bringt nur zwei **neue** Dateien:

@@ -12,10 +12,14 @@
 // one mutable file on the webspace; file:// URLs are left untouched, which
 // is what makes fixture-based dry-runs free.
 //
-// Download flow: streams the artifact to <destDir>/<filename>, emits
-// progress, and verifies the SHA-256 from the manifest on completion — a
-// mismatch deletes the file and reports an error, it never hands the caller
-// a corrupt installer.
+// Download flow: streams the artifact to a temp file <filename>.XXXXXX.part
+// in <destDir>, emits progress, verifies the SHA-256 from the manifest on
+// what landed on disk, and only then REPLACES the name <destDir>/<filename>
+// (rename, never an overwrite of the old file — docs/SHARED.md „Downloader:
+// ersetzen, nie überschreiben“). A mismatch, an abort or a failed replace
+// deletes the temp file, leaves an older file of that name untouched and
+// reports an error; it never hands the caller a corrupt installer. A
+// symlink at the name is replaced, its target is never written.
 //
 // ⚠️ SIGNATURE ASYMMETRY — this class is NOT the pattern the ESP32 fleet
 // follows, and reading it as one leads to a wrong conclusion about them.
