@@ -341,11 +341,17 @@ gelöscht und Zulassung entfernt) — zum Wiederholen
 einem Aufruf mit **mehreren** `-arch` je übersetzter Datei und Architektur einen leeren Ordner
 im TMPDIR liegen (lokal gemessen: eine Architektur → 0, zwei → 2 je Datei); die Familien-Repos
 mit universalen Mac-Bauten leiten TMPDIR darum beim Konfigurieren/Bauen nach `runner.temp`
-um. QTmux baut single-arch (jeder Compile-Befehl trägt genau ein `-arch`), und ein
-GitHub-gehosteter Runner ist je Job eine frische VM — die Umleitung entfällt. Statt ihrer
-stehen zwei Belegzeilen im Job: `BUILD-TMPDIR-START` (Ausgangsstand, samt Runner-Name und
-Image) und `BUILD-TMPDIR` + `BUILD-ARCH` nach dem Bau. Wächst die Zahl der leeren Ordner im
-Bau, baut QTmux inzwischen universal — dann die Umleitung nachziehen (Falle dabei: `mktemp -d`
+um. QTmux baut single-arch (jeder Compile-Befehl trägt genau ein `-arch`; ein kompletter
+lokaler Bau mit eigenem leerem TMPDIR legt 0 Einträge an), und die GitHub-gehosteten Runner
+sind je Job eine eigene Maschine (`runner_name` je Job verschieden, Gruppe „GitHub Actions“)
+— die Umleitung entfällt. Statt ihrer stehen Belegzeilen im Job: `BUILD-TMPDIR-START`
+(Ausgangsstand samt Runner-Name und Image), nach dem Bau `BUILD-TMPDIR`, `BUILD-TMPDIR-NEW`
+(Namen der neu entstandenen leeren Ordner) und `BUILD-ARCH`. ⚠️ **Eine Differenz allein ist
+kein Befund:** Das Image hat schon vor dem Bau 72 bzw. 95 leere Ordner (Läufe `38879028974`,
+`38880025712`), und während des Baus legen macOS-Systemdienste weitere an (gemessen +8 bzw.
++3, benannt `com.apple.fskit.fskit_agent`, `com.apple.geoanalyticsd`,
+`com.apple.intelligencetasksd`). Erst Compiler-Ordnernamen in `BUILD-TMPDIR-NEW` oder zwei
+Architekturen in `BUILD-ARCH` verlangen die Umleitung (Falle dabei: `mktemp -d`
 ohne Vorlage ignoriert unter macOS TMPDIR → `mktemp -d "$TMPDIR/x.XXXXXX"`; den Test-Schritt
 NICHT umleiten, AF_UNIX-Pfade sind auf ~104 Byte begrenzt).
 **Windows-Tests sind seit `db52b41` blockierend** — vorher lief der Schritt mit
@@ -815,7 +821,12 @@ UPSTREAM.md-Pin + Abgleich. Mechanik, Riegel, Wächter und Mutationsproben: Feat
 „Online-Update“ (Absatz „Reste eines harten Endes“) — 2 neue Fälle in `tst_updater`, 1 in
 `tst_updateviewmodel`, alle Plattformen, gegen den vorherigen vendierten Stand alle rot.
 Frische Bäume `build/w148` (Debug) + `build/w148r` (Release) je 43/43. **TMPDIR-Umleitung der
-macOS-CI bewusst NICHT übernommen** (Begründung und Belegzeilen im CI-Abschnitt).
+macOS-CI bewusst NICHT übernommen** (Begründung und Belegzeilen im CI-Abschnitt). Gepusht
+f0af19a..26af17f (11:13:54) und ..9bdae8a (11:22:36, nur Belegzeile mit Namen), Messung der
+vier Repos davor angesagt; CI `38879028974` und `38880025712` je macOS 43/43, Linux 43/43,
+Windows 41/41 (je Job: Checkout des Commits, `test_updater` + `test_updateviewmodel` Passed —
+die drei neuen Funktionen haben keinen Skip-Pfad, ctest druckt die QtTest-Zeilen bei Erfolg
+nicht). Jira QTMUX-148 dual Done am Ticket gelesen.
 
 ✅ **2026-10-15: QTMUX-147 — Download ersetzt den Zielnamen statt hineinzuschreiben,
 unreleased (Familien-Auftrag „0.12.3“, Owner-Freigabe).** Hub-Updater auf `f2d9ac7` (MAC-95)
