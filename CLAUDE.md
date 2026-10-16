@@ -337,6 +337,17 @@ heruntergeladenen Asset. Probe: Wegwerf-Tag `appimage-probe-1` (Lauf `3648429384
 gelöscht und Zulassung entfernt) — zum Wiederholen
 `appimage-probe-*` für EINEN Commit in `on.push.tags`, im Job-`if` und im `case` von
 „Version und Tag" zulassen.
+🔑 **Kein TMPDIR-Umweg im macOS-Job (QTMUX-148, 2026-10-16).** Apple clang 21 lässt bei
+einem Aufruf mit **mehreren** `-arch` je übersetzter Datei und Architektur einen leeren Ordner
+im TMPDIR liegen (lokal gemessen: eine Architektur → 0, zwei → 2 je Datei); die Familien-Repos
+mit universalen Mac-Bauten leiten TMPDIR darum beim Konfigurieren/Bauen nach `runner.temp`
+um. QTmux baut single-arch (jeder Compile-Befehl trägt genau ein `-arch`), und ein
+GitHub-gehosteter Runner ist je Job eine frische VM — die Umleitung entfällt. Statt ihrer
+stehen zwei Belegzeilen im Job: `BUILD-TMPDIR-START` (Ausgangsstand, samt Runner-Name und
+Image) und `BUILD-TMPDIR` + `BUILD-ARCH` nach dem Bau. Wächst die Zahl der leeren Ordner im
+Bau, baut QTmux inzwischen universal — dann die Umleitung nachziehen (Falle dabei: `mktemp -d`
+ohne Vorlage ignoriert unter macOS TMPDIR → `mktemp -d "$TMPDIR/x.XXXXXX"`; den Test-Schritt
+NICHT umleiten, AF_UNIX-Pfade sind auf ~104 Byte begrenzt).
 **Windows-Tests sind seit `db52b41` blockierend** — vorher lief der Schritt mit
 `continue-on-error`, weil `test_pty` dort umgebungsbedingt fällt; damit waren aber auch alle
 übrigen Tests wirkungslos, eine echte Regression hätte den Job nie rot gemacht. Jetzt wird nur
@@ -757,7 +768,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-147** (Download ersetzt den Zielnamen statt hineinzuschreiben, Hub `f2d9ac7` vendiert, 2026-10-15 dual angelegt; davor QTMUX-146 Update-Dialog ohne Rechtsklick-Rat + Hub-`quarantineState`, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+**QTMUX-148** (alte `.part`-Reste eines harten Endes räumt der nächste Download ab, Hub `4a645a4` vendiert, + TMPDIR-Messung macOS-CI, 2026-10-16 dual angelegt; davor QTMUX-147 Download ersetzt den Zielnamen statt hineinzuschreiben, Hub `f2d9ac7` vendiert, 2026-10-15 dual angelegt; davor QTMUX-146 Update-Dialog ohne Rechtsklick-Rat + Hub-`quarantineState`, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
@@ -796,6 +807,15 @@ Windows-**Debug**-Build ist dafür das einzige taugliche Messmittel (`-DQT_FORCE
 trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
+
+✅ **2026-10-16: QTMUX-148 — alte `.part`-Reste räumt der nächste Download ab, unreleased
+(Familien-Auftrag „0124“, Owner-Freigabe).** Hub-Updater auf `4a645a4` (MAC-99) vendiert,
+nur `UpdateChecker.cpp` geändert, Wächter 19/8/5/1, `ls-tree`-Vergleich blob-gleich 19/19,
+UPSTREAM.md-Pin + Abgleich. Mechanik, Riegel, Wächter und Mutationsproben: Feature-Referenz
+„Online-Update“ (Absatz „Reste eines harten Endes“) — 2 neue Fälle in `tst_updater`, 1 in
+`tst_updateviewmodel`, alle Plattformen, gegen den vorherigen vendierten Stand alle rot.
+Frische Bäume `build/w148` (Debug) + `build/w148r` (Release) je 43/43. **TMPDIR-Umleitung der
+macOS-CI bewusst NICHT übernommen** (Begründung und Belegzeilen im CI-Abschnitt).
 
 ✅ **2026-10-15: QTMUX-147 — Download ersetzt den Zielnamen statt hineinzuschreiben,
 unreleased (Familien-Auftrag „0.12.3“, Owner-Freigabe).** Hub-Updater auf `f2d9ac7` (MAC-95)

@@ -1035,6 +1035,33 @@ Download-Ordner → Download trägt keine Marke (direkt per `getxattr`), neues I
 gegen den vorherigen vendierten Stand sind alle rot (Marke geerbt, Inode gleich, Linkziel mit
 Installer-Bytes überschrieben, ältere Datei nach SHA-Fehler leer, Haltender liest neue Bytes).
 
+🔑 **Reste eines harten Endes räumt der nächste Download ab (QTMUX-148, Hub-Stand MAC-99,
+gemessen 2026-10-16).** „Kein `*.part`-Rest“ oben gilt für jeden Ausgang, den die App
+**erlebt**. Stirbt sie zwischen dem Anlegen der Zwischendatei und dem Umbenennen (SIGKILL,
+Absturz, Strom weg), bleibt `<Name>.XXXXXX.part` im Ordner `QTmux-Updates` liegen — ein
+Update-Paket wiegt 30–60 MB. Der nächste Download **desselben Namens** in **denselben**
+Ordner löscht solche Reste, und nur, was nachweislich einer ist: genau das Muster
+`<Name>.<6 Zeichen [A-Za-z0-9]>.part` · eine gewöhnliche Datei (kein Symlink, kein Ordner;
+unter POSIX zweiter Riegel `O_NOFOLLOW`) · zuletzt vor mehr als **10 min** geschrieben
+(deckt nur den Augenblick zwischen Anlegen und Sperren bei einer zweiten Instanz) · **nicht
+belegt**: ein lebender Download hält unter POSIX ein `flock()` auf seiner Zwischendatei
+(vom Anlegen bis zum Umbenennen, der Kernel gibt es mit dem Prozess frei — wie auch immer er
+endet), unter Windows öffnet Qt ohne `FILE_SHARE_DELETE`, das Löschen scheitert und die Datei
+bleibt mit Warnung. Das Alter allein beweist nichts: der Downloader kennt keine Frist, ein
+hängender Download einer zweiten Instanz hält eine **alte** Zwischendatei. Jede Löschung steht
+per `qWarning` im Log (`update: removed download remnant <Pfad> (<Bytes> bytes, last written
+<UTC>)`). Ein Rest eines **anderen** Pakets (andere Version) bleibt bis zu einem Download
+genau dieses Namens liegen.
+Wächter, alle drei Plattformen: `tst_updater::aRemnantOfAnEarlierDownloadIsRemovedAndLogged`
+(Rest weg + genau eine Logzeile; anderer Name, Beinahe-Treffer, junge Datei und — POSIX — ein
+Link mit Musternamen bleiben, Linkziel unberührt) · `aPartHeldByALivingDownloadStays`
+(belegter alter Rest bleibt, nach Freigabe räumt der nächste Download ihn ab) ·
+`tst_updateviewmodel::aRemnantInTheUpdateFolderIsClearedByTheNextDownload` (Weg über das
+ViewModel in den echten Update-Ordner). Positivkontrolle: alle drei rot gegen den vorherigen
+vendierten Stand. Mutationsproben am vendierten Kern (danach per `--update` zurück), alle rot:
+Belegungsriegel aus · Altersfrist aus · Muster gelockert · **beide** Symlink-Riegel aus (einer
+allein bleibt grün — der zweite fängt ihn, so gewollt).
+
 🔑 **Signierte Fixtures brauchen `-text` in `.gitattributes`.** Auf der Windows-Maschine
 (`core.autocrlf=true`) machte git aus 935 Byte `manifest.json` 966 Byte — 31 eingefügte CR.
 Die Ed25519-Signatur steht über die **exakten** Bytes, also fiel `test_updateviewmodel` mit

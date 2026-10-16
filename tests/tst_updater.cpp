@@ -32,7 +32,10 @@
 #include <QTimer>
 
 #if !defined(Q_OS_WIN)
+#include <fcntl.h>
+#include <sys/file.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 using namespace appupdate;
@@ -99,6 +102,41 @@ QByteArray contentOf(const QString &path) {
     QFile f(path);
     return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
 }
+
+// Datiert die letzte Schreibzeit einer Datei um `seconds` zurück — so alt, wie ein
+// Rest nach einem harten Ende der App beim nächsten Versuch wäre.
+bool age(const QString &path, int seconds) {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadWrite)) return false;
+    return f.setFileTime(QDateTime::currentDateTime().addSecs(-seconds),
+                         QFileDevice::FileModificationTime);
+}
+
+// Alle Einträge eines Ordners (Dateien, Ordner, Links), sortiert.
+QStringList entriesOf(const QString &dir) {
+    QStringList e = QDir(dir).entryList(QDir::AllEntries | QDir::Hidden | QDir::System
+                                        | QDir::NoDotAndDotDot);
+    e.sort();
+    return e;
+}
+
+// Fängt die Warnungen des Update-Kerns mit (er meldet jedes Aufräumen per
+// qWarning) und reicht alles an den Handler von QtTest weiter.
+class WarningLog {
+public:
+    WarningLog() { s_self = this; s_prev = qInstallMessageHandler(&WarningLog::handle); }
+    ~WarningLog() { qInstallMessageHandler(s_prev); s_self = nullptr; }
+    QString text() const { return m_lines.join(QLatin1Char('\n')); }
+
+private:
+    static void handle(QtMsgType t, const QMessageLogContext &c, const QString &m) {
+        if (s_self && t == QtWarningMsg) s_self->m_lines << m;
+        if (s_prev) s_prev(t, c, m);
+    }
+    static inline WarningLog *s_self = nullptr;
+    static inline QtMessageHandler s_prev = nullptr;
+    QStringList m_lines;
+};
 
 #if !defined(Q_OS_WIN)
 // Inode des NAMENS selbst (lstat: ein Symlink zählt als er selbst). 0 = fehlt.
@@ -475,6 +513,126 @@ private slots:
         QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
 #endif
         QCOMPARE(partFiles(dest.path()), QStringList());
+    }
+
+    // --- Reste eines harten Endes (Hub-Stand MAC-99) ---------------------------
+    // Stirbt die App zwischen dem Anlegen von <Name>.XXXXXX.part und dem
+    // Umbenennen (SIGKILL, Absturz, Strom weg), bleibt die Zwischendatei liegen —
+    // ein Update-Paket wiegt 30–60 MB. Der nächste Download DESSELBEN Namens in
+    // DENSELBEN Ordner räumt sie ab, und nur, was nachweislich so ein Rest ist:
+    // genau das Muster, eine gewöhnliche Datei, älter als die Frist des Hubs
+    // (10 min) und von keinem laufenden Download belegt. Jede Löschung steht im
+    // Log. Beide Wächter laufen auf allen drei Plattformen.
+
+    // Ein alter Rest verschwindet mit Logzeile; was ihm nur ähnlich sieht, bleibt.
+    void aRemnantOfAnEarlierDownloadIsRemovedAndLogged() {
+        QTemporaryDir dest;
+        QVERIFY(dest.isValid());
+        const QString name = QStringLiteral("QTmux-9.9.9.pkgtest");
+        const auto at = [&](const QString &n) { return dest.path() + QLatin1Char('/') + n; };
+        const QString remnant = name + QStringLiteral(".Ab3dE9.part");
+        QVERIFY(writeFile(at(remnant), QByteArray(70000, 'r')));
+        QVERIFY(age(at(remnant), 3600));
+        // Positivkontrolle: der Rest ist wirklich alt (sonst bewiese sein
+        // Verbleiben nichts über die Frist).
+        QVERIFY(QFileInfo(at(remnant)).lastModified().secsTo(QDateTime::currentDateTime()) > 3000);
+        // Ebenso alt, aber nicht unser: anderer Name, Beinahe-Treffer des Musters.
+        const QStringList decoys{
+            QStringLiteral("QTmux-9.9.8.pkgtest.Ab3dE9.part"),
+            name + QStringLiteral(".Ab3dE.part"),
+            name + QStringLiteral(".Ab3dE9.part.bak"),
+        };
+        for (const QString &d : decoys) {
+            QVERIFY(writeFile(at(d), "fremd"));
+            QVERIFY(age(at(d), 3600));
+        }
+        // Jung: womöglich der Download einer zweiten Instanz, die gerade beginnt.
+        const QString young = name + QStringLiteral(".Young1.part");
+        QVERIFY(writeFile(at(young), "wird geschrieben"));
+        QStringList expected = decoys;
+        expected << name << young;
+#if !defined(Q_OS_WIN)
+        QTemporaryDir elsewhere;
+        QVERIFY(elsewhere.isValid());
+        const QString linkTarget = elsewhere.path() + QStringLiteral("/fremd.bin");
+        QVERIFY(writeFile(linkTarget, "nicht unseres"));
+        QVERIFY(age(linkTarget, 3600));
+        const QString link = name + QStringLiteral(".Lnk123.part");
+        QVERIFY(QFile::link(linkTarget, at(link)));
+        QVERIFY(QFileInfo(at(link)).isSymLink());
+        expected << link;
+#endif
+        expected.sort();
+
+        WarningLog log;
+        const Fetch r = fetchInto(QStringLiteral("qtmux"), dest.path());
+        QVERIFY2(r.finished, "Download kam nicht zurück (Wache abgelaufen)");
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QCOMPARE(contentOf(at(name)), m_payload);
+
+        QVERIFY2(!QFileInfo::exists(at(remnant)), "Der Rest des früheren Downloads liegt noch da");
+        QVERIFY2(log.text().contains(QStringLiteral("removed download remnant"))
+                     && log.text().contains(remnant),
+                 qPrintable(QStringLiteral("Löschung nicht im Log: ") + log.text()));
+        QCOMPARE(log.text().count(QStringLiteral("removed download remnant")), 1);
+        QCOMPARE(entriesOf(dest.path()), expected);
+#if !defined(Q_OS_WIN)
+        QVERIFY2(QFileInfo(at(link)).isSymLink(), "Ein Link mit dem Musternamen wurde entfernt");
+        QCOMPARE(contentOf(linkTarget), QByteArray("nicht unseres"));
+#endif
+        qInfo("Aufräum-Log: %s", qPrintable(log.text()));
+    }
+
+    // Ein alter Rest, den ein noch LEBENDER Download belegt (ein hängender
+    // Download einer zweiten Instanz — der Downloader kennt keine Frist, das
+    // Alter allein beweist also nichts), bleibt. Der Haltende spielt hier, was
+    // der Hub selbst tut: POSIX ein flock() auf einem eigenen Deskriptor,
+    // Windows eine offene Datei ohne FILE_SHARE_DELETE (so öffnet Qt). Erst
+    // wenn er loslässt — wie nach seinem harten Ende —, räumt der nächste
+    // Download ab (Positivkontrolle: nur die Belegung hat geschützt).
+    void aPartHeldByALivingDownloadStays() {
+        QTemporaryDir dest;
+        QVERIFY(dest.isValid());
+        const QString name = QStringLiteral("QTmux-9.9.9.pkgtest");
+        const QString part = dest.path() + QLatin1Char('/') + name + QStringLiteral(".Live01.part");
+        QVERIFY(writeFile(part, QByteArray(65536, 'x')));
+        QVERIFY(age(part, 3600));
+#if defined(Q_OS_WIN)
+        QFile holder(part);
+        QVERIFY(holder.open(QIODevice::ReadWrite));
+#else
+        const int holder = ::open(QFile::encodeName(part).constData(), O_RDONLY | O_CLOEXEC);
+        QVERIFY(holder >= 0);
+        QCOMPARE(::flock(holder, LOCK_EX | LOCK_NB), 0);
+#endif
+        {
+            WarningLog log;
+            const Fetch r = fetchInto(QStringLiteral("qtmux"), dest.path());
+            QVERIFY2(r.finished, "Download kam nicht zurück (Wache abgelaufen)");
+            QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+            QVERIFY2(QFileInfo::exists(part),
+                     "Das Aufräumen nahm die Datei eines Downloads, der noch läuft");
+            QVERIFY2(!log.text().contains(QStringLiteral("removed download remnant")),
+                     qPrintable(log.text()));
+            qInfo("belegt: Log \"%s\"", qPrintable(log.text()));
+        }
+#if defined(Q_OS_WIN)
+        holder.close();
+#else
+        ::close(holder);   // gibt das flock frei
+#endif
+        QVERIFY(QFileInfo::exists(part));
+        QVERIFY(age(part, 3600));
+        {
+            WarningLog log;
+            const Fetch r = fetchInto(QStringLiteral("qtmux"), dest.path());
+            QVERIFY2(r.finished, "Download kam nicht zurück (Wache abgelaufen)");
+            QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+            QVERIFY2(!QFileInfo::exists(part), "Der freigegebene Rest überlebte den Download");
+            QVERIFY2(log.text().contains(QStringLiteral("removed download remnant")),
+                     qPrintable(log.text()));
+        }
+        QCOMPARE(entriesOf(dest.path()), QStringList{name});
     }
 
     // --- Installer-Start ----------------------------------------------------

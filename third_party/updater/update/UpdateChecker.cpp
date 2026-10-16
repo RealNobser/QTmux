@@ -11,6 +11,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QUrlQuery>
 
 #include <memory>
@@ -23,11 +24,23 @@
 #else
 #include <cerrno>
 #include <cstdio>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 namespace appupdate {
 
 namespace {
+
+// How old (last write) a <name>.XXXXXX.part must be before a later download
+// of the same name may take it for a remnant (sweepStaleParts). Not the
+// proof that nobody uses it — that is the lock — but the cover for the one
+// instant without a lock: between NewOnly-create and flock() of another
+// instance, microseconds. Ten minutes are far beyond that and still clear a
+// crash's remnant at the next attempt that is not within the same minutes.
+constexpr qint64 kStalePartAgeSeconds = 10 * 60;
 
 // Puts the finished temp file in place of `finalPath` in ONE step that
 // replaces the NAME — whatever lies there: a regular file (its inode, and
@@ -71,6 +84,13 @@ bool replaceName(const QString& tempPath, const QString& finalPath,
 // violation (CI 38782128012, 2026-10-15; POSIX does not mind). This one is
 // created exclusively (NewOnly = O_EXCL / CREATE_NEW), close() really closes,
 // and it removes itself unless the download took its name.
+//
+// While it lives it is marked IN USE for sweepStaleParts() of every other
+// instance: POSIX holds an flock() on a second descriptor from creation
+// until keep()/discard() — across close(), hashing and rename, and the
+// kernel drops it with the process, however that ends. Windows needs no
+// extra lock: Qt opens without FILE_SHARE_DELETE, so nobody can delete the
+// file while the download writes it.
 class PartFile {
 public:
     explicit PartFile(const QString& finalPath)
@@ -87,10 +107,23 @@ public:
             if (m_file.open(QIODevice::WriteOnly | QIODevice::NewOnly)) break;
             m_lastError = m_file.errorString();
         }
+#if !defined(Q_OS_WIN)
+        if (m_file.isOpen()) {
+            m_lockFd = ::open(QFile::encodeName(m_file.fileName()).constData(),
+                              O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+            if (m_lockFd < 0 || ::flock(m_lockFd, LOCK_EX | LOCK_NB) != 0) {
+                qWarning("update: no lock on %s (%s) — after %d min of silence "
+                         "another instance would take it for a remnant",
+                         qPrintable(m_file.fileName()), qPrintable(qt_error_string(errno)),
+                         int(kStalePartAgeSeconds / 60));
+            }
+        }
+#endif
     }
     ~PartFile()
     {
         if (!m_kept) discard();
+        unlock();
     }
     PartFile(const PartFile&) = delete;
     PartFile& operator=(const PartFile&) = delete;
@@ -103,14 +136,121 @@ public:
     {
         m_file.close();
         if (!m_file.fileName().isEmpty()) QFile::remove(m_file.fileName());
+        unlock();
     }
-    void keep() { m_kept = true; }
+    void keep()
+    {
+        m_kept = true;
+        unlock();
+    }
 
 private:
+    void unlock()
+    {
+#if !defined(Q_OS_WIN)
+        if (m_lockFd >= 0) ::close(m_lockFd);  // releases the flock
+        m_lockFd = -1;
+#endif
+    }
+
     QFile m_file;
     QString m_lastError;
     bool m_kept = false;
+#if !defined(Q_OS_WIN)
+    int m_lockFd = -1;
+#endif
 };
+
+// Remnants of an earlier download of the SAME name in the SAME folder
+// (2026-10-16, EmbyStudio EMB-283): an app that dies between creating its
+// <name>.XXXXXX.part and renaming it (SIGKILL, crash, power) leaves the part
+// behind — an update DMG is 30–40 MB. The next download of that name clears
+// them, and only what is provably such a remnant:
+//   - the hub's exact pattern <name>.<6 of [A-Za-z0-9]>.part, nothing else;
+//   - a regular file — no symlink, no junction, no folder;
+//   - last written more than kStalePartAgeSeconds ago. A live download
+//     writes it all the time; the age only covers the instant between
+//     creating and locking (below) and must not let a sweep delete a part
+//     another instance has just created;
+//   - not in use: POSIX takes the flock() a living PartFile holds (a
+//     stalled download keeps an OLD part locked — no timeout in this
+//     downloader, so age alone proves nothing); Windows: a file a download
+//     writes cannot be deleted (no FILE_SHARE_DELETE), the removal fails
+//     and the file stays.
+// Every removal is logged with qWarning, and so is every remnant that stays
+// for any other reason than its age.
+// Guard: UpdateDownloadReplace.ARemnant* / AStalledDownload* (both run on
+// every platform).
+void sweepStaleParts(const QString& destDir, const QString& fileName)
+{
+    const QRegularExpression pattern(
+        QStringLiteral("\\A%1\\.[A-Za-z0-9]{6}\\.part\\z")
+            .arg(QRegularExpression::escape(fileName)));
+    const QDateTime now = QDateTime::currentDateTime();
+    const QFileInfoList candidates = QDir(destDir).entryInfoList(
+        {QStringLiteral("*.part")},
+        QDir::Files | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot);
+    for (const QFileInfo& fi : candidates) {
+        if (!pattern.match(fi.fileName()).hasMatch()) continue;
+        const QString path = fi.absoluteFilePath();
+        if (fi.isSymLink() || fi.isJunction() || !fi.isFile()) {
+            qWarning("update: %s matches a download part but is no regular "
+                     "file — left alone", qPrintable(path));
+            continue;
+        }
+        const QDateTime written = fi.lastModified();
+        if (!written.isValid() || written.secsTo(now) <= kStalePartAgeSeconds) {
+            continue;  // young: possibly another instance's download
+        }
+#if defined(Q_OS_WIN)
+        QFile file(path);
+        if (!file.remove()) {
+            qWarning("update: download remnant %s stays (%s) — another "
+                     "download may still write it",
+                     qPrintable(path), qPrintable(file.errorString()));
+            continue;
+        }
+#else
+        const QByteArray native = QFile::encodeName(path);
+        const int fd = ::open(native.constData(),
+                              O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
+        if (fd < 0) {
+            qWarning("update: download remnant %s stays (cannot open: %s)",
+                     qPrintable(path), qPrintable(qt_error_string(errno)));
+            continue;
+        }
+        struct stat st {};
+        if (::fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+            ::close(fd);
+            qWarning("update: %s is no regular file — left alone", qPrintable(path));
+            continue;
+        }
+        if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
+            const int err = errno;
+            ::close(fd);
+            if (err != EWOULDBLOCK) {
+                qWarning("update: download remnant %s stays (no lock: %s — "
+                         "cannot prove it unused)",
+                         qPrintable(path), qPrintable(qt_error_string(err)));
+            }
+            continue;  // EWOULDBLOCK: a living download holds it
+        }
+        // Holding the lock: no download can own it until it is gone.
+        const bool removed = ::unlink(native.constData()) == 0;
+        const int err = errno;
+        ::close(fd);
+        if (!removed) {
+            qWarning("update: download remnant %s stays (%s)",
+                     qPrintable(path), qPrintable(qt_error_string(err)));
+            continue;
+        }
+#endif
+        qWarning("update: removed download remnant %s (%lld bytes, last "
+                 "written %s)",
+                 qPrintable(path), static_cast<long long>(fi.size()),
+                 qPrintable(written.toUTC().toString(Qt::ISODate)));
+    }
+}
 
 }  // namespace
 
@@ -398,6 +538,7 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
     // into the existing name (WriteOnly|Truncate, the old way) kept that
     // file's inode with a browser's com.apple.quarantine and wrote THROUGH a
     // symlink lying there (measured, EmbyStudio EMB-280).
+    sweepStaleParts(destDir, fileName);  // remnants of a hard end, see there
     auto part = std::make_shared<PartFile>(localPath);
     if (!part->isOpen()) {
         callback(QString(), QStringLiteral("cannot write %1.XXXXXX.part: %2")

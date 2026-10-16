@@ -91,11 +91,34 @@ jobs:
           modules: qtserialport qtshadertools
           cache: true
 
+      # TMPDIR-Messung (QTMUX-148). Apple clang 21 lässt bei einem Bau mit MEHREREN
+      # -arch je übersetzter Datei und Architektur einen leeren Ordner im TMPDIR
+      # liegen; die Familien-Repos mit universalen Mac-Bauten leiten TMPDIR darum
+      # beim Konfigurieren/Bauen in runner.temp um. QTmux baut hier single-arch
+      # (lokal gemessen: eine Architektur → 0 Ordner, zwei → 2 je Datei), und ein
+      # GitHub-gehosteter Runner ist je Job eine frische VM. Deshalb KEINE
+      # Umleitung — nur diese zwei Belegzeilen: Ausgangsstand (zeigt, ob ein
+      # früherer Job etwas hinterließ) und Stand nach dem Bau (zeigt, ob der Bau
+      # selbst Ordner anlegt). Wächst die zweite Zahl über die erste, baut QTmux
+      # inzwischen universal — dann die Umleitung nachziehen.
+      - name: TMPDIR vor dem Bau (macOS)
+        if: matrix.host == 'mac'
+        run: |
+          T="${TMPDIR:-/tmp}"
+          echo "BUILD-TMPDIR-START: $(find "$T" -mindepth 1 -maxdepth 1 -type d -empty | wc -l | tr -d ' ') empty folders, $(find "$T" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ') entries in $T (runner ${RUNNER_NAME}, image ${ImageOS:-?} ${ImageVersion:-?})"
+
       - name: Konfigurieren
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
 
       - name: Bauen
         run: cmake --build build --parallel
+
+      - name: TMPDIR nach dem Bau (macOS)
+        if: matrix.host == 'mac'
+        run: |
+          T="${TMPDIR:-/tmp}"
+          echo "BUILD-TMPDIR: $(find "$T" -mindepth 1 -maxdepth 1 -type d -empty | wc -l | tr -d ' ') empty folders, $(find "$T" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ') entries in $T after the build"
+          echo "BUILD-ARCH: $(grep -o -- '-arch [a-z0-9_]*' build/build.ninja | sort | uniq -c | tr '\n' ' ')"
 
       # Tests headless (offscreen-Plattform → kein Display/GPU nötig).
       - name: Tests (macOS/Linux)

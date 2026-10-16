@@ -590,6 +590,62 @@ private slots:
         QCOMPARE(QDir(vm.downloadDir()).entryList(QDir::Files).size(), 0);
     }
 
+    // Hub-Stand MAC-99 im QTmux-eigenen Update-Ordner: ein Rest
+    // <Name>.XXXXXX.part, den ein hartes Ende der App mitten im Download
+    // hinterließ, verschwindet beim nächsten Download desselben Pakets. Ein Rest
+    // eines ANDEREN Pakets (andere Version) bleibt — er gehört nicht zu diesem
+    // Namen. Das Muster und die Riegel prüft test_updater; hier zählt, dass der
+    // Weg über das ViewModel in den echten Ordner `QTmux-Updates` führt.
+    void aRemnantInTheUpdateFolderIsClearedByTheNextDownload() {
+        const auto settle = [](UpdateViewModel &vm) {
+            bool done = false;
+            auto c = connect(&vm, &UpdateViewModel::stateChanged, [&] {
+                if (vm.state() == UpdateViewModel::Ready
+                    || vm.state() == UpdateViewModel::Failed) done = true;
+            });
+            vm.download();
+            spinUntil(done);
+            disconnect(c);
+        };
+        const auto aged = [](const QString &path, const QByteArray &bytes) {
+            QFile f(path);
+            return f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size()
+                   && f.setFileTime(QDateTime::currentDateTime().addSecs(-3600),
+                                    QFileDevice::FileModificationTime);
+        };
+        QString target;
+        {
+            UpdateViewModel vm;
+            vm.setBaseUrl(baseFor(QStringLiteral("good")));
+            QVERIFY(runCheck(vm, true));
+            settle(vm);
+            QVERIFY2(vm.state() == UpdateViewModel::Ready, qPrintable(vm.lastError()));
+            target = vm.downloadedPath();
+        }
+        const QString dir = QFileInfo(target).absolutePath();
+        QCOMPARE(dir, QDir(UpdateViewModel().downloadDir()).absolutePath());
+        const QString remnant = target + QStringLiteral(".Qx7Kp2.part");
+        const QString foreign = dir + QStringLiteral("/QTmux-9.9.8-anders.bin.Qx7Kp2.part");
+        QVERIFY(aged(remnant, QByteArray(40000, 'r')));
+        QVERIFY(aged(foreign, "anderes Paket"));
+        {
+            UpdateViewModel vm;
+            vm.setBaseUrl(baseFor(QStringLiteral("good")));
+            QVERIFY(runCheck(vm, true));
+            settle(vm);
+            QVERIFY2(vm.state() == UpdateViewModel::Ready, qPrintable(vm.lastError()));
+            QCOMPARE(vm.downloadedPath(), target);
+        }
+        const bool remnantGone = !QFileInfo::exists(remnant);
+        const bool foreignStays = QFileInfo::exists(foreign);
+        QFile::remove(foreign);
+        QFile::remove(remnant);
+        QFile::remove(target);
+        QVERIFY2(remnantGone, "Der Rest des abgebrochenen Downloads liegt noch im Update-Ordner");
+        QVERIFY2(foreignStays, "Das Aufräumen nahm den Rest eines anderen Pakets mit");
+        QCOMPARE(QDir(dir).entryList(QDir::Files | QDir::Hidden).size(), 0);
+    }
+
     // Der Download landet in einem eigenen Unterordner, nicht lose in Downloads.
     void downloadDirIsItsOwnFolder() {
         UpdateViewModel vm;

@@ -9,9 +9,25 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `f2d9ac75544c4d3cf575b14aedf2e8415d9a69b9` |
-| Datum | 2026-10-15 |
-| Betreff | `MAC-95: Windows-Download repariert (QFile NewOnly statt QTemporaryFile), Riegel gegen Haenger` |
+| Commit | `4a645a4d59adc443d059c4412547616c20b6a1fd` |
+| Datum | 2026-10-16 |
+| Betreff | `MAC-98/99/100: hartes Ende der App nimmt den Claude-Code-Baum mit, .part-Reste werden abgeraeumt, TMPDIR der Mac-Jobs` |
+
+Abgleich 2026-10-16 (QTMUX-148): `git log f2d9ac7..4a645a4 -- src/update/` nennt genau
+**einen** Commit, `4a645a4`, und der ändert genau **eine** Datei, `UpdateChecker.cpp` (keine
+neue). **Verhalten (MAC-99):** Vor jedem Download räumt `sweepStaleParts` im Zielordner alte
+`<Name>.XXXXXX.part` DESSELBEN Namens ab — Reste einer App, die zwischen Anlegen und
+Umbenennen hart endete. Riegel: genaues Muster, gewöhnliche Datei (kein Symlink), älter als
+10 min, nicht belegt (POSIX: `flock()`, das jeder lebende Download auf seiner Zwischendatei
+hält; Windows: Qt öffnet ohne `FILE_SHARE_DELETE`). Jede Löschung per `qWarning`. Die übrigen
+Teile des Commits (MAC-98 Claude-Code-Prozessbaum, MAC-100 Workflow) liegen außerhalb von
+`src/update/`. Der Hub stand beim Abgleich schon auf dem Folge-Commit `d3d25ef` (nur Doku,
+`git diff 4a645a4 d3d25ef -- src/update/` leer); gepinnt ist der Code-Stand mit grüner Hub-CI.
+Der Wächter meldete vorher Exit 1 („ABWEICHUNG“ nur für `UpdateChecker.cpp`), nach
+`--update` Exit 0 mit 19/8/5/1 verglichenen Dateien; zusätzlich `git ls-tree -r 4a645a4
+src/update/` gegen `git hash-object` der vendierten Dateien blob-gleich (19/19). Kein
+CMake-Eingriff. Wirkung in QTmux gemessen und als Wächter festgehalten: Feature-Referenz
+„Online-Update“ (`tst_updater`, `tst_updateviewmodel`).
 
 Abgleich 2026-10-15 (QTMUX-147): `git log aa73f21..f2d9ac7 -- src/update/` nennt
 **zwei** Commits, `7eeb0e8` (MAC-95/96/97) und `f2d9ac7` (MAC-95, Windows-Fix). Geändert
