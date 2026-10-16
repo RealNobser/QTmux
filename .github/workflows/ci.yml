@@ -95,17 +95,20 @@ jobs:
       # -arch je übersetzter Datei und Architektur einen leeren Ordner im TMPDIR
       # liegen; die Familien-Repos mit universalen Mac-Bauten leiten TMPDIR darum
       # beim Konfigurieren/Bauen in runner.temp um. QTmux baut hier single-arch
-      # (lokal gemessen: eine Architektur → 0 Ordner, zwei → 2 je Datei), und ein
-      # GitHub-gehosteter Runner ist je Job eine frische VM. Deshalb KEINE
-      # Umleitung — nur diese zwei Belegzeilen: Ausgangsstand (zeigt, ob ein
-      # früherer Job etwas hinterließ) und Stand nach dem Bau (zeigt, ob der Bau
-      # selbst Ordner anlegt). Wächst die zweite Zahl über die erste, baut QTmux
-      # inzwischen universal — dann die Umleitung nachziehen.
+      # (lokal gemessen: eine Architektur → 0 Ordner, zwei → 2 je Datei; ein
+      # kompletter lokaler QTmux-Bau → 0), und ein GitHub-gehosteter Runner ist je
+      # Job eine frische VM. Deshalb KEINE Umleitung — nur Belegzeilen:
+      # Ausgangsstand (zeigt, ob ein früherer Job etwas hinterließ), Stand nach dem
+      # Bau, die NAMEN der dabei neu entstandenen leeren Ordner und die -arch-Flags.
+      # Eine Differenz allein ist kein Alarm (der erste Lauf zeigte +8 bei einem
+      # einzigen -arch); erst BUILD-ARCH mit zwei Architekturen verlangt die
+      # Umleitung.
       - name: TMPDIR vor dem Bau (macOS)
         if: matrix.host == 'mac'
         run: |
           T="${TMPDIR:-/tmp}"
-          echo "BUILD-TMPDIR-START: $(find "$T" -mindepth 1 -maxdepth 1 -type d -empty | wc -l | tr -d ' ') empty folders, $(find "$T" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ') entries in $T (runner ${RUNNER_NAME}, image ${ImageOS:-?} ${ImageVersion:-?})"
+          find "$T" -mindepth 1 -maxdepth 1 -type d -empty | sort > "$RUNNER_TEMP/tmpdir-empty-start.txt"
+          echo "BUILD-TMPDIR-START: $(wc -l < "$RUNNER_TEMP/tmpdir-empty-start.txt" | tr -d ' ') empty folders, $(find "$T" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ') entries in $T (runner ${RUNNER_NAME}, image ${ImageOS:-?} ${ImageVersion:-?})"
 
       - name: Konfigurieren
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
@@ -117,7 +120,11 @@ jobs:
         if: matrix.host == 'mac'
         run: |
           T="${TMPDIR:-/tmp}"
-          echo "BUILD-TMPDIR: $(find "$T" -mindepth 1 -maxdepth 1 -type d -empty | wc -l | tr -d ' ') empty folders, $(find "$T" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ') entries in $T after the build"
+          find "$T" -mindepth 1 -maxdepth 1 -type d -empty | sort > "$RUNNER_TEMP/tmpdir-empty-end.txt"
+          echo "BUILD-TMPDIR: $(wc -l < "$RUNNER_TEMP/tmpdir-empty-end.txt" | tr -d ' ') empty folders, $(find "$T" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ') entries in $T after the build"
+          # Welche leeren Ordner kamen während Konfigurieren + Bauen hinzu (Namen,
+          # höchstens 20) — damit eine wachsende Zahl einen Verursacher hat.
+          echo "BUILD-TMPDIR-NEW: $(comm -13 "$RUNNER_TEMP/tmpdir-empty-start.txt" "$RUNNER_TEMP/tmpdir-empty-end.txt" | xargs -n1 basename 2>/dev/null | head -20 | tr '\n' ' ')"
           echo "BUILD-ARCH: $(grep -o -- '-arch [a-z0-9_]*' build/build.ninja | sort | uniq -c | tr '\n' ' ')"
 
       # Tests headless (offscreen-Plattform → kein Display/GPU nötig).
