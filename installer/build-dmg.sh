@@ -25,14 +25,14 @@
 # /Applications/QTmux.app`). Der eingebaute Updater lädt ohne Quarantäne (QTMUX-146).
 set -euo pipefail
 
-VERSION="${1:-1.9.9}"
+VERSION="${1:-1.9.10}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PRESET="macos-release"
 # Ausweich-Build-Verzeichnis wie beim AppImage-Skript (QTMUX_BUILD_DIR). Nötig, wenn
 # aus build/macos-release gerade eine QTmux-Instanz LÄUFT: Der Release-Build würde
 # deren Binary im Betrieb überschreiben und den Prozess mitsamt allen Terminal-
 # Sessions abreißen. Dann hierhin ausweichen, statt die laufende Arbeit zu verlieren:
-#   QTMUX_BUILD_DIR=build/macos-dmg installer/build-dmg.sh 1.9.9
+#   QTMUX_BUILD_DIR=build/macos-dmg installer/build-dmg.sh 1.9.10
 BUILD_DIR="${QTMUX_BUILD_DIR:-$REPO/build/$PRESET}"
 [[ "$BUILD_DIR" = /* ]] || BUILD_DIR="$REPO/$BUILD_DIR"
 APP_SRC="$BUILD_DIR/qtmux.app"
@@ -73,6 +73,17 @@ cp -R "$APP_SRC" "$APP"
 # optionale QML-Module, die QtQuick.Controls referenziert, die wir aber nicht nutzen
 # und die hier nicht installiert sind — der Lauf bündelt die benötigten Module trotzdem.
 "$MACDEPLOYQT" "$APP" -qmldir="$REPO/qml" || true
+
+# Ein Release ohne CAN-Plugin entsteht sonst STILL: Fehlt PCBUSB, überspringt CMake das Plugin
+# ohne Fehler, und alles bleibt grün (beim 1.9.9-Bau in einem frischen Baum passiert, aufgefallen
+# nur am Dateilisten-Vergleich gegen 1.9.8). Nur für Release-Bauten; ohne `require` bleibt der
+# Bau ohne PCBUSB erlaubt (öffentliches Repo, PCBUSB ist nicht enthalten).
+if [[ "${FAMILY_CODESIGN:-}" == "require" ]]; then
+    for f in "$APP/Contents/PlugIns/libqtmux_macpcan_plugin.dylib" \
+             "$APP/Contents/Frameworks/libPCBUSB.0.13.dylib"; do
+        [[ -f "$f" ]] || { echo "FEHLER: Release-Bau ohne CAN-Plugin: $f fehlt (QTMUX_PCBUSB_DIR setzen)." >&2; exit 1; }
+    done
+fi
 
 # macdeployqt schreibt rpaths NACH seiner internen Ad-hoc-Signatur um → die Signatur
 # einzelner mitkopierter dylibs (z. B. libbrotlicommon) wird ungültig, und auf Apple

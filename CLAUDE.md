@@ -96,7 +96,9 @@ QT_QPA_PLATFORM=offscreen ./build/macos/qtmux.app/Contents/MacOS/qtmux   # headl
 
 **DMG:** `installer/build-dmg.sh [version]` — baut `macos-release` (oder `QTMUX_BUILD_DIR`,
 wenn aus `macos-release` gerade eine Instanz läuft), `macdeployqt -qmldir=qml`
-(self-contained inkl. Plugins/PCBUSB), dann **Re-Signatur mit der Familien-Identität**
+(self-contained inkl. Plugins/PCBUSB; 🔑 PCBUSB kommt aus `QTMUX_PCBUSB_DIR` oder dem Nachbar-
+Checkout `../MacPCAN`, fehlt es, bricht der Release-Bau mit `FAMILY_CODESIGN=require` ab, statt
+das CAN-Plugin still wegzulassen), dann **Re-Signatur mit der Familien-Identität**
 (`installer/macos/sign-bundle.sh`, aus MacPCAN vendiert, Kontrakt 4 im Sync-Wächter; innen →
 außen, kein `--deep` — macdeployqt schreibt rpaths NACH seiner Signatur um → ungültig; Apple
 Silicon startet nur signiert), `hdiutil`-DMG → `dist/QTmux-<ver>-macos.dmg`. Seit 2026-10-07
@@ -330,6 +332,13 @@ C CXX)` ist Pflicht (ohne `C` → leere `vterm.lib` → Linkfehler).
 macOS/Windows/Linux; Qt via `jurplel/install-qt-action` (Module **qtserialport** +
 **qtshadertools**). Linux-Job packt zusätzlich bei jedem Lauf das AppImage (Wächter für
 `build-appimage.sh` + linuxdeploy-Pin) — **hochgeladen wird es dort nicht**.
+🔴 **Linux-Runner fest auf `ubuntu-24.04`, nicht `ubuntu-latest` (2026-11-03).** Das AppImage
+bündelt die glibc nicht, seine Mindestanforderung folgt dem Runner-Image. `ubuntu-latest` sprang
+still auf 26.04 und hob sie von GLIBC 2.38 auf 2.43 — auf Ubuntu 24.04 LTS wäre das Image nicht
+mehr gestartet, und per Selbstersetzung wäre die Installation kaputt gewesen. CI und Bau blieben
+grün, aufgefallen nur an `Image:` im Job-Log und am Inhaltsvergleich gegen das Vorrelease.
+Messgerät: höchstes `GLIBC_` in `usr/lib`/`usr/bin` des extrahierten Images. Das Anheben ist eine
+Owner-Entscheidung, keine Runner-Nebenwirkung.
 🔑 **Release-AppImage = GitHub-Release-Asset, KEIN Actions-Artefakt (QTMUX-136,
 2026-09-28).** Die Artefakt-Quota ist **account-weit** (alle Repos von RealNobser) und war
 am 2026-09-28 voll (EmbyStudios 0.0.4-Tag-Lauf scheiterte dreimal allein am Upload);

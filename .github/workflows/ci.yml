@@ -42,7 +42,10 @@ jobs:
         include:
           - { name: macOS,   os: macos-latest,   host: mac,     arch: clang_64 }
           - { name: Windows, os: windows-latest, host: windows, arch: win64_msvc2022_64 }
-          - { name: Linux,   os: ubuntu-latest,  host: linux,   arch: linux_gcc_64 }
+          # Linux bewusst fest, nicht ubuntu-latest: Das AppImage bündelt die glibc nicht,
+          # seine Mindestanforderung folgt also dem Runner-Image. Der stille Sprung auf 26.04
+          # hob sie von GLIBC 2.38 auf 2.43 (auf Ubuntu 24.04 LTS nicht mehr lauffähig).
+          - { name: Linux,   os: ubuntu-24.04,   host: linux,   arch: linux_gcc_64 }
 
     steps:
       - uses: actions/checkout@v5
@@ -153,7 +156,7 @@ jobs:
           QTMUX_BUILD_DIR: build
         run: |
           sudo apt-get install -y libfuse2 || true
-          bash installer/build-appimage.sh 1.9.9
+          bash installer/build-appimage.sh 1.9.10
 
       # Das gepackte AppImage bleibt in diesem Job liegen — es wird NIRGENDS
       # hochgeladen (QTMUX-136). Der Pack-Schritt oben läuft trotzdem bei jedem
@@ -184,7 +187,7 @@ jobs:
   linux-release:
     name: Linux-AppImage → Release-Asset
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # fest wie der Linux-Matrix-Job: bestimmt die glibc-Anforderung des AppImage
     # Nur Tag-Pushes; ein pull_request erreicht diesen Job nie. Der Fork-Riegel
     # steht trotzdem (Familienregel; das Repo ist öffentlich).
     # Einmal geprobt mit dem Wegwerf-Tag appimage-probe-1 (Lauf 36484293842,

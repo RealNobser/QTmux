@@ -16,7 +16,7 @@ set(_pcbusb_candidates
     "${QTMUX_PCBUSB_DIR}"
     "$ENV{QTMUX_PCBUSB_DIR}"
     "${CMAKE_SOURCE_DIR}/third_party/PCBUSB"
-    "$ENV{HOME}/Projects/GitHub/MacPCAN/third_party/PCBUSB"
+    "${CMAKE_SOURCE_DIR}/../MacPCAN/third_party/PCBUSB"
 )
 set(_pcbusb_dir "")
 foreach(_cand IN LISTS _pcbusb_candidates)

@@ -1,7 +1,7 @@
 # QTmux
 
 [![CI](https://github.com/RealNobser/QTmux/actions/workflows/ci.yml/badge.svg)](https://github.com/RealNobser/QTmux/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.9.9-blue)
+![Version](https://img.shields.io/badge/version-1.9.10-blue)
 ![Plattformen](https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-supported-success)
 [![Lizenz](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
@@ -70,7 +70,7 @@ alles andere kommt von Qt oder dem System.
 
 **Funktionsreich und in aktiver Entwicklung.** Die Kernphasen (Terminal-Kern, Sessions &
 Layout, Agent-Awareness, SSH/Serial, Plugin-System) sind abgeschlossen; aktuelle Version
-**1.9.9** mit Early-Adopter-Installern für **macOS, Windows und Linux**. Siehe [Roadmap](#roadmap).
+**1.9.10** mit Early-Adopter-Installern für **macOS, Windows und Linux**. Siehe [Roadmap](#roadmap).
 
 <a id="agenten-steuern-mcp"></a>
 ### Agenten steuern (MCP)
@@ -176,9 +176,9 @@ Early-Adopter-Stand.
 
 | Plattform | Befehl | Ergebnis |
 |---|---|---|
-| macOS | [`installer/build-dmg.sh`](installer/build-dmg.sh) `1.9.9` | `dist/QTmux-1.9.9-macos.dmg` |
-| Windows | [`installer\build-msi.ps1`](installer/build-msi.ps1) `-Version 1.9.9` | `dist\QTmux-1.9.9-win64.msi` (+ portables ZIP) |
-| Linux | [`installer/build-appimage.sh`](installer/build-appimage.sh) `1.9.9` | `dist/QTmux-1.9.9-x86_64.AppImage` |
+| macOS | [`installer/build-dmg.sh`](installer/build-dmg.sh) `1.9.10` | `dist/QTmux-1.9.10-macos.dmg` |
+| Windows | [`installer\build-msi.ps1`](installer/build-msi.ps1) `-Version 1.9.10` | `dist\QTmux-1.9.10-win64.msi` (+ portables ZIP) |
+| Linux | [`installer/build-appimage.sh`](installer/build-appimage.sh) `1.9.10` | `dist/QTmux-1.9.10-x86_64.AppImage` |
 
 **macOS (DMG):** Release-Build → `macdeployqt` → Signatur mit eigener Identität → `hdiutil`.
 Nicht notarisiert: Wurde das DMG per Browser geladen, lässt sich QTmux beim ersten Start erst
@@ -270,7 +270,7 @@ everything else comes from Qt or the system.
 
 **Feature-rich and under active development.** The core phases (terminal core, sessions &
 layout, agent awareness, SSH/serial, plugin system) are complete; the current version is
-**1.9.9** with early-adopter installers for **macOS, Windows and Linux**. See the [Roadmap](#roadmap-1).
+**1.9.10** with early-adopter installers for **macOS, Windows and Linux**. See the [Roadmap](#roadmap-1).
 
 <a id="driving-agents-mcp"></a>
 ### Driving agents (MCP)
@@ -375,9 +375,9 @@ early-adopter state.
 
 | Platform | Command | Output |
 |---|---|---|
-| macOS | [`installer/build-dmg.sh`](installer/build-dmg.sh) `1.9.9` | `dist/QTmux-1.9.9-macos.dmg` |
-| Windows | [`installer\build-msi.ps1`](installer/build-msi.ps1) `-Version 1.9.9` | `dist\QTmux-1.9.9-win64.msi` (+ portable ZIP) |
-| Linux | [`installer/build-appimage.sh`](installer/build-appimage.sh) `1.9.9` | `dist/QTmux-1.9.9-x86_64.AppImage` |
+| macOS | [`installer/build-dmg.sh`](installer/build-dmg.sh) `1.9.10` | `dist/QTmux-1.9.10-macos.dmg` |
+| Windows | [`installer\build-msi.ps1`](installer/build-msi.ps1) `-Version 1.9.10` | `dist\QTmux-1.9.10-win64.msi` (+ portable ZIP) |
+| Linux | [`installer/build-appimage.sh`](installer/build-appimage.sh) `1.9.10` | `dist/QTmux-1.9.10-x86_64.AppImage` |
 
 **macOS (DMG):** release build → `macdeployqt` → signing with a self-issued identity →
 `hdiutil`. Not notarized: if the DMG was downloaded with a browser, the first launch needs
