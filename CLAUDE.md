@@ -692,13 +692,41 @@ Standardweg für visuelle Abnahmen. ⚠️ Er setzt `QTMUX_NO_GPU=1` und fotogra
 **QPainter-Fallback**: Fehler im Glyph-Atlas (QTMUX-97) sind darauf **prinzipiell unsichtbar**.
 Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fallen, nicht hier.
 
-## Arbeitsstand & Wiedereinstieg (2026-10-10)
+## Arbeitsstand & Wiedereinstieg (2026-11-03)
 
 > Die EINE Stelle für den aktuellen Stand (Pflegeregeln 2–4 oben). Verlauf steht in
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.9.8 — Wartungsrelease (2026-10-10, letztes Release der Familien-Runde
+**Ausgeliefert: v1.9.10 — Wartungsrelease (2026-11-03, Owner-Auftrag).** Tag `v1.9.10` (annotiert)
+auf dem Bau-Commit `32a1daa`, Bump 15/15 Zeilen. Inhalt gegenüber 1.9.8: QTMUX-145…149. Alle vier
+Artefakte aus `32a1daa`, Build-ID `1.9.10+32a1daa` je Artefakt EINZELN gemessen (ASCII + UTF-16,
+kein `-dirty`/`+unknown`, 0 Reste von `1.9.8`/`1.9.9`):
+
+| Artefakt | Bytes | SHA256 |
+|---|---|---|
+| `QTmux-1.9.10-macos.dmg` | 59 779 772 | `2d437e1470963b236a051f584e3d70a23b8de9fd4146ba6ac9d01a55d5703ef3` |
+| `QTmux-1.9.10-win64.msi` | 31 947 435 | `7188c2f47215afaca0055951b7c00b04153ed8868658a6275d8f123fa9b104bf` |
+| `QTmux-1.9.10-win64-portable.zip` | 39 289 663 | `2262eb2929fe41e5d7f5e04fcdadc6db2dffaf41dbd4585a3296d5a45fd1c780` |
+| `QTmux-1.9.10-x86_64.AppImage` | 44 882 424 | `ec32ae81153ac4a58ca86d81d0ac7b279143af6d2537e96f9d58a8b8e5531fe1` |
+
+CI: main-Lauf `41731573314`, Tag-Lauf `41732610600`, je macOS/Linux 44/44, Windows 42/42,
+`test_conptyreplay` je Job als `Passed` gelesen. DMG: DR `certificate root`, 168/168 Mach-O,
+Plugin + PCBUSB enthalten, Lebendtest aus dem gemounteten Image. Eigene Publish-Abnahme: Index-Diff =
+genau qtmux `1.9.8`→`1.9.10` + `updated`, Signatur gegen die Client-Bytes gültig, Gegentest fällt, drei
+Artefakte `cmp`-gleich. Benutzerdoku dual (on-prem v27, Cloud v26), Jira QTMUX-149 dual Done.
+🔴 **`v1.9.9` wurde vor der Veröffentlichung verworfen** (kein Update-Server, nie „Latest“): Am
+fertigen Artefakt fielen bei grüner CI zwei Fehler auf, die nur der Inhaltsvergleich gegen 1.9.8 zeigte —
+AppImage verlangte GLIBC 2.43 (Runner-Sprung) und im frischen DMG-Baum fehlte das CAN-Plugin (beide
+Riegel im Build-Abschnitt bzw. CI-Abschnitt). Tag und Draft `v1.9.9` stehen noch, das Löschen ist offen.
+🔑 **Größen gegen 1.9.8 am Inhalt erklärt:** DMG-Inhalt −4,3 MB (Homebrew-Qt 6.11.1→6.11.2, OpenSSL
+3.6→4.0, TLS-Abruf mit den Bundle-Bibliotheken belegt; hdiutil streut zusätzlich: gleicher Inhalt ergab
+61,8 und 59,8 MB) · MSI +12 289 B, ZIP +2 731 B (1456 = 1456 Dateien, nur `qtmux.exe` +4 096 und
+`LIESMICH.txt` +80) · AppImage +8 192 B (1672 = 1672 Dateien, `qtmux` +12 288, Runner-Image-Neubauten).
+⚠️ Ein `build-msi.ps1`-Aufruf aus `powershell -EncodedCommand` braucht `-ExecutionPolicy Bypass`:
+ohne ihn endet er sofort ohne Artefakt, und `$LASTEXITCODE` zeigt noch die 0 des vorigen Befehls.
+
+Davor: **v1.9.8 — Wartungsrelease (2026-10-10, letztes Release der Familien-Runde
 MacPCAN 0.6.0 → RAFTNG 0.10.1 → QTmux, Orchestrator-Auftrag mit Owner-Freigabe).** Tag
 `v1.9.8` (annotiert) auf dem Bau-Commit `58931b0` (Bump aller sechs manuellen Stellen,
 15/15 Zeilen). Inhalt gegenüber 1.9.7: **QTMUX-141** (`5f4f9c6`), **QTMUX-142** (`1b01b4d`),
@@ -796,7 +824,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-148** (alte `.part`-Reste eines harten Endes räumt der nächste Download ab, Hub `4a645a4` vendiert, + TMPDIR-Messung macOS-CI, 2026-10-16 dual angelegt; davor QTMUX-147 Download ersetzt den Zielnamen statt hineinzuschreiben, Hub `f2d9ac7` vendiert, 2026-10-15 dual angelegt; davor QTMUX-146 Update-Dialog ohne Rechtsklick-Rat + Hub-`quarantineState`, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+**QTMUX-149** (ConPTY-Fixes aus dem Clink-Befund, 2026-11-03 beidseitig Done am Ticket gelesen; davor QTMUX-148 alte `.part`-Reste eines harten Endes räumt der nächste Download ab, Hub `4a645a4` vendiert, + TMPDIR-Messung macOS-CI, 2026-10-16 dual angelegt; davor QTMUX-147 Download ersetzt den Zielnamen statt hineinzuschreiben, Hub `f2d9ac7` vendiert, 2026-10-15 dual angelegt; davor QTMUX-146 Update-Dialog ohne Rechtsklick-Rat + Hub-`quarantineState`, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
@@ -838,15 +866,14 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
-🔧 **2026-11-03: Clink-Auftrag (Orchestrator-Auftrag 2026-11-03, außerhalb des Repos)
-— lokal committet, NICHT gepusht (Push nur auf Orchestrator-/Owner-Wort).** ConPTY-Reflow bei
-Größenänderung + Verlauf vor dem ConPTY-Start-`ESC[2J` in den Scrollback (Mechanik in der
-Feature-Referenz, „ConPTY malt nach jeder Größenänderung neu“ und QTMUX-130-Absatz). Bericht
-mit Mitschnitten und Owner-Abnahme: Orchestrator-Bericht 2026-11-03, außerhalb des Repos.
-Kein Jira-Ticket angelegt (ohne Rückfrage nicht erlaubt). libvterm-Reflow braucht Patch 4
-(s. Abschnitt libvterm). Symptom „Auto-Copy“: QTmux verhält sich korrekt, ConPTY liefert mit und
+🔧 **2026-11-03: QTMUX-149 ausgeliefert mit 1.9.10, Owner-Test unter Windows steht aus.** ConPTY-Reflow
+bei Größenänderung + Verlauf vor dem ConPTY-Start-`ESC[2J` in den Scrollback (Mechanik in der
+Feature-Referenz, „ConPTY malt nach jeder Größenänderung neu“ und QTMUX-130-Absatz). libvterm-Reflow
+braucht Patch 4 (s. Abschnitt libvterm). Am echten Windows-Fenster bisher nicht gesehen, belegt sind
+die Bytes im Replay. Offen: Symptom „Auto-Copy“: QTmux verhält sich korrekt, ConPTY liefert mit und
 ohne Clink dieselben Bytes; Kandidat ist Claude Codes Renderer-Wahl (Vollbild/klassisch, s.
-`docs/e2e-fallen.md`), für cmd+Clink nicht am echten Programm belegt — offen beim Owner.
+`docs/e2e-fallen.md`), für cmd+Clink nicht am echten Programm belegt — Einzeltest beim Owner:
+`set CLAUDE_CODE_NO_FLICKER=1`, dann `claude`. Tag und Draft `v1.9.9` warten aufs Löschen.
 
 ✅ **2026-10-16: QTMUX-148 — alte `.part`-Reste räumt der nächste Download ab, unreleased
 (Familien-Auftrag „0124“, Owner-Freigabe).** Hub-Updater auf `4a645a4` (MAC-99) vendiert,
