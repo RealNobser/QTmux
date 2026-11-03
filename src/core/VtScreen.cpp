@@ -251,6 +251,12 @@ bool VtScreen::clearViewportKeepScrollback() {
     return true;
 }
 
+void VtScreen::setReflow(bool on) {
+    if (on == m_reflow) return;
+    m_reflow = on;
+    vterm_screen_enable_reflow(m_screen, on);
+}
+
 void VtScreen::setSize(int rows, int cols) {
     if (rows == m_rows && cols == m_cols) return;
     m_rows = rows;

@@ -137,6 +137,13 @@ qt_add_executable(test_restorehistory tst_restorehistory.cpp)
 target_link_libraries(test_restorehistory PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_restorehistory COMMAND test_restorehistory)
 
+# Clink-Auftrag 2026-11-03: ConPTY-Verhalten mit ECHTEN Bytes (Mitschnitt einer Windows-11-
+# Maschine, eingebettet in conpty_captures.h) — Reflow bei Größenänderung und Verlauf vor
+# dem Start-ESC[2J. Plattformunabhängig: Die Bytes laufen auf jedem System durch VtScreen.
+qt_add_executable(test_conptyreplay tst_conptyreplay.cpp conpty_captures.h)
+target_link_libraries(test_conptyreplay PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_conptyreplay COMMAND test_conptyreplay)
+
 qt_add_executable(test_agent tst_agent.cpp)
 target_link_libraries(test_agent PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_agent COMMAND test_agent)

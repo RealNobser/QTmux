@@ -240,6 +240,15 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   alter Stand `34449de` bricht nach dem Neustart bei **80** um (80 + 26), der neue bei **84**
   (84 + 22) — also genau dort, wo die Anwendung selbst umbrochen hätte. Tests:
   `test_restorehistory` (11 Fälle, inkl. Gegentest `oldOrderWouldWrapAt80`).
+  🔑 **Unter ConPTY schiebt der Restore den Verlauf VOR der ersten Shell-Ausgabe komplett in
+  den Scrollback** (Clink-Auftrag 2026-11-03, `Session::flushPendingHistory`, nur bei
+  `Session::conPtyHost()`): Jede ConPTY-Session beginnt mit `ESC[2J ESC[H` — am Mitschnitt
+  löschte das von 40 eingespielten Zeilen die letzten 27 **samt** Wiederherstellungs-Marker.
+  QTMUX-130 war nur unter macOS am lebenden Objekt belegt, dort löscht keine Shell. Folge:
+  Unter Windows steht der Verlauf nach dem Neustart direkt **über** dem Bildschirm (einmal
+  hochscrollen), nicht mehr darauf. Eine angefangene letzte Zeile wird vorher per CRLF
+  abgeschlossen. Tests `test_conptyreplay` (`restoredHistorySurvivesConPtyStart`,
+  `restoredHistoryWithOpenLastLine`, Gegenprobe `restoreWithoutFixLosesHistory`).
 - **Gruppen in der Sidebar (QTMUX-42/45, seit QTMUX-83 **Window**-Gruppen):** Frei benannte,
   einklappbare Gruppen mit Kopfzeile + Anzahl; Farbe aus dem Namen gehasht. Zuordnung per
   Rechtsklick, Palette oder MCP (`set_window_group`, `set_session_group` wirkt aufs Window
@@ -267,6 +276,34 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   lag nur im Einstellungsdialog (`confirmQuit`), Gruppen nur im Rechtsklick — beides in der
   Palette unauffindbar. Faustregel: Was per MCP steuerbar ist, muss auch die Palette können
   (Ausnahme Vault — bewusste Sicherheitsgrenze).
+- **ConPTY malt nach jeder Größenänderung neu — QTmux muss selbst reflowen (Clink-Auftrag
+  2026-11-03):** ConPTY bricht seinen eigenen Puffer auf die neue Breite um und schreibt
+  danach den ganzen Sichtbereich ab `ESC[H` neu (`ESC[?25l ESC[8;<r>;<c>t ESC[H Zeile…ESC[K
+  CRLF …`), **ohne** zu scrollen. Werden lange Zeilen beim Schmalziehen mehrzeilig, rutscht
+  bei ConPTY die oberste Zeile in dessen Verlauf — QTmux sieht keinen Scroll, überschreibt
+  sie und hat sie **für immer verloren**. Gemessen an einer Windows-11-Maschine (Mitschnitt
+  der rohen ConPTY-Bytes, abgespielt durch `VtScreen`): cmd **ohne** Clink verlor 1 von 60
+  Zeilen, mit Clink (Vorgabe) 1, mit Clink-„Enhanced Defaults“ 2 — Clink verlängert die
+  Zeilen (Farb-Prompt, Autosuggest-Hinweis „F2=List Suggestions“, Zeitstempel im
+  `history`) und zeichnet nach dem Resize selbst neu. Abhilfe: `VtScreen::setReflow(true)`
+  (libvterms vendierter, bisher brachliegender Reflow) **nur** für ConPTY-Sessions — die
+  Weiche ist `Session::conPtyHost()` (Windows + `PtyBackend`, also auch System-ssh; per
+  `qobject_cast`, weil eine neue virtuelle Methode in `ITerminalBackend` die Plugin-ABI
+  bräche). Danach 0 verlorene, 0 doppelte Zeilen in allen drei Varianten. forkpty-Sessions
+  (macOS/Linux) bleiben **ohne** Reflow, unverändert. Der Scrollback selbst wird weiter
+  nicht umgebrochen (feste `Cell`-Vektoren, `sb_popline` liefert 0). Windows Terminal und
+  xterm.js reflowen aus demselben Grund selbst. Test `test_conptyreplay`
+  (`resizeKeepsEveryLine` mit echten Bytes, Gegenprobe `resizeWithoutFixLosesLines`);
+  Bytes in `tests/conpty_captures.h` als Escape-Literale (kein CRLF-Umbau auf Windows-
+  Runnern), Domäne/Host/Benutzer längengleich ersetzt (öffentliches Repo).
+  ⚠️ **Nebenbefunde aus denselben Mitschnitten:** ConPTY schaltet zu Beginn
+  `ESC[?9001h` (win32-input-mode) und `ESC[?1004h` (Fokus-Meldungen) ein — beides kennt
+  QTmux nicht, ConPTY fällt still auf normale VT-Eingabe zurück. ConPTY reicht DECSET
+  1003/1006 einer Anwendung nur durch, wenn sie VT-Eingabe (`ENABLE_VIRTUAL_TERMINAL_INPUT`)
+  eingeschaltet hat, **bevor** sie die Sequenz schreibt — sonst verschluckt ConPTY sie
+  (mit und ohne Clink gleich). Mit Clink `terminal.mouse_input=on` fordert ConPTY für Clinks
+  Zeileneingabe selbst `ESC[?1003;1006h` an; QTmux bleibt dort trotzdem bei der lokalen
+  Auswahl, weil das Prompt nicht im Alt-Screen steht (QTMUX-104).
 - **Session-Größe wird entprellt (QTMUX-86):** `recomputeGrid()` reicht das Raster **nicht
   sofort** an die Session, sondern über einen 60-ms-Einmal-Timer (`m_resizeTimer` →
   `applyPendingResize`). Grund: Beim Auf-/Abbauen des Pane-Baums (Window-Wechsel, Teilen,

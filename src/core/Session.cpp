@@ -1,5 +1,6 @@
 #include "Session.h"
 #include "VtScreen.h"
+#include "PtyBackend.h"
 #include "AgentRegistry.h"
 #include "GitInfo.h"
 #include "AgentEventHub.h"
@@ -181,6 +182,14 @@ void Session::attachBackend(ITerminalBackend *backend, Type type, int cols, int 
     m_backend.reset(backend);
 
     m_screen = std::make_unique<VtScreen>(rows, cols);
+    // ConPTY-Host erkennen (Begründung an conPtyHost() im Header). Bewusst über den
+    // Typ und NICHT über eine neue virtuelle Methode in ITerminalBackend: die ist Teil
+    // des Plugin-SDK, ein zusätzlicher vtable-Eintrag bräche dessen ABI.
+#if defined(Q_OS_WIN)
+    setConPtyHost(qobject_cast<PtyBackend *>(backend) != nullptr);   // auch SshBackend
+#else
+    setConPtyHost(false);
+#endif
 
     // QTMUX-130: NICHT direkt in den Screen — onBackendData haelt die Ausgabe zurueck,
     // solange ein wiederhergestellter Verlauf auf die erste echte Groesse wartet.
@@ -775,6 +784,11 @@ void Session::markRestored(const QDateTime &snapshotTime) {
     setPendingHistory(marker, 0);
 }
 
+void Session::setConPtyHost(bool on) {
+    m_conPtyHost = on;
+    if (m_screen) m_screen->setReflow(on);
+}
+
 void Session::flushPendingHistory() {
     if (!m_historyPending) return;
     m_historyPending = false;                  // vor dem Schreiben loeschen: inputWrite
@@ -789,7 +803,20 @@ void Session::flushPendingHistory() {
     m_pendingCols = 0;
     if (cols > 0 && cols != m_cols) resize(cols, m_rows);
     if (m_screen) {
-        if (!m_pendingHistory.isEmpty()) m_screen->inputWrite(m_pendingHistory);
+        if (!m_pendingHistory.isEmpty()) {
+            m_screen->inputWrite(m_pendingHistory);
+            // ConPTY beginnt mit ESC[2J ESC[H und malt seinen eigenen (leeren) Puffer —
+            // was vom Verlauf noch auf dem sichtbaren Bildschirm steht, wäre danach weg
+            // (am Windows-11-Mitschnitt: die letzten 27 von 40 Zeilen samt Marker). Also
+            // den Verlauf vorher vollständig in den Scrollback schieben; eine angefangene
+            // letzte Zeile zuerst abschließen, sonst bliebe sie oben stehen und fiele dem
+            // ESC[2J zum Opfer. forkpty-Shells löschen nicht — dort bleibt der Verlauf
+            // sichtbar über dem frischen Prompt wie bisher.
+            if (m_conPtyHost) {
+                if (m_screen->cursor().x() != 0) m_screen->inputWrite(QByteArrayLiteral("\r\n"));
+                m_screen->clearViewportKeepScrollback();
+            }
+        }
         if (!m_pendingOutput.isEmpty()) m_screen->inputWrite(m_pendingOutput);
     }
     m_pendingHistory = QByteArray();           // Speicher wirklich freigeben (clear()

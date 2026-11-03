@@ -112,6 +112,22 @@ public:
     /// 1007h und **kein** 1000/1002/1003/1006 (am Binary belegt). Ohne Auswertung ist das
     /// Rad in so einer App tot, weil im Alt-Screen auch der lokale Scrollback leer ist.
     bool altScroll() const { return m_altScroll; }
+    /// Bei einer Größenänderung den **sichtbaren Bildschirm neu umbrechen** (libvterm-
+    /// Reflow): weich umbrochene Zeilen werden auf die neue Breite verteilt, was oben
+    /// nicht mehr passt, wandert mit Fortsetzungs-Flag in den Scrollback.
+    ///
+    /// 🔑 Eingeschaltet nur für Sessions, deren PTY-Host **ConPTY** ist (Session
+    /// entscheidet, s. `Session::conPtyHost`). ConPTY bricht seinen eigenen Puffer bei
+    /// jeder Größenänderung um und malt danach den Sichtbereich ab `ESC[H` neu — ohne
+    /// zu scrollen. Was bei ihm dabei über den Sichtbereich hinausgeschoben wurde,
+    /// erfährt das Terminal nie; es muss dieselbe Umverteilung SELBST machen, sonst
+    /// überschreibt die Neuzeichnung die oberste(n) Zeile(n), und sie fehlen für immer
+    /// im Verlauf (am Windows-11-Mitschnitt gemessen: cmd ohne Clink 1 Zeile, mit Clink
+    /// bis 2 Zeilen je Runde — Clink macht die Zeilen länger). Windows Terminal und
+    /// xterm.js reflowen aus demselben Grund selbst.
+    /// Der Scrollback selbst wird NICHT umgebrochen (feste `Cell`-Vektoren).
+    void setReflow(bool on);
+    bool reflow() const { return m_reflow; }
     /// Hängende Eingabe-Reporting-Modi lösen (Maus-Tracking, SGR-Maus, Bracketed Paste)
     /// und Attribute/Cursor normalisieren — **ohne** den Bildschirm zu leeren oder den
     /// Alt-Screen umzuschalten. Der manuelle Notausgang, wenn ein TUI unsauber endete
@@ -207,6 +223,7 @@ private:
     int m_mouseTracking = 0;   // VTERM_PROP_MOUSE: 0=aus,1=Klick,2=Drag,3=Move
     bool m_altScreen = false;  // VTERM_PROP_ALTSCREEN: Vollbild-TUI aktiv (DECSET 1049)
     bool m_altScroll = false;  // VTERM_PROP_ALTSCROLL: Rad als Cursor-Tasten (DECSET 1007)
+    bool m_reflow = false;     // libvterm-Reflow bei setSize (nur ConPTY, s. setReflow)
 
     // OSC 52: Puffer, in den libvterm das Base64 dekodiert, plus der eingesammelte Text.
     // `kMaxClipboardBytes` deckelt, was ein Programm ablegen darf — ein Agent, der

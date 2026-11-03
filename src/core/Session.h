@@ -99,6 +99,24 @@ public:
     /// Übernimmt Besitz des Backends und verbindet es mit einem frischen VtScreen.
     void attachBackend(ITerminalBackend *backend, Type type, int cols, int rows);
 
+    /// Ist der PTY-Host dieser Session **ConPTY** (Windows, lokale Shell oder System-ssh
+    /// über `PtyBackend`)? `attachBackend` setzt den Wert selbst; der Setter ist für
+    /// Tests da, die das ConPTY-Verhalten mit aufgezeichneten Bytes auf jeder Plattform
+    /// prüfen.
+    ///
+    /// 🔑 ConPTY ist kein durchreichender PTY, sondern führt einen eigenen Bildschirm-
+    /// puffer und malt ihn bei Bedarf **neu** — beim Start mit `ESC[2J ESC[H`, bei jeder
+    /// Größenänderung nach seinem eigenen Umbruch ab `ESC[H`. Daraus folgen zwei Regeln,
+    /// beide am Windows-11-Mitschnitt belegt (Clink-Auftrag 2026-11-03):
+    ///   1. Reflow im VtScreen einschalten (`VtScreen::setReflow`), sonst fehlen nach
+    ///      einer Größenänderung Zeilen im Verlauf.
+    ///   2. Ein wiederhergestellter Verlauf (QTMUX-130) gehört VOR der ersten
+    ///      ConPTY-Ausgabe komplett in den Scrollback — das Start-`ESC[2J` löschte sonst
+    ///      seinen zuletzt sichtbaren Bildschirm samt Wiederherstellungs-Marker.
+    /// Unter macOS/Linux (forkpty) gilt beides nicht: dort bleibt alles wie bisher.
+    void setConPtyHost(bool on);
+    bool conPtyHost() const { return m_conPtyHost; }
+
     int id() const { return m_id; }
     Type type() const { return m_type; }
     QString title() const { return m_title; }
@@ -418,6 +436,7 @@ private:
     QByteArray m_pendingOutput;
     int     m_pendingCols = 0;                // Breite, bei der der Dump entstand (0 = unbekannt)
     bool    m_historyPending = false;
+    bool    m_conPtyHost = false;      // s. conPtyHost()
     QTimer *m_historyTimer = nullptr;         // Sicherheitsnetz, falls nie ein resize kommt
     // Sicherheitsnetz-Frist. Ein Pane wird binnen ~60 ms vermessen (QTMUX-86); so lange
     // zu warten kostet nichts, deckt aber auch einen zaehen Layout-Aufbau ab.
