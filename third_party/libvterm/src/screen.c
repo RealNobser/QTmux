@@ -547,16 +547,24 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int new_rows, int new
    */
   int final_blank_row = new_rows;
 
+  /* QTMUX: Patch 4 (Reflow-Absicherung, aus Neovims libvterm-Fassung uebernommen):
+   * Reflow nur im Primaerpuffer — der Alt-Screen hat keinen Scrollback und wird von
+   * Vollbild-TUIs ohnehin neu gezeichnet. */
+  bool do_reflow = screen->reflow && (bufidx == BUFIDX_PRIMARY);
+
   while(old_row >= 0) {
     int old_row_end = old_row;
     /* TODO: Stop if dwl or dhl */
-    while(screen->reflow && old_lineinfo && old_row >= 0 && old_lineinfo[old_row].continuation)
+    /* QTMUX: Patch 4 — `> 0` statt `>= 0`: Ist Zeile 0 eine Fortsetzung (ihr Anfang liegt
+     * schon im Scrollback), lief old_row auf -1 und old_buffer wurde VOR seinem Anfang
+     * gelesen (ASan: heap-buffer-overflow in resize_buffer). */
+    while(do_reflow && old_lineinfo && old_row > 0 && old_lineinfo[old_row].continuation)
       old_row--;
     int old_row_start = old_row;
 
     int width = 0;
     for(int row = old_row_start; row <= old_row_end; row++) {
-      if(screen->reflow && row < (old_rows - 1) && old_lineinfo[row + 1].continuation)
+      if(do_reflow && row < (old_rows - 1) && old_lineinfo[row + 1].continuation) /* QTMUX: Patch 4 */
         width += old_cols;
       else
         width += line_popcount(old_buffer, row, old_rows, old_cols);
@@ -565,7 +573,7 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int new_rows, int new
     if(final_blank_row == (new_row + 1) && width == 0)
       final_blank_row = new_row;
 
-    int new_height = screen->reflow
+    int new_height = do_reflow /* QTMUX: Patch 4 */
       ? width ? (width + new_cols - 1) / new_cols : 1
       : 1;
 
@@ -612,7 +620,9 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int new_rows, int new
 #endif
 
     if(new_row_start < 0) {
-      if(old_row_start <= old_cursor.row && old_cursor.row < old_row_end) {
+      /* QTMUX: Patch 4 — `<=` statt `<`: Stand der Cursor in der LETZTEN Zeile einer
+       * umgebrochenen Zeile, die oben herausfaellt, blieb new_cursor unbelegt -> abort(). */
+      if(old_row_start <= old_cursor.row && old_cursor.row <= old_row_end) {
         new_cursor.row = 0;
         new_cursor.col = old_cursor.col;
         if(new_cursor.col >= new_cols)
@@ -638,7 +648,7 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int new_rows, int new
         if(old_col == old_cols) {
           old_row++;
 
-          if(!screen->reflow) {
+          if(!do_reflow) { /* QTMUX: Patch 4 */
             new_col++;
             break;
           }
@@ -649,7 +659,8 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int new_rows, int new
         count--;
       }
 
-      if(old_cursor.row == old_row && old_cursor.col >= old_col) {
+      /* QTMUX: Patch 4 — Grenzpruefung: old_row kann hier schon hinter der Zeile liegen. */
+      if(old_row <= old_row_end && old_cursor.row == old_row && old_cursor.col >= old_col) {
         new_cursor.row = new_row, new_cursor.col = (old_cursor.col - old_col + new_col);
         if(new_cursor.col >= new_cols)
           new_cursor.col = new_cols-1;
@@ -677,8 +688,10 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int new_rows, int new
 
   /* We really expect the cursor position to be set by now */
   if(active && (new_cursor.row == -1 || new_cursor.col == -1)) {
-    fprintf(stderr, "screen_resize failed to update cursor position\n");
-    abort();
+    /* QTMUX: Patch 4 — kein abort(): Terminal-Ausgabe (auch die eines fremden Rechners
+     * per ssh) darf den ganzen Prozess samt aller Sessions nie beenden. Cursor begrenzen. */
+    if(new_cursor.row < 0 || new_cursor.row >= new_rows) new_cursor.row = 0;
+    if(new_cursor.col < 0 || new_cursor.col >= new_cols) new_cursor.col = 0;
   }
 
   if(old_row >= 0 && bufidx == BUFIDX_PRIMARY) {

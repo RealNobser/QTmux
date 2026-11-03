@@ -105,6 +105,10 @@ private slots:
     void restoredHistoryWithOpenLastLine();
     void restoreOutsideConPtyStaysOnScreen();
     void conPtyHostFollowsBackend();
+    void reflowHostileResizesDoNotCrash_data();
+    void reflowHostileResizesDoNotCrash();
+    void reflowRandomResizesStayConsistent();
+    void reflowKeepsCursorOnLastWrappedRow();
 };
 
 void TestConPtyReplay::resizeKeepsEveryLine_data() {
@@ -227,6 +231,103 @@ void TestConPtyReplay::conPtyHostFollowsBackend() {
         sess.attachBackend(new FakeBackend, Session::Type::Shell, 80, 24);
         QVERIFY(!sess.conPtyHost());
         QVERIFY(!sess.screen()->reflow());
+    }
+}
+
+// libvterm-Reflow ist in 0.3.3 nicht absturzfest: Ein Zufallstester unter ASan scheiterte
+// mit dem unveränderten Code in JEDEM von 1500 Läufen — abort() („screen_resize failed to
+// update cursor position“) oder Lesen vor dem Pufferanfang in resize_buffer. Weil die
+// Ausgabe vom Programm im Terminal kommt (per ssh auch von einem fremden Rechner), wäre das
+// ein Absturz des ganzen QTmux samt aller Sessions. Behoben durch Patch 4 in
+// third_party/libvterm/src/screen.c (QTMUX:-Marker, aus Neovims libvterm-Fassung).
+void TestConPtyReplay::reflowHostileResizesDoNotCrash_data() {
+    QTest::addColumn<QByteArray>("input");
+    QTest::addColumn<int>("rows");
+    QTest::addColumn<int>("cols");
+    // Eine umgebrochene Zeile füllt den Schirm, Cursor in ihrer LETZTEN Zeile, schrumpfen.
+    QTest::newRow("cursor-letzte-zeile") << QByteArray(29, 'a') << 3 << 5;
+    // Mehr als ein Schirm am Stück: Zeile 0 ist Fortsetzung, Cursor darin.
+    QTest::newRow("zeile0-fortsetzung-cursor") << QByteArray(35, 'b') << 3 << 7;
+    // Zeile 0 ist Fortsetzung, Cursor in eigener Zeile darunter.
+    QTest::newRow("zeile0-fortsetzung") << QByteArray(35, 'c') + "\r\nx" << 3 << 7;
+}
+
+void TestConPtyReplay::reflowHostileResizesDoNotCrash() {
+    QFETCH(QByteArray, input);
+    QFETCH(int, rows);
+    QFETCH(int, cols);
+    VtScreen s(3, 10);
+    s.setReflow(true);
+    s.inputWrite(input);
+    s.setSize(rows, cols);   // vor Patch 4: abort() bzw. Lesen vor dem Puffer
+    QVERIFY(s.cursor().y() >= 0 && s.cursor().y() < rows);
+    QVERIFY(s.cursor().x() >= 0 && s.cursor().x() < cols);
+}
+
+// Cursor in der LETZTEN Zeile einer umgebrochenen Zeile, die nach dem Umbruch nicht mehr in
+// den Schirm passt (29 Zeichen bei Breite 5 = 6 Zeilen > 3): libvterm schiebt die logische
+// Zeile dann aus dem Schirm und setzt den Cursor in Zeile 0, Spalte = alte Spalte,
+// begrenzt (9 -> 4). Vor Patch 4 blieb der Cursor dabei unbelegt (abort()); ohne die
+// `<=`-Korrektur fiele er heute auf die Notbegrenzung (0,0) zurück.
+void TestConPtyReplay::reflowKeepsCursorOnLastWrappedRow() {
+    VtScreen s(3, 10);
+    s.setReflow(true);
+    s.inputWrite(QByteArray(29, 'a'));
+    QCOMPARE(s.cursor(), QPoint(9, 2));
+    s.setSize(3, 5);
+    QCOMPARE(s.cursor(), QPoint(4, 0));
+    QCOMPARE(s.screenText(), QString());
+    // ⚠️ Bekannte Grenze (libvterm wie Neovim, hier bewusst NICHT als „richtig“ festgehalten):
+    // Ist eine einzelne logische Zeile nach dem Umbruch höher als der ganze Schirm, landet
+    // nur ihre erste alte Zeile im Scrollback (hier 10 von 29 Zeichen).
+}
+
+// Deterministischer Zufallslauf (gleiche Mechanik wie der ASan-Tester): schreiben,
+// umbrechen, Cursor setzen, löschen, Alt-Screen, Größe ändern. Nach jedem Schritt darf auf
+// dem Schirm nur stehen, was geschrieben wurde (a–z) — Fremdbytes aus einem Lesen vor dem
+// Puffer fielen hier auf; ein abort() beendete den Testprozess.
+void TestConPtyReplay::reflowRandomResizesStayConsistent() {
+    for (unsigned seed = 0; seed < 300; ++seed) {
+        unsigned st = seed * 2654435761u + 1;
+        auto rnd = [&st](int n) { st = st * 1103515245u + 12345u; return int((st >> 16) % unsigned(n)); };
+        int rows = 1 + rnd(8), cols = 1 + rnd(20);
+        VtScreen s(rows, cols);
+        s.setReflow(true);
+        for (int step = 0; step < 200; ++step) {
+            const int a = rnd(10);
+            if (a < 5) {
+                QByteArray b;
+                const int n = rnd(40);
+                for (int i = 0; i < n; ++i) b += char('a' + rnd(26));
+                s.inputWrite(b);
+            } else if (a == 5) {
+                s.inputWrite("\r\n");
+            } else if (a == 6) {
+                s.inputWrite("\x1b[" + QByteArray::number(1 + rnd(rows + 2)) + ';'
+                             + QByteArray::number(1 + rnd(cols + 2)) + 'H');
+            } else if (a == 7) {
+                static const char *const esc[] = {"\x1b[2J", "\x1b[K", "\x1b[S", "\x1bM",
+                                                  "\x1b[?1049h", "\x1b[?1049l", "\x1b[3T"};
+                s.inputWrite(esc[rnd(7)]);
+            } else {
+                rows = 1 + rnd(8);
+                cols = 1 + rnd(20);
+                s.setSize(rows, cols);
+            }
+            // Bewusst KEINE Cursor-Grenzprüfung hier: `VtScreen::cursor()` ist ein Cache aus
+            // cbMoveCursor und steht nach Alt-Screen-/Scroll-Folgen auch OHNE Reflow
+            // gelegentlich außerhalb (gemessen 2026-11-03, vorbestehend, eigener Faden).
+            const QString where = QStringLiteral("seed %1 step %2").arg(seed).arg(step);
+            for (int r = 0; r < rows; ++r)
+                for (int c = 0; c < cols; ++c) {
+                    const QString t = s.cell(r, c).text;
+                    if (t.isEmpty() || t == QLatin1String(" ")) continue;
+                    const QChar ch = t.at(0);
+                    QVERIFY2(t.size() == 1 && ch >= QLatin1Char('a') && ch <= QLatin1Char('z'),
+                             qPrintable(where + QStringLiteral(" Zelle %1,%2 = U+%3")
+                                                    .arg(r).arg(c).arg(uint(ch.unicode()), 4, 16)));
+                }
+        }
     }
 }
 

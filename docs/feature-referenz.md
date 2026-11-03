@@ -296,6 +296,10 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   (`resizeKeepsEveryLine` mit echten Bytes, Gegenprobe `resizeWithoutFixLosesLines`);
   Bytes in `tests/conpty_captures.h` als Escape-Literale (kein CRLF-Umbau auf Windows-
   Runnern), Domäne/Host/Benutzer längengleich ersetzt (öffentliches Repo).
+  🔴 **Reflow nur MIT libvterm-Patch 4** (CLAUDE.md, Abschnitt libvterm): Der vendierte Reflow
+  stürzt sonst über gewöhnliche Terminal-Ausgabe ab (`abort()`, Lesen vor dem Puffer). Wer
+  libvterm aktualisiert, muss den Patch mitnehmen; der Zufallslauf
+  `reflowRandomResizesStayConsistent` fällt sonst.
   ⚠️ **Nebenbefunde aus denselben Mitschnitten:** ConPTY schaltet zu Beginn
   `ESC[?9001h` (win32-input-mode) und `ESC[?1004h` (Fokus-Meldungen) ein — beides kennt
   QTmux nicht, ConPTY fällt still auf normale VT-Eingabe zurück. ConPTY reicht DECSET

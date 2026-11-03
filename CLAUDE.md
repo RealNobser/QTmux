@@ -310,6 +310,19 @@ C CXX)` ist Pflicht (ohne `C` → leere `vterm.lib` → Linkfehler).
 > Frontend entscheidet. `VtScreen::altScroll()`; Tests `tst_vtscreen::altScrollModeTracked`
 > + `altScrollRule` (Gegentest ohne den Patch: genau die zwei parse-abhängigen Fälle fallen,
 > die reine Regel bleibt grün).
+>
+> **Patch 4 — Reflow-Absicherung, `screen.c` `resize_buffer` (Clink-Auftrag 2026-11-03):**
+> libvterms Reflow ist in 0.3.3 nicht absturzfest — ein Zufallstester unter ASan scheiterte
+> mit dem unveränderten Code in **jedem** von 1500 Läufen (`abort()` „screen_resize failed to
+> update cursor position“ bzw. Lesen vor dem Puffer). Übernommen aus Neovims libvterm-Fassung
+> (`src/nvim/vterm/screen.c`): Reflow nur im Primärpuffer, `old_row > 0`, `<= old_row_end`,
+> Grenzprüfung bei der Cursor-Spalte; zusätzlich ersetzt eine Begrenzung das `abort()`
+> (in 3000 Läufen nie erreicht, reines Netz). Danach 3000/3000 sauber. Relevant, seit QTmux
+> den Reflow für ConPTY-Sessions einschaltet (`VtScreen::setReflow`). Tests
+> `tst_conptyreplay::reflow*`; Mutationsproben `old_row > 0` und `<=` je rot, die zwei
+> übrigen Neovim-Stellen zeigten keine messbare Wirkung. ⚠️ Grenze (auch bei Neovim): Wird
+> eine **einzelne** logische Zeile nach dem Umbruch höher als der ganze Schirm, landet nur
+> ihre erste alte Zeile im Scrollback.
 
 ## CI (GitHub Actions)
 
