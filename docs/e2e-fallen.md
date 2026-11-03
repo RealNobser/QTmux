@@ -9,6 +9,17 @@
 
 ## E2E-/Test-Fallen (alle Plattformen)
 
+- 🔴 **Claude Code im Test nie abschießen, bevor sein Vollbild-Start „gesund“ ist** (gemessen
+  2026-11-03, Version 2.1.316). Claude Code hat zwei Renderer: **Vollbild** (`?1049h ?1000h ?1002h
+  ?1003h ?1006h`, eigene türkise Auswahl, OSC 52) und **klassisch** (kein Alt-Screen, keine Maus →
+  QTmux markiert blau). Stirbt ein Vollbild-Start innerhalb von ~10 s nach dem ersten Frame, zählt
+  das in `~/.claude.json` als Strike — **maschinenweit**, je Version: 1 Strike = nächster Start
+  klassisch, 2 = `fullscreenAutoDisabled`, klassisch bis `/tui fullscreen` oder Update. Ein
+  pty-Mitschnitt mit SIGTERM nach 6 s löste das aus und ließ die Läufe scheinbar zufällig zwischen
+  den Renderern wechseln — fast als Wirkung der gerade getesteten Umgebungsvariablen gelesen.
+  **Also:** sauber per `/exit` beenden, danach `fullscreenAutoDisabled`/`fullscreenBootStrikes`
+  prüfen. Vergleiche zwischen Shells sind reihenfolgeabhängig; `CLAUDE_CODE_NO_FLICKER=1` schlägt
+  die Sperre und trennt „Renderer-Wahl“ von „Maus kommt nicht an“.
 - 🔑 **Eine Gegenprobe, die nur die gewünschte Richtung misst, beweist nichts — prüfe BEIDES:
   ist das Neue da UND ist das Alte weg?** (2026-08-07, an einem Prefs-Text erlebt; RAFTNG hat
   die Regel danach übernommen.) Der neue Text allein belegt nicht, dass die alte Stelle

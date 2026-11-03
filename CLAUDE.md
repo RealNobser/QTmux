@@ -834,8 +834,10 @@ trägt nicht, es wirkt nur in den *Headern*).
 Größenänderung + Verlauf vor dem ConPTY-Start-`ESC[2J` in den Scrollback (Mechanik in der
 Feature-Referenz, „ConPTY malt nach jeder Größenänderung neu“ und QTMUX-130-Absatz). Bericht
 mit Mitschnitten und Owner-Abnahme: Orchestrator-Bericht 2026-11-03, außerhalb des Repos.
-Kein Jira-Ticket angelegt (ohne Rückfrage nicht erlaubt). Symptom „Auto-Copy“ an den Bytes
-NICHT reproduziert — offen beim Owner.
+Kein Jira-Ticket angelegt (ohne Rückfrage nicht erlaubt). libvterm-Reflow braucht Patch 4
+(s. Abschnitt libvterm). Symptom „Auto-Copy“: QTmux verhält sich korrekt, ConPTY liefert mit und
+ohne Clink dieselben Bytes; Kandidat ist Claude Codes Renderer-Wahl (Vollbild/klassisch, s.
+`docs/e2e-fallen.md`), für cmd+Clink nicht am echten Programm belegt — offen beim Owner.
 
 ✅ **2026-10-16: QTMUX-148 — alte `.part`-Reste räumt der nächste Download ab, unreleased
 (Familien-Auftrag „0124“, Owner-Freigabe).** Hub-Updater auf `4a645a4` (MAC-99) vendiert,
