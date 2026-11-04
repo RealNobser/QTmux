@@ -39,9 +39,24 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   `read_screen` gegengeprüft (114 Spalten: **57** ⚠️ pro Zeile statt 100 in einer).
 
 ### Terminal-Verhalten
-- **Scrollback** (Cap 10000) in `VtScreen`; Selektion in **absoluten** Inhalts-Zeilen
-  (scroll-fest); **Soft-Wrap-Copy** via `sb_pushline4`-Continuation-Flags (eine logische
-  Zeile ohne `\n` am weichen Umbruch).
+- **Scrollback** (Cap 10000) in `VtScreen`; **Soft-Wrap-Copy** via
+  `sb_pushline4`-Continuation-Flags (eine logische Zeile ohne `\n` am weichen Umbruch).
+- **Auswahl (`core/TerminalSelection`, Gui-frei):** Sie markiert genau den ausgewählten Text oder
+  sie verschwindet, nie fremden Text (Owner-Befund 2026-11-04). Zwei Mechanismen:
+  **stabile Zeilennummern** (`absolute Zeile + VtScreen::scrollbackDropped()`) halten sie beim
+  Rollen in den Scrollback und an der 10000-Zeilen-Grenze am Text; ein **Inhaltsvergleich** der
+  markierten Live-Zeilen bei jedem `damaged` fängt alles, was Text bewegt, ohne dass sich eine
+  Nummer ändert (Neumalen an Ort und Stelle, Scroll-Region, Alt-Screen, Reflow, `ESC[2J`).
+  🔑 Vorher stand sie in nackten absoluten Zeilen: An der Grenze rutschte sie je neuer Zeile um
+  eins (`zeile 10043` → `neu`), Neumalen wurde gar nicht bemerkt, ein Sessionwechsel im selben
+  Item behielt sie, und die lineare Zellnummer `zeile*spalten+spalte` lief nach dem Schmalziehen
+  in die Nachbarzeile über. Gleicher Text an gleicher Stelle zählt als derselbe, Attribute zählen
+  nicht. „Alles auswählen“ ist die Ausnahme: Es meint den ganzen Inhalt und wächst mit.
+  Scrollback-Zeilen ändern sich nie, ihr Vergleichstext wird vergessen, die Prüfung kostet also
+  höchstens einen Bildschirm je Änderung. Nicht umgesetzt: Mitwandern bei Scroll-Regionen und im
+  Alt-Screen (ginge über libvterms `moverect`), dort verschwindet die Auswahl.
+  Tests `tst_terminalselection` (je Bewegungsart, dazu ein Zufallslauf auf die Regel selbst),
+  `tst_terminalitem` (Verdrahtung).
 - **Maus-Reporting:** `VtScreen` trackt `VTERM_PROP_MOUSE` (DECSET 1000/1002/1003);
   `TerminalItem` leitet Rad/Klick/Drag an libvterm (X10/SGR-Sequenzen), sonst lokaler
   Scrollback/Selektion; **Shift+Drag** selektiert immer lokal. macOS: Cmd=ControlModifier,
@@ -153,16 +168,55 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   „⌘/Strg-Klick zum Öffnen: <ziel>" (`hoverLinkTarget`); das **Öffnen** bleibt an
   Cmd/Ctrl-Klick (`QDesktopServices::openUrl`) — bewusste Geste gegen versehentliches Öffnen.
   🔑 Erkennung lief zuerst nur bei gehaltenem Modifier (Syscall-Sparen) — ohne sichtbaren
-  Hinweis fand der Anwender die Geste nicht. Jetzt Hover, aber **je Zeile gecacht**
-  (`m_hoverDetectRow`), nicht je Pixel. Klick läuft **vor** der App-Maus-Weiterleitung.
-  Zeilentext aus `absLineText(absRow)` (Spalten↔Zeichen 1:1, solange kein Emoji davor).
+  Hinweis fand der Anwender die Geste nicht. Jetzt Hover, aber **je logischer Zeile gemerkt**
+  (`TerminalItem::linkAt`), nicht je Pixel. Klick läuft **vor** der App-Maus-Weiterleitung.
+  **Zellen ↔ Link (`core/ScreenLinks`, Gui-frei, Owner-Befund 2026-11-04):** Hover, Klick und
+  Kontextmenü gehen durch dieselbe Stelle, der Klick öffnet also, was die Pille nennt (vorher
+  erkannte er neu; ein geändertes oder gerade nicht lesbares Arbeitsverzeichnis machte einen
+  unterstrichenen relativen Pfad tot). Die **logische Zeile** verbindet weiche Umbrüche
+  (höchstens `kMaxChainRows` je Richtung; ein Link, der die Grenze oder den fehlenden Anfang an
+  der Scrollback-Grenze berührt, zählt nicht, sonst öffnete er ein abgeschnittenes Ziel). Vorher
+  war ein umbrochener Link ab der zweiten Zeile tot und in der ersten abgeschnitten. Jede
+  `QChar`-Stelle kennt ihre Zelle: Vorher verschob jedes Emoji den Treffer um eine Spalte, der
+  Anfang des Links war tot und die Unterstreichung stand daneben. Rahmenzeichen (U+2500–257F)
+  beenden einen Treffer. Ohne Arbeitsverzeichnis zählen nur absolute Pfade.
+  🔴 **Netzpfade werden nie geprüft oder geöffnet** (`LinkDetector::isNetworkPath`: zwei führende
+  Trenner, auch gemischt, auch nach Punkt-Segmenten wie `/.//host` (`QDir::cleanPath` macht daraus
+  `//host`), oder das NT-Präfix `\??\`; `isRemoteFileUrl`: prüft `toLocalFile`, also auch jeden Host
+  samt `localhost` und kodierte Formen wie `file:///%2Fhost/…`): Die Erkennung läuft schon
+  beim Überfahren, und `QFileInfo::exists` auf `\\host\share\x` baut unter Windows eine
+  SMB-Verbindung zu diesem Rechner auf. Fremde Terminal-Ausgabe plus eine Mausbewegung hätten so
+  die Windows-Anmeldung (NTLM) an einen fremden Server geschickt, und zwar für JEDES Wort der
+  logischen Zeile. Die Prüfung steht vor dem ersten Dateizugriff, auch in
+  `FileManagerReveal::localPathFor` und für das Arbeitsverzeichnis. 🔴 **Noch schärfer war OSC 7:**
+  `ESC]7;file:////host/share` galt als lokal, `refreshGitBranch` las das Verzeichnis sofort aus,
+  ganz ohne Mausbewegung, und der Wert lief weiter in den Befehls-Scan der Palette und „Arbeitsverzeichnis
+  öffnen“. Eine solche Meldung verwirft `VtScreen` jetzt ganz, und ein `gitdir:`-Zeiger auf einen
+  Netzpfad wird nicht verfolgt (`GitInfo`, auch nach dem Auflösen, also auch nicht innerhalb einer
+  Freigabe: Eine verknüpfte Arbeitskopie auf einem Netzlaufwerk zeigt keinen Git-Zweig). Das gepollte UNC-Verzeichnis des Prozesses bleibt erlaubt:
+  Das stammt nicht aus der Ausgabe.
+  Preis: Ein bewusst ausgegebener UNC-Pfad ist kein Link mehr, und eine Shell, die ihr UNC-Verzeichnis
+  per OSC 7 meldet, wird dabei überhört (es gilt der gepollte Wert, unter PowerShell also der Startort).
+  Eine `file:`-URL öffnet immer den lokalen Pfad, Anfrage und Fragment entfallen (`#abschnitt` einer
+  HTML-Datei wirkt also nicht).
+  **Rückmeldung (`linkNotice`, in der Pille):** Jede Geste sagt, was geschah: „Wird geöffnet“,
+  „Das System konnte das Ziel nicht öffnen“ (`openUrl` = false, z. B. Datei ohne verknüpftes
+  Programm), „Kein Link an dieser Stelle“, „Anzeigen geht nur bei lokalen Dateien“. Vorher sahen
+  alle vier gleich aus: nichts passiert. Das macht einen Befund „geht nicht immer“ erst
+  unterscheidbar. 🔑 **Eine Unterstreichung ohne Pille ist nicht von QTmux:** Claude Code sendet
+  OSC 8 (Logik `supports-hyperlinks` im Binary gelesen, kein Mitschnitt), wenn es `WT_SESSION` oder
+  `TERM_PROGRAM=vscode` u. a. in der Umgebung findet, also wenn QTmux aus Windows Terminal oder
+  VS Code gestartet wurde. Solchen Link-Text kennt QTmux nicht (QTMUX-40), die Geste meldet dann
+  „Kein Link an dieser Stelle“.
   **Rechtsklick auf einen Link** bietet im Kontextmenü zusätzlich „Link kopieren" an
   (Owner-Wunsch 2026-08-09): `TerminalItem` hält das Ziel unmittelbar vor
-  `contextMenuRequested` in `contextLinkTarget` fest (`linkTargetAt` — dieselbe
-  Span-Logik wie `openLinkAt`), `popupTermContextMenu` übernimmt es einmalig beim
+  `contextMenuRequested` in `contextLinkTarget` fest (`linkTargetAt`),
+  `popupTermContextMenu` übernimmt es einmalig beim
   Öffnen; kopiert wird das **aufgelöste** Ziel (bei Dateipfaden also der absolute Pfad).
   Bewusst nur kopieren, nicht öffnen — das Öffnen bleibt die Cmd/Ctrl-Geste.
-  Tests: `tst_linkdetector` + `tst_vtscreen::linkDetectionOnScreenLine`.
+  Tests: `tst_linkdetector`, `tst_screenlinks` (Gesten aller drei Plattformen auf jedem Host,
+  Zellen, Umbrüche), `tst_terminalitem` (echte Maus-Ereignisse am echten Item, ohne Fenster) +
+  `tst_vtscreen::linkDetectionOnScreenLine`.
   **OSC 8 bewusst NICHT** — s. offene Jira (QTMUX-40).
 - **Im Finder/Explorer/Dateimanager zeigen (QTMUX-138, Owner-Wunsch 2026-09-30):** zweite
   Geste auf erkannten Links — **macOS ⌘⌥-Klick**, **Windows/Linux Strg+Umschalt-Klick** —

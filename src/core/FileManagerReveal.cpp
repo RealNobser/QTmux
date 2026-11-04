@@ -1,4 +1,5 @@
 #include "FileManagerReveal.h"
+#include "LinkDetector.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -30,6 +31,8 @@ QString localPathFor(const QString &target) {
     // Nur absolute Pfade: ein relativer hinge am Prozess-CWD von QTmux, nicht an dem der
     // Session — der LinkDetector hat Dateipfade ohnehin schon absolut aufgelöst.
     if (path.isEmpty() || !QDir::isAbsolutePath(path)) return {};
+    // Vor dem ersten Dateizugriff: Diese Funktion läuft schon beim Überfahren (Pille).
+    if (LinkDetector::isNetworkPath(path)) return {};
     const QFileInfo fi(path);
     if (!fi.exists()) return {};
     return QDir::cleanPath(fi.absoluteFilePath());
@@ -89,13 +92,13 @@ namespace {
 // Startet Befehl `i`; scheitert er (nicht startbar oder Exit ≠ 0), folgt `i+1`.
 // Der letzte Befehl läuft losgelöst (startDetached) — dessen Ergebnis interessiert nicht
 // mehr. Nur Linux hat überhaupt mehr als einen.
-void runFrom(QSharedPointer<const QList<Command>> cmds, int i) {
-    if (i >= cmds->size()) return;
+// Rückgabe: Ließ sich der losgelöste Befehl starten? Bei einer Kette (Linux) steht das
+// erst später fest, dann true.
+bool runFrom(QSharedPointer<const QList<Command>> cmds, int i) {
+    if (i >= cmds->size()) return false;
     const Command &c = cmds->at(i);
-    if (i == cmds->size() - 1) {
-        QProcess::startDetached(c.program, c.arguments);
-        return;
-    }
+    if (i == cmds->size() - 1)
+        return QProcess::startDetached(c.program, c.arguments);
     auto *p = new QProcess;
     p->setProgram(c.program);
     p->setArguments(c.arguments);
@@ -112,6 +115,7 @@ void runFrom(QSharedPointer<const QList<Command>> cmds, int i) {
         if (st != QProcess::NormalExit || code != 0) runFrom(cmds, i + 1);
     });
     p->start();
+    return true;
 }
 
 } // namespace
@@ -121,8 +125,7 @@ bool reveal(const QString &target) {
     if (path.isEmpty()) return false;
     auto cmds = QSharedPointer<const QList<Command>>::create(commands(path, currentPlatform()));
     if (cmds->isEmpty()) return false;
-    runFrom(cmds, 0);
-    return true;
+    return runFrom(cmds, 0);
 }
 
 } // namespace FileManagerReveal

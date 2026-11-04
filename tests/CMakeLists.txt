@@ -7,6 +7,28 @@ qt_add_executable(test_linkdetector tst_linkdetector.cpp)
 target_link_libraries(test_linkdetector PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_linkdetector COMMAND test_linkdetector)
 
+# Klickbare Links im Bildschirminhalt: Zellen <-> Zeichen, weiche Umbrueche, Gesten aller
+# drei Plattformen auf jedem Host.
+qt_add_executable(test_screenlinks tst_screenlinks.cpp)
+target_link_libraries(test_screenlinks PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_screenlinks COMMAND test_screenlinks)
+
+# Auswahl: markiert genau den ausgewaehlten Text oder verschwindet, an echten Bytes im VtScreen.
+qt_add_executable(test_terminalselection tst_terminalselection.cpp)
+target_link_libraries(test_terminalselection PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_terminalselection COMMAND test_terminalselection)
+
+# Das echte TerminalItem mit Maus-Ereignissen, ohne Fenster: Verdrahtung von Link-Gesten und
+# Auswahl-Regel. TerminalItem.cpp liegt im QML-Modul der App, darum direkt mitkompiliert.
+# Kein Prozessstart, also kein WIN32_EXECUTABLE noetig (s. e2e-fallen).
+qt_add_executable(test_terminalitem tst_terminalitem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/terminal/TerminalItem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/terminal/GlyphAtlas.cpp)
+target_include_directories(test_terminalitem PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/terminal)
+target_link_libraries(test_terminalitem PRIVATE qtmux_core Qt6::Gui Qt6::Quick Qt6::Test)
+set_target_properties(test_terminalitem PROPERTIES WIN32_EXECUTABLE FALSE)
+add_test(NAME test_terminalitem COMMAND test_terminalitem)
+
 # QTMUX-138: „Im Finder/Explorer/Dateimanager zeigen" — Befehlsermittlung aller drei
 # Plattformen auf jedem Host + lokale Existenzprüfung.
 qt_add_executable(test_filemanagerreveal tst_filemanagerreveal.cpp)

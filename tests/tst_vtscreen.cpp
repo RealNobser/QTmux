@@ -38,6 +38,7 @@ private slots:
     void osc7WorkingDirectory();
     void osc7HostHandling();
     void osc7TakesPrecedenceOverPolling();
+    void osc7NetworkPathIsDiscarded();
     void osc52WritesClipboard();
     void osc52QueryIsRefused();
 };
@@ -163,6 +164,29 @@ void TestVtScreen::osc7WorkingDirectory() {
 // Der Host-Teil entscheidet, ob der Pfad zu DIESER Maschine gehört. Fremde Hosts
 // (SSH, Container) werden übernommen, aber als nicht-lokal gekennzeichnet — sonst
 // liefe ein Pfad von einem anderen Rechner als lokales Verzeichnis weiter.
+void TestVtScreen::osc7NetworkPathIsDiscarded() {
+    // Der gemeldete Wert läuft als Arbeitsverzeichnis weiter, auch in die Dateizugriffe der Palette.
+    // Darum genügt es nicht, ihn als „entfernt“ zu vermerken. Der alte Stand bleibt.
+    const QList<QByteArray> reports{
+        "\x1b]7;file:////server/share\x07",
+        "\x1b]7;file://fremd//server/share\x07",
+        "\x1b]7;file:///%2Fserver/share\x07",
+        "\x1b]7;file:///%5C%5Cserver/share\x07",
+        "\x1b]7;file:///%3F%3F/UNC/server/share\x07",
+        "\x1b]7;file:///.//server/share\x07",
+        "\x1b]7;file:///x/..//server/share\x07",
+    };
+    for (const QByteArray &report : reports) {
+        VtScreen vt(5, 40);
+        vt.inputWrite("\x1b]7;file:///opt/build\x07");
+        QSignalSpy spy(&vt, &VtScreen::workingDirectoryReported);
+        vt.inputWrite(report);
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(vt.reportedWorkingDirectory(), QStringLiteral("/opt/build"));
+        QVERIFY(vt.reportedWorkingDirectoryIsLocal());
+    }
+}
+
 void TestVtScreen::osc7HostHandling() {
     {   // "localhost" zählt als diese Maschine.
         VtScreen vt(24, 80);

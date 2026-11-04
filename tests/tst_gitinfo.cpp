@@ -157,6 +157,33 @@ private slots:
         QVERIFY(g.branch.isEmpty());
     }
 
+    void gitdirPointingToANetworkPathIsNotFollowed() {
+        // Unter POSIX ist `//tmp/x` dasselbe Verzeichnis wie `/tmp/x`: Das Ziel existiert und ist
+        // ein gültiges Git-Verzeichnis. Trotzdem darf der Zeiger nicht gelten.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString real = tmp.filePath("real");
+        writeFile(real + "/HEAD", "ref: refs/heads/main\n");
+        const QString wt = tmp.filePath("wt");
+        writeFile(wt + "/.git", QStringLiteral("gitdir: %1\n").arg(real).toUtf8());
+        QVERIFY(GitInfo::forDirectory(wt).valid);     // Gegenprobe: Der Zeiger an sich trägt
+#if !defined(Q_OS_WIN)
+        writeFile(wt + "/.git", QStringLiteral("gitdir: /%1\n").arg(real).toUtf8());
+        QVERIFY(!GitInfo::forDirectory(wt).valid);
+        // `cleanPath` machte daraus wieder `//…`.
+        writeFile(wt + "/.git", QStringLiteral("gitdir: /./%1\n").arg(real).toUtf8());
+        QVERIFY(!GitInfo::forDirectory(wt).valid);
+        // Relativ: Genug `..` führen zur Wurzel, ein weiterer Trenner macht daraus einen Netzpfad.
+        writeFile(wt + "/.git", "gitdir: ../real\n");
+        QVERIFY(GitInfo::forDirectory(wt).valid);     // Gegenprobe: Ein normaler relativer Zeiger trägt
+        const QString toRoot = QStringLiteral("../").repeated(QFileInfo(wt).absoluteFilePath().count(QLatin1Char('/')));
+        writeFile(wt + "/.git", QStringLiteral("gitdir: %1/%2\n").arg(toRoot, real).toUtf8());
+        QVERIFY(!GitInfo::forDirectory(wt).valid);
+#endif
+        writeFile(wt + "/.git", "gitdir: \\\\server\\share\\repo\n");
+        QVERIFY(!GitInfo::forDirectory(wt).valid);
+    }
+
     // --- bare-Repository ----------------------------------------------------
 
     void bareRepoIsDetected() {

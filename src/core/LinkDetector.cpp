@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QUrl>
 
 namespace LinkDetector {
 
@@ -54,20 +55,56 @@ QString resolvePath(const QString &tok, const QString &cwd) {
     QString p = tok;
     if (p.startsWith(QLatin1String("~/")) || p == QLatin1String("~"))
         p = QDir::homePath() + p.mid(1);
-    QFileInfo fi(QDir::isAbsolutePath(p) || cwd.isEmpty()
-                     ? p
-                     : QDir(cwd).filePath(p));
+    // Ohne bekanntes Arbeitsverzeichnis zählen nur absolute Pfade. Ein relativer hinge sonst
+    // am Arbeitsverzeichnis von QTmux selbst und träfe eine fremde Datei.
+    if (!QDir::isAbsolutePath(p) && cwd.isEmpty()) return {};
+    const QString candidate = QDir::isAbsolutePath(p) ? p : QDir(cwd).filePath(p);
+    // VOR jedem Dateizugriff. Auch das Arbeitsverzeichnis kann aus der Ausgabe stammen (OSC 7).
+    if (isNetworkPath(p) || isNetworkPath(candidate)) return {};
+    QFileInfo fi(candidate);
     return fi.exists() ? fi.absoluteFilePath() : QString();
 }
 
 } // namespace
 
+bool isRemoteFileUrl(const QUrl &url) {
+    // Geprüft wird, was beim Öffnen ankommt: `toLocalFile` ist dekodiert und macht aus jedem Host
+    // `//host/…`, auch aus `localhost`. Ungültige URLs zählen mit: `fromUserInput` machte aus
+    // `file://%2Fserver/x` beim Klick eine http-URL.
+    return !url.isValid() || isNetworkPath(url.toLocalFile());
+}
+
+bool isNetworkPath(const QString &path) {
+    const auto isSeparator = [](QChar c) { return c == QLatin1Char('/') || c == QLatin1Char('\\'); };
+    if (path.isEmpty() || !isSeparator(path.at(0))) return false;
+    // Von der Wurzel aus laufen und Punkt-Segmente auflösen: `QDir::cleanPath` macht aus `/.//server`
+    // und `/x/..//server` ein `//server`. Maßgeblich ist also, was an der Wurzel ankommt: ein weiterer
+    // Trenner, oder das NT-Präfix `\??\` (führt unter Windows ebenfalls zu einem anderen Rechner).
+    int depth = 0;
+    const QStringView view(path);
+    for (qsizetype i = 1; i < view.size();) {
+        qsizetype end = i;
+        while (end < view.size() && !isSeparator(view.at(end))) ++end;
+        const QStringView segment = view.sliced(i, end - i);
+        if (depth == 0 && end < view.size() && (segment.isEmpty() || segment == u"??")) return true;
+        if (segment == u"..") {
+            if (depth > 0) --depth;
+        } else if (!segment.isEmpty() && segment != u".") {
+            ++depth;
+        }
+        i = end + 1;
+    }
+    return false;
+}
+
 QList<Span> detect(const QString &line, const QString &cwd) {
     QList<Span> spans;
 
-    // 1) URLs mit Schema. Nur freigegebene Schemata; der Rest wird ignoriert.
+    // 1) URLs mit Schema. Nur freigegebene Schemata; der Rest wird ignoriert. Rahmenzeichen
+    //    (U+2500–257F) beenden einen Treffer: Agenten-Oberflächen zeichnen Kästen, und ein
+    //    `https://x│` gehört nicht zum Ziel.
     static const QRegularExpression urlRe(
-        QStringLiteral(R"((\w[\w+.-]*)://[^\s"'<>`]+|mailto:[^\s"'<>`]+)"));
+        QStringLiteral(R"((\w[\w+.-]*)://[^\s"'<>`\x{2500}-\x{257F}]+|mailto:[^\s"'<>`\x{2500}-\x{257F}]+)"));
     QList<QPair<int,int>> taken;  // belegte Bereiche, um Pfad-Doppel zu vermeiden
     auto it = urlRe.globalMatch(line);
     while (it.hasNext()) {
@@ -78,6 +115,9 @@ QList<Span> detect(const QString &line, const QString &cwd) {
             ? QStringLiteral("mailto")
             : hit.left(hit.indexOf(QLatin1String("://")));
         if (!isAllowedScheme(scheme)) continue;
+        if (scheme.compare(QLatin1String("file"), Qt::CaseInsensitive) == 0
+            && isRemoteFileUrl(QUrl(hit)))
+            continue;
         const int hs = static_cast<int>(m.capturedStart(0));
         const int hl = static_cast<int>(hit.length());
         spans.append({hs, hl, hit, Span::Url});
@@ -87,7 +127,7 @@ QList<Span> detect(const QString &line, const QString &cwd) {
     // 2) Dateipfade: die Zeile in „whitespace-getrennte Token" zerlegen und jedes auf
     //    Existenz prüfen. Die Existenzprüfung ist der Fehlalarm-Filter — nur was wirklich
     //    auf der Platte liegt, wird klickbar.
-    static const QRegularExpression tokRe(QStringLiteral(R"([^\s"'<>`|]+)"));
+    static const QRegularExpression tokRe(QStringLiteral(R"([^\s"'<>`|\x{2500}-\x{257F}]+)"));
     auto jt = tokRe.globalMatch(line);
     while (jt.hasNext()) {
         const auto m = jt.next();

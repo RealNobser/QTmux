@@ -182,6 +182,14 @@
   `ControlModifier`** (⌘⌥ = `Control|Alt`); (3) MCP-Session-IDs sind **Zahlen** —
   `"id":"1"` meldet „Unbekannte Session-ID: 0" und `send_text` schreibt ins Leere.
   Beweiskraft nur mit Kontrolllauf (derselbe Klick **ohne** Modifier → Auswahl unverändert).
+- ⚠️ **Ein fensterloser Item-Test sieht Fehler, die das Fenster gar nicht hat** (2026-11-04):
+  `tst_terminalitem` schickt Ereignisse direkt ans Item und zeigte eine stehengebliebene
+  Link-Pille, wenn Text unter ruhender Maus weiterrollt. Am echten Fenster gibt es das nicht,
+  `QQuickWindow` liefert je Frame einen synthetischen Hover nach (per Sonde an der lebenden
+  Instanz gemessen, alter Stand). Der schon gebaute Timer flog wieder raus. **Regel:** Alles, was
+  an der Ereigniszustellung hängt, vor dem Fix an der lebenden Instanz bestätigen; die Sonde aus
+  QTMUX-138 (s. o.) schickt dazu ans Fenster, nicht ans Item. `cellWidth`/`cellHeight` sind dafür
+  jetzt Properties.
 - ⚠️ **Ein Nachbau ist kein Beweis — er kann am Original vorbeigehen (QTMUX-100).** Für den
   Sidebar-Drag stand ein QML-Minimalnachbau, der eine Drift zeigte; die Ursache dort war aber
   die **Zielzeile 0 bei gescrollter Liste**, nicht der eigentliche Fehler. Erst die Messung an

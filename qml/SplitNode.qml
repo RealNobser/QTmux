@@ -354,7 +354,7 @@ Item {
             // so ist der (Cmd/Ctrl-gebundene) Klick überhaupt auffindbar. Nicht-interaktiv.
             Rectangle {
                 id: linkHint
-                visible: paneTerm.hoverLinkTarget !== ""
+                visible: paneTerm.hoverLinkTarget !== "" || paneTerm.linkNotice !== ""
                 z: 70
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
@@ -379,7 +379,9 @@ Item {
                     // zusätzlich die „Zeigen"-Geste nennen; bei URLs gibt es nichts zu zeigen.
                     readonly property bool revealable: paneTerm.hoverLinkTarget !== ""
                         && App.canRevealInFileManager(paneTerm.hoverLinkTarget)
-                    text: (Qt.platform.os === "osx"
+                    // Die Rückmeldung einer Geste hat Vorrang vor dem Hinweis auf die Geste.
+                    text: paneTerm.linkNotice !== "" ? paneTerm.linkNotice
+                          : (Qt.platform.os === "osx"
                            ? (revealable ? qsTr("⌘-Klick öffnen · ⌘⌥-Klick im Finder zeigen: %1")
                                          : qsTr("⌘-Klick zum Öffnen: %1"))
                            : Qt.platform.os === "windows"

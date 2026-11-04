@@ -82,6 +82,11 @@ public:
     QString title() const { return m_title; }
 
     int scrollbackCount() const { return static_cast<int>(m_scrollback.size()); }
+    /// Wie viele Zeilen seit Sitzungsbeginn oben aus dem Scrollback gefallen sind (Grenze
+    /// kMaxScrollback). `absolute Zeile + scrollbackDropped()` ist eine Zeilennummer, die
+    /// sich bei keinem Scrollen ändert; die absolute Zeile rutscht an der Grenze dagegen
+    /// bei jeder neuen Zeile um eins.
+    qint64 scrollbackDropped() const { return m_scrollbackDropped; }
     /// Scrollback-Zeile (0 = älteste).
     const std::vector<Cell> &scrollbackLine(int index) const { return m_scrollback[index].cells; }
     /// Ist die Scrollback-Zeile ein weicher Umbruch (Flow-Fortsetzung) der vorigen?
@@ -240,6 +245,7 @@ private:
         bool continuation = false;
     };
     std::deque<SbLine> m_scrollback;
+    qint64 m_scrollbackDropped = 0;
     static constexpr int kMaxScrollback = 10000;
 
     int m_oscCommand = -1;     // aktuell gesammelte OSC-Nummer

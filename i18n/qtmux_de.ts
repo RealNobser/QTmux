@@ -3405,27 +3405,27 @@ ame</translation>
 <context>
     <name>Session</name>
     <message>
-        <location filename="../src/core/Session.cpp" line="379"/>
+        <location filename="../src/core/Session.cpp" line="388"/>
         <source>Agent steht seit %1 min still — evtl. verdeckter Systemdialog?</source>
         <translation>Agent steht seit %1 min still — evtl. verdeckter Systemdialog?</translation>
     </message>
     <message>
-        <location filename="../src/core/Session.cpp" line="737"/>
+        <location filename="../src/core/Session.cpp" line="746"/>
         <source>── QTmux: Sitzung wiederhergestellt — Schnappschuss vom %1, der frühere Prozess ist beendet, darunter beginnt eine neue Shell ──</source>
         <translation>── QTmux: Sitzung wiederhergestellt — Schnappschuss vom %1, der frühere Prozess ist beendet, darunter beginnt eine neue Shell ──</translation>
     </message>
     <message>
-        <location filename="../src/core/Session.cpp" line="742"/>
+        <location filename="../src/core/Session.cpp" line="751"/>
         <source>── QTmux: Sitzung wiederhergestellt — der frühere Prozess ist beendet, es beginnt eine neue Shell ──</source>
         <translation>── QTmux: Sitzung wiederhergestellt — der frühere Prozess ist beendet, es beginnt eine neue Shell ──</translation>
     </message>
     <message>
-        <location filename="../src/core/Session.cpp" line="754"/>
+        <location filename="../src/core/Session.cpp" line="763"/>
         <source>── QTmux: Agent — Fortsetzung der letzten Unterhaltung angefordert ──</source>
         <translation>── QTmux: Agent — Fortsetzung der letzten Unterhaltung angefordert ──</translation>
     </message>
     <message>
-        <location filename="../src/core/Session.cpp" line="757"/>
+        <location filename="../src/core/Session.cpp" line="766"/>
         <source>── QTmux: Agent — startet ohne bisherige Unterhaltung ──</source>
         <translation>── QTmux: Agent — startet ohne bisherige Unterhaltung ──</translation>
     </message>
@@ -3433,13 +3433,13 @@ ame</translation>
 <context>
     <name>Shells</name>
     <message>
-        <location filename="../src/core/Session.cpp" line="33"/>
+        <location filename="../src/core/Session.cpp" line="34"/>
         <location filename="../src/core/ShellRegistry.cpp" line="105"/>
         <source>Eingabeaufforderung (Clink)</source>
         <translation>Eingabeaufforderung (Clink)</translation>
     </message>
     <message>
-        <location filename="../src/core/Session.cpp" line="55"/>
+        <location filename="../src/core/Session.cpp" line="56"/>
         <location filename="../src/core/ShellRegistry.cpp" line="88"/>
         <source>Eingabeaufforderung</source>
         <translation>Eingabeaufforderung</translation>
@@ -3458,28 +3458,28 @@ ame</translation>
         <translation>0</translation>
     </message>
     <message>
-        <location filename="../qml/SplitNode.qml" line="383"/>
+        <location filename="../qml/SplitNode.qml" line="385"/>
         <source>⌘-Klick öffnen · ⌘⌥-Klick im Finder zeigen: %1</source>
         <translation>⌘-Klick öffnen · ⌘⌥-Klick im Finder zeigen: %1</translation>
     </message>
     <message>
-        <location filename="../qml/SplitNode.qml" line="384"/>
+        <location filename="../qml/SplitNode.qml" line="386"/>
         <source>⌘-Klick zum Öffnen: %1</source>
         <translation>⌘-Klick zum Öffnen: %1</translation>
     </message>
     <message>
-        <location filename="../qml/SplitNode.qml" line="386"/>
+        <location filename="../qml/SplitNode.qml" line="388"/>
         <source>Strg-Klick öffnen · Strg+Umschalt-Klick im Explorer anzeigen: %1</source>
         <translation>Strg-Klick öffnen · Strg+Umschalt-Klick im Explorer anzeigen: %1</translation>
     </message>
     <message>
-        <location filename="../qml/SplitNode.qml" line="387"/>
         <location filename="../qml/SplitNode.qml" line="389"/>
+        <location filename="../qml/SplitNode.qml" line="391"/>
         <source>Strg-Klick zum Öffnen: %1</source>
         <translation>Strg-Klick zum Öffnen: %1</translation>
     </message>
     <message>
-        <location filename="../qml/SplitNode.qml" line="388"/>
+        <location filename="../qml/SplitNode.qml" line="390"/>
         <source>Strg-Klick öffnen · Strg+Umschalt-Klick im Dateimanager anzeigen: %1</source>
         <translation>Strg-Klick öffnen · Strg+Umschalt-Klick im Dateimanager anzeigen: %1</translation>
     </message>
@@ -3488,9 +3488,47 @@ ame</translation>
         <translation type="vanished">-Klick zum Öffnen: </translation>
     </message>
     <message>
-        <location filename="../qml/SplitNode.qml" line="423"/>
+        <location filename="../qml/SplitNode.qml" line="425"/>
         <source>Die Anwendung steuert die Maus · Shift halten zum Markieren</source>
         <translation>Die Anwendung steuert die Maus · Shift halten zum Markieren</translation>
+    </message>
+</context>
+<context>
+    <name>TerminalItem</name>
+    <message>
+        <location filename="../src/terminal/TerminalItem.cpp" line="980"/>
+        <source>Anzeigen geht nur bei lokalen Dateien: %1</source>
+        <translation>Anzeigen geht nur bei lokalen Dateien: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/terminal/TerminalItem.cpp" line="984"/>
+        <source>Wird im Dateimanager angezeigt: %1</source>
+        <translation>Wird im Dateimanager angezeigt: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/terminal/TerminalItem.cpp" line="988"/>
+        <source>Dateimanager ließ sich nicht starten: %1</source>
+        <translation>Dateimanager ließ sich nicht starten: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/terminal/TerminalItem.cpp" line="999"/>
+        <source>Dieses Ziel wird nicht geöffnet: %1</source>
+        <translation>Dieses Ziel wird nicht geöffnet: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/terminal/TerminalItem.cpp" line="1007"/>
+        <source>Wird geöffnet: %1</source>
+        <translation>Wird geöffnet: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/terminal/TerminalItem.cpp" line="1010"/>
+        <source>Das System konnte das Ziel nicht öffnen: %1</source>
+        <translation>Das System konnte das Ziel nicht öffnen: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/terminal/TerminalItem.cpp" line="1219"/>
+        <source>Kein Link an dieser Stelle</source>
+        <translation>Kein Link an dieser Stelle</translation>
     </message>
 </context>
 <context>

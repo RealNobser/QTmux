@@ -8,7 +8,11 @@
 #include <QPointer>
 #include "GlyphAtlas.h"
 #include "LinkDetector.h"
+#include "ScreenLinks.h"
 #include "TerminalSearch.h"
+#include "TerminalSelection.h"
+
+#include <functional>
 
 QT_BEGIN_NAMESPACE
 class QWheelEvent;
@@ -63,6 +67,12 @@ class TerminalItem : public QQuickItem {
     // Ziel des Links unter der Maus (leer = keiner). Treibt den QML-Tooltip „⌘-Klick zum
     // Öffnen"; die Erkennung läuft beim einfachen Drüberfahren, das Öffnen bleibt Cmd/Ctrl.
     Q_PROPERTY(QString hoverLinkTarget READ hoverLinkTarget NOTIFY hoverLinkChanged)
+    // Was eine Link-Geste bewirkt hat (leer = nichts zu melden), einige Sekunden sichtbar.
+    // Ohne das sehen drei Fälle gleich aus: kein Link an der Stelle, das System lehnt ab,
+    // das Ziel kann die Geste nicht.
+    Q_PROPERTY(QString linkNotice READ linkNotice NOTIFY linkNoticeChanged)
+    Q_PROPERTY(qreal cellWidth READ cellWidth NOTIFY fontChanged)
+    Q_PROPERTY(qreal cellHeight READ cellHeight NOTIFY fontChanged)
     // Link unter dem letzten Rechtsklick (leer = keiner). Wird unmittelbar vor
     // `contextMenuRequested` gesetzt — das Kontextmenü bietet dann „Link kopieren" an.
     Q_PROPERTY(QString contextLinkTarget READ contextLinkTarget NOTIFY contextLinkChanged)
@@ -130,7 +140,7 @@ public:
     /// Verwirft eine zurückgehaltene Einfügung.
     Q_INVOKABLE void cancelPaste();
     /// Ob aktuell etwas selektiert ist (für Menü-Aktivierung).
-    Q_INVOKABLE bool hasSelection() const { return m_hasSelection; }
+    Q_INVOKABLE bool hasSelection() const { return m_selection.hasSelection(); }
     /// Selektiert den GESAMTEN Inhalt: Scrollback + Live-Screen (Design 1a, Teil A).
     /// Bewusst inklusive Historie — die Selektion rechnet ohnehin in absoluten
     /// Inhaltszeilen, und „alles" heißt beim Terminal die ganze Sitzung, nicht nur
@@ -172,6 +182,7 @@ signals:
     void appMouseHintChanged();
     /// Mehrzeilige Einfügung erkannt — QML fragt nach (lineCount = Zeilenzahl).
     void multilinePasteWarning(int lineCount);
+    void linkNoticeChanged();
     /// Link unter der Maus hat gewechselt (Ziel geändert) — QML aktualisiert den Tooltip.
     void hoverLinkChanged();
     /// Link unter dem letzten Rechtsklick hat gewechselt (s. contextLinkTarget).
@@ -219,24 +230,22 @@ private:
     QPoint absCellAt(const QPointF &pos) const;  // Pixel -> Selektionszelle (col, ABSOLUTE Inhalts-Zeile)
     QString selectedText() const;
     /// Text einer ABSOLUTEN Inhalts-Zeile (Scrollback oder Live), ein Zeichen je Spalte —
-    /// Grundlage der Link-Heuristik. Spalten↔Zeichen sind 1:1, solange keine Mehr-
-    /// Codepoint-Grapheme (Emoji) vor dem Treffer stehen; Links sind ASCII.
+    /// Grundlage der Scrollback-Suche.
     QString absLineText(int absRow) const;
     /// Arbeitsverzeichnis der Session (für relative Link-Pfade); leer, wenn keine.
     QString sessionCwd() const;
-    /// Cmd/Ctrl-Klick-Semantik: auf macOS Cmd (Control ohne Meta), sonst Ctrl.
-    static bool isLinkModifier(Qt::KeyboardModifiers mods);
-    /// „Im Dateimanager zeigen"-Geste (QTMUX-138): macOS Cmd+Option, sonst Ctrl+Shift.
-    static bool isRevealModifier(Qt::KeyboardModifiers mods);
-    /// Aktualisiert die Link-Hervorhebung unter `pos` (nur bei gedrücktem Link-Modifier).
-    void updateHoverLink(const QPointF &pos, Qt::KeyboardModifiers mods);
-    /// Öffnet den Link unter `pos` im verknüpften Viewer (Scheme-Whitelist); true, wenn dort einer lag.
-    bool openLinkAt(const QPointF &pos);
-    /// Zeigt den Link unter `pos` im Dateimanager, wenn er lokal existiert (Datei/Ordner,
-    /// file://). true, wenn dort ein Link lag — auch bei http/mailto, dann ohne Aktion.
-    bool revealLinkAt(const QPointF &pos);
+    /// Link unter `pos`. Die EINE Stelle für Hover, Klick und Kontextmenü: das Erkennungs-
+    /// ergebnis wird je logischer Zeile gemerkt, bis sich deren Text ändert. Damit öffnet
+    /// der Klick genau das, was die Pille nennt, auch wenn das Arbeitsverzeichnis gerade
+    /// nicht lesbar ist, und das Fahren innerhalb einer Zeile löst keine Syscalls je Pixel aus.
+    ScreenLinks::Hit linkAt(const QPointF &pos);
+    /// Aktualisiert Unterstreichung und Pille für `pos`.
+    void updateHoverLink(const QPointF &pos);
+    /// Führt die Geste auf `hit` aus und meldet das Ergebnis über linkNotice.
+    void activateLink(ScreenLinks::Gesture gesture, const ScreenLinks::Hit &hit);
+    void showLinkNotice(const QString &text);
     /// Ziel des Links unter `pos` (URL oder aufgelöster Dateipfad); leer, wenn dort keiner liegt.
-    QString linkTargetAt(const QPointF &pos) const;
+    QString linkTargetAt(const QPointF &pos);
     void clearSelection();
     void onDamaged();                            // Damage + Scroll-Anker nachführen
     /// Zeigt kurz „Die Anwendung steuert die Maus · Shift halten zum Markieren".
@@ -280,14 +289,10 @@ private:
     QColor m_defaultBg{0x1e, 0x1f, 0x29};
     QColor m_cursorColor{0xe6, 0xe7, 0xee};
 
-    // Maus-Selektion. x = Spalte, y = ABSOLUTE Inhalts-Zeile (Scrollback-Index,
-    // Live-Screen dahinter) — NICHT die sichtbare Zeile. Dadurch bleibt die Selektion
-    // beim Scrollen am Text kleben statt am Bildschirm. Umrechnung über selBase =
-    // scrollbackCount() - m_scrollOffset (absolute oberste sichtbare Zeile).
-    QPoint m_selAnchor{-1, -1};
-    QPoint m_selCaret{-1, -1};
+    // Maus-Auswahl. Regel und Begründung in core/TerminalSelection.h: markiert genau den
+    // ausgewählten Text oder verschwindet. m_selecting = Maustaste gerade unten.
+    TerminalSelection m_selection;
     bool m_selecting = false;
-    bool m_hasSelection = false;
     // Maus-Weiterleitung an die App (Tracking aktiv): merkt, ob der laufende
     // Klick/Drag an die App gemeldet wird, plus die zuletzt gemeldete Zelle.
     bool m_mouseReporting = false;
@@ -305,25 +310,28 @@ private:
 
     // Scrollback-Ansicht: 0 = Live-Boden, >0 = so viele Zeilen in die Historie.
     int m_scrollOffset = 0;
-    int m_lastSbCount = 0;   // letzter scrollbackCount() — für die Anker-Nachführung
+    // Letzte Summe aus Scrollback + herausgefallenen Zeilen, für die Anker-Nachführung.
+    // scrollbackCount() allein steht an der Grenze still, obwohl der Text weiterrollt.
+    qint64 m_lastSbTotal = 0;
 
     // Klickbarer Link unter der Maus. Die Erkennung/Unterstreichung läuft schon beim
     // einfachen Drüberfahren (Auffindbarkeit); der Klick zum Öffnen bleibt Cmd/Ctrl.
-    // m_hoverRow = absolute Inhalts-Zeile (-1 = keiner), m_hoverC0..C1 = Spaltenbereich,
-    // target = aufgelöstes Ziel. m_lastHoverPos merkt die letzte Mausposition, damit ein
-    // reines Modifier-Drücken/Loslassen (ohne Bewegung) neu bewerten kann.
+    // Rollt Text unter einer ruhenden Maus weiter, bewertet Qt die Stelle selbst neu: Am
+    // sichtbaren Fenster liefert es je Frame einen synthetischen Hover nach (an der lebenden
+    // Instanz gemessen). Ein eigener Timer dafür wäre doppelt.
     QPointF m_lastHoverPos{-1, -1};
-    int m_hoverRow = -1;
-    int m_hoverC0 = 0;
-    int m_hoverC1 = -1;   // < C0 ⇒ kein aktiver Link
+    QList<ScreenLinks::Segment> m_hoverSegments;   // leer = kein aktiver Link
     QString m_hoverTarget;
 
-    // Detect()-Ergebnis je Zeile zwischenspeichern, damit das Fahren INNERHALB einer Zeile
-    // nicht bei jedem Pixel erneut QFileInfo::exists (Syscalls) auslöst — nur bei Zeilen-
-    // oder Textwechsel neu bestimmen.
-    int m_hoverDetectRow = -2;
-    QString m_hoverDetectText;
-    QList<LinkDetector::Span> m_hoverSpans;
+    // Erkennung der zuletzt betrachteten logischen Zeile (s. linkAt). Schlüssel: erste Zeile
+    // + Text; die Spannen hängen an nichts anderem, was der Anwender sehen könnte.
+    int m_linkCacheFirstRow = -2;
+    QString m_linkCacheText;
+    QList<LinkDetector::Span> m_linkCacheSpans;
+
+    QString m_linkNotice;
+    std::function<bool(const QString &)> m_revealFn;
+    QTimer m_linkNoticeTimer;
 
     // Link unter dem letzten Rechtsklick (leer = keiner) — Grundlage für den
     // Kontextmenü-Eintrag „Link kopieren".
@@ -341,6 +349,12 @@ private:
 
 public:
     QString hoverLinkTarget() const { return m_hoverTarget; }
+    QString linkNotice() const { return m_linkNotice; }
+    qreal cellWidth() const { return m_cellW; }
+    qreal cellHeight() const { return m_cellH; }
+    /// Ersetzt den Dateimanager-Start. Für Tests: Die Geste soll prüfbar sein, ohne dass bei
+    /// jedem Testlauf ein Finder- oder Explorer-Fenster aufgeht.
+    void setRevealFunction(std::function<bool(const QString &)> fn) { m_revealFn = std::move(fn); }
     QString contextLinkTarget() const { return m_contextLink; }
 };
 

@@ -202,6 +202,16 @@ TerminalItem::TerminalItem(QQuickItem *parent) : QQuickItem(parent) {
         emit appMouseHintChanged();
     });
 
+    // Rückmeldung einer Link-Geste blendet sich aus wie der Maus-Hinweis.
+    m_linkNoticeTimer.setSingleShot(true);
+    m_linkNoticeTimer.setInterval(4000);
+    connect(&m_linkNoticeTimer, &QTimer::timeout, this, [this] {
+        if (m_linkNotice.isEmpty()) return;
+        m_linkNotice.clear();
+        emit linkNoticeChanged();
+    });
+    m_revealFn = [](const QString &target) { return FileManagerReveal::reveal(target); };
+
     setFlag(ItemHasContents, true);
     setAcceptedMouseButtons(Qt::AllButtons);
     setAcceptHoverEvents(true);   // für Link-Hervorhebung unter der Maus
@@ -226,6 +236,18 @@ void TerminalItem::setSession(QObject *session) {
     }
     m_session = s;
 
+    // Die Auswahl gehört zum Text der alten Session: Ihre Zeilennummern träfen sonst fremden
+    // Inhalt. Dasselbe gilt für den gemerkten Link.
+    clearSelection();
+    m_linkCacheFirstRow = -2;
+    m_linkCacheText.clear();
+    m_linkCacheSpans.clear();
+    if (!m_hoverSegments.isEmpty() || !m_hoverTarget.isEmpty()) {
+        m_hoverSegments.clear();
+        m_hoverTarget.clear();
+        emit hoverLinkChanged();
+    }
+
     m_scrollOffset = 0;            // neue Session -> Live-Boden zeigen
     if (VtScreen *sc = screen()) {
         connect(sc, &VtScreen::damaged, this, [this](const QRect &) { onDamaged(); });
@@ -238,7 +260,7 @@ void TerminalItem::setSession(QObject *session) {
             if (!m_appClipboardWrite || text.isEmpty()) return;
             QGuiApplication::clipboard()->setText(text);
         });
-        m_lastSbCount = sc->scrollbackCount();
+        m_lastSbTotal = sc->scrollbackCount() + sc->scrollbackDropped();
         // Kein Größen-Vorbehalt mehr an dieser Stelle: recomputeGrid() bricht selbst ab,
         // wenn die Größe noch nicht feststeht (gridFor), und reicht die Größe ohnehin nur
         // entprellt weiter (QTMUX-86). Sonst stünde dieselbe Regel an zwei Stellen — und
@@ -403,18 +425,9 @@ void TerminalItem::paintContents(QPainter *painter) {
 
     painter->setFont(m_font);
 
-    // Selektion liegt in ABSOLUTEN Inhalts-Zeilen (Scrollback-Index, Live-Screen
-    // dahinter) — so bleibt sie beim Scrollen am Text. selBase = absolute Zeile der
-    // obersten sichtbaren Zeile; damit wird die Viewport-Zeile in den Selektionsraum
-    // umgerechnet.
-    int selLo = -1, selHi = -1;
+    // selBase = absolute Zeile der obersten sichtbaren Zeile; damit wird die Viewport-Zeile
+    // in den Auswahl-Raum umgerechnet.
     const int selBase = sc->scrollbackCount() - m_scrollOffset;
-    if (m_hasSelection) {
-        const int a = m_selAnchor.y() * m_cols + m_selAnchor.x();
-        const int b = m_selCaret.y() * m_cols + m_selCaret.x();
-        selLo = std::min(a, b);
-        selHi = std::max(a, b);
-    }
     const QColor selColor(0x5b, 0x8c, 0xff, 0x70);
 
     auto drawGlyph = [&](const QString &text, qreal x, qreal y, const QColor &fg,
@@ -435,6 +448,9 @@ void TerminalItem::paintContents(QPainter *painter) {
         const bool isSb = viewportSource(row, sbIndex, liveRow);
         const std::vector<Cell> *sbLine =
             isSb && sbIndex < sc->scrollbackCount() ? &sc->scrollbackLine(sbIndex) : nullptr;
+
+        int selFrom = 0, selTo = -1;
+        const bool rowSelected = m_selection.rowSpan(*sc, selBase + row, m_cols, selFrom, selTo);
 
         QString run;
         qreal runX = 0;
@@ -459,11 +475,8 @@ void TerminalItem::paintContents(QPainter *painter) {
                 painter->fillRect(QRectF(x, y, m_cellW * c.width, m_cellH),
                                   QColor::fromRgb(c.bg));
             }
-            if (selLo >= 0) {
-                const int idx = (selBase + row) * m_cols + col;
-                if (idx >= selLo && idx <= selHi)
-                    painter->fillRect(QRectF(x, y, m_cellW * c.width, m_cellH), selColor);
-            }
+            if (rowSelected && col >= selFrom && col <= selTo)
+                painter->fillRect(QRectF(x, y, m_cellW * c.width, m_cellH), selColor);
 
             const bool visible = !c.text.isEmpty() && c.text != QStringLiteral(" ");
             if (!visible || c.width != 1) {
@@ -761,21 +774,13 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
     // als einzelne Quads. So kosten Cursor-/Selektions-Updates keinen Glyph-Aufbau.
     std::vector<QSGGeometry::ColoredPoint2D> ovVerts;
     if (sc) {
-        if (m_hasSelection) {
-            // Selektion in ABSOLUTEN Inhalts-Zeilen; pro sichtbarer Zeile in
-            // Viewport-Koordinaten umrechnen (selBase = absolute oberste Zeile),
-            // damit sie beim Scrollen am Text bleibt und nur sichtbare Teile rendert.
-            const int a = m_selAnchor.y() * m_cols + m_selAnchor.x();
-            const int b = m_selCaret.y() * m_cols + m_selCaret.x();
-            const int lo = std::min(a, b), hi = std::max(a, b);
-            const int r0 = lo / m_cols, c0 = lo % m_cols;
-            const int r1 = hi / m_cols, c1 = hi % m_cols;
+        if (m_selection.hasSelection()) {
+            // Je sichtbarer Zeile der markierte Spaltenbereich (selBase = absolute oberste
+            // Zeile), damit nur sichtbare Teile entstehen.
             const int selBase = sc->scrollbackCount() - m_scrollOffset;
-            for (int absRow = r0; absRow <= r1; ++absRow) {
-                const int vr = absRow - selBase;          // sichtbare Zeile
-                if (vr < 0 || vr >= m_rows) continue;
-                const int from = (absRow == r0) ? c0 : 0;
-                const int to   = (absRow == r1) ? c1 : m_cols - 1;
+            for (int vr = 0; vr < m_rows; ++vr) {
+                int from = 0, to = -1;
+                if (!m_selection.rowSpan(*sc, selBase + vr, m_cols, from, to)) continue;
                 pushColoredQuad(ovVerts, from * m_cellW, vr * m_cellH,
                                 (to - from + 1) * m_cellW, m_cellH, selColor);
             }
@@ -791,12 +796,14 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
         // zur Auffindbarkeit — der Klick zum Öffnen bleibt Cmd/Ctrl): dünne Linie an der
         // Zellunterkante über den Spaltenbereich des Treffers, in Viewport-Koordinaten
         // wie die Selektion umgerechnet.
-        if (m_hoverRow >= 0 && m_hoverC1 >= m_hoverC0) {
-            const int vr = m_hoverRow - (sc->scrollbackCount() - m_scrollOffset);
-            if (vr >= 0 && vr < m_rows) {
-                const QColor linkColor(0x4d, 0x9d, 0xff);   // Link-Blau, hell/dunkel tauglich
-                pushColoredQuad(ovVerts, m_hoverC0 * m_cellW, (vr + 1) * m_cellH - 2,
-                                (m_hoverC1 - m_hoverC0 + 1) * m_cellW, 2, linkColor);
+        if (!m_hoverSegments.isEmpty()) {
+            const QColor linkColor(0x4d, 0x9d, 0xff);   // Link-Blau, hell/dunkel tauglich
+            const int base = sc->scrollbackCount() - m_scrollOffset;
+            for (const auto &seg : m_hoverSegments) {
+                const int vr = seg.row - base;
+                if (vr < 0 || vr >= m_rows) continue;
+                pushColoredQuad(ovVerts, seg.c0 * m_cellW, (vr + 1) * m_cellH - 2,
+                                (seg.c1 - seg.c0 + 1) * m_cellW, 2, linkColor);
             }
         }
 
@@ -866,7 +873,7 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     // (\x03 = SIGINT). Ctrl+V fügt ein. Ctrl+Shift+C/V bleiben zusätzlich erhalten.
     const bool plainCtrl = (mods & Qt::ControlModifier)
                            && !(mods & Qt::ShiftModifier) && !(mods & Qt::AltModifier);
-    if (plainCtrl && event->key() == Qt::Key_C && m_hasSelection) {
+    if (plainCtrl && event->key() == Qt::Key_C && m_selection.hasSelection()) {
         copy(); clearSelection(); event->accept(); return;
     }
     if (plainCtrl && event->key() == Qt::Key_V) { paste(); event->accept(); return; }
@@ -885,7 +892,7 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
 
     const QByteArray bytes = encodeKey(event);
     if (!bytes.isEmpty()) {
-        if (m_hasSelection) clearSelection();
+        clearSelection();
         if (m_scrollOffset != 0) { m_scrollOffset = 0; m_geomDirty = true; update(); }
         sendInput(bytes);
         event->accept();
@@ -909,29 +916,6 @@ QPoint TerminalItem::absCellAt(const QPointF &pos) const {
     return {vp.x(), base + vp.y()};           // (col, absolute Inhalts-Zeile)
 }
 
-bool TerminalItem::isLinkModifier(Qt::KeyboardModifiers mods) {
-#if defined(Q_OS_MACOS)
-    // macOS: Cmd = ControlModifier (physisches Ctrl = MetaModifier, das schließen wir aus).
-    return (mods & Qt::ControlModifier) && !(mods & Qt::MetaModifier);
-#else
-    return (mods & Qt::ControlModifier) && !(mods & Qt::AltModifier);
-#endif
-}
-
-bool TerminalItem::isRevealModifier(Qt::KeyboardModifiers mods) {
-#if defined(Q_OS_MACOS)
-    // Cmd+Option — wie „Im Finder zeigen" (⌥⌘R) in Xcode/VS Code. Physisches Ctrl
-    // (MetaModifier) ausgeschlossen wie beim Öffnen.
-    return (mods & Qt::ControlModifier) && (mods & Qt::AltModifier)
-        && !(mods & Qt::MetaModifier);
-#else
-    // Ctrl+Shift. NICHT Ctrl+Alt: das ist unter Windows AltGr (s. isLinkModifier), und
-    // Alt+Klick verschiebt unter vielen Linux-Fenstermanagern das Fenster.
-    return (mods & Qt::ControlModifier) && (mods & Qt::ShiftModifier)
-        && !(mods & Qt::AltModifier);
-#endif
-}
-
 QString TerminalItem::absLineText(int absRow) const {
     VtScreen *sc = screen();
     if (!sc || absRow < 0) return {};
@@ -953,75 +937,88 @@ QString TerminalItem::sessionCwd() const {
     return m_session ? m_session->currentWorkingDirectory() : QString();
 }
 
-void TerminalItem::updateHoverLink(const QPointF &pos, Qt::KeyboardModifiers /*mods*/) {
-    int newRow = -1, c0 = 0, c1 = -1;
-    QString target;
+ScreenLinks::Hit TerminalItem::linkAt(const QPointF &pos) {
+    VtScreen *sc = screen();
+    if (!sc) return {};
+    const QPoint ac = absCellAt(pos);
+    const ScreenLinks::Line line = ScreenLinks::logicalLine(*sc, ac.y());
+    if (line.firstRow != m_linkCacheFirstRow || line.text != m_linkCacheText) {
+        m_linkCacheFirstRow = line.firstRow;
+        m_linkCacheText = line.text;
+        m_linkCacheSpans = LinkDetector::detect(line.text, sessionCwd());
+    }
+    return ScreenLinks::hitAt(line, m_linkCacheSpans, ac.y(), ac.x());
+}
+
+void TerminalItem::updateHoverLink(const QPointF &pos) {
     // Schon beim einfachen Drüberfahren nach Links suchen (Auffindbarkeit: unterstreichen
-    // + Hand-Cursor + Tooltip, damit man den Cmd/Ctrl-Klick überhaupt entdeckt). Der Klick
-    // zum Öffnen bleibt in mousePressEvent Cmd/Ctrl-gebunden. Das detect()-Ergebnis wird je
-    // Zeile gecacht, damit das Fahren INNERHALB einer Zeile keine QFileInfo-Syscalls je
-    // Pixel auslöst.
-    if (screen() && pos.x() >= 0) {
-        const QPoint ac = absCellAt(pos);
-        const QString lineText = absLineText(ac.y());
-        if (ac.y() != m_hoverDetectRow || lineText != m_hoverDetectText) {
-            m_hoverDetectRow = ac.y();
-            m_hoverDetectText = lineText;
-            m_hoverSpans = LinkDetector::detect(lineText, sessionCwd());
+    // + Hand-Cursor + Pille, damit man die Geste überhaupt entdeckt).
+    const ScreenLinks::Hit hit = pos.x() >= 0 ? linkAt(pos) : ScreenLinks::Hit{};
+    if (hit.segments == m_hoverSegments && hit.target == m_hoverTarget) return;
+    const bool targetChanged = (hit.target != m_hoverTarget);
+    m_hoverSegments = hit.segments;
+    m_hoverTarget = hit.target;
+    setCursor(hit.valid() ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    if (targetChanged) emit hoverLinkChanged();
+    update();
+}
+
+void TerminalItem::showLinkNotice(const QString &text) {
+    m_linkNotice = text;
+    emit linkNoticeChanged();
+    m_linkNoticeTimer.start();
+}
+
+void TerminalItem::activateLink(ScreenLinks::Gesture gesture, const ScreenLinks::Hit &hit) {
+    if (gesture == ScreenLinks::Gesture::Reveal) {
+        // Nur lokal Existierendes (Dateipfad, file://). Bei http/https/mailto/ftp gibt es
+        // nichts zu zeigen, und ein unverlangt startender Browser wäre die Überraschung.
+        // Die Pille sagt das, sonst sieht es aus, als wäre die Geste kaputt.
+        const bool local = !FileManagerReveal::localPathFor(hit.target).isEmpty();
+        if (!local) {
+            showLinkNotice(QCoreApplication::translate(
+                               "TerminalItem", "Anzeigen geht nur bei lokalen Dateien: %1")
+                               .arg(hit.target));
+        } else if (m_revealFn(hit.target)) {
+            showLinkNotice(QCoreApplication::translate(
+                               "TerminalItem", "Wird im Dateimanager angezeigt: %1")
+                               .arg(hit.target));
+        } else {
+            showLinkNotice(QCoreApplication::translate(
+                               "TerminalItem", "Dateimanager ließ sich nicht starten: %1")
+                               .arg(hit.target));
         }
-        for (const auto &s : m_hoverSpans) {
-            if (ac.x() >= s.start && ac.x() < s.start + s.length) {
-                newRow = ac.y(); c0 = s.start; c1 = s.start + s.length - 1;
-                target = s.target;
-                break;
-            }
-        }
+        return;
     }
-    if (newRow != m_hoverRow || c0 != m_hoverC0 || c1 != m_hoverC1) {
-        const bool targetChanged = (target != m_hoverTarget);
-        m_hoverRow = newRow; m_hoverC0 = c0; m_hoverC1 = c1; m_hoverTarget = target;
-        setCursor(newRow >= 0 ? Qt::PointingHandCursor : Qt::ArrowCursor);
-        if (targetChanged) emit hoverLinkChanged();
-        update();
+    QUrl url = (hit.kind == LinkDetector::Span::FilePath)
+        ? QUrl::fromLocalFile(hit.target)
+        : QUrl::fromUserInput(hit.target);
+    // Geöffnet wird der lokale Pfad, nie der fremde URL-Text samt Anfrage und Fragment: Den reichte
+    // Qt unter Windows als Text an die Shell weiter, und deren URL-Normalisierung macht aus
+    // `file:///x/..//server/y` einen Netzpfad, den die Prüfung am lokalen Pfad nicht sieht.
+    if (url.isLocalFile()) url = QUrl::fromLocalFile(url.toLocalFile());
+    // Doppelte Sicherung: nur freigegebene Schemata an den OS-Handler geben.
+    if (url.scheme().isEmpty() || !LinkDetector::isAllowedScheme(url.scheme())
+        || (url.isLocalFile() && LinkDetector::isRemoteFileUrl(url))) {
+        showLinkNotice(QCoreApplication::translate(
+                           "TerminalItem", "Dieses Ziel wird nicht geöffnet: %1")
+                           .arg(hit.target));
+        return;
+    }
+    // openUrl meldet false, wenn das System ablehnt, z. B. eine Datei ohne verknüpftes
+    // Programm. Das bliebe sonst spurlos und sähe aus wie ein nicht erkannter Klick.
+    if (QDesktopServices::openUrl(url)) {
+        showLinkNotice(QCoreApplication::translate("TerminalItem", "Wird geöffnet: %1")
+                           .arg(hit.target));
+    } else {
+        showLinkNotice(QCoreApplication::translate(
+                           "TerminalItem", "Das System konnte das Ziel nicht öffnen: %1")
+                           .arg(hit.target));
     }
 }
 
-bool TerminalItem::openLinkAt(const QPointF &pos) {
-    if (!screen()) return false;
-    const QPoint ac = absCellAt(pos);
-    const auto spans = LinkDetector::detect(absLineText(ac.y()), sessionCwd());
-    for (const auto &s : spans) {
-        if (ac.x() < s.start || ac.x() >= s.start + s.length) continue;
-        const QUrl url = (s.kind == LinkDetector::Span::FilePath)
-            ? QUrl::fromLocalFile(s.target)
-            : QUrl::fromUserInput(s.target);
-        // Doppelte Sicherung: nur freigegebene Schemata an den OS-Handler geben.
-        if (!url.scheme().isEmpty() && LinkDetector::isAllowedScheme(url.scheme()))
-            QDesktopServices::openUrl(url);
-        return true;   // Treffer verbraucht den Klick, auch wenn das Schema abgelehnt wurde
-    }
-    return false;
-}
-
-bool TerminalItem::revealLinkAt(const QPointF &pos) {
-    const QString target = linkTargetAt(pos);
-    if (target.isEmpty()) return false;
-    // Nur lokal Existierendes (Dateipfad, file://). Bei http/https/mailto/ftp gibt es
-    // nichts zu zeigen — dann bewusst KEINE Aktion (auch kein Öffnen im Browser: die
-    // Geste verlangt „zeigen", ein unverlangt startender Browser wäre die Überraschung).
-    // Der Klick ist trotzdem verbraucht, damit keine Auswahl beginnt.
-    FileManagerReveal::reveal(target);
-    return true;
-}
-
-QString TerminalItem::linkTargetAt(const QPointF &pos) const {
-    if (!screen()) return {};
-    const QPoint ac = absCellAt(pos);
-    const auto spans = LinkDetector::detect(absLineText(ac.y()), sessionCwd());
-    for (const auto &s : spans)
-        if (ac.x() >= s.start && ac.x() < s.start + s.length)
-            return s.target;
-    return {};
+QString TerminalItem::linkTargetAt(const QPointF &pos) {
+    return linkAt(pos).target;
 }
 
 // --- Scrollback-Suche (QTMUX-71) -----------------------------------------------------
@@ -1030,8 +1027,8 @@ void TerminalItem::recomputeMatches() {
     VtScreen *sc = screen();
     if (!sc || m_searchQuery.isEmpty()) return;
     // Gesamten Inhalt (Scrollback + sichtbar) zu Zeilen zusammensetzen; Zeilenindex =
-    // absolute Inhalts-Zeile. absLineText baut 1 Zeichen/Spalte (Spalten↔Zeichen 1:1,
-    // solange keine Emoji davor — dieselbe Konvention wie die Link-Erkennung).
+    // absolute Inhalts-Zeile. absLineText baut 1 Zeichen/Spalte (Spalten↔Zeichen 1:1, solange
+    // keine Emoji davor; die Link-Erkennung kann das inzwischen genauer, s. ScreenLinks::Line).
     const int total = sc->scrollbackCount() + m_rows;
     QStringList lines;
     lines.reserve(total);
@@ -1101,9 +1098,9 @@ void TerminalItem::endSearch() {
 }
 
 void TerminalItem::clearSelection() {
-    if (!m_hasSelection) return;
-    m_hasSelection = false;
-    m_selAnchor = m_selCaret = QPoint(-1, -1);
+    const bool had = m_selection.hasSelection();
+    m_selection.clear();
+    if (!had) return;
     emit selectionChanged();
     update();
 }
@@ -1111,15 +1108,7 @@ void TerminalItem::clearSelection() {
 void TerminalItem::selectAll() {
     VtScreen *sc = screen();
     if (!sc || m_cols <= 0 || m_rows <= 0) return;
-    // Absolute Inhaltszeilen: 0 … scrollbackCount()-1 = Historie, dahinter der
-    // Live-Screen. Anker auf den Anfang, Caret auf die letzte Zelle der letzten
-    // Live-Zeile — damit liefert selectedText() genau das, was auch ein Drag über
-    // alles liefern würde (inkl. Soft-Wrap-Behandlung).
-    const int lastRow = sc->scrollbackCount() + m_rows - 1;
-    if (lastRow < 0) return;
-    m_selAnchor = QPoint(0, 0);
-    m_selCaret = QPoint(m_cols - 1, lastRow);
-    m_hasSelection = true;
+    m_selection.selectAll();
     m_selecting = false;
     emit selectionChanged();
     if (m_copyOnSelect) copy();
@@ -1128,48 +1117,7 @@ void TerminalItem::selectAll() {
 
 QString TerminalItem::selectedText() const {
     VtScreen *sc = screen();
-    if (!sc || !m_hasSelection) return {};
-    // Selektion in ABSOLUTEN Inhalts-Zeilen: row < sb -> Scrollback-Zeile, sonst
-    // Live-Screen-Zeile (row - sb). Unabhängig vom aktuellen Scroll-Offset, daher
-    // liefert Kopieren denselben Text, egal wohin gerade gescrollt ist.
-    int a = m_selAnchor.y() * m_cols + m_selAnchor.x();
-    int b = m_selCaret.y() * m_cols + m_selCaret.x();
-    if (a > b) std::swap(a, b);
-    const QPoint start(a % m_cols, a / m_cols);
-    const QPoint end(b % m_cols, b / m_cols);
-    const int sb = sc->scrollbackCount();
-
-    // Ist die absolute Zeile `row` ein weicher Umbruch (Autowrap-Fortsetzung) der
-    // vorigen? Dann gehört sie zur SELBEN logischen Zeile → beim Kopieren KEIN \n
-    // einfügen (sonst wird ein umbrochener Befehl fälschlich als mehrzeilig erkannt).
-    auto isContinuation = [&](int absRow) -> bool {
-        if (absRow < sb) return absRow >= 0 && sc->scrollbackContinuation(absRow);
-        const int lr = absRow - sb;
-        return lr >= 0 && lr < m_rows && sc->lineContinuation(lr);
-    };
-
-    QString out;
-    for (int row = start.y(); row <= end.y(); ++row) {
-        const int c0 = (row == start.y()) ? start.x() : 0;
-        const int c1 = (row == end.y()) ? end.x() : m_cols - 1;
-        const std::vector<Cell> *sbLine =
-            (row < sb && row >= 0) ? &sc->scrollbackLine(row) : nullptr;
-        const int liveRow = row - sb;
-        QString line;
-        for (int col = c0; col <= c1 && col < m_cols; ++col) {
-            Cell c;
-            if (sbLine) { if (col < static_cast<int>(sbLine->size())) c = (*sbLine)[col]; }
-            else if (liveRow >= 0 && liveRow < m_rows) c = sc->cell(liveRow, col);
-            line += c.text.isEmpty() ? QStringLiteral(" ") : c.text;
-        }
-        // Bei einer fortgesetzten (umbrochenen) Zeile rechte Leerzeichen NICHT
-        // trimmen — der Text läuft ja in der nächsten Zeile weiter.
-        if (!isContinuation(row + 1))
-            while (line.endsWith(QLatin1Char(' '))) line.chop(1);
-        if (row > start.y() && !isContinuation(row)) out += QLatin1Char('\n');
-        out += line;
-    }
-    return out;
+    return sc ? m_selection.text(*sc) : QString();
 }
 
 void TerminalItem::copy() {
@@ -1179,9 +1127,8 @@ void TerminalItem::copy() {
     // nächsten Auftreten die Ursache im Log (Console.app) — reine Whitespace-Auswahl (wird
     // zu "" getrimmt), verlorene Auswahl, oder falsches/leeres Pane. Sichtbar nur im
     // Problemfall, kein Rauschen im Normalbetrieb.
-    qWarning("QTmux copy(): nichts kopiert (hasSelection=%d, cols=%d, anchor=%d,%d caret=%d,%d)",
-             m_hasSelection ? 1 : 0, m_cols,
-             m_selAnchor.x(), m_selAnchor.y(), m_selCaret.x(), m_selCaret.y());
+    qWarning("QTmux copy(): nichts kopiert (hasSelection=%d, cols=%d)",
+             m_selection.hasSelection() ? 1 : 0, m_cols);
 }
 
 void TerminalItem::paste() {
@@ -1258,20 +1205,24 @@ static bool appMouseActive(const VtScreen *sc) {
 
 void TerminalItem::mousePressEvent(QMouseEvent *event) {
     forceActiveFocus();
-    // Cmd/Ctrl+Linksklick auf einen erkannten Link öffnet ihn im verknüpften Viewer —
-    // lokal und VOR jeder App-Maus-Weiterleitung (analog dazu, wie Shift die Selektion
-    // erzwingt). Der Modifier ist die bewusste Geste, die versehentliches Öffnen von
-    // Agenten-Output verhindert. Die „Zeigen"-Geste (QTMUX-138) enthält den Öffnen-
-    // Modifier (Cmd bzw. Ctrl) und wird darum ZUERST geprüft.
-    if (event->button() == Qt::LeftButton && isRevealModifier(event->modifiers())
-            && revealLinkAt(event->position())) {
-        event->accept();
-        return;
-    }
-    if (event->button() == Qt::LeftButton && isLinkModifier(event->modifiers())
-            && openLinkAt(event->position())) {
-        event->accept();
-        return;
+    // Cmd/Ctrl+Linksklick auf einen erkannten Link öffnet ihn im verknüpften Viewer,
+    // Cmd+Option bzw. Ctrl+Shift zeigt ihn im Dateimanager (QTMUX-138) — lokal und VOR jeder
+    // App-Maus-Weiterleitung (analog dazu, wie Shift die Selektion erzwingt). Der Modifier
+    // ist die bewusste Geste, die versehentliches Öffnen von Agenten-Output verhindert.
+    if (event->button() == Qt::LeftButton) {
+        const ScreenLinks::Gesture gesture =
+            ScreenLinks::gestureFor(event->modifiers(), FileManagerReveal::currentPlatform());
+        if (gesture != ScreenLinks::Gesture::None) {
+            const ScreenLinks::Hit hit = linkAt(event->position());
+            if (hit.valid()) {
+                activateLink(gesture, hit);
+                event->accept();
+                return;
+            }
+            // Daneben: Die Pille sagt es, der Klick läuft normal weiter.
+            showLinkNotice(QCoreApplication::translate(
+                "TerminalItem", "Kein Link an dieser Stelle"));
+        }
     }
     VtScreen *sc = screen();
     // App mit Maus-Tracking: Klicks an die App melden (vim/htop/tmux/…). Shift
@@ -1289,9 +1240,9 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
     }
     m_mouseReporting = false;
     if (event->button() == Qt::LeftButton) {
-        m_selAnchor = m_selCaret = absCellAt(event->position());
+        const QPoint cell = absCellAt(event->position());
+        if (sc) m_selection.begin(*sc, cell.x(), cell.y());
         m_selecting = true;
-        m_hasSelection = false;
         emit selectionChanged();
         update();
     } else if (event->button() == Qt::RightButton) {
@@ -1333,9 +1284,7 @@ void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
     }
     if (!m_selecting) { event->ignore(); return; }
     const QPoint cell = absCellAt(event->position());
-    if (cell != m_selCaret) {
-        m_selCaret = cell;
-        m_hasSelection = (m_selCaret != m_selAnchor);
+    if (sc && m_selection.extendTo(*sc, cell.x(), cell.y())) {
         emit selectionChanged();
         update();
     }
@@ -1357,8 +1306,8 @@ void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
     }
     if (m_selecting) {
         m_selecting = false;
-        if (m_selCaret == m_selAnchor) clearSelection();
-        else if (m_copyOnSelect && m_hasSelection) copy();
+        if (!m_selection.hasSelection()) m_selection.clear();
+        else if (m_copyOnSelect) copy();
         event->accept();
         return;
     }
@@ -1375,19 +1324,13 @@ void TerminalItem::showAppMouseHint() {
 
 void TerminalItem::hoverMoveEvent(QHoverEvent *event) {
     m_lastHoverPos = event->position();
-    updateHoverLink(m_lastHoverPos, event->modifiers());
+    updateHoverLink(m_lastHoverPos);
     QQuickItem::hoverMoveEvent(event);
 }
 
 void TerminalItem::hoverLeaveEvent(QHoverEvent *event) {
     m_lastHoverPos = QPointF(-1, -1);
-    if (m_hoverRow >= 0 || m_hoverC1 >= m_hoverC0) {
-        const bool hadTarget = !m_hoverTarget.isEmpty();
-        m_hoverRow = -1; m_hoverC1 = -1; m_hoverTarget.clear();
-        setCursor(Qt::ArrowCursor);
-        if (hadTarget) emit hoverLinkChanged();
-        update();
-    }
+    updateHoverLink(m_lastHoverPos);
     QQuickItem::hoverLeaveEvent(event);
 }
 
@@ -1482,11 +1425,18 @@ bool TerminalItem::viewportSource(int screenRow, int &sbIndex, int &liveRow) con
 void TerminalItem::onDamaged() {
     VtScreen *sc = screen();
     const int sb = sc ? sc->scrollbackCount() : 0;
+    // Zuwachs aus Scrollback + herausgefallenen Zeilen: An der Scrollback-Grenze steht
+    // scrollbackCount() still, obwohl der Text weiterrollt. Sonst liefe eine zurückgescrollte
+    // Ansicht dort unter dem Anwender weg.
+    const qint64 total = sb + (sc ? sc->scrollbackDropped() : 0);
     if (m_scrollOffset > 0) {
-        const int delta = sb - m_lastSbCount;
-        if (delta > 0) m_scrollOffset = std::min(m_scrollOffset + delta, sb);
+        const qint64 delta = total - m_lastSbTotal;
+        if (delta > 0) m_scrollOffset = static_cast<int>(std::min<qint64>(m_scrollOffset + delta, sb));
     }
-    m_lastSbCount = sb;
+    m_lastSbTotal = total;
+    // Hat sich markierter Text geändert, ist die Auswahl weg (Regel: TerminalSelection.h).
+    // Auch mitten im Ziehen: Der Anker ist dann ebenfalls weg, weiteres Ziehen läuft ins Leere.
+    if (sc && m_selection.revalidate(*sc)) emit selectionChanged();
     m_geomDirty = true;   // Inhalt hat sich geändert
     update();
 }

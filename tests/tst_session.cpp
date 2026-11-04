@@ -36,6 +36,7 @@ private slots:
     void queuedTextIsDispatchedOnceQuiet();
     void osc7ReportedDirectoryWinsOverPolling();
     void osc7RemoteDirectoryIsNotUsedAsLocalCwd();
+    void osc7NetworkPathNeverBecomesTheWorkingDirectory();
 };
 
 static QString rowText(const VtScreen &vt, int row) {
@@ -524,6 +525,26 @@ void TestSession::osc7RemoteDirectoryIsNotUsedAsLocalCwd() {
     // ja bewusst auf den gepollten Wert zurück, der hier NICHT gespeichert werden darf.
     sess.refreshWorkingDirectory();
     QCOMPARE(sess.workingDirectory(), QStringLiteral("/opt/build"));
+}
+
+// Der Wert von `workingDirectory` geht ungefiltert in die Dateizugriffe der Palette. Ein Netzpfad aus
+// fremder Ausgabe darf dort nie ankommen. Die zweite Meldung ist der Anker: Sie zeigt, dass die erste
+// schon verarbeitet ist.
+void TestSession::osc7NetworkPathNeverBecomesTheWorkingDirectory() {
+    Session sess;
+    auto *pty = new PtyBackend;
+    const auto cmd = qtmux_test::emitRawThenWait(
+        QByteArrayLiteral("\033]7;file:////qtmux-server/share\007\033]7;file:///qtmux-osc7/danach\007"), 5);
+    pty->setProgram(cmd.program);
+    pty->setArguments(cmd.args);
+    QStringList seen;
+    QObject::connect(&sess, &Session::workingDirectoryChanged, &sess,
+                     [&] { seen << sess.workingDirectory(); });
+    sess.attachBackend(pty, Session::Type::Shell, 80, 24);
+    sess.start(80, 24);
+
+    QTRY_VERIFY_WITH_TIMEOUT(sess.workingDirectory() == QStringLiteral("/qtmux-osc7/danach"), 5000);
+    QVERIFY2(!seen.join(u'|').contains(QStringLiteral("qtmux-server")), qPrintable(seen.join(u'|')));
 }
 
 // QTMUX-58: Der Branch der Kachel haengt am Arbeitsverzeichnis der Session. Geprueft wird

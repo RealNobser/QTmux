@@ -1,4 +1,5 @@
 #include "GitInfo.h"
+#include "LinkDetector.h"
 
 #include <QByteArray>
 #include <QDir>
@@ -54,9 +55,17 @@ QString gitDirFromFile(const QString &gitFilePath, const QDir &containingDir)
     const QString target = line.mid(marker.size()).trimmed();
     if (target.isEmpty())
         return QString();
+    // Der Zeiger steht in einer Datei des Arbeitsbaums, also in fremdem Inhalt (entpacktes
+    // Archiv). Er darf QTmux nicht zu einem anderen Rechner schicken. Vor cleanPath geprüft:
+    // Das macht unter POSIX aus `//x` ein `/x`.
+    if (LinkDetector::isNetworkPath(target))
+        return QString();
 
     // absoluteFilePath() lässt einen bereits absoluten Pfad unverändert.
     const QString resolved = QDir::cleanPath(containingDir.absoluteFilePath(target));
+    // Auch ein relativer Zeiger erreicht mit genug `..` die Wurzel, und cleanPath macht daraus `//…`.
+    if (LinkDetector::isNetworkPath(resolved))
+        return QString();
     return QFileInfo(resolved).isDir() ? resolved : QString();
 }
 

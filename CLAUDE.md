@@ -54,6 +54,8 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/core/PtyBackend.{h,cpp}` | Lokale Shell/Agenten; zerlegt `program` via `splitCommand` |
 | `src/core/VtScreen.{h,cpp}` | libvterm-Wrapper; `Cell` Qt-freundlich; OSC-Parser (133/9/777/Maus) |
 | `src/core/LinkDetector.{h,cpp}` | Gui-freie Link-Heuristik (URLs + existierende Dateipfade, Scheme-Whitelist) für klickbare Links (QTMUX-39) |
+| `src/core/ScreenLinks.{h,cpp}` | Gui-frei: Zellen ↔ Link (logische Zeile über weiche Umbrüche, Emoji-feste Spalten) + Link-Gesten aller drei Plattformen |
+| `src/core/TerminalSelection.{h,cpp}` | Gui-frei: Auswahl, die genau den markierten Text trägt oder verschwindet (stabile Zeilennummern + Inhaltsvergleich) |
 | `src/core/FileManagerReveal.{h,cpp}` | Gui-frei: „Im Finder/Explorer/Dateimanager zeigen" — Befehl je Plattform + lokale Existenzprüfung (QTMUX-138, Mechanik in der Feature-Referenz) |
 | `src/core/Session.{h,cpp}` | Backend + VtScreen; Activity/Attention/Progress; Login-Script; SSH-Passwort-Auto-Fill |
 | `src/viewmodels/SessionModel.{h,cpp}` | QAbstractListModel Sidebar; Persistenz/Restore; CWD-Vererbung |
@@ -73,7 +75,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/StallDetector.{h,cpp}` | Gui-frei: Stillstand-Erkennung (QTMUX-139) — Agent zeigt „arbeitet" (Merkmal `AgentInfo::workingMarkers`), Bildschirm steht seit N min still → `needsAttention`; Mechanik in der Feature-Referenz |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **44** ctest-Tests: 37 QtTest-Binaries (pty, vtscreen, linkdetector, **filemanagerreveal**, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, statuscolors, combowidth, **conptyreplay** — echte ConPTY-Bytes, s. Feature-Referenz) + **5 × `I18n.*`** (Anrede-Wächter [tools/i18n/check_address.py](tools/i18n/check_address.py) + vier Positivproben, QTMUX-145 — brauchen Python 3, ohne Python entsteht ein roter ERROR-Test statt eines stillen Fehlens) + `test_doc_duplicates` (reines CMake-Skript) + `test_check_updater_sync` (bash-Skripttest des Vendoring-Wächters, QTMUX-144 — **nicht auf Windows**). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 43. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **47** ctest-Tests: 40 QtTest-Binaries (pty, vtscreen, linkdetector, **screenlinks**, **terminalselection**, **terminalitem** — das echte Item mit Maus-Ereignissen, ohne Fenster, **filemanagerreveal**, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, statuscolors, combowidth, **conptyreplay** — echte ConPTY-Bytes, s. Feature-Referenz) + **5 × `I18n.*`** (Anrede-Wächter [tools/i18n/check_address.py](tools/i18n/check_address.py) + vier Positivproben, QTMUX-145 — brauchen Python 3, ohne Python entsteht ein roter ERROR-Test statt eines stillen Fehlens) + `test_doc_duplicates` (reines CMake-Skript) + `test_check_updater_sync` (bash-Skripttest des Vendoring-Wächters, QTMUX-144 — **nicht auf Windows**). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 46. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -835,8 +837,9 @@ Transition hinterher. Vorher 107/26 bis QTMUX-133, gemessen im Jira-Audit 2026-0
 QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
 Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 
-**Teststände:** **44** Tests auf macOS/Linux, **43** auf Windows (s. Dateitabelle; per
-`ctest -N` am 2026-11-03 gezählt — `conptyreplay` kam mit dem Clink-Auftrag hinzu, lokal 44/44
+**Teststände:** **47** Tests auf macOS/Linux, **46** auf Windows (s. Dateitabelle; per
+`ctest -N` am 2026-11-04 gezählt — `screenlinks`, `terminalselection`, `terminalitem` kamen mit
+dem Auftrag Links/Auswahl hinzu; davor am 2026-11-03 44 — `conptyreplay` kam mit dem Clink-Auftrag hinzu, lokal 44/44
 in frisch angelegtem Debug- **und** Release-Baum (`build/wclink`, `build/wclinkr`); davor
 am 2026-10-13 43 — `combowidth` + fünf `I18n.*` kamen mit QTMUX-145 hinzu,
 lokal 43/43 in frisch angelegtem Debug- **und** Release-Baum, CI-Lauf `38486777601` macOS/Linux
@@ -865,6 +868,15 @@ Windows-**Debug**-Build ist dafür das einzige taugliche Messmittel (`-DQT_FORCE
 trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
+
+🔧 **2026-11-04: Owner-Befunde Links und Auswahl umgesetzt, lokal committet, nicht gepusht, unreleased.**
+Auswahl markiert nie mehr fremden Text; Link-Gesten treffen über Emoji und weiche Umbrüche und melden
+jedes Ergebnis in der Pille (Mechanik: Feature-Referenz „Auswahl“, „Klickbare Links“). Die Owner-Abnahme
+unter Windows steht aus: Das zeitweise Versagen von Strg-Klick ist dort nicht am echten Desktop
+reproduziert, die Pille macht es jetzt unterscheidbar. Offen als Nebenbefund: Die Scrollback-Suche nutzt
+weiter die Spalten-Zeichen-Gleichsetzung (`absLineText`) und setzt ihre Treffer hinter Emoji daneben;
+`m_matches` rutschen auch an der Scrollback-Grenze. Jira-Ticket fehlt noch, Owner-Entscheid Mitwandern im
+Alt-Screen offen (Bericht liegt im Workspace).
 
 🔧 **2026-11-04: Owner-Befund „Windows + Clink + Resize gibt immer noch Artefakte“, Entscheidung offen.**
 Ursache gemessen: Claude Codes **klassischer** Renderer, nicht ConPTY, nicht Clink, nicht der Reflow

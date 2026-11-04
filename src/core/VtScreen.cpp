@@ -1,5 +1,6 @@
 #include "VtScreen.h"
 #include "ColorScheme.h"
+#include "LinkDetector.h"
 
 #include <vterm.h>
 #include <QChar>
@@ -410,6 +411,7 @@ void VtScreen::cbPushScrollback(std::vector<Cell> &&line, bool continuation) {
     m_scrollback.push_back(SbLine{std::move(line), continuation});
     while (static_cast<int>(m_scrollback.size()) > kMaxScrollback) {
         m_scrollback.pop_front();
+        ++m_scrollbackDropped;
     }
 }
 
@@ -581,6 +583,11 @@ void VtScreen::cbOsc(int command, const char *str, int len, bool initial, bool f
         // anderen Maschine). QTmux leitet nichts ab — die Shell meldet, wir übernehmen.
         QString path, host;
         if (!parseOsc7(data, path, host)) break;
+        // 🔴 Eine Meldung mit Netzpfad wird verworfen, nicht nur als entfernt vermerkt. Sie kann von
+        // jedem Programm kommen, und der gemeldete Wert läuft als Arbeitsverzeichnis weiter: Git-Zweig
+        // der Kachel, Befehls-Scan der Palette, „Arbeitsverzeichnis öffnen“. Unter Windows hieße jeder
+        // dieser Zugriffe: SMB-Verbindung samt Anmeldung zu einem fremden Server.
+        if (LinkDetector::isNetworkPath(path)) break;
         const bool local = hostIsLocal(host);
         // OSC 7 kommt an JEDER Prompt; nur echte Änderungen weitermelden.
         if (path == m_reportedDir && host == m_reportedHost && local == m_reportedLocal)

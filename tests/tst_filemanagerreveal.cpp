@@ -22,6 +22,7 @@ private slots:
     void platformLinux();
     void relativeOrEmptyGivesNothing();
     void localPathForFilesAndFolders();
+    void localPathForRefusesNetworkPaths();
     void localPathForRejectsNonLocal();
     void leadingDashStaysAPath();
 };
@@ -129,6 +130,25 @@ void TestFileManagerReveal::relativeOrEmptyGivesNothing() {
     // Plattform-fremde Absolutpfade werden abgelehnt statt verbogen.
     QVERIFY(commands(QStringLiteral("C:/x.txt"), Platform::MacOS).isEmpty());
     QVERIFY(commands(QStringLiteral("/home/x.txt"), Platform::Windows).isEmpty());
+}
+
+void TestFileManagerReveal::localPathForRefusesNetworkPaths() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QFile f(dir.filePath(QStringLiteral("x.txt")));
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.close();
+    const QString abs = QFileInfo(f.fileName()).absoluteFilePath();
+    QVERIFY(!localPathFor(abs).isEmpty());
+#if !defined(Q_OS_WIN)
+    // POSIX: `//tmp/x` existiert. Die Regel greift also vor der Existenzprüfung, nicht wegen ihr.
+    QVERIFY(QFileInfo::exists(QLatin1Char('/') + abs));
+    QVERIFY(localPathFor(QLatin1Char('/') + abs).isEmpty());
+#endif
+    QVERIFY(localPathFor(QStringLiteral("\\\\server\\share\\x.txt")).isEmpty());
+    QVERIFY(localPathFor(QStringLiteral("file://server/share/x.txt")).isEmpty());
+    QVERIFY(localPathFor(QStringLiteral("file:////server/share/x.txt")).isEmpty());
+    QVERIFY(localPathFor(QStringLiteral("file:///%2Fserver/share/x.txt")).isEmpty());
 }
 
 void TestFileManagerReveal::localPathForFilesAndFolders() {

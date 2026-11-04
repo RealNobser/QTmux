@@ -53,6 +53,10 @@ add_library(qtmux_core STATIC
     src/core/VtScreen.cpp
     src/core/LinkDetector.h
     src/core/LinkDetector.cpp
+    src/core/ScreenLinks.h
+    src/core/ScreenLinks.cpp
+    src/core/TerminalSelection.h
+    src/core/TerminalSelection.cpp
     src/core/FileManagerReveal.h
     src/core/FileManagerReveal.cpp
     src/core/KeyEncoding.h
