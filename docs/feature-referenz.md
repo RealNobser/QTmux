@@ -300,6 +300,28 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   stürzt sonst über gewöhnliche Terminal-Ausgabe ab (`abort()`, Lesen vor dem Puffer). Wer
   libvterm aktualisiert, muss den Patch mitnehmen; der Zufallslauf
   `reflowRandomResizesStayConsistent` fällt sonst.
+  🔑 **Doppelter Inhalt mit Claude Code nach einer Größenänderung ist KEIN ConPTY- und kein
+  Reflow-Fehler (Resize-Auftrag 2026-11-04, gemessen an 2.1.316; 2.1.303, .310, .312 haben im
+  Paket dieselbe Löschfolge):** Der **klassische** Renderer sendet weder `ESC[3J` noch `ESC[2J`,
+  sondern `ESC[H (ESC[2K ESC[1B)×Zeilen ESC[H` und malt dann nur die letzten Zeilen seines
+  Frames in der neuen Breite. Der Scrollback behält die alte Breite, das Gespräch steht an der
+  Naht zweimal, und die Naht liegt mitten im Text. Das Bild entsteht **ohne ConPTY und ohne
+  Clink** genauso (Mac-Mitschnitt durch `VtScreen`). Der Vollbild-Renderer ist nicht betroffen:
+  Alt-Screen, Scrollback 0. Abhilfe beim Anwender: `/tui fullscreen`.
+  ⚠️ Eine Abhilfe in QTmux müsste Scrollback-Zeilen per Textvergleich löschen, und die beiden
+  Kopien sind nicht gleich: Claude Code kürzt Werkzeugausgaben breitenabhängig (schmal „+5 lines“,
+  breit „+3 lines“). Prototyp am Mitschnitt: Toleranz 10 % schneidet auch **ohne** Größenänderung
+  und löscht Text, der darunter fehlt; 3 % löscht noch Text, der darunter fehlt; 0 % trifft nur 4 von
+  47 Zeilen. Unter ConPTY gibt es zudem kein Byte-Merkmal, die Neuzeichnung sieht aus wie ConPTYs
+  eigene. Deshalb bisher nicht gebaut (Tests `classicRendererRepaintKeepsScrollback`,
+  `fullscreenRendererLeavesNoScrollback`).
+  ⚠️ **Der Reflow legt beim SCHMALziehen eine Kopie drauf:** Lange Zeilen des alten Frames werden
+  umgebrochen, die oberen wandern in den Scrollback, dann malt die Anwendung neu (gemessen 181×55 →
+  100×40: 157 statt 143 Scrollback-Zeilen). Für die Shell ist genau das die Abhilfe gegen
+  Zeilenverlust, beides lässt sich an den Bytes nicht unterscheiden.
+  ⚠️ `ESC[3J` reicht ConPTY durch, QTmux wertet es nicht aus (`sb_clear` in `VtScreen` ist nicht
+  gesetzt), andere Terminals löschen dabei den Scrollback. Offene Entscheidung, gälte für alle
+  Plattformen; Test `eraseScrollbackSequenceIsIgnored`.
   ⚠️ **Nebenbefunde aus denselben Mitschnitten:** ConPTY schaltet zu Beginn
   `ESC[?9001h` (win32-input-mode) und `ESC[?1004h` (Fokus-Meldungen) ein — beides kennt
   QTmux nicht, ConPTY fällt still auf normale VT-Eingabe zurück. ConPTY reicht DECSET

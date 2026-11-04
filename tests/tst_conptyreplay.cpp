@@ -109,6 +109,10 @@ private slots:
     void reflowHostileResizesDoNotCrash();
     void reflowRandomResizesStayConsistent();
     void reflowKeepsCursorOnLastWrappedRow();
+    void classicRendererRepaintKeepsScrollback_data();
+    void classicRendererRepaintKeepsScrollback();
+    void fullscreenRendererLeavesNoScrollback();
+    void eraseScrollbackSequenceIsIgnored();
 };
 
 void TestConPtyReplay::resizeKeepsEveryLine_data() {
@@ -329,6 +333,95 @@ void TestConPtyReplay::reflowRandomResizesStayConsistent() {
                 }
         }
     }
+}
+
+// --- Claude Codes klassischer Renderer bei einer Größenänderung (Resize-Auftrag 2026-11-04) ---
+//
+// Owner-Befund: Nach einer Größenänderung steht der Gesprächsinhalt doppelt im Verlauf, erst
+// schmal, dann breit, und an der Naht folgt mitten im Satz ein Rest einer älteren Ausgabe.
+// Gemessen an Claude Code 2.1.316 (pty-Mitschnitt, dazu gelesen im Paket): Der klassische
+// Renderer sendet KEIN ESC[3J und KEIN ESC[2J. Er löscht nur den Sichtbereich zeilenweise an
+// Ort und Stelle und malt die letzten Zeilen seines Frames in der neuen Breite. Was im
+// Scrollback steht, hält er für unveränderlich. Unter ConPTY kommt davon nur die Neuzeichnung
+// ab ESC[H an.
+//
+// 🔑 Diese Fälle halten die Terminal-Semantik fest, sie loben das Bild nicht: QTmux erfindet
+// und verliert nichts, die Dopplung steht in den Bytes der Anwendung. Wer hier eine Abhilfe
+// einbaut (etwa einen Textvergleich gegen das Scrollback-Ende), MUSS diese Erwartung bewusst
+// umschreiben. Warum das bisher unterblieb, steht in der Feature-Referenz.
+void TestConPtyReplay::classicRendererRepaintKeepsScrollback_data() {
+    QTest::addColumn<bool>("reflow");
+    QTest::addColumn<bool>("conptyForm");
+    QTest::newRow("forkpty") << false << false;
+    QTest::newRow("conpty")  << true  << true;
+}
+
+void TestConPtyReplay::classicRendererRepaintKeepsScrollback() {
+    QFETCH(bool, reflow);
+    QFETCH(bool, conptyForm);
+    VtScreen s(10, 40);
+    s.setReflow(reflow);
+    for (int i = 1; i <= 30; ++i)
+        s.inputWrite(QByteArray("Absatz ") + QByteArray::number(i) + " schmal\r\n");
+    const int before = s.scrollbackCount();
+    QVERIFY(before > 0);
+    QVERIFY(s.scrollbackText().contains(QStringLiteral("Absatz 15 schmal")));
+
+    s.setSize(20, 90);   // breiter und höher: kein Reflow-Schub, kein Scroll
+    QCOMPARE(s.scrollbackCount(), before);
+
+    QByteArray repaint;
+    if (conptyForm) {
+        repaint = "\x1b[?25l\x1b[H";   // ConPTY: nur die Neuzeichnung, Zeile für Zeile mit ESC[K
+    } else {
+        repaint = "\x1b[?25l\x1b[2D\x1b[6B\x1b[H";   // gemessene Folge von Claude Code
+        for (int r = 0; r < 20; ++r) repaint += "\x1b[2K\x1b[1B";
+        repaint += "\x1b[H";
+    }
+    for (int i = 15; i <= 30; ++i)
+        repaint += QByteArray("Absatz ") + QByteArray::number(i) + " breit\x1b[K\r\n";
+    repaint += "\x1b[?25h";
+    s.inputWrite(repaint);
+
+    QCOMPARE(s.scrollbackCount(), before);   // das Löschen an Ort und Stelle schiebt nichts
+    const QStringList screen = s.screenText().split(QLatin1Char('\n'));
+    QCOMPARE(screen.first(), QStringLiteral("Absatz 15 breit"));
+    // Die Naht: Das Scrollback-Ende ist eine schmale Zeile, die Zeile danach eine breite ältere.
+    const QStringList sb = s.scrollbackText().split(QLatin1Char('\n'));
+    QVERIFY(sb.contains(QStringLiteral("Absatz 15 schmal")));
+    QVERIFY(sb.last().endsWith(QStringLiteral(" schmal")));
+}
+
+// Der Vollbild-Renderer zeichnet im Alt-Screen: Das Scrollback bleibt leer, auch mit ESC[3J
+// und mit Reflow. Deshalb gibt es dort keine Dopplung.
+void TestConPtyReplay::fullscreenRendererLeavesNoScrollback() {
+    VtScreen s(10, 40);
+    s.setReflow(true);
+    s.inputWrite("\x1b[?1049h\x1b[2J\x1b[H");
+    QVERIFY(s.altScreen());
+    for (int i = 1; i <= 9; ++i)
+        s.inputWrite(QByteArray("Zeile ") + QByteArray::number(i) + "\r\n");
+    s.setSize(20, 90);
+    s.inputWrite("\x1b[2J\x1b[3J\x1b[HZeile neu\r\n");
+    QVERIFY(s.altScreen());
+    QCOMPARE(s.scrollbackCount(), 0);
+    QCOMPARE(s.screenText(), QStringLiteral("Zeile neu"));
+}
+
+// ConPTY reicht ESC[3J durch (gemessen, auch ohne Größenänderung), QTmux wertet es nicht aus:
+// `sb_clear` ist in VtScreen nicht gesetzt. Andere Terminals löschen dabei den Scrollback.
+// Das ist NICHT die Ursache des Befunds oben; eine Änderung gälte auf allen Plattformen und
+// bleibt eine eigene Entscheidung. Der Fall macht sie sichtbar, statt sie nebenbei zu treffen.
+void TestConPtyReplay::eraseScrollbackSequenceIsIgnored() {
+    VtScreen s(5, 40);
+    for (int i = 1; i <= 20; ++i)
+        s.inputWrite(QByteArray("Zeile ") + QByteArray::number(i) + "\r\n");
+    const int before = s.scrollbackCount();
+    QVERIFY(before > 0);
+    s.inputWrite("\x1b[3J");
+    QCOMPARE(s.scrollbackCount(), before);
+    s.inputWrite("\x1b[2J\x1b[3J\x1b[H");
+    QCOMPARE(s.scrollbackCount(), before);
 }
 
 QTEST_GUILESS_MAIN(TestConPtyReplay)

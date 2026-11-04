@@ -866,6 +866,13 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
+🔧 **2026-11-04: Owner-Befund „Windows + Clink + Resize gibt immer noch Artefakte“, Entscheidung offen.**
+Ursache gemessen: Claude Codes **klassischer** Renderer, nicht ConPTY, nicht Clink, nicht der Reflow
+(Feature-Referenz, „Doppelter Inhalt mit Claude Code“). Kein Code-Fix in QTmux, nur Fälle in
+`test_conptyreplay` und Doku. Empfehlung: `/tui fullscreen` beim Owner messen; die Alternative wäre ein
+Textvergleich, der Scrollback löscht, im Prototyp nicht zuverlässig. Ein neuer Verlauf ist dabei Pflicht,
+der alte trägt die Dopplung als Inhalt.
+
 🔧 **2026-11-03: QTMUX-149 ausgeliefert mit 1.9.10, Owner-Test unter Windows steht aus.** ConPTY-Reflow
 bei Größenänderung + Verlauf vor dem ConPTY-Start-`ESC[2J` in den Scrollback (Mechanik in der
 Feature-Referenz, „ConPTY malt nach jeder Größenänderung neu“ und QTMUX-130-Absatz). libvterm-Reflow

@@ -20,6 +20,10 @@
   **Also:** sauber per `/exit` beenden, danach `fullscreenAutoDisabled`/`fullscreenBootStrikes`
   prüfen. Vergleiche zwischen Shells sind reihenfolgeabhängig; `CLAUDE_CODE_NO_FLICKER=1` schlägt
   die Sperre und trennt „Renderer-Wahl“ von „Maus kommt nicht an“.
+- ⚠️ **Ein `!`-Befehl in Claude Code ist kein Offline-Mitschnitt** (gemessen 2026-11-04): Die Ausgabe
+  geht ans Modell, das antwortet (Kontingent!), und der Text der Antwort landet im Mitschnitt. Für
+  Renderer-Messungen wenige Befehle fahren. Eine aus einer Claude-Session geerbte
+  `CLAUDE_CODE_CHILD_SESSION` schaltet das Transkript ab und blendet eine zusätzliche Warnzeile ein.
 - 🔑 **Eine Gegenprobe, die nur die gewünschte Richtung misst, beweist nichts — prüfe BEIDES:
   ist das Neue da UND ist das Alte weg?** (2026-08-07, an einem Prefs-Text erlebt; RAFTNG hat
   die Regel danach übernommen.) Der neue Text allein belegt nicht, dass die alte Stelle
