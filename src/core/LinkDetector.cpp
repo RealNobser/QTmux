@@ -59,7 +59,8 @@ QString resolvePath(const QString &tok, const QString &cwd) {
     // am Arbeitsverzeichnis von QTmux selbst und träfe eine fremde Datei.
     if (!QDir::isAbsolutePath(p) && cwd.isEmpty()) return {};
     const QString candidate = QDir::isAbsolutePath(p) ? p : QDir(cwd).filePath(p);
-    // VOR jedem Dateizugriff. Auch das Arbeitsverzeichnis kann aus der Ausgabe stammen (OSC 7).
+    // VOR jedem Dateizugriff. Auch das Arbeitsverzeichnis kann ein Netzpfad sein: Der gepollte Wert
+    // folgt der Shell, eine OSC-7-Meldung mit Netzpfad verwirft VtScreen dagegen schon vorher.
     if (isNetworkPath(p) || isNetworkPath(candidate)) return {};
     QFileInfo fi(candidate);
     return fi.exists() ? fi.absoluteFilePath() : QString();
