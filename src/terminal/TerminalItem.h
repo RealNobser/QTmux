@@ -244,6 +244,7 @@ private:
     /// Führt die Geste auf `hit` aus und meldet das Ergebnis über linkNotice.
     void activateLink(ScreenLinks::Gesture gesture, const ScreenLinks::Hit &hit);
     void showLinkNotice(const QString &text);
+    static QString cutLinkNotice();
     /// Ziel des Links unter `pos` (URL oder aufgelöster Dateipfad); leer, wenn dort keiner liegt.
     QString linkTargetAt(const QPointF &pos);
     void clearSelection();

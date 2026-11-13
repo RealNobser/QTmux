@@ -75,6 +75,18 @@ bool isRemoteFileUrl(const QUrl &url) {
     return !url.isValid() || isNetworkPath(url.toLocalFile());
 }
 
+QString declaredTarget(const QString &uri) {
+    // Leerraum und Steuerzeichen gehören in kein Ziel. Sie kämen beim Öffnen als etwas anderes an
+    // als das, was die Pille zeigt.
+    for (const QChar c : uri)
+        if (c.isSpace() || c.unicode() < 0x20 || c.unicode() == 0x7f) return {};
+    const QUrl url(uri);
+    if (!url.isValid() || url.scheme().isEmpty() || !isAllowedScheme(url.scheme())) return {};
+    if (url.scheme().compare(QLatin1String("file"), Qt::CaseInsensitive) == 0 && isRemoteFileUrl(url))
+        return {};
+    return uri;
+}
+
 bool isNetworkPath(const QString &path) {
     const auto isSeparator = [](QChar c) { return c == QLatin1Char('/') || c == QLatin1Char('\\'); };
     if (path.isEmpty() || !isSeparator(path.at(0))) return false;

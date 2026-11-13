@@ -270,6 +270,58 @@ private slots:
         QCOMPARE(m_opened.first().toString(), QString::fromLatin1(url));
     }
 
+    // --- Vom Programm umbrochene Links (Owner-Befund 2026-11-13) ---------------------------
+    void hardWrappedLinkIsNotOpenedAndSaysWhy() {
+        // So schreibt Claude Code eine lange Adresse: bis in die letzte Spalte, dann per
+        // Cursor in die nächste Zeile. 1.9.11 öffnete hier das abgeschnittene Stück.
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        const QByteArray head = "https://example.com/" + QByteArray(38, 'a');      // 58 Zeichen ab Spalte 2
+        f.feed("\033[1;3H" + head + "\r\033[2C\033[1B" + "bbbb/ende\r\n");
+        f.hover(f.at(10, 0));
+        QCOMPARE(f.item.hoverLinkTarget(), QString());                 // nichts wird als Link angeboten
+        f.click(f.at(10, 0), Qt::ControlModifier);
+        QVERIFY(m_opened.isEmpty());
+        const QString notice = f.item.linkNotice();
+        QVERIFY2(notice.contains(QStringLiteral("umbrochen")), qPrintable(notice));
+        QVERIFY(!f.item.hasSelection());                               // der Klick ist verbraucht
+        // Die Folgezeile meldet dasselbe, nicht „Kein Link an dieser Stelle“.
+        f.click(f.at(4, 1), Qt::ControlModifier);
+        QVERIFY(m_opened.isEmpty());
+        QCOMPARE(f.item.linkNotice(), notice);
+        // Gegenprobe: Daneben bleibt es bei der alten Meldung.
+        f.feed("\r\nnur text\r\n");
+        f.click(f.at(1, 3), Qt::ControlModifier);
+        QVERIFY(f.item.linkNotice() != notice);
+    }
+
+    void declaredHyperlinkOpensFromEveryRow() {
+        // Nennt das Programm das Ziel selbst (OSC 8), öffnet jede Zeile das ganze Ziel.
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        const QByteArray url = "https://example.com/" + QByteArray(38, 'a') + "bbbb/ende";
+        const QByteArray open = "\033]8;id=1;" + url + "\033\\", close = "\033]8;;\033\\";
+        f.feed("\033[1;3H" + open + url.left(58) + close + "\r\033[2C\033[1B" + open + url.mid(58) + close + "\r\n");
+        for (int row = 0; row < 2; ++row) {
+            m_opened.clear();
+            f.hover(f.at(4, row));
+            QCOMPARE(f.item.hoverLinkTarget(), QString::fromLatin1(url));
+            f.click(f.at(4, row), Qt::ControlModifier);
+            QCOMPARE(m_opened, QList<QUrl>{QUrl(QString::fromLatin1(url))});
+        }
+    }
+
+    void refusedHyperlinkIsReported() {
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        f.feed("\033]8;;file://server/freigabe/x\033\\https://example.com/sichtbar\033]8;;\033\\\r\n");
+        f.hover(f.at(5, 0));
+        QCOMPARE(f.item.hoverLinkTarget(), QString());
+        f.click(f.at(5, 0), Qt::ControlModifier);
+        QVERIFY(m_opened.isEmpty());                                   // auch nicht der sichtbare Text
+        QVERIFY(f.item.linkNotice().contains(QStringLiteral("file://server/freigabe/x")));
+    }
+
     // --- Auswahl: die Regel erreicht das Item --------------------------------------------------
     void dragSelectsAndCopies() {
         Fixture f;

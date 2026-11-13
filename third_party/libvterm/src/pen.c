@@ -191,7 +191,9 @@ INTERNAL void vterm_state_savepen(VTermState *state, int save)
     state->saved.pen = state->pen;
   }
   else {
+    int uri = state->pen.uri; /* QTMUX: OSC 8 gehoert nicht zum gespeicherten Stift */
     state->pen = state->saved.pen;
+    state->pen.uri = uri;
 
     setpenattr_bool(state, VTERM_ATTR_BOLD,      state->pen.bold);
     setpenattr_bool(state, VTERM_ATTR_FAINT,     state->pen.faint); /* QTMUX */
@@ -557,9 +559,20 @@ INTERNAL int vterm_state_getpen(VTermState *state, long args[], int argcount)
   return argi;
 }
 
+/* QTMUX: Hyperlink-Kennung (OSC 8) setzen, s. vterm.h */
+void vterm_state_set_pen_uri(VTermState *state, int uri)
+{
+  state->pen.uri = uri;
+  setpenattr_int(state, VTERM_ATTR_URI, uri);
+}
+
 int vterm_state_get_penattr(const VTermState *state, VTermAttr attr, VTermValue *val)
 {
   switch(attr) {
+  case VTERM_ATTR_URI:   /* QTMUX: Hyperlink-Kennung (OSC 8) */
+    val->number = state->pen.uri;
+    return 1;
+
   case VTERM_ATTR_BOLD:
     val->boolean = state->pen.bold;
     return 1;

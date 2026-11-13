@@ -213,7 +213,7 @@ int SessionModel::createShellSession(const QString &workingDir, const QString &p
     s->setLoginScript(loginScript);
     // Eigene Session-ID in die Shell-Umgebung legen: ein steuernder Agent liest
     // $QTMUX_SESSION_ID und meldet sich per MCP-Tool attach_controller(id) an.
-    pty->setExtraEnv({QStringLiteral("QTMUX_SESSION_ID=%1").arg(s->id())});
+    pty->setExtraEnv(shellEnvironment(s->id(), m_announceHyperlinks));
     s->attachBackend(pty, Session::Type::Shell, 80, 24);
     // Initialtitel aus dem gestarteten Programm ableiten (z. B. "PowerShell",
     // "Eingabeaufforderung", "Bash") — Session::setTitle verschönert ihn. So zeigt
@@ -907,6 +907,19 @@ void SessionModel::markRestored(int row) const {
     // aber die Shell ist genauso frisch — der Marker macht es sichtbar.
     if (row < 0 || row >= m_sessions.size()) return;
     m_sessions.at(row)->markRestored();
+}
+
+// --- Hyperlinks ankündigen ----------------------------------------------------
+void SessionModel::setAnnounceHyperlinks(bool on) {
+    if (on == m_announceHyperlinks) return;
+    m_announceHyperlinks = on;           // wirkt auf Sitzungen, die danach entstehen
+    emit announceHyperlinksChanged();
+}
+
+QStringList SessionModel::shellEnvironment(int sessionId, bool announceHyperlinks) {
+    QStringList env{QStringLiteral("QTMUX_SESSION_ID=%1").arg(sessionId)};
+    if (announceHyperlinks) env << QStringLiteral("FORCE_HYPERLINK=1");
+    return env;
 }
 
 // --- Ruhezustand verhindern (QTMUX-89) ---------------------------------------

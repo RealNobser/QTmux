@@ -534,6 +534,13 @@ ApplicationWindow {
     property bool preventSleep: false
     onPreventSleepChanged: sessions.preventSleep = preventSleep
 
+    // Programmen in neuen Sitzungen melden, dass QTmux Hyperlinks (OSC 8) versteht:
+    // FORCE_HYPERLINK=1 in der Umgebung. Vorgabe AUS, s. SessionModel::announceHyperlinks.
+    // Nur so bleibt ein Link klickbar, den ein Programm wie Claude Code selbst über mehrere
+    // Zeilen umbricht.
+    property bool announceHyperlinks: false
+    onAnnounceHyperlinksChanged: sessions.announceHyperlinks = announceHyperlinks
+
     // Stillstand-Erkennung (QTMUX-139): Minuten, nach denen ein Agent, der „arbeitet"
     // zeigt, dessen Bildschirm aber stillsteht, Aufmerksamkeit anfordert. 0 = aus.
     // Vorgabe = SessionModel::kDefaultStallMinutes (Begründung in der Feature-Referenz).
@@ -1704,6 +1711,7 @@ ApplicationWindow {
         // und nicht nur über onPreventSleepChanged: Entspricht der gespeicherte Wert der
         // Vorgabe, feuert beim Start gar kein Änderungssignal.
         sessions.preventSleep = window.preventSleep
+        sessions.announceHyperlinks = window.announceHyperlinks   // VOR restoreWindows: gilt ab Start
         sessions.stallMinutes = window.stallMinutes   // QTMUX-139, derselbe Grund
         window.restoreWindows()
         window._starting = false   // ab jetzt darf ein leerer Fensterstand beenden
@@ -1759,6 +1767,7 @@ ApplicationWindow {
         property alias terminalFontFamily: window.terminalFontFamily
         property alias terminalLigatures: window.terminalLigatures
         property alias terminalGpuRendering: window.terminalGpuRendering
+        property alias announceHyperlinks: window.announceHyperlinks
         property alias quakeMode: window.quakeMode
         property alias copyOnSelect: window.copyOnSelect
         property alias rightClickPaste: window.rightClickPaste
@@ -1830,6 +1839,7 @@ ApplicationWindow {
         case "window/terminalFontSize":     window.terminalFontSize = i(13); break
         case "window/terminalLigatures":    window.terminalLigatures = b(false); break
         case "window/terminalGpuRendering": window.terminalGpuRendering = b(true); break
+        case "window/announceHyperlinks":   window.announceHyperlinks = b(false); break
         case "window/defaultShellProgram":  window.defaultShellProgram = s(""); break
         case "window/copyOnSelect":         window.copyOnSelect = b(false); break
         case "window/rightClickPaste":      window.rightClickPaste = b(false); break
@@ -2623,6 +2633,8 @@ ApplicationWindow {
                             { title: window.zoomedPane >= 0 ? qsTr("Pane-Zoom aufheben") : qsTr("Pane zoomen"), sub: hk("actZoomPane"), icon: "eye", run: function(){ window.toggleZoom() } },
                             { title: qsTr("Ligaturen umschalten"),       sub: "",             icon: "terminal-window", run: function(){ window.terminalLigatures = !window.terminalLigatures } },
                             { title: qsTr("GPU-Rendering umschalten"),   sub: "",             icon: "terminal-window", run: function(){ window.terminalGpuRendering = !window.terminalGpuRendering } },
+                            { title: window.announceHyperlinks ? qsTr("Hyperlinks der Programme nicht mehr ankündigen") : qsTr("Programmen melden, dass QTmux Hyperlinks versteht"),
+                              sub: "", icon: "terminal-window", run: function(){ window.announceHyperlinks = !window.announceHyperlinks } },
                             { title: qsTr("Auswahl automatisch kopieren"), sub: "",           icon: "copy",            run: function(){ window.copyOnSelect = !window.copyOnSelect } },
                             { title: qsTr("Rechtsklick fügt ein"),       sub: "",             icon: "clipboard",       run: function(){ window.rightClickPaste = !window.rightClickPaste } },
                             { title: qsTr("Programme dürfen die Zwischenablage füllen"), sub: "", icon: "clipboard", run: function(){ window.appClipboardWrite = !window.appClipboardWrite } },

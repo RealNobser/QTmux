@@ -129,6 +129,7 @@ QStringList SettingsIo::patternsFor(const QString &category) {
                  QStringLiteral("window/terminalFontSize"),
                  QStringLiteral("window/terminalLigatures"),
                  QStringLiteral("window/terminalGpuRendering"),
+                 QStringLiteral("window/announceHyperlinks"),
                  QStringLiteral("window/defaultShellProgram") };
     if (category == QLatin1String("eingabe"))
         return { QStringLiteral("window/copyOnSelect"),

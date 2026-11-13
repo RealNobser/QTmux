@@ -203,11 +203,65 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   „Das System konnte das Ziel nicht öffnen“ (`openUrl` = false, z. B. Datei ohne verknüpftes
   Programm), „Kein Link an dieser Stelle“, „Anzeigen geht nur bei lokalen Dateien“. Vorher sahen
   alle vier gleich aus: nichts passiert. Das macht einen Befund „geht nicht immer“ erst
-  unterscheidbar. 🔑 **Eine Unterstreichung ohne Pille ist nicht von QTmux:** Claude Code sendet
-  OSC 8 (Logik `supports-hyperlinks` im Binary gelesen, kein Mitschnitt), wenn es `WT_SESSION` oder
-  `TERM_PROGRAM=vscode` u. a. in der Umgebung findet, also wenn QTmux aus Windows Terminal oder
-  VS Code gestartet wurde. Solchen Link-Text kennt QTmux nicht (QTMUX-40), die Geste meldet dann
-  „Kein Link an dieser Stelle“.
+  unterscheidbar.
+  **Vom Programm umbrochene Links (Owner-Befund 2026-11-13).** Claude Code bricht lange Adressen
+  selbst um, in beiden Renderern: Es schreibt bis an den Rand und setzt die Folgezeile per
+  Cursor (`\r ESC[2C ESC[1B`), eingerückt, im Zitat mit Balken, in Tabellen mit Rahmen. Eine
+  Fortsetzungs-Marke entsteht dabei nicht. 1.9.11 öffnete auf der ersten Zeile das abgeschnittene
+  Stück und erkannte die übrigen gar nicht.
+  🔑 **Zusammensetzen geht nicht, gemessen:** Eine hart umbrochene Adresse und eine Adresse, die
+  genau am Rand endet und der ein neues Wort folgt, ergeben dasselbe Bild (volle Zeile, keine
+  Marke, Folgezeile ab der Einrückung). Auch die Bytes unterscheiden sich nicht. Jede Heuristik
+  öffnete bei der zweiten `…adressewort`. Dasselbe gilt für zwei Adressen untereinander im
+  Codeblock. Darum zwei Wege:
+  1. **Hyperlinks des Programms (OSC 8, QTMUX-40).** Das Programm nennt das Ziel selbst, jede
+     Zelle trägt es (`Cell::link`, Ziel über `VtScreen::hyperlink`). libvterm trägt nur eine
+     Kennung durch die Zellen (Patch 5), das Ziel steht in einer Tabelle in `VtScreen`
+     (höchstens `kMaxHyperlinks` Einträge, je höchstens `kMaxHyperlinkBytes`; ein längeres Ziel
+     ist keines, der älteste Eintrag fällt heraus und seine Zellen sind wieder Text). Gleiche
+     Angaben (`id`-Parameter und Ziel) bekommen dieselbe Kennung, so gehören die Zeilen eines
+     umbrochenen Links zusammen. `ScreenLinks::hyperlinkAt` hat Vorrang vor der Texterkennung.
+     Für das Ziel gelten dieselben Grenzen wie für Text (`LinkDetector::declaredTarget`:
+     Schema-Liste, `file:` nur lokal und ohne Rechnernamen, keine Netzpfade, kein Leerraum).
+     Wird es abgelehnt, öffnet auch der Text an der Stelle nichts, die Pille nennt das Ziel.
+     SGR 0 und Cursor-Zurückholen beenden einen Link nicht; ein Reset, der Notausgang
+     „Terminal-Eingabe zurücksetzen“ und der Prompt-Marker OSC 133;A tun es, sonst trüge nach
+     einem Abbruch alles Folgende das alte Ziel. Der Verlaufs-Abzug (`serializeAnsi`) gibt die
+     Links mit. ConPTY reicht OSC 8 durch (Windows 10.0.26200 gemessen, eigene `id`, ST statt BEL).
+     ⚠️ `ls --hyperlink` meldet `file://<rechnername>/…`; das gilt als entfernt und ist kein Link.
+  2. **Kein abgeschnittenes Ziel** (`ScreenLinks::mayContinueBelow`, `Hit::Blocked::MaybeCut`).
+     Ein Text-Link ist keiner, wenn er am Rand endet und die nächste Zeile Text enthält, der ihn
+     fortsetzen könnte. Drei Formen: letzte oder vorletzte Spalte (die vorletzte, weil Claude
+     Code die Eingabe des Anwenders dort umbricht); eine bis an ihren Rahmen gefüllte
+     Tabellenzelle, wenn dieselbe Zelle darunter Text hat; und für Adressen ein Block, dessen
+     nächste Zeile ein einziges Wort mit derselben Endspalte ist (Werkzeugausgabe, sechs Spalten
+     vor dem Rand), außer darunter beginnt erkennbar ein eigener Link. Die Pille sagt „Nicht
+     geöffnet: Der Link ist am Zeilenrand umbrochen …“, auch auf den Folgezeilen
+     (`continuesCutLink`, nur beim Klick). Preis: Eine vollständige Adresse, die zufällig am Rand
+     endet und der Text folgt, öffnet nicht mehr.
+     ⚠️ Lücke: Ein Zweizeiler, den ein Programm schmaler als das Fenster umbricht, ist nicht
+     erkennbar; dort öffnet die erste Zeile weiter das abgeschnittene Stück.
+  🔑 **Unter ConPTY belegt eine Fortsetzungs-Marke nichts** (`VtScreen::conPtyHost`). ConPTY löscht
+  mit Leerzeichen-Läufen über Zeilengrenzen hinweg, jeder Überlauf setzt in libvterm eine Marke,
+  und sie bleibt stehen, wenn die Zeile danach per Cursor neu beschrieben wird (libvterm löscht
+  sie nur, wenn das Zeilenende davor gelöscht wird). Am Windows-Mitschnitt trägt fast jede Zeile
+  von Claude Code eine. Dort zählt die Randregel deshalb auch mit Marke, auf macOS und Linux ist
+  die Marke der Beleg, dass das Terminal umbrochen hat. Eine Shell unter ConPTY schickt lange
+  Zeilen dagegen am Stück, auch beim Neumalen nach einer Größenänderung; ihre Links bleiben ganz
+  (`tst_conptyreplay::wrappedUrlStaysOneLinkThroughEveryResize`). ⚠️ Dieselben falschen Marken
+  wirken auf Kopieren (kein Zeilenumbruch) und auf den Reflow; nicht untersucht, Kandidat für
+  QTMUX-153.
+  **Ankündigung (`window/announceHyperlinks`, Vorgabe aus):** Claude Code sendet OSC 8 nur, wenn
+  es das Terminal für fähig hält. Eine Abfrage gibt es nicht, es liest die Umgebung (Binary
+  2.1.323: `FORCE_HYPERLINK`, sonst Namenslisten für `TERM_PROGRAM` u. a., `WT_SESSION`,
+  `VTE_VERSION`). In einer QTmux-Sitzung kommt ohne Zutun kein OSC 8 (gemessen: 0). Der Schalter
+  unter Einstellungen › Terminal › Links setzt `FORCE_HYPERLINK=1` für NEUE lokale Sitzungen
+  (`SessionModel::shellEnvironment`). Dann trägt bei Claude Code jede Zeile eines umbrochenen
+  Links das volle Ziel: Fließtext, Listen, Zitate, Tabellen, im klassischen Renderer auch die
+  Werkzeugausgabe. **Codeblöcke zeichnet es nicht aus**, dort bleibt Weg 2. Während eine Antwort
+  noch einläuft, nennt es für Sekundenbruchteile ein unfertiges Ziel. 🔑 Aus als Vorgabe: Wer
+  die Variable auswertet, prüft nicht mehr, ob die Ausgabe ein Terminal ist, und schreibt die
+  Auszeichnung auch in Dateien und Pipes.
   **Rechtsklick auf einen Link** bietet im Kontextmenü zusätzlich „Link kopieren" an
   (Owner-Wunsch 2026-08-09): `TerminalItem` hält das Ziel unmittelbar vor
   `contextMenuRequested` in `contextLinkTarget` fest (`linkTargetAt`),
@@ -215,9 +269,10 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Öffnen; kopiert wird das **aufgelöste** Ziel (bei Dateipfaden also der absolute Pfad).
   Bewusst nur kopieren, nicht öffnen — das Öffnen bleibt die Cmd/Ctrl-Geste.
   Tests: `tst_linkdetector`, `tst_screenlinks` (Gesten aller drei Plattformen auf jedem Host,
-  Zellen, Umbrüche), `tst_terminalitem` (echte Maus-Ereignisse am echten Item, ohne Fenster) +
-  `tst_vtscreen::linkDetectionOnScreenLine`.
-  **OSC 8 bewusst NICHT** — s. offene Jira (QTMUX-40).
+  Zellen, Umbrüche, Randregel und OSC 8 an wörtlichen Stücken echter Mitschnitte aus
+  `tests/link_wrap_captures.h`), `tst_terminalitem` (echte Maus-Ereignisse am echten Item, ohne
+  Fenster), `tst_vtscreen` (`hyperlink*`, `oversizedOscIsDropped`, `linkDetectionOnScreenLine`),
+  `tst_conptyreplay` (Shell unter ConPTY über vier Größenänderungen).
 - **Im Finder/Explorer/Dateimanager zeigen (QTMUX-138, Owner-Wunsch 2026-09-30):** zweite
   Geste auf erkannten Links — **macOS ⌘⌥-Klick**, **Windows/Linux Strg+Umschalt-Klick** —
   plus Kontextmenü-Eintrag „Im Finder zeigen" / „Im Explorer anzeigen" / „Im Dateimanager

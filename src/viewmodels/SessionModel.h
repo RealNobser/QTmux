@@ -24,6 +24,10 @@ class SessionModel : public QAbstractListModel {
     QML_ELEMENT
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(bool preventSleep READ preventSleep WRITE setPreventSleep NOTIFY preventSleepChanged)
+    // Programmen in neuen Sitzungen melden, dass QTmux Hyperlinks (OSC 8) versteht. Vorgabe AUS;
+    // Einstellung `window/announceHyperlinks` (QML-Settings, wie `preventSleep`).
+    Q_PROPERTY(bool announceHyperlinks READ announceHyperlinks WRITE setAnnounceHyperlinks
+               NOTIFY announceHyperlinksChanged)
     Q_PROPERTY(bool sleepInhibited READ sleepInhibited NOTIFY sleepInhibitedChanged)
     // Aggregat für die Statusleiste (Design 1a, Teil B): wie viele Sessions warten auf
     // Eingabe bzw. melden einen Fehler. Bewusst HIER und nicht in WindowModel — die
@@ -232,6 +236,19 @@ public:
     /// (seit dem Window-Modell toten) restoreState()-Pfad.
     Q_INVOKABLE void setRestoring(bool on) { m_restoring = on; }
 
+    // --- Hyperlinks ankündigen ----------------------------------------------------
+    /// Anwender-Schalter, **Vorgabe AUS**. Ist er an, bekommt jede NEUE lokale Sitzung
+    /// `FORCE_HYPERLINK=1` in die Umgebung. Daran erkennen Programme wie Claude Code, dass
+    /// sie das Ziel ihrer Links selbst nennen dürfen (OSC 8); eine Abfrage des Terminals
+    /// gibt es dafür nicht, und QTmux steht in keiner ihrer Namenslisten.
+    /// 🔑 Aus als Vorgabe, weil die Variable mehr sagt als gemeint: Wer sie auswertet,
+    /// prüft danach nicht mehr, ob die Ausgabe ein Terminal ist, und schreibt die
+    /// Auszeichnung auch in Dateien und Pipes.
+    bool announceHyperlinks() const { return m_announceHyperlinks; }
+    void setAnnounceHyperlinks(bool on);
+    /// Zusätzliche Umgebung einer lokalen Sitzung. Gui-frei und ohne Prozess prüfbar.
+    static QStringList shellEnvironment(int sessionId, bool announceHyperlinks);
+
     // --- Ruhezustand verhindern (QTMUX-89) ---------------------------------------
     /// Anwender-Schalter, **Vorgabe AUS**. Ist er an, hält QTmux das System wach,
     /// solange mindestens eine Session `busy` meldet — die Regel steht Gui-frei in
@@ -260,6 +277,7 @@ public:
 signals:
     void stallMinutesChanged();
     void preventSleepChanged();
+    void announceHyperlinksChanged();
     /// Die Sperre wurde gesetzt oder freigegeben.
     void sleepInhibitedChanged();
     void countChanged();
@@ -326,6 +344,7 @@ private:
     /// Session und beim Umlegen des Schalters. Idempotent — setActive prüft selbst.
     void updateSleepInhibit();
     bool m_preventSleep = false;      // Vorgabe AUS (Anwender-Entscheidung)
+    bool m_announceHyperlinks = false; // Vorgabe AUS, s. announceHyperlinks()
     SleepInhibitor m_sleepInhibitor;
     int m_activeRow = -1;
     bool m_restoring = false;         // unterdrückt Persistierung während restoreState()

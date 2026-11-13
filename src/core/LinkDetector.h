@@ -34,6 +34,12 @@ bool isAllowedScheme(const QString &scheme);
 // Rechner auf. Das reicht einem fremden Server, um die Windows-Anmeldung (NTLM) mitzulesen.
 bool isNetworkPath(const QString &path);
 
+// Ziel eines Hyperlinks, den das PROGRAMM ausgezeichnet hat (OSC 8), auf Öffnen prüfen. Rückgabe:
+// das Ziel, wenn es geöffnet werden darf, sonst leer. Es gelten dieselben Grenzen wie für erkannten
+// Text: nur freigegebene Schemata, `file:` nur lokal und ohne Rechnernamen, keine Netzpfade. Ein
+// Ziel ohne Schema ist keines; relative Angaben löst QTmux nicht auf.
+QString declaredTarget(const QString &uri);
+
 // Zeigt eine `file:`-URL auf einen anderen Rechner? Jeder Host zählt, auch `localhost`
 // (`toLocalFile` macht daraus `//localhost/…`). Ungültige URLs gelten ebenfalls als entfernt.
 bool isRemoteFileUrl(const QUrl &url);

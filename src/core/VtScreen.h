@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QByteArray>
+#include <QHash>
 #include <QString>
 #include <QRect>
 #include <QPoint>
@@ -29,6 +30,8 @@ struct Cell {
     bool underline = false;
     bool reverse = false;
     quint8 width = 1;             // 1 = normal, 2 = doppelt breit (CJK)
+    quint32 link = 0;             // Hyperlink des Programms (OSC 8): Kennung für
+                                  // VtScreen::hyperlink(), 0 = keiner
 };
 
 /// Wrapper um libvterm: parst VT-/ANSI-Bytes, hält den Screen-State + Scrollback
@@ -80,6 +83,16 @@ public:
     QPoint cursor() const { return m_cursor; }
     bool cursorVisible() const { return m_cursorVisible; }
     QString title() const { return m_title; }
+
+    /// Ziel eines vom Programm ausgezeichneten Hyperlinks (OSC 8), wie gesendet. `id` ist
+    /// `Cell::link`. Leer, wenn die Kennung unbekannt ist: 0, oder so alt, dass ihr Eintrag
+    /// verdrängt wurde (`kMaxHyperlinks`). Das Ziel ist UNGEPRÜFT, es stammt aus fremder
+    /// Ausgabe; ob es geöffnet werden darf, entscheidet `LinkDetector::declaredTarget`.
+    QString hyperlink(quint32 id) const;
+    /// Obergrenzen für das, was ein Programm per OSC 8 ablegen darf. Ein längeres Ziel wird
+    /// nicht gekürzt, sondern ist kein Link: Ein gekürztes Ziel wäre ein anderes Ziel.
+    static constexpr int kMaxHyperlinks = 2048;
+    static constexpr int kMaxHyperlinkBytes = 2048;
 
     int scrollbackCount() const { return static_cast<int>(m_scrollback.size()); }
     /// Wie viele Zeilen seit Sitzungsbeginn oben aus dem Scrollback gefallen sind (Grenze
@@ -133,6 +146,12 @@ public:
     /// Der Scrollback selbst wird NICHT umgebrochen (feste `Cell`-Vektoren).
     void setReflow(bool on);
     bool reflow() const { return m_reflow; }
+    /// Kommen die Bytes aus ConPTY? Dasselbe Kennzeichen wie `reflow()`, hier für eine zweite
+    /// Folge: ConPTY malt sein eigenes Zeilenbild und löscht dabei mit Leerzeichen-Läufen über
+    /// Zeilengrenzen hinweg. Jeder Überlauf hinterlässt eine Fortsetzungs-Marke, die mit dem
+    /// Inhalt nichts zu tun hat. Eine Marke belegt dort also nicht, dass zwei Zeilen
+    /// zusammengehören (am Windows-Mitschnitt gemessen, s. `ScreenLinks`).
+    bool conPtyHost() const { return m_reflow; }
     /// Hängende Eingabe-Reporting-Modi lösen (Maus-Tracking, SGR-Maus, Bracketed Paste)
     /// und Attribute/Cursor normalisieren — **ohne** den Bildschirm zu leeren oder den
     /// Alt-Screen umzuschalten. Der manuelle Notausgang, wenn ein TUI unsauber endete
@@ -250,6 +269,18 @@ private:
 
     int m_oscCommand = -1;     // aktuell gesammelte OSC-Nummer
     QByteArray m_oscBuffer;    // akkumulierte OSC-Fragmente bis 'final'
+    bool m_oscOverflow = false; // Sequenz über kMaxOscBytes: wird als Ganzes verworfen
+    static constexpr int kMaxOscBytes = 1 << 16;
+
+    // OSC 8: Die Zelle trägt nur eine Kennung, das Ziel steht hier. Schlüssel ist
+    // `<id-Parameter>;<Ziel>`: Gleiche Angaben bekommen dieselbe Kennung, so gehören die
+    // Zeilen eines umbrochenen Links zusammen. Kennung = m_linkBase + Index. Ist die Tabelle
+    // voll, fällt der älteste Eintrag heraus; seine Zellen sind dann keine Links mehr.
+    quint32 internHyperlink(const QByteArray &idParam, const QByteArray &uri);
+    void setPenHyperlink(quint32 id);
+    std::deque<QByteArray> m_linkKeys;
+    QHash<QByteArray, quint32> m_linkIds;
+    quint32 m_linkBase = 1;
 
     QString m_reportedDir;        // OSC 7: gemeldetes Arbeitsverzeichnis (dekodiert)
     QString m_reportedHost;       // OSC 7: Host-Teil, roh wie gemeldet

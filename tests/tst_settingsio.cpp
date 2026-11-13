@@ -103,7 +103,7 @@ void tst_settingsio::allowlistCoversSettingsAndExcludesState() {
         QStringLiteral("window/quakeMode"), QStringLiteral("window/preventSleep"),
         QStringLiteral("window/terminalFontFamily"), QStringLiteral("window/terminalFontSize"),
         QStringLiteral("window/terminalLigatures"), QStringLiteral("window/terminalGpuRendering"),
-        QStringLiteral("window/defaultShellProgram"),
+        QStringLiteral("window/defaultShellProgram"), QStringLiteral("window/announceHyperlinks"),
         QStringLiteral("window/copyOnSelect"), QStringLiteral("window/rightClickPaste"),
         QStringLiteral("window/pasteWarnMultiline"),
         QStringLiteral("window/restoreAgents"), QStringLiteral("window/resumeAgentMode"),

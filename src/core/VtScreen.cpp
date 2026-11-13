@@ -4,6 +4,7 @@
 
 #include <vterm.h>
 #include <QChar>
+#include <limits>
 #include <QSysInfo>
 #include <QUrl>
 
@@ -41,6 +42,9 @@ Cell toCell(VTermScreen *screen, const VTermScreenCell &vc) {
     cell.italic = vc.attrs.italic;
     cell.underline = vc.attrs.underline != 0;
     cell.reverse = vc.attrs.reverse;
+    // Die Spacer-Zelle hinter einem breiten Zeichen behält in libvterm ihren ALTEN Stift,
+    // ihre Kennung gehörte also zu einem früheren Inhalt.
+    if (vc.uri > 0 && vc.chars[0] != 0xffffffff) cell.link = static_cast<quint32>(vc.uri);
     applyColor(screen, vc.fg, cell.fg, cell.fgDefault);
     applyColor(screen, vc.bg, cell.bg, cell.bgDefault);
     if (cell.reverse) {
@@ -347,6 +351,17 @@ QByteArray VtScreen::serializeAnsi() const {
     // Stil über den GESAMTEN Strom tracken (SGR persistiert über \r\n, wie im echten
     // Terminal). An weichen Umbrüchen KEIN \r\n → das Terminal wrappt beim Restore selbst
     // auf die aktuelle Breite (kein harter Umbruch mitten im Wort).
+    // Hyperlinks (OSC 8) reisen mit, sonst wären sie nach einem Neustart nur noch Text. Die
+    // eigene Kennung dient als id-Parameter, damit die Zeilen eines umbrochenen Links wieder
+    // zusammenfinden. Am Ende wird geschlossen: Der Stift gilt über \r\n hinweg, und was
+    // nach dem Wiederherstellen ausgegeben wird, darf kein altes Ziel erben.
+    quint32 openLink = 0;
+    auto linkSeq = [this](quint32 id) {
+        const QString uri = id ? hyperlink(id) : QString();
+        if (uri.isEmpty()) return QByteArray("\x1b]8;;\x1b\\");
+        return QByteArray("\x1b]8;id=q") + QByteArray::number(id) + ';' + uri.toUtf8()
+             + QByteArray("\x1b\\");
+    };
     Cell prev; bool havePrev = false;
     for (size_t k = 0; k < lines.size(); ++k) {
         const std::vector<Cell> &cells = lines[k].first;
@@ -364,13 +379,49 @@ QByteArray VtScreen::serializeAnsi() const {
         for (int i = 0; i <= last; ) {
             const Cell &c = cells[i];
             if (!havePrev || !sameStyle(prev, c)) { out += sgrFor(c); prev = c; havePrev = true; }
+            const quint32 link = hyperlink(c.link).isEmpty() ? 0 : c.link;
+            if (link != openLink) { out += linkSeq(link); openLink = link; }
             out += c.text.isEmpty() ? QByteArray(" ") : c.text.toUtf8();
             i += (c.width == 2 ? 2 : 1);   // Spacer-Zelle hinter Doppelbreite überspringen
         }
         if (!nextIsCont) out += "\r\n";
     }
+    if (openLink) out += linkSeq(0);
     if (havePrev) out += "\x1b[0m";
     return out;
+}
+
+quint32 VtScreen::internHyperlink(const QByteArray &idParam, const QByteArray &uri) {
+    if (uri.isEmpty() || uri.size() > kMaxHyperlinkBytes) return 0;
+    // Steuerzeichen gehören in kein Ziel; libvterm reicht sie in einem OSC nicht durch, die
+    // Prüfung hängt aber nicht daran.
+    for (const char ch : uri)
+        if (static_cast<unsigned char>(ch) < 0x20 || ch == 0x7f) return 0;
+    // Der id-Parameter verbindet nur Zeilen. Gekürzt verschmelzen höchstens zwei Kennungen
+    // mit GLEICHEM Ziel, denn das Ziel steht ungekürzt im Schlüssel.
+    const QByteArray key = idParam.left(256) + ';' + uri;
+    const auto it = m_linkIds.constFind(key);
+    if (it != m_linkIds.constEnd()) return it.value();
+    const quint64 next = quint64(m_linkBase) + m_linkKeys.size();
+    if (next >= quint64(std::numeric_limits<int>::max())) return 0;   // libvterm trägt ein int
+    while (static_cast<int>(m_linkKeys.size()) >= kMaxHyperlinks) {
+        m_linkIds.remove(m_linkKeys.front());
+        m_linkKeys.pop_front();
+        ++m_linkBase;
+    }
+    m_linkKeys.push_back(key);
+    m_linkIds.insert(key, static_cast<quint32>(next));
+    return static_cast<quint32>(next);
+}
+
+void VtScreen::setPenHyperlink(quint32 id) {
+    vterm_state_set_pen_uri(m_state, static_cast<int>(id));
+}
+
+QString VtScreen::hyperlink(quint32 id) const {
+    if (id < m_linkBase || id - m_linkBase >= m_linkKeys.size()) return {};
+    const QByteArray &key = m_linkKeys[id - m_linkBase];
+    return QString::fromUtf8(key.mid(key.indexOf(';') + 1));
 }
 
 Cell VtScreen::cell(int row, int col) const {
@@ -477,6 +528,9 @@ void VtScreen::resetInputModes() {
     // abgeschaltet, und er sendet 1007h nie erneut. Anders als beim Maus-Tracking, das
     // SGR-Codes in die Shell schreibt, gibt es hier also nichts zu retten.
     inputWrite("\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?2004l\033[m\033[?25h");
+    // Auch ein offen gebliebener Hyperlink (OSC 8) hängt nach einem Abbruch: Alles, was
+    // danach ausgegeben wird, trüge sein Ziel.
+    setPenHyperlink(0);
 }
 
 // Qt-Tastaturmodifier → VTermModifier (nur die, die libvterm für die Maus kennt).
@@ -531,9 +585,28 @@ void VtScreen::cbOsc(int command, const char *str, int len, bool initial, bool f
     if (initial) {
         m_oscBuffer.clear();
         m_oscCommand = command;
+        m_oscOverflow = false;
     }
-    if (str && len > 0) m_oscBuffer.append(str, len);
+    // Eine OSC-Sequenz ist Eingabe von außen und hat kein natürliches Ende. Über der Grenze wird
+    // sie verworfen statt gesammelt; ein halbes Ziel oder ein halber Pfad wäre ein anderer.
+    if (str && len > 0 && !m_oscOverflow) {
+        if (m_oscBuffer.size() + len > kMaxOscBytes) {
+            m_oscOverflow = true;
+            m_oscBuffer.clear();
+        } else {
+            m_oscBuffer.append(str, len);
+        }
+    }
     if (!final) return;
+    if (m_oscOverflow) {
+        // Ein übergroßes OSC 8 darf den vorigen Link nicht offen lassen: Der Text danach
+        // gehörte sonst zum falschen Ziel.
+        if (m_oscCommand == 8) setPenHyperlink(0);
+        m_oscOverflow = false;
+        m_oscBuffer.clear();
+        m_oscCommand = -1;
+        return;
+    }
 
     const QByteArray data = m_oscBuffer;
     const int cmd = m_oscCommand;
@@ -598,9 +671,24 @@ void VtScreen::cbOsc(int command, const char *str, int len, bool initial, bool f
         emit workingDirectoryReported(path, host, local);
         break;
     }
+    case 8: {  // OSC 8 ; <parameter> ; <ziel>  — Hyperlink des Programms, leeres Ziel = Ende
+        // Das Programm nennt das Ziel selbst. Nur so ist ein Link sicher, den es über mehrere
+        // Zeilen SELBST umbricht: Am Bildschirm sieht eine hart umbrochene Adresse genauso aus
+        // wie eine Adresse am Zeilenende mit einem neuen Wort darunter.
+        const int semi = data.indexOf(';');
+        if (semi < 0) { setPenHyperlink(0); break; }
+        QByteArray idParam;
+        for (const QByteArray &p : data.left(semi).split(':'))
+            if (p.startsWith("id=")) idParam = p.mid(3);
+        setPenHyperlink(internHyperlink(idParam, data.mid(semi + 1)));
+        break;
+    }
     case 133: {  // OSC 133 ; A|B|C|D[;exit]   (Shell-Integration / FinalTerm)
         if (data.isEmpty()) break;
         const char kind = data.at(0);
+        // Ein neuer Prompt beendet einen Hyperlink, den ein abgebrochenes Programm offen ließ.
+        // Sonst trüge alles, was die Shell danach ausgibt, dessen Ziel.
+        if (kind == 'A') setPenHyperlink(0);
         int exitCode = -1;
         if (kind == 'D') {
             const int semi = data.indexOf(';');

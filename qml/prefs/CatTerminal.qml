@@ -56,6 +56,20 @@ CatPage {
     }
     }
 
+    PrefAnchor { settingKey: "terminal.links"; page: page
+    PrefGroup {
+        title: qsTr("Links")
+        PrefRow {
+            title: qsTr("Programmen melden, dass QTmux Hyperlinks versteht")
+            description: qsTr("Setzt in neuen Sitzungen FORCE_HYPERLINK=1. Programme wie Claude Code nennen das Ziel ihrer Links dann selbst; nur so bleibt eine Adresse klickbar, die das Programm über mehrere Zeilen umbricht. Manche Programme schreiben die Auszeichnung dann auch in Dateien und Pipes.")
+            AppSwitch {
+                checked: page.host.app.announceHyperlinks
+                onToggled: page.host.app.announceHyperlinks = checked
+            }
+        }
+    }
+    }
+
     PrefAnchor { settingKey: "terminal.shell"; page: page
     PrefGroup {
         title: qsTr("Shell")

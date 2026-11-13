@@ -51,6 +51,7 @@ struct VTermPen
   unsigned int font:4; /* To store 0-9 */
   unsigned int small:1;
   unsigned int baseline:2;
+  int uri; /* QTMUX: Hyperlink-Kennung (OSC 8), 0 = keiner */
 };
 
 struct VTermState

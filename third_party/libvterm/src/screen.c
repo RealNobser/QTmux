@@ -29,6 +29,8 @@ typedef struct
   unsigned int small     : 1;
   unsigned int baseline  : 2;
 
+  int uri; /* QTMUX: Hyperlink-Kennung (OSC 8), 0 = keiner */
+
   /* Extra state storage that isn't strictly pen-related */
   unsigned int protected_cell : 1;
   unsigned int dwl            : 1; /* on a DECDWL or DECDHL line */
@@ -462,6 +464,9 @@ static int setpenattr(VTermAttr attr, VTermValue *val, void *user)
   case VTERM_ATTR_BASELINE:
     screen->pen.baseline = val->number;
     return 1;
+  case VTERM_ATTR_URI:   /* QTMUX: Hyperlink-Kennung (OSC 8) */
+    screen->pen.uri = val->number;
+    return 1;
 
   case VTERM_N_ATTRS:
     return 0;
@@ -737,6 +742,7 @@ static void resize_buffer(VTermScreen *screen, int bufidx, int new_rows, int new
 
         dst->pen.fg = src->fg;
         dst->pen.bg = src->bg;
+        dst->pen.uri = src->uri; /* QTMUX: Hyperlink-Kennung (OSC 8) */
 
         if(src->width == 2 && pos.col < (new_cols-1))
           (dst + 1)->chars[0] = (uint32_t) -1;
@@ -1033,6 +1039,7 @@ int vterm_screen_get_cell(const VTermScreen *screen, VTermPos pos, VTermScreenCe
 
   cell->fg = intcell->pen.fg;
   cell->bg = intcell->pen.bg;
+  cell->uri = intcell->pen.uri; /* QTMUX: Hyperlink-Kennung (OSC 8) */
 
   if(pos.col < (screen->cols - 1) &&
      getcell(screen, pos.row, pos.col + 1)->chars[0] == (uint32_t)-1)

@@ -9,7 +9,7 @@ add_test(NAME test_linkdetector COMMAND test_linkdetector)
 
 # Klickbare Links im Bildschirminhalt: Zellen <-> Zeichen, weiche Umbrueche, Gesten aller
 # drei Plattformen auf jedem Host.
-qt_add_executable(test_screenlinks tst_screenlinks.cpp)
+qt_add_executable(test_screenlinks tst_screenlinks.cpp link_wrap_captures.h)
 target_link_libraries(test_screenlinks PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_screenlinks COMMAND test_screenlinks)
 
@@ -162,7 +162,7 @@ add_test(NAME test_restorehistory COMMAND test_restorehistory)
 # Clink-Auftrag 2026-11-03: ConPTY-Verhalten mit ECHTEN Bytes (Mitschnitt einer Windows-11-
 # Maschine, eingebettet in conpty_captures.h) — Reflow bei Größenänderung und Verlauf vor
 # dem Start-ESC[2J. Plattformunabhängig: Die Bytes laufen auf jedem System durch VtScreen.
-qt_add_executable(test_conptyreplay tst_conptyreplay.cpp conpty_captures.h)
+qt_add_executable(test_conptyreplay tst_conptyreplay.cpp conpty_captures.h link_wrap_captures.h)
 target_link_libraries(test_conptyreplay PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_conptyreplay COMMAND test_conptyreplay)
 

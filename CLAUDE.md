@@ -54,7 +54,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/core/PtyBackend.{h,cpp}` | Lokale Shell/Agenten; zerlegt `program` via `splitCommand` |
 | `src/core/VtScreen.{h,cpp}` | libvterm-Wrapper; `Cell` Qt-freundlich; OSC-Parser (133/9/777/Maus) |
 | `src/core/LinkDetector.{h,cpp}` | Gui-freie Link-Heuristik (URLs + existierende Dateipfade, Scheme-Whitelist) für klickbare Links (QTMUX-39) |
-| `src/core/ScreenLinks.{h,cpp}` | Gui-frei: Zellen ↔ Link (logische Zeile über weiche Umbrüche, Emoji-feste Spalten) + Link-Gesten aller drei Plattformen |
+| `src/core/ScreenLinks.{h,cpp}` | Gui-frei: Zellen ↔ Link (Hyperlinks des Programms per OSC 8 zuerst, sonst logische Zeile über weiche Umbrüche, Emoji-feste Spalten; ein am Rand abgeschnittener Text-Link ist keiner) + Link-Gesten aller drei Plattformen |
 | `src/core/TerminalSelection.{h,cpp}` | Gui-frei: Auswahl, die genau den markierten Text trägt oder verschwindet (stabile Zeilennummern + Inhaltsvergleich) |
 | `src/core/FileManagerReveal.{h,cpp}` | Gui-frei: „Im Finder/Explorer/Dateimanager zeigen" — Befehl je Plattform + lokale Existenzprüfung (QTMUX-138, Mechanik in der Feature-Referenz) |
 | `src/core/Session.{h,cpp}` | Backend + VtScreen; Activity/Attention/Progress; Login-Script; SSH-Passwort-Auto-Fill |
@@ -327,6 +327,15 @@ C CXX)` ist Pflicht (ohne `C` → leere `vterm.lib` → Linkfehler).
 > übrigen Neovim-Stellen zeigten keine messbare Wirkung. ⚠️ Grenze (auch bei Neovim): Wird
 > eine **einzelne** logische Zeile nach dem Umbruch höher als der ganze Schirm, landet nur
 > ihre erste alte Zeile im Scrollback.
+>
+> **Patch 5 — Hyperlink-Kennung (OSC 8), `vterm.h`/`pen.c`/`screen.c`/`state.c`/`vterm.c`
+> (Auftrag Links/Umbruch 2026-11-13):** libvterm 0.3.3 kennt keine Hyperlinks, OSC 8 läuft in
+> den OSC-Fallback. Dort parst `VtScreen` es und setzt per `vterm_state_set_pen_uri` eine
+> Kennung in den Stift; libvterm trägt sie durch die Zellen (`VTermPen::uri`, `ScreenPen::uri`,
+> `VTermScreenCell::uri`, `VTERM_ATTR_URI` am Enum-**Ende**) und damit durch Scrollen, Löschen
+> und Scrollback. Das Ziel selbst kennt libvterm nicht. Der Stift behält die Kennung bei SGR 0
+> und bei DECRC (OSC 8 ist kein SGR-Attribut), ein Reset setzt sie auf 0, gelöschte Zellen
+> tragen keine. Tests `tst_vtscreen::hyperlink*`; Mutationsproben je Stelle rot.
 
 ## CI (GitHub Actions)
 
@@ -876,6 +885,20 @@ trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
 
+🔧 **2026-11-13: Owner-Befund „URLs über mehr als eine Zeile werden nicht erkannt und sind nicht
+klickbar“, umgesetzt, nur lokal, unreleased.** Ursache gemessen: Claude Code bricht lange Adressen
+selbst um (beide Renderer, keine Marke), 1.9.11 öffnete auf der ersten Zeile das abgeschnittene
+Stück. Zusammensetzen ist nicht sicher möglich. Umgesetzt: OSC 8 (libvterm-Patch 5, schließt
+QTMUX-40), ein am Rand abgeschnittener Text-Link ist keiner und sagt warum, Schalter
+`window/announceHyperlinks` (Vorgabe aus). Mechanik und Grenzen: Feature-Referenz „Klickbare Links“,
+Rezept: [docs/owner-abnahmen.md](docs/owner-abnahmen.md). Messkommando für den Stand:
+`git log --oneline origin/main..HEAD`. Kein Jira-Ticket angelegt, keine CI gelaufen, Benutzerdoku
+nicht nachgezogen (alles mit dem Push). **Offene Owner-Entscheide:** (1) Schalter als Vorgabe
+einschalten? Ohne ihn bleibt eine von Claude Code umbrochene Adresse unklickbar, mit ihm schreiben
+manche Programme die Auszeichnung auch in Pipes. (2) Für Codeblöcke und Programme ohne OSC 8 bleibt
+nur „nicht geöffnet“; ein Ausweg wäre „Auswahl als Link öffnen“ im Kontextmenü. (3) Die falschen
+Fortsetzungs-Marken unter ConPTY wirken auch auf Kopieren und Reflow, nicht untersucht.
+
 🔧 **2026-11-05: QTMUX-150…152 ausgeliefert mit 1.9.11, Owner-Abnahme steht aus.** Auswahl markiert nie
 mehr fremden Text; Link-Gesten treffen über Emoji und weiche Umbrüche und melden jedes Ergebnis in der
 Pille; Netzpfade lösen keinen Zugriff aus (Mechanik: Feature-Referenz „Auswahl“, „Klickbare Links“; Rezepte:
@@ -1154,8 +1177,8 @@ die dauerhaften Lektionen stehen jeweils im zuständigen Fachabschnitt, nicht hi
 **122/123** (OSC-52-Zwischenablage · Hinweis bei App-Maus) sind seit `162f079` in `main`
 und mit 1.8.1 **ausgeliefert** — Mechanik in der Feature-Referenz; Jira-Status dual
 **Done** (am 2026-09-06 per REST in beiden Systemen gemessen). ·
-**40** (OSC-8-Hyperlinks — deferred; bräuchte Cursor-Span-Tracking + neues `Cell`-Feld,
-teuer, da `VtScreen` den Sichtbereich lazy aus libvterm bildet) ·
+**40** (OSC-8-Hyperlinks — am 2026-11-13 lokal umgesetzt über eine Kennung im libvterm-Stift
+statt Span-Tracking, s. „Nächster Schritt“; Ticket noch offen, schließen mit dem Push) ·
 **13** (native macOS-Menü-Icons — deferred; Qt reicht `icon.source`/`icon.name` in nativen
 Menüs nicht durch, einziger Weg wäre ein QMenuBar-Umbau; [[qtmux-native-menu-icons]]) ·
 **126** (Marken-Badge „Q" in Menüleiste + App-Icon; Farbe **`#B239EA`** (Violett), festgelegt 2026-08-05 nachdem `#0284C7` sich als die Farbe des **Deskstarters** herausstellte. 🔑 Eine weitere **Blaustufe war rechnerisch nicht möglich**: Der Bereich H 184–275 ist von MacPCAN, Deskstarter und AstroCAN dreifach belegt, jede Blaustufe scheitert am Abstand zu MacPCAN oder geht im **Dunkel**-Design unter. Belege — ΔE2000 und WCAG-Kontrast gegen **beide** Designs samt Kopfleiste — stehen in der Spec; Backlog; Spec

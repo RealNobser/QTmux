@@ -941,13 +941,16 @@ ScreenLinks::Hit TerminalItem::linkAt(const QPointF &pos) {
     VtScreen *sc = screen();
     if (!sc) return {};
     const QPoint ac = absCellAt(pos);
+    // Nennt das Programm das Ziel selbst (OSC 8), gilt das und nicht der Text an der Stelle.
+    const ScreenLinks::Hit declared = ScreenLinks::hyperlinkAt(*sc, ac.y(), ac.x());
+    if (declared.declared) return declared;
     const ScreenLinks::Line line = ScreenLinks::logicalLine(*sc, ac.y());
     if (line.firstRow != m_linkCacheFirstRow || line.text != m_linkCacheText) {
         m_linkCacheFirstRow = line.firstRow;
         m_linkCacheText = line.text;
         m_linkCacheSpans = LinkDetector::detect(line.text, sessionCwd());
     }
-    return ScreenLinks::hitAt(line, m_linkCacheSpans, ac.y(), ac.x());
+    return ScreenLinks::hitAt(*sc, line, m_linkCacheSpans, ac.y(), ac.x());
 }
 
 void TerminalItem::updateHoverLink(const QPointF &pos) {
@@ -961,6 +964,15 @@ void TerminalItem::updateHoverLink(const QPointF &pos) {
     setCursor(hit.valid() ? Qt::PointingHandCursor : Qt::ArrowCursor);
     if (targetChanged) emit hoverLinkChanged();
     update();
+}
+
+QString TerminalItem::cutLinkNotice() {
+    // Ein Programm, das eine lange Adresse selbst umbricht, hinterlässt keine Marke. Ob die
+    // nächste Zeile dazugehört, ist am Bildschirm nicht zu entscheiden; ein zusammengesetztes
+    // oder ein abgeschnittenes Ziel wäre im Zweifel ein anderes als das gemeinte.
+    return QCoreApplication::translate(
+        "TerminalItem",
+        "Nicht geöffnet: Der Link ist am Zeilenrand umbrochen, sein Ende ist nicht sicher erkennbar");
 }
 
 void TerminalItem::showLinkNotice(const QString &text) {
@@ -1219,9 +1231,28 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
                 event->accept();
                 return;
             }
-            // Daneben: Die Pille sagt es, der Klick läuft normal weiter.
-            showLinkNotice(QCoreApplication::translate(
-                "TerminalItem", "Kein Link an dieser Stelle"));
+            // Ein Link steht da, wird aber nicht geöffnet: Die Pille sagt, warum.
+            if (hit.blocked == ScreenLinks::Hit::Blocked::Refused) {
+                showLinkNotice(QCoreApplication::translate(
+                                   "TerminalItem", "Dieses Ziel wird nicht geöffnet: %1")
+                                   .arg(hit.refused));
+                event->accept();
+                return;
+            }
+            if (hit.blocked == ScreenLinks::Hit::Blocked::MaybeCut) {
+                showLinkNotice(cutLinkNotice());
+                event->accept();
+                return;
+            }
+            // Daneben: Die Pille sagt es, der Klick läuft normal weiter. Steht die Stelle unter
+            // einem Link, der am Zeilenrand endet, ist sie vielleicht dessen Fortsetzung.
+            const QPoint cell = absCellAt(event->position());
+            if (VtScreen *linkScreen = screen();
+                linkScreen && ScreenLinks::continuesCutLink(*linkScreen, cell.y(), cell.x()))
+                showLinkNotice(cutLinkNotice());
+            else
+                showLinkNotice(QCoreApplication::translate(
+                    "TerminalItem", "Kein Link an dieser Stelle"));
         }
     }
     VtScreen *sc = screen();

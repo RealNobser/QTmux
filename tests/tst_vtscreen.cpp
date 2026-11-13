@@ -39,6 +39,11 @@ private slots:
     void osc7HostHandling();
     void osc7TakesPrecedenceOverPolling();
     void osc7NetworkPathIsDiscarded();
+    void hyperlinkCellsCarryTheTarget();
+    void hyperlinkEndsWhereItShould();
+    void hyperlinkLimits();
+    void hyperlinkSurvivesSerialize();
+    void oversizedOscIsDropped();
     void osc52WritesClipboard();
     void osc52QueryIsRefused();
 };
@@ -663,6 +668,144 @@ void TestVtScreen::serializeAnsiRoundTrip() {
         a.inputWrite("ABCDEFGHIJKLMNO");               // 15 > 10 Spalten -> Soft-Wrap
         QVERIFY(a.serializeAnsi().contains("ABCDEFGHIJKLMNO"));
     }
+}
+
+// --- Hyperlinks des Programms (OSC 8) ------------------------------------------------------
+void TestVtScreen::hyperlinkCellsCarryTheTarget() {
+    VtScreen vt(5, 40);
+    // Beide Abschlüsse (BEL und ST), mit und ohne Parameter.
+    vt.inputWrite("a \033]8;;https://example.com/x\007Link\033]8;;\007 b "
+                  "\033]8;id=k:foo=bar;https://example.com/y\033\\Zwei\033]8;;\033\\");
+    QCOMPARE(vt.cell(0, 0).link, quint32(0));
+    const quint32 first = vt.cell(0, 2).link;
+    QVERIFY(first != 0);
+    for (int c = 2; c <= 5; ++c) QCOMPARE(vt.cell(0, c).link, first);
+    QCOMPARE(vt.cell(0, 6).link, quint32(0));
+    QCOMPARE(vt.hyperlink(first), QStringLiteral("https://example.com/x"));
+    const quint32 second = vt.cell(0, 9).link;
+    QVERIFY(second != 0 && second != first);
+    QCOMPARE(vt.hyperlink(second), QStringLiteral("https://example.com/y"));
+    QCOMPARE(vt.hyperlink(0), QString());
+    QCOMPARE(vt.hyperlink(second + 1000), QString());
+    // Gleiche Angaben, gleiche Kennung: So finden die Zeilen eines umbrochenen Links zusammen.
+    vt.inputWrite("\r\n\033]8;;https://example.com/x\007nochmal\033]8;;\007");
+    QCOMPARE(vt.cell(1, 0).link, first);
+    // Ein anderer id-Parameter ist ein anderer Link, auch mit demselben Ziel.
+    vt.inputWrite("\r\n\033]8;id=z;https://example.com/x\007anders\033]8;;\007");
+    QVERIFY(vt.cell(2, 0).link != first);
+    QCOMPARE(vt.hyperlink(vt.cell(2, 0).link), QStringLiteral("https://example.com/x"));
+}
+
+void TestVtScreen::hyperlinkEndsWhereItShould() {
+    // SGR 0 und Cursor-Sichern/-Zurückholen beenden den Link nicht: OSC 8 ist kein SGR-Attribut.
+    VtScreen vt(5, 40);
+    vt.inputWrite("\0337\033]8;;https://example.com/x\007ab\033[0mcd");
+    for (int c = 0; c < 4; ++c) QVERIFY2(vt.cell(0, c).link != 0, qPrintable(QString::number(c)));
+    // Gespeichert wurde der Stift OHNE Link. Das Zurückholen setzt den Cursor an den Anfang,
+    // der Link bleibt offen.
+    vt.inputWrite("\0338ef");
+    QCOMPARE(vt.cell(0, 0).text, QStringLiteral("e"));
+    QVERIFY(vt.cell(0, 0).link != 0);
+    // Gelöschte Zellen tragen keinen.
+    vt.inputWrite("\r\033[K");
+    QCOMPARE(vt.cell(0, 0).link, quint32(0));
+    // Ein offen gebliebener Link (Programm abgebrochen) endet am nächsten Prompt …
+    vt.inputWrite("\r\nxy\033]133;A\007zz");
+    QVERIFY(vt.cell(1, 0).link != 0);
+    QCOMPARE(vt.cell(1, 2).link, quint32(0));
+    // … am Notausgang …
+    vt.inputWrite("\r\n\033]8;;https://example.com/x\007a");
+    vt.resetInputModes();
+    vt.inputWrite("b");
+    QVERIFY(vt.cell(2, 0).link != 0);
+    QCOMPARE(vt.cell(2, 1).link, quint32(0));
+    // … und bei einem Terminal-Reset.
+    vt.inputWrite("\033]8;;https://example.com/x\007\033cq");
+    QCOMPARE(vt.cell(0, 0).text, QStringLiteral("q"));
+    QCOMPARE(vt.cell(0, 0).link, quint32(0));
+    // Ein kaputtes OSC 8 ohne Trenner schließt ebenfalls.
+    vt.inputWrite("\r\n\033]8;;https://example.com/x\007a\033]8\007b");
+    QVERIFY(vt.cell(1, 0).link != 0);
+    QCOMPARE(vt.cell(1, 1).link, quint32(0));
+}
+
+void TestVtScreen::hyperlinkLimits() {
+    VtScreen vt(5, 40);
+    // Ein überlanges Ziel wird nicht gekürzt, es ist keines. Und es lässt den vorigen Link
+    // nicht offen: Der Text danach gehörte sonst zum falschen Ziel.
+    const QByteArray longUri = "https://example.com/" + QByteArray(VtScreen::kMaxHyperlinkBytes, 'a');
+    vt.inputWrite("\033]8;;https://example.com/vorher\007a\033]8;;" + longUri + "\007b");
+    QCOMPARE(vt.hyperlink(vt.cell(0, 0).link), QStringLiteral("https://example.com/vorher"));
+    QCOMPARE(vt.cell(0, 1).link, quint32(0));
+    // Genau an der Grenze geht es noch.
+    const QByteArray maxUri = "https://example.com/" + QByteArray(VtScreen::kMaxHyperlinkBytes - 20, 'a');
+    vt.inputWrite("\033]8;;" + maxUri + "\007c\033]8;;\007");
+    QCOMPARE(vt.hyperlink(vt.cell(0, 2).link), QString::fromLatin1(maxUri));
+    // Die Tabelle hat eine Obergrenze: Der älteste Eintrag fällt heraus, neuere bleiben.
+    const quint32 old = vt.cell(0, 0).link;
+    for (int i = 0; i < VtScreen::kMaxHyperlinks - 1; ++i)
+        vt.inputWrite("\033]8;;https://example.net/" + QByteArray::number(i) + "\007\033]8;;\007");
+    QCOMPARE(vt.hyperlink(old), QString());
+    QCOMPARE(vt.hyperlink(vt.cell(0, 2).link), QString::fromLatin1(maxUri));
+    vt.inputWrite("\r\n\033]8;;https://example.net/neu\007d\033]8;;\007");
+    QCOMPARE(vt.hyperlink(vt.cell(1, 0).link), QStringLiteral("https://example.net/neu"));
+    // Ein verdrängtes Ziel bekommt bei erneuter Meldung eine NEUE Kennung, die alte bleibt tot.
+    vt.inputWrite("\033]8;;https://example.com/vorher\007e\033]8;;\007");
+    QVERIFY(vt.cell(1, 1).link != old);
+    QCOMPARE(vt.hyperlink(vt.cell(1, 1).link), QStringLiteral("https://example.com/vorher"));
+    QCOMPARE(vt.hyperlink(old), QString());
+}
+
+void TestVtScreen::hyperlinkSurvivesSerialize() {
+    // Der wiederhergestellte Verlauf (QTMUX-81) behält die Links, auch über Zeilen hinweg,
+    // und nichts dahinter erbt ein Ziel.
+    VtScreen vt(8, 20);
+    vt.inputWrite("\033]8;id=a;https://example.com/eins\007erste\033]8;;\007 Text\r\n"
+                  "  \033]8;id=a;https://example.com/eins\007zweite\033]8;;\007\r\n"
+                  "\033]8;;https://example.com/lang\007" + QByteArray(30, 'x') + "\033]8;;\007\r\nEnde");
+    VtScreen back(8, 20);
+    back.inputWrite(vt.serializeAnsi());
+    back.inputWrite("danach");                      // jede Zeile des Abzugs endet mit CR LF
+    QCOMPARE(back.screenText().trimmed(), vt.screenText().trimmed() + QStringLiteral("\ndanach"));
+    QVERIFY(back.lineContinuation(3));
+    const auto target = [&back](int row, int col) { return back.hyperlink(back.cell(row, col).link); };
+    QCOMPARE(target(0, 0), QStringLiteral("https://example.com/eins"));
+    QCOMPARE(target(0, 6), QString());
+    QCOMPARE(target(1, 2), QStringLiteral("https://example.com/eins"));
+    QCOMPARE(back.cell(0, 0).link, back.cell(1, 2).link);
+    QCOMPARE(target(1, 0), QString());
+    // Die weich umbrochene Zeile trägt ihr Ziel auf beiden Zeilen.
+    QCOMPARE(target(2, 0), QStringLiteral("https://example.com/lang"));
+    QCOMPARE(target(3, 9), QStringLiteral("https://example.com/lang"));
+    QCOMPARE(target(3, 10), QString());
+    QCOMPARE(target(4, 0), QString());              // „Ende“
+    QCOMPARE(target(5, 0), QString());              // was danach ausgegeben wird, erbt nichts
+
+    // Endet der Abzug mitten in einem Link, ist er danach trotzdem zu.
+    VtScreen open(4, 20), reopened(4, 20);
+    open.inputWrite("\033]8;;https://example.com/offen\007bis zum Ende");
+    reopened.inputWrite(open.serializeAnsi());
+    reopened.inputWrite("neu");
+    QCOMPARE(reopened.hyperlink(reopened.cell(0, 0).link), QStringLiteral("https://example.com/offen"));
+    QCOMPARE(reopened.cell(1, 0).text, QStringLiteral("n"));
+    QCOMPARE(reopened.cell(1, 0).link, quint32(0));
+}
+
+void TestVtScreen::oversizedOscIsDropped() {
+    // Eine OSC-Sequenz ohne Ende ist Eingabe von außen. Über der Grenze wird sie verworfen,
+    // nicht gesammelt, und sie wirkt nicht halb.
+    VtScreen vt(5, 40);
+    QSignalSpy notes(&vt, &VtScreen::notify);
+    vt.inputWrite("\033]9;" + QByteArray(200000, 'x') + "\007");
+    QCOMPARE(notes.count(), 0);
+    vt.inputWrite("\033]9;kurz\007");
+    QCOMPARE(notes.count(), 1);
+    QCOMPARE(notes.first().first().toString(), QStringLiteral("kurz"));
+    // Ein übergroßes OSC 8 ist kein Link und lässt den vorigen nicht offen.
+    vt.inputWrite("\033]8;;https://example.com/vorher\007a\033]8;;https://example.com/"
+                  + QByteArray(200000, 'a') + "\007x");
+    QVERIFY(vt.cell(0, 0).link != 0);
+    QCOMPARE(vt.cell(0, 1).link, quint32(0));
 }
 
 QTEST_MAIN(TestVtScreen)

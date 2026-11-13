@@ -5,6 +5,7 @@
 
 #include "ScreenLinks.h"
 #include "VtScreen.h"
+#include "link_wrap_captures.h"
 
 using namespace qtmux;
 using ScreenLinks::Gesture;
@@ -16,6 +17,51 @@ class TestScreenLinks : public QObject {
 
     // Emoji und Hilfen: 😀 belegt zwei Spalten und zwei QChar.
     static QByteArray emoji() { return QByteArray("\xF0\x9F\x98\x80"); }
+
+    using Blocked = ScreenLinks::Hit::Blocked;
+    static QByteArray bytes(const linkwrapcap::Bytes &b) {
+        return QByteArray(b.bytes, static_cast<qsizetype>(b.size));
+    }
+    // Die Probe-Adressen der Mitschnitte: https://example.com/<fall>/n001/…/n030?fall=<fall>&ende=1
+    static QString probeUrl(const char *tag, int parts = 30) {
+        QString u = QStringLiteral("https://example.com/%1/").arg(QLatin1String(tag));
+        for (int i = 1; i <= parts; ++i)
+            u += QStringLiteral("n%1%2").arg(i, 3, 10, QLatin1Char('0')).arg(i < parts ? "/" : "");
+        return u + QStringLiteral("?fall=%1&ende=1").arg(QLatin1String(tag));
+    }
+    static int firstInk(const VtScreen &sc, int row) {
+        for (int c = 0; c < sc.cols(); ++c)
+            if (!sc.cell(row, c).text.trimmed().isEmpty()) return c;
+        return -1;
+    }
+    static int lastInk(const VtScreen &sc, int row) {
+        for (int c = sc.cols() - 1; c >= 0; --c)
+            if (!sc.cell(row, c).text.trimmed().isEmpty()) return c;
+        return -1;
+    }
+    // Trifft JEDE Zelle von c0 bis c1 der Zeile dasselbe, vollständige Ziel?
+    static bool everyCellOpens(const VtScreen &sc, int row, int c0, int c1, const QString &target,
+                               int segments) {
+        if (c0 < 0 || c1 < c0) return false;
+        for (int c = c0; c <= c1; ++c) {
+            const auto hit = ScreenLinks::linkAt(sc, row, c);
+            if (hit.target != target || hit.segments.size() != segments) {
+                qWarning() << "Zeile" << row << "Spalte" << c << "liefert" << hit.target
+                           << "mit" << hit.segments.size() << "Abschnitten";
+                return false;
+            }
+        }
+        return true;
+    }
+    // Liefert irgendeine Zelle der Zeile ein Ziel? Dann welches (leer = keine).
+    static QStringList targetsInRow(const VtScreen &sc, int row) {
+        QStringList out;
+        for (int c = 0; c < sc.cols(); ++c) {
+            const auto hit = ScreenLinks::linkAt(sc, row, c);
+            if (hit.valid() && !out.contains(hit.target)) out << hit.target;
+        }
+        return out;
+    }
 
 private slots:
     // --- Gesten: alle drei Plattformen auf jedem Host -------------------------------------
@@ -198,6 +244,391 @@ private slots:
         QCOMPARE(line.firstRow, 0);
         QVERIFY(line.cutTop);
         QVERIFY(!ScreenLinks::linkAt(sc, 0, 2).valid());
+    }
+
+
+    // --- Vom Programm umbrochene Links (Owner-Befund 2026-11-13) ---------------------------
+    // Die Vorlagen sind wörtliche Stücke aus Mitschnitten von Claude Code, s. link_wrap_captures.h.
+    // Claude Code bricht lange Adressen SELBST um und setzt die Folgezeilen per Cursor: Es gibt
+    // keine Fortsetzungs-Marke. 1.9.11 öffnete auf der ersten Zeile das abgeschnittene Stück.
+
+    void claudeFullscreenHardWrapNeverOpensACutTarget() {
+        VtScreen sc(29, 84);
+        sc.inputWrite("\033[?1049h\033[2J\033[1;3H" + bytes(linkwrapcap::kFullscreenCodeBlock));
+        QVERIFY(sc.altScreen());
+        QCOMPARE(lastInk(sc, 0), 83);                       // bis in die letzte Spalte geschrieben
+        QVERIFY(!sc.lineContinuation(1));                    // und trotzdem keine Marke
+        QCOMPARE(firstInk(sc, 1), 2);
+        // Keine Zeile öffnet ein Ziel: nicht das abgeschnittene, nicht ein zusammengesetztes.
+        for (int row = 0; row < 3; ++row) QCOMPARE(targetsInRow(sc, row), QStringList());
+        const auto head = ScreenLinks::linkAt(sc, 0, 10);
+        QCOMPARE(head.blocked, Blocked::MaybeCut);
+        QVERIFY(head.segments.isEmpty());                    // nichts wird unterstrichen
+        // Die Folgezeilen sagen bei einem Klick dasselbe statt „Kein Link an dieser Stelle“.
+        QVERIFY(ScreenLinks::continuesCutLink(sc, 1, 5));
+        QVERIFY(ScreenLinks::continuesCutLink(sc, 2, 5));
+    }
+
+    void sameScreenDifferentMeaning() {
+        // 🔑 Der Grund, warum NICHT zusammengesetzt wird. Beide Bilder sind echt: links eine
+        // Adresse, die Claude Code mitten im Wort umbricht, rechts eine, die genau am Rand
+        // endet, mit einem neuen Wort darunter. Volle Zeile, keine Marke, Folgezeile ab Spalte
+        // 2. Wer die erste zusammensetzt, öffnet bei der zweiten `…xxZdanach`.
+        VtScreen wrapped(29, 84), complete(29, 84);
+        wrapped.inputWrite("\033[1;3H" + bytes(linkwrapcap::kFullscreenCodeBlock));
+        complete.inputWrite("\033[1;3H" + bytes(linkwrapcap::kClassicWordAfterEdge));
+        for (const VtScreen *sc : {&wrapped, &complete}) {
+            QCOMPARE(lastInk(*sc, 0), 83);
+            QVERIFY(!sc->lineContinuation(1));
+            QCOMPARE(firstInk(*sc, 1), 2);
+        }
+        QCOMPARE(complete.cell(1, 2).text, QStringLiteral("d"));     // „danach folgt …“
+        QCOMPARE(targetsInRow(complete, 0), QStringList());
+        QCOMPARE(targetsInRow(complete, 1), QStringList());
+        QCOMPARE(ScreenLinks::linkAt(complete, 0, 20).blocked, Blocked::MaybeCut);
+    }
+
+    void twoUrlsBelowEachOtherAreNeverGlued() {
+        VtScreen sc(29, 84);
+        sc.inputWrite("\033[1;3H" + bytes(linkwrapcap::kClassicTwoUrlsBelowEachOther));
+        QCOMPARE(lastInk(sc, 0), 83);
+        QCOMPARE(targetsInRow(sc, 0), QStringList());        // erste Adresse: unklar, also keine
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 20).blocked, Blocked::MaybeCut);
+        // Die zweite steht für sich und bleibt ein Link, mit genau ihrem Ziel.
+        QCOMPARE(targetsInRow(sc, 1), QStringList{QStringLiteral("https://example.com/r4b/s01/s02/s03/s04Z")});
+        QCOMPARE(targetsInRow(sc, 2), QStringList());
+    }
+
+    void toolOutputWrappedBeforeTheEdge() {
+        // Die Werkzeugausgabe bricht Claude Code sechs Spalten vor dem Rand um. Die mittlere
+        // Zeile verrät es: ein einziges Wort, das in derselben Spalte endet.
+        VtScreen sc(29, 84);
+        sc.inputWrite("\033[1;6H" + bytes(linkwrapcap::kClassicToolOutput));
+        QCOMPARE(lastInk(sc, 0), 78);
+        QCOMPARE(lastInk(sc, 1), 78);
+        for (int row = 0; row < 3; ++row) QCOMPARE(targetsInRow(sc, row), QStringList());
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 20).blocked, Blocked::MaybeCut);
+    }
+
+    void urlBeforeTheEdgeStaysALink() {
+        // Die Regel trifft nur den Rand. Eine Adresse, die davor endet, ist vollständig.
+        VtScreen sc(5, 40);
+        sc.inputWrite("https://example.com/abcdefghijklmnopq\r\nweiter im Text\r\n");   // 37 Zeichen
+        QCOMPARE(lastInk(sc, 0), 36);
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 5).target, QStringLiteral("https://example.com/abcdefghijklmnopq"));
+    }
+
+    void urlAtTheEdgeFollowedByNothingStaysALink() {
+        VtScreen sc(5, 40);
+        sc.inputWrite("https://example.com/abcdefghijklmnopqrst\r\n\r\nspaeter\r\n");    // genau 40
+        QCOMPARE(lastInk(sc, 0), 39);
+        QVERIFY(ScreenLinks::linkAt(sc, 0, 5).valid());
+    }
+
+    void urlAtTheEdgeFollowedByTextIsNoLink() {
+        // Auch ohne Einrückung, auch mit einem Wort, das nie zu einer Adresse gehören würde:
+        // Am Bildschirm ist das nicht von einer umbrochenen Adresse zu unterscheiden.
+        VtScreen sc(5, 40);
+        sc.inputWrite("https://example.com/abcdefghijklmnopqrst\r\nweiter und mehr\r\n");
+        QVERIFY(!sc.lineContinuation(1));
+        const auto hit = ScreenLinks::linkAt(sc, 0, 5);
+        QVERIFY(!hit.valid());
+        QCOMPARE(hit.blocked, Blocked::MaybeCut);
+        // Die Rückmeldung „vielleicht die Fortsetzung“ gilt dem ersten Wort darunter, nicht
+        // jedem Wort der Zeile und keiner leeren Stelle.
+        QVERIFY(ScreenLinks::continuesCutLink(sc, 1, 2));
+        QVERIFY(!ScreenLinks::continuesCutLink(sc, 1, 12));          // „mehr“
+        QVERIFY(!ScreenLinks::continuesCutLink(sc, 1, 6));           // Leerzeichen
+        QVERIFY(!ScreenLinks::continuesCutLink(sc, 2, 0));
+    }
+
+    void urlAtTheEdgeAboveSomethingThatCannotContinueIt() {
+        // Beginnt die nächste Zeile mit einem Zeichen, das in keiner Adresse steht (hier ein
+        // Anführungszeichen und ein Rahmen), kann sie keine Fortsetzung sein.
+        for (const QByteArray &below : {QByteArray("\"so\" steht es da"), QByteArray("\xE2\x94\x94\xE2\x94\x80\xE2\x94\x80")}) {
+            VtScreen sc(5, 40);
+            sc.inputWrite("https://example.com/abcdefghijklmnopqrst\r\n" + below + "\r\n");
+            QCOMPARE(lastInk(sc, 0), 39);
+            QCOMPARE(ScreenLinks::linkAt(sc, 0, 5).target, QStringLiteral("https://example.com/abcdefghijklmnopqrst"));
+        }
+    }
+
+    void indentedNextLineIsNotAttached() {
+        // Eingerückte Folgezeile, die NICHT dazugehört: kein zusammengesetztes Ziel.
+        VtScreen sc(5, 40);
+        sc.inputWrite("https://example.com/abcdefghijklmnopqrst\r\n    eingerueckt/weiter\r\n");
+        for (int row = 0; row < 2; ++row) QCOMPARE(targetsInRow(sc, row), QStringList());
+    }
+
+    void oneColumnBeforeTheEdgeCounts() {
+        // Claude Code bricht die Eingabe des Anwenders eine Spalte vor dem Rand um.
+        VtScreen sc(5, 40);
+        sc.inputWrite("https://example.com/abcdefghijklmnopqrs\r\n  t/uvw\r\n");          // 39 Zeichen
+        QCOMPARE(lastInk(sc, 0), 38);
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 5).blocked, Blocked::MaybeCut);
+    }
+
+    void softWrapWithATrailingWordStaysALink() {
+        // Gegenprobe: Hat das TERMINAL umbrochen, steht die Marke da, und sie zählt. Die
+        // Adresse endet in der letzten Spalte, der Rest der Zeile folgt nach einem Leerzeichen.
+        VtScreen sc(5, 40);
+        sc.inputWrite("https://example.com/abcdefghijklmnopqrst und weiter\r\n");
+        QVERIFY(sc.lineContinuation(1));
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 5).target, QStringLiteral("https://example.com/abcdefghijklmnopqrst"));
+    }
+
+    void conPtyMarksDoNotVouch() {
+        // Unter ConPTY entstehen Marken, die mit dem Inhalt nichts zu tun haben: Es löscht mit
+        // Leerzeichen-Läufen über Zeilengrenzen, die Marke bleibt stehen, die Zeile wird danach
+        // per Cursor neu beschrieben. Dasselbe Bild wie oben, aber kein Beleg.
+        for (const bool conPty : {false, true}) {
+            VtScreen sc(5, 40);
+            sc.setReflow(conPty);
+            sc.inputWrite("\033[1;1H" + QByteArray(41, ' '));           // Überlauf: Marke auf Zeile 2
+            QVERIFY(sc.lineContinuation(1));
+            sc.inputWrite("\033[1;1Hhttps://example.com/abcdefghijklmnopqrst\033[2;3Huvw/xyz");
+            QVERIFY(sc.lineContinuation(1));                             // sie klebt
+            const auto hit = ScreenLinks::linkAt(sc, 0, 5);
+            if (conPty) {
+                QVERIFY(!hit.valid());
+                QCOMPARE(hit.blocked, Blocked::MaybeCut);
+                QVERIFY(ScreenLinks::continuesCutLink(sc, 1, 3));
+            } else {
+                QVERIFY(hit.valid());
+            }
+        }
+    }
+
+    void conPtySoftWrapAfterASpaceStaysALink() {
+        // Gewöhnlicher Fließtext bleibt auch unter ConPTY ein Link: Adresse, ein Leerzeichen,
+        // dann bricht das Terminal um. Die vorletzte Spalte zählt dort nur OHNE Marke.
+        VtScreen sc(5, 40);
+        sc.setReflow(true);
+        sc.inputWrite("https://example.com/abcdefghijklmnopqrs weiter im Text\r\n");      // 39 Zeichen
+        QCOMPARE(lastInk(sc, 0), 38);
+        QVERIFY(sc.lineContinuation(1));
+        QCOMPARE(firstInk(sc, 1), 0);
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 5).target, QStringLiteral("https://example.com/abcdefghijklmnopqrs"));
+    }
+
+    void tableCellFilledToItsBorder() {
+        // Tabellen zeichnet Claude Code mit Rahmen und bricht in der Zelle um.
+        const QByteArray bar = "\xE2\x94\x82";   // │
+        const auto row = [&bar](const QByteArray &a, const QByteArray &b) {     // Zellen 2 und 32 breit
+            return bar + ' ' + a.leftJustified(2) + ' ' + bar + ' ' + b.leftJustified(32) + ' ' + bar + "\r\n";
+        };
+        VtScreen sc(5, 60);
+        sc.inputWrite(row("ab", "https://example.com/abcdefghijkl") + row("cd", "mnop/qrst"));
+        QCOMPARE(lastInk(sc, 0), 40);
+        QCOMPARE(targetsInRow(sc, 0), QStringList());
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 10).blocked, Blocked::MaybeCut);
+        QVERIFY(ScreenLinks::continuesCutLink(sc, 1, 8));
+        QVERIFY(!ScreenLinks::continuesCutLink(sc, 1, 2));           // Nachbarzelle
+        // Gegenprobe: Die Zelle ist nicht voll, die Adresse also zu Ende.
+        VtScreen ok(5, 60);
+        ok.inputWrite(row("ab", "https://example.com/abcdefg") + row("cd", "mnop/qrst"));
+        QCOMPARE(targetsInRow(ok, 0), QStringList{QStringLiteral("https://example.com/abcdefg")});
+        // Die Zelle darunter ist leer: Auch dann ist die Adresse zu Ende.
+        VtScreen empty(5, 60);
+        empty.inputWrite(row("ab", "https://example.com/abcdefghijkl") + row("cd", ""));
+        QCOMPARE(targetsInRow(empty, 0), QStringList{QStringLiteral("https://example.com/abcdefghijkl")});
+        // Und eine volle Zelle über dem Tabellenende bleibt ein Link.
+        VtScreen last(5, 60);
+        last.inputWrite(row("ab", "https://example.com/abcdefghijkl")
+                        + "\xE2\x94\x94" + QByteArray("\xE2\x94\x80").repeated(39) + "\xE2\x94\x98\r\n");
+        QCOMPARE(targetsInRow(last, 0), QStringList{QStringLiteral("https://example.com/abcdefghijkl")});
+    }
+
+    void equalLengthUrlsBelowEachOtherStayLinks() {
+        // Alltag: Listen gleich langer Adressen. Jede steht für sich.
+        VtScreen sc(5, 60);
+        sc.inputWrite("https://example.com/eins\r\nhttps://example.com/zwei\r\nhttps://example.com/drei\r\n");
+        QCOMPARE(targetsInRow(sc, 0), QStringList{QStringLiteral("https://example.com/eins")});
+        QCOMPARE(targetsInRow(sc, 1), QStringList{QStringLiteral("https://example.com/zwei")});
+    }
+
+    void equalLengthPathsBelowEachOtherStayLinks() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QVERIFY(QDir(dir.path()).mkpath(QStringLiteral("src")));
+        for (const char *name : {"src/a.txt", "src/b.txt"}) {
+            QFile f(dir.filePath(QLatin1String(name)));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+        }
+        VtScreen sc(5, 60);
+        sc.inputWrite("src/a.txt\r\nsrc/b.txt\r\n");
+        QVERIFY(ScreenLinks::linkAt(sc, 0, 2, dir.path()).valid());
+        QVERIFY(ScreenLinks::linkAt(sc, 1, 2, dir.path()).valid());
+    }
+
+    void wideCharAtTheSoftWrapDoesNotCutTheLink() {
+        // Passt ein breites Zeichen nicht mehr in die letzte Spalte, bricht das Terminal davor um
+        // und lässt die Spalte leer. Als Leerzeichen gelesen endete die Adresse dort.
+        VtScreen sc(5, 20);
+        const QByteArray wide = "\xE4\xB8\xAD";                          // 中, zwei Spalten
+        sc.inputWrite("https://example.com/" + wide.repeated(1) + "abcdefghijklmnopq" + wide + "/ende\r\n");
+        // 20 + 2 + 17 = 39 Spalten: Das zweite 中 müsste in Spalte 39 beginnen und passt nicht.
+        QVERIFY(sc.cell(1, 19).text.isEmpty());
+        QVERIFY(sc.lineContinuation(2));
+        const QString full = QStringLiteral("https://example.com/") + QString::fromUtf8(wide)
+                           + QStringLiteral("abcdefghijklmnopq") + QString::fromUtf8(wide) + QStringLiteral("/ende");
+        for (int row = 0; row < 3; ++row) QCOMPARE(ScreenLinks::linkAt(sc, row, 1).target, full);
+    }
+
+    // --- Hyperlinks des Programms (OSC 8) -----------------------------------------------------
+    // Mit FORCE_HYPERLINK=1 nennt Claude Code das Ziel selbst, auf jeder Zeile dasselbe.
+
+    void claudeFullscreenOsc8OpensTheFullTargetOnEveryLine() {
+        VtScreen sc(29, 84);
+        sc.inputWrite("\033[?1049h\033[2J\033[1;21H" + bytes(linkwrapcap::kFullscreenOsc8));
+        const QString full = probeUrl("A");
+        QCOMPARE(lastInk(sc, 0), 83);
+        QVERIFY(!sc.lineContinuation(1));
+        QVERIFY(everyCellOpens(sc, 0, 20, 83, full, 3));
+        QVERIFY(everyCellOpens(sc, 1, firstInk(sc, 1), lastInk(sc, 1), full, 3));
+        // Dritte Zeile: Hinter der Adresse geht der Satz weiter, der gehört nicht mehr dazu.
+        const int end = firstInk(sc, 2) + int(QStringLiteral("/n026/n027/n028/n029/n030?fall=A&ende=1").size()) - 1;
+        QVERIFY(everyCellOpens(sc, 2, firstInk(sc, 2), end, full, 3));
+        QVERIFY(!ScreenLinks::linkAt(sc, 2, end + 1).valid());
+        const auto hit = ScreenLinks::linkAt(sc, 1, 10);
+        QVERIFY(hit.declared);
+        QCOMPARE(hit.segments[0], (ScreenLinks::Segment{0, 20, 83}));
+        QCOMPARE(hit.segments[1].row, 1);
+        QCOMPARE(hit.segments[2].row, 2);
+    }
+
+    void claudeClassicOsc8ToolOutput() {
+        VtScreen sc(29, 84);
+        sc.inputWrite("\033[1;6H" + bytes(linkwrapcap::kClassicOsc8ToolOutput));
+        const QString full = probeUrl("D");
+        for (int row = 0; row < 3; ++row)
+            QVERIFY(everyCellOpens(sc, row, firstInk(sc, row), lastInk(sc, row), full, 3));
+    }
+
+    void osc8ArrivesThroughConPty() {
+        // ConPTY reicht OSC 8 durch, mit eigener id (`u-…%…`) und ST statt BEL. Die Marken
+        // dort sind kein Maßstab, das Ziel kommt vom Programm.
+        VtScreen sc(29, 84);
+        sc.setReflow(true);
+        sc.inputWrite(bytes(linkwrapcap::kConPtyOsc8));
+        const QString full = probeUrl("A");
+        QVERIFY(everyCellOpens(sc, 19, 20, 83, full, 3));
+        QVERIFY(everyCellOpens(sc, 20, firstInk(sc, 20), lastInk(sc, 20), full, 3));
+        QVERIFY(everyCellOpens(sc, 21, firstInk(sc, 21), lastInk(sc, 21), full, 3));
+    }
+
+    void declaredTargetBeatsTheVisibleText() {
+        // Was geöffnet wird, nennt die Pille: das Ziel des Programms, nicht der Text davor.
+        VtScreen sc(5, 60);
+        sc.inputWrite("\033]8;;https://example.org/ziel\033\\https://example.com/text\033]8;;\033\\ danach\r\n");
+        const auto hit = ScreenLinks::linkAt(sc, 0, 5);
+        QCOMPARE(hit.target, QStringLiteral("https://example.org/ziel"));
+        QVERIFY(hit.declared);
+        QCOMPARE(hit.segments, (QList<ScreenLinks::Segment>{{0, 0, 23}}));
+        QVERIFY(!ScreenLinks::linkAt(sc, 0, 26).valid());
+    }
+
+    void declaredTargetWithoutAUrlAsText() {
+        VtScreen sc(5, 60);
+        sc.inputWrite("siehe \033]8;id=x;https://example.org/doku\007die Doku\033]8;;\007.\r\n");
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 8).target, QStringLiteral("https://example.org/doku"));
+        QVERIFY(!ScreenLinks::linkAt(sc, 0, 5).valid());
+        QVERIFY(!ScreenLinks::linkAt(sc, 0, 14).valid());       // der Punkt dahinter
+    }
+
+    void refusedDeclaredTargets_data() {
+        QTest::addColumn<QByteArray>("uri");
+        QTest::newRow("javascript") << QByteArray("javascript:alert(1)");
+        QTest::newRow("fremdes Schema") << QByteArray("vscode://datei/x");
+        QTest::newRow("data") << QByteArray("data:text/html,x");
+        QTest::newRow("ohne Schema") << QByteArray("example.com/x");
+        QTest::newRow("relativer Pfad") << QByteArray("src/main.cpp");
+        QTest::newRow("file mit Rechner") << QByteArray("file://server/freigabe/x");
+        QTest::newRow("file localhost") << QByteArray("file://localhost/etc/hosts");
+        QTest::newRow("file Netzpfad") << QByteArray("file:////server/freigabe/x");
+        QTest::newRow("file kodierter Netzpfad") << QByteArray("file:///%2Fserver/freigabe/x");
+        QTest::newRow("file Punkt-Segmente") << QByteArray("file:///x/..//server/y");
+        QTest::newRow("UNC") << QByteArray("\\\\server\\freigabe\\x");
+        QTest::newRow("Leerzeichen") << QByteArray("https://example.com/a b");
+    }
+
+    void refusedDeclaredTargets() {
+        // Für ein Ziel des Programms gelten dieselben Grenzen wie für erkannten Text. Wird es
+        // abgelehnt, öffnet auch der Text an der Stelle nichts: Er ist nicht das Ziel.
+        QFETCH(QByteArray, uri);
+        VtScreen sc(5, 60);
+        sc.inputWrite("\033]8;;" + uri + "\033\\https://example.com/sichtbar\033]8;;\033\\\r\n");
+        QVERIFY(sc.cell(0, 3).link != 0);
+        const auto hit = ScreenLinks::linkAt(sc, 0, 3);
+        QVERIFY(!hit.valid());
+        QCOMPARE(hit.blocked, Blocked::Refused);
+        QCOMPARE(hit.refused, QString::fromUtf8(uri));
+        QVERIFY(hit.segments.isEmpty());
+    }
+
+    void allowedDeclaredTargets() {
+        for (const QByteArray &uri : {QByteArray("https://example.com/x?a=1&b=2#teil"),
+                                      QByteArray("http://example.com/"), QByteArray("mailto:jemand@example.com"),
+                                      QByteArray("ftp://example.com/datei"), QByteArray("file:///tmp/datei.txt")}) {
+            VtScreen sc(5, 60);
+            sc.inputWrite("\033]8;;" + uri + "\033\\Text\033]8;;\033\\\r\n");
+            QCOMPARE(ScreenLinks::linkAt(sc, 0, 1).target, QString::fromUtf8(uri));
+        }
+    }
+
+    void networkPathAcrossAWrapIsNoLink() {
+        // Netzpfade bleiben gesperrt, gleich wie sie auf den Schirm kommen: weich umbrochen,
+        // hart umbrochen oder als Hyperlink des Programms.
+        VtScreen soft(5, 20);
+        soft.inputWrite("\\\\server\\freigabe\\ordner\\datei.txt\r\n");
+        QVERIFY(soft.lineContinuation(1));
+        VtScreen url(5, 20);
+        url.inputWrite("file://server/freigabe/ordner/datei.txt\r\n");
+        VtScreen hard(5, 20);
+        hard.inputWrite("file://server/freiga\r\nbe/ordner/datei.txt\r\n");
+        for (const VtScreen *sc : {&soft, &url, &hard})
+            for (int row = 0; row < 2; ++row) QCOMPARE(targetsInRow(*sc, row), QStringList());
+    }
+
+    void sameIdOnTwoLinesIsOneLink() {
+        VtScreen sc(5, 30);
+        sc.inputWrite("\033]8;id=a;https://example.com/eins\033\\erste Zeile\033]8;;\033\\\r\n"
+                      "  \033]8;id=a;https://example.com/eins\033\\zweite\033]8;;\033\\ und \033]8;id=b;https://example.com/zwei\033\\andere\033]8;;\033\\\r\n");
+        const auto hit = ScreenLinks::linkAt(sc, 1, 3);
+        QCOMPARE(hit.target, QStringLiteral("https://example.com/eins"));
+        QCOMPARE(hit.segments, (QList<ScreenLinks::Segment>{{0, 0, 10}, {1, 2, 7}}));
+        const auto other = ScreenLinks::linkAt(sc, 1, 14);
+        QCOMPARE(other.target, QStringLiteral("https://example.com/zwei"));
+        QCOMPARE(other.segments.size(), 1);
+    }
+
+    void hyperlinkOnAWideCharacter() {
+        VtScreen sc(5, 30);
+        sc.inputWrite("\033]8;;https://example.com/w\033\\\xE4\xB8\xAD\xE6\x96\x87\033]8;;\033\\x\r\n");
+        for (int col = 0; col < 4; ++col)                 // beide Hälften beider Zeichen
+            QCOMPARE(ScreenLinks::linkAt(sc, 0, col).target, QStringLiteral("https://example.com/w"));
+        QVERIFY(!ScreenLinks::linkAt(sc, 0, 4).valid());
+    }
+
+    void hyperlinkInTheScrollback() {
+        VtScreen sc(3, 30);
+        sc.inputWrite("\033]8;;https://example.com/alt\033\\oben\033]8;;\033\\\r\n1\r\n2\r\n3\r\n4\r\n");
+        QVERIFY(sc.scrollbackCount() >= 2);
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 1).target, QStringLiteral("https://example.com/alt"));
+    }
+
+    void droppedHyperlinkFallsBackToTheText() {
+        // Ist die Tabelle voll, fällt der älteste Eintrag heraus. Seine Zellen sind dann Text
+        // wie jeder andere: Eine Adresse darin wird erkannt, ein beliebiges Wort nicht.
+        VtScreen sc(5, 60);
+        sc.inputWrite("\033]8;;https://example.org/ziel\033\\Wort\033]8;;\033\\ "
+                      "\033]8;;https://example.org/zwei\033\\https://example.com/text\033]8;;\033\\\r\n");
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 1).target, QStringLiteral("https://example.org/ziel"));
+        for (int i = 0; i < VtScreen::kMaxHyperlinks; ++i)
+            sc.inputWrite("\033]8;;https://example.net/" + QByteArray::number(i) + "\033\\\033]8;;\033\\");
+        QVERIFY(sc.hyperlink(sc.cell(0, 1).link).isEmpty());
+        QVERIFY(!ScreenLinks::linkAt(sc, 0, 1).valid());
+        QCOMPARE(ScreenLinks::linkAt(sc, 0, 8).target, QStringLiteral("https://example.com/text"));
     }
 
     // --- Ränder des Erkennens -----------------------------------------------------------------

@@ -213,6 +213,7 @@ Window {
             { cat: "terminal",         key: "terminal.options",      label: qsTr("Schriftgröße"),                      keywords: "schriftgröße größe font size zoom" },
             { cat: "terminal",         key: "terminal.options",      label: qsTr("Ligaturen"),                         keywords: "ligaturen firacode glyph programmier calt liga" },
             { cat: "terminal",         key: "terminal.options",      label: qsTr("GPU-Glyph-Atlas"),                   keywords: "gpu rendering glyph atlas qpainter beschleunigung" },
+            { cat: "terminal",         key: "terminal.links",        label: qsTr("Programmen melden, dass QTmux Hyperlinks versteht"), keywords: "link links hyperlink url adresse osc8 osc 8 umbrochen umbruch klickbar claude force_hyperlink" },
             { cat: "terminal",         key: "terminal.shell",        label: qsTr("Standard-Shell"),                    keywords: "shell zsh bash powershell cmd standard" },
             { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Auswahl automatisch kopieren"),      keywords: "kopieren auswahl copy select zwischenablage" },
             { cat: "eingabe",          key: "eingabe.clipboard",     label: qsTr("Rechtsklick fügt ein"),              keywords: "rechtsklick einfügen paste zwischenablage" },

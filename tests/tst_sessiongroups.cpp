@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <QSignalSpy>
 #include <QSettings>
 #include "SessionModel.h"
 #include "Session.h"
@@ -23,6 +24,7 @@ private slots:
     void moveGroupReordersBlock();
     void renameMergesAndDissolves();
     void groupSurvivesSaveAndRestore();
+    void hyperlinkAnnouncementIsOptIn();
 
 private:
     /// Gruppen aller Zeilen in Sidebar-Reihenfolge — das ist die Größe, auf die
@@ -274,6 +276,22 @@ void TestSessionGroups::groupSurvivesSaveAndRestore() {
     QCOMPARE(l.at(0), QStringLiteral("Release 1.5"));
     QCOMPARE(l.at(1), QStringLiteral("Release 1.5"));
     QCOMPARE(l.at(2), QString());
+}
+
+// Hyperlinks ankündigen: Die Umgebungsvariable gibt es nur auf Wunsch, und der Schalter steht
+// als Vorgabe auf AUS. Sie verändert das Verhalten fremder Programme (auch beim Schreiben in
+// Dateien und Pipes), das entscheidet der Anwender.
+void TestSessionGroups::hyperlinkAnnouncementIsOptIn() {
+    SessionModel m;
+    QVERIFY(!m.announceHyperlinks());
+    QCOMPARE(SessionModel::shellEnvironment(7, false), QStringList{QStringLiteral("QTMUX_SESSION_ID=7")});
+    QCOMPARE(SessionModel::shellEnvironment(7, true),
+             (QStringList{QStringLiteral("QTMUX_SESSION_ID=7"), QStringLiteral("FORCE_HYPERLINK=1")}));
+    QSignalSpy changed(&m, &SessionModel::announceHyperlinksChanged);
+    m.setAnnounceHyperlinks(true);
+    m.setAnnounceHyperlinks(true);
+    QCOMPARE(changed.count(), 1);
+    QVERIFY(m.announceHyperlinks());
 }
 
 QTEST_MAIN(TestSessionGroups)

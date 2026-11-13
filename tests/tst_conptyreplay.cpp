@@ -26,9 +26,11 @@
 
 #include "ITerminalBackend.h"
 #include "PtyBackend.h"
+#include "ScreenLinks.h"
 #include "Session.h"
 #include "VtScreen.h"
 #include "conpty_captures.h"
+#include "link_wrap_captures.h"
 
 using namespace qtmux;
 
@@ -113,6 +115,7 @@ private slots:
     void classicRendererRepaintKeepsScrollback();
     void fullscreenRendererLeavesNoScrollback();
     void eraseScrollbackSequenceIsIgnored();
+    void wrappedUrlStaysOneLinkThroughEveryResize();
 };
 
 void TestConPtyReplay::resizeKeepsEveryLine_data() {
@@ -422,6 +425,51 @@ void TestConPtyReplay::eraseScrollbackSequenceIsIgnored() {
     QCOMPARE(s.scrollbackCount(), before);
     s.inputWrite("\x1b[2J\x1b[3J\x1b[H");
     QCOMPARE(s.scrollbackCount(), before);
+}
+
+// Links über Zeilengrenzen unter ConPTY (Auftrag Links/Umbruch 2026-11-13, Kandidat „ConPTY
+// malt neu und die Fortsetzungs-Marke geht verloren“): cmd.exe gibt eine 176 Zeichen lange
+// Adresse aus, danach wird das Fenster viermal in der Breite geändert. Gemessen: ConPTY schickt
+// die Adresse auch beim Neumalen AM STÜCK, das Terminal bricht also selbst um, und die Marke
+// steht. Nach jedem Schritt öffnet jede Zeile der Adresse das ganze Ziel, und keine Zelle
+// irgendwo öffnet ein anderes.
+void TestConPtyReplay::wrappedUrlStaysOneLinkThroughEveryResize() {
+    QString url = QStringLiteral("https://example.com/W/");
+    for (int i = 1; i <= 30; ++i) url += QStringLiteral("n%1/").arg(i, 3, 10, QLatin1Char('0'));
+    url += QStringLiteral("ende");
+    QCOMPARE(url.size(), 176);
+
+    const auto &cap = linkwrapcap::kConPtyEchoResize;
+    VtScreen s(cap[0].rows, cap[0].cols);
+    s.setReflow(true);
+    // Wie oft die Adresse je Schritt auf dem Schirm steht: Befehlszeile und Ausgabe, ab dem
+    // dritten Segment ein zweites Mal mit Text davor und dahinter.
+    const int occurrences[] = {2, 2, 4, 4, 4};
+    for (std::size_t i = 0; i < std::size(cap); ++i) {
+        if (i > 0) s.setSize(cap[i].rows, cap[i].cols);
+        s.inputWrite(QByteArray(cap[i].bytes, qsizetype(cap[i].size)));
+        const QString where = QStringLiteral("nach Segment %1 (%2x%3)").arg(i).arg(cap[i].cols).arg(cap[i].rows);
+        const int total = s.scrollbackCount() + s.rows();
+        int linkedRows = 0, cutRows = 0;
+        for (int row = 0; row < total; ++row) {
+            bool linked = false, cut = false;
+            for (int col = 0; col < s.cols(); ++col) {
+                const auto hit = ScreenLinks::linkAt(s, row, col);
+                if (hit.valid()) {
+                    QVERIFY2(hit.target == url, qPrintable(where + QStringLiteral(": Zeile %1 öffnet %2").arg(row).arg(hit.target)));
+                    linked = true;
+                }
+                cut = cut || hit.blocked == ScreenLinks::Hit::Blocked::MaybeCut;
+            }
+            linkedRows += linked;
+            cutRows += cut;
+        }
+        // Jedes Vorkommen belegt mindestens ceil(176 / Spalten) Zeilen.
+        const int perOccurrence = (176 + cap[i].cols - 1) / cap[i].cols;
+        QVERIFY2(linkedRows >= occurrences[i] * perOccurrence,
+                 qPrintable(where + QStringLiteral(": nur %1 Zeilen mit Link").arg(linkedRows)));
+        QVERIFY2(cutRows == 0, qPrintable(where + QStringLiteral(": %1 Zeilen gelten als abgeschnitten").arg(cutRows)));
+    }
 }
 
 QTEST_GUILESS_MAIN(TestConPtyReplay)

@@ -246,6 +246,7 @@ typedef enum {
   VTERM_ATTR_SMALL,      // bool:   73, 74, 75
   VTERM_ATTR_BASELINE,   // number: 73, 74, 75
   VTERM_ATTR_FAINT,      // bool:   2, 22   /* QTMUX: faint/dim (angehaengt, ABI-stabil) */
+  VTERM_ATTR_URI,        // number: OSC 8   /* QTMUX: Hyperlink-Kennung, 0 = keiner (angehaengt, ABI-stabil) */
 
   VTERM_N_ATTRS
 } VTermAttr;
@@ -476,6 +477,10 @@ void vterm_state_set_default_colors(VTermState *state, const VTermColor *default
 void vterm_state_set_palette_color(VTermState *state, int index, const VTermColor *col);
 void vterm_state_set_bold_highbright(VTermState *state, int bold_is_highbright);
 int  vterm_state_get_penattr(const VTermState *state, VTermAttr attr, VTermValue *val);
+/* QTMUX: Hyperlink-Kennung (OSC 8) des Stifts setzen; 0 = kein Hyperlink. Das Frontend parst OSC 8
+ * im OSC-Fallback und vergibt die Kennung, libvterm traegt sie nur durch die Zellen. SGR 0 und
+ * DECRC lassen sie stehen (OSC 8 ist kein SGR-Attribut), ein Reset setzt sie auf 0. */
+void vterm_state_set_pen_uri(VTermState *state, int uri);
 int  vterm_state_set_termprop(VTermState *state, VTermProp prop, VTermValue *val);
 void vterm_state_focus_in(VTermState *state);
 void vterm_state_focus_out(VTermState *state);
@@ -536,6 +541,7 @@ typedef struct {
   char     width;
   VTermScreenCellAttrs attrs;
   VTermColor fg, bg;
+  int      uri; /* QTMUX: Hyperlink-Kennung (OSC 8), 0 = keiner */
 } VTermScreenCell;
 
 typedef struct {
