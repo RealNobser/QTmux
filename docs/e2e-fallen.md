@@ -24,6 +24,26 @@
   geht ans Modell, das antwortet (Kontingent!), und der Text der Antwort landet im Mitschnitt. Für
   Renderer-Messungen wenige Befehle fahren. Eine aus einer Claude-Session geerbte
   `CLAUDE_CODE_CHILD_SESSION` schaltet das Transkript ab und blendet eine zusätzliche Warnzeile ein.
+- 🔑 **Bytes eines Programms in QTmux mitschneiden, ohne Fenster** (2026-11-13, Links über mehrere
+  Zeilen): Testinstanz aus dem Bau-Baum mit `QT_QPA_PLATFORM=offscreen`, eigenem `QTMUX_PROFILE` und
+  Port, gestartet mit `env -i` (sonst erbt die Sitzung die Variablen der eigenen Claude-Session).
+  In ihrer Sitzung per MCP `script -q <datei> <programm>` starten: Das Programm sieht die echte
+  Umgebung und die echten Antworten des Terminals, die Datei trägt die rohen Bytes. Ausgewertet
+  wird, indem man die Bytes bis zu einem Offset durch `VtScreen` spielt und je Zeile Text, Marke
+  und `ScreenLinks::linkAt` ausgibt. ⚠️ Der Offset muss an einer Bildgrenze liegen, mitten in
+  einem Bild stehen alte und neue Zeilen gemischt da. ⚠️ Ein neues Arbeitsverzeichnis löst den
+  Vertrauensdialog von Claude Code aus, und dessen Vorauswahl ist „No, exit“.
+- ⚠️ **Ein ConPTY-Messprogramm aus einer SSH-Sitzung schreibt an der Pseudokonsole vorbei**
+  (2026-11-13): Die Standard-Handles des Messprogramms sind dort Pipes, und ein Kind, das mit
+  `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` startet, erbt sie trotzdem. Der Mitschnitt bleibt leer,
+  die Ausgabe steht im SSH-Protokoll. Abhilfe: `STARTF_USESTDHANDLES` mit drei leeren Handles.
+  QTmux selbst ist nicht betroffen (GUI-Programm ohne geerbte Handles), `test_pty` unter Windows
+  aus genau diesem Grund schon.
+- 🔑 **Eine gestellte Ausgabe unter ConPTY nachspielen** (Programm auf der Windows-Maschine nicht
+  verfügbar): Mitschnitt vom anderen Rechner mit einem kleinen Programm binär auf die Konsole
+  schreiben, mit eingeschalteter VT-Verarbeitung, in Stücken, die kein UTF-8-Zeichen zerschneiden.
+  ConPTY malt daraus sein eigenes Bild; so wurde gemessen, dass OSC 8 durchkommt und dass die
+  Fortsetzungs-Marken dort nichts belegen (Feature-Referenz, „Klickbare Links“).
 - 🔑 **Eine Gegenprobe, die nur die gewünschte Richtung misst, beweist nichts — prüfe BEIDES:
   ist das Neue da UND ist das Alte weg?** (2026-08-07, an einem Prefs-Text erlebt; RAFTNG hat
   die Regel danach übernommen.) Der neue Text allein belegt nicht, dass die alte Stelle
