@@ -28,8 +28,10 @@
 #include "PtyBackend.h"
 #include "ScreenLinks.h"
 #include "Session.h"
+#include "TerminalSelection.h"
 #include "VtScreen.h"
 #include "conpty_captures.h"
+#include "conpty_wrap_captures.h"
 #include "link_wrap_captures.h"
 
 using namespace qtmux;
@@ -87,6 +89,28 @@ Capture byName(const QString &which) {
         : capture(conptycap::kResizePlainCmd);
 }
 
+// Sichtbare Zeile, die mit `needle` beginnt; -1 = keine.
+int liveRowStartingWith(const VtScreen &s, const QString &needle) {
+    const QStringList rows = s.screenText().split(QLatin1Char('\n'));
+    for (int r = 0; r < rows.size(); ++r)
+        if (rows[r].startsWith(needle)) return r;
+    return -1;
+}
+
+// Was „Kopieren“ für die sichtbaren Zeilen [from, to] in die Zwischenablage legt.
+QString copied(const VtScreen &s, int from, int to) {
+    TerminalSelection sel;
+    sel.begin(s, 0, s.scrollbackCount() + from);
+    sel.extendTo(s, s.cols() - 1, s.scrollbackCount() + to);
+    return sel.text(s);
+}
+
+QString copiedAll(const VtScreen &s) {
+    TerminalSelection sel;
+    sel.selectAll();
+    return sel.text(s);
+}
+
 QByteArray restoredDump() {
     QByteArray d;
     for (int i = 1; i <= 40; ++i) d += "Verlauf " + QByteArray::number(i) + "\r\n";
@@ -116,6 +140,11 @@ private slots:
     void fullscreenRendererLeavesNoScrollback();
     void eraseScrollbackSequenceIsIgnored();
     void wrappedUrlStaysOneLinkThroughEveryResize();
+    void fullRowLeftWithoutLineFeedArrivesAsSoftWrap();
+    void copyBreaksWhereAProgramPaddedToTheEdge();
+    void shellSoftWrapCopiesAsOneLine_data();
+    void shellSoftWrapCopiesAsOneLine();
+    void reflowFollowsConPtyNotTheCopyRule();
 };
 
 void TestConPtyReplay::resizeKeepsEveryLine_data() {
@@ -470,6 +499,176 @@ void TestConPtyReplay::wrappedUrlStaysOneLinkThroughEveryResize() {
                  qPrintable(where + QStringLiteral(": nur %1 Zeilen mit Link").arg(linkedRows)));
         QVERIFY2(cutRows == 0, qPrintable(where + QStringLiteral(": %1 Zeilen gelten als abgeschnitten").arg(cutRows)));
     }
+}
+
+// --- Fortsetzungs-Marken unter ConPTY (Auftrag ConPTY-Marken 2026-11-14) ----------------------
+//
+// Gemessen an Windows 10.0.26200 mit einem Probe-Programm: Die Konsole merkt sich eine Zeile als
+// „umbrochen“, sobald in ihre letzte Spalte geschrieben wird, und nimmt das nur bei einem
+// Zeilenvorschub aus dieser Zeile zurück. ConPTY gibt eine so vermerkte Zeile OHNE CRLF aus, das
+// nächste Zeichen bricht im Terminal regulär um, und die Folgezeile trägt die Marke. Die Bytes
+// sind dieselben wie bei einer wirklich überlangen Zeile, unterscheiden lässt sich das nicht.
+//
+// Was das Probe-Programm schrieb (40 Spalten), und was daraus wurde:
+//   P01  40 Zeichen, CR LF            -> eigene Zeile
+//   P02  40 Zeichen, CR, ESC[1B       -> MARKE (so verlässt Claude Code seine Zeilen)
+//   P03  40 Zeichen, ESC[<z>;1H       -> MARKE
+//   P04  39 Zeichen, CR, ESC[1B       -> eigene Zeile (die letzte Spalte entscheidet)
+//   P05  50 Zeichen                   -> Marke, zu Recht
+//   P06  40 Zeichen, LF               -> eigene Zeile
+//   P07  40 Leerzeichen, CR, ESC[1B   -> MARKE
+//   P08  40 Zeichen, ESC[E            -> MARKE
+//   P09  40 Zeichen, ESC[K, CR LF     -> eigene Zeile
+//   P10  40 Zeichen, CR, LF           -> eigene Zeile
+void TestConPtyReplay::fullRowLeftWithoutLineFeedArrivesAsSoftWrap() {
+    const auto &cap = conptywrapcap::kProbeFullRows;
+    VtScreen s(cap[0].rows, cap[0].cols);
+    s.setReflow(true);
+    s.inputWrite(QByteArray(cap[0].bytes, qsizetype(cap[0].size)));
+
+    const auto marked = [&s](const char *rowStart) {
+        const int row = liveRowStartingWith(s, QString::fromLatin1(rowStart));
+        return row >= 0 && s.lineContinuation(row);
+    };
+    for (const char *own : {"nach01", "nach04", "nach05", "nach06", "nach09", "nach10"}) {
+        QVERIFY2(liveRowStartingWith(s, QString::fromLatin1(own)) >= 0, own);
+        QVERIFY2(!marked(own), own);
+    }
+    // Vier Zeilen tragen eine Marke, die das Programm nie gemeint hat. Sie stehen hier als
+    // Sollwert, weil das der Bytestrom ist: Wer das ändert, muss wissen, dass P05 gleich aussieht.
+    for (const char *glued : {"nach02", "nach03", "nach07", "nach08"})
+        QVERIFY2(marked(glued), glued);
+    // P05, der echte Umbruch: 40 Zeichen, die übrigen zehn in der Zeile darunter.
+    QVERIFY(s.lineContinuation(liveRowStartingWith(s, QStringLiteral("P05")) + 2));
+
+    // Kopieren: P07 endet am Rand in Leerraum, dort zählt die Marke nicht. P02, P03 und P08
+    // bleiben mit ihrer Folgezeile verklebt, genau wie P05 zusammenbleiben muss.
+    const QString text = copied(s, liveRowStartingWith(s, QStringLiteral("P01")),
+                                liveRowStartingWith(s, QStringLiteral("ENDE1")));
+    const QStringList want = {
+        QStringLiteral("P01 voll+CRLF"), QString(40, QLatin1Char('A')), QStringLiteral("nach01"),
+        QStringLiteral("P02 voll+CR+CUD"), QString(40, QLatin1Char('B')) + QStringLiteral("nach02"),
+        QStringLiteral("P03 voll+CUP"), QString(40, QLatin1Char('C')) + QStringLiteral("nach03"),
+        QStringLiteral("P04 39+CR+CUD"), QString(39, QLatin1Char('D')), QStringLiteral("nach04"),
+        QStringLiteral("P05 echt 50"), QString(50, QLatin1Char('E')), QStringLiteral("nach05"),
+        QStringLiteral("P06 voll+LF"), QString(40, QLatin1Char('F')), QStringLiteral("nach06"),
+        QStringLiteral("P07 leer40+CR+CUD"), QString(), QStringLiteral("nach07"),
+        QStringLiteral("P08 voll+CNL"), QString(40, QLatin1Char('G')) + QStringLiteral("nach08"),
+        QStringLiteral("P09 voll+EL+CRLF"), QString(39, QLatin1Char('H')), QStringLiteral("nach09"),
+        QStringLiteral("P10 voll+CR+LF getrennt"), QString(40, QLatin1Char('I')), QStringLiteral("nach10"),
+        QStringLiteral("ENDE1")};
+    QCOMPARE(text.split(QLatin1Char('\n')), want);
+}
+
+// Der häufige Fall: Ein Programm füllt seine Zeile bis an den Rand mit Leerraum (Claude Code
+// malt so die Eingabe des Anwenders, mit Hintergrund) und geht per Cursor in die nächste.
+// Wörtliches Stück durch ConPTY, 84 Spalten: Die Zeilen 2 bis 4 tragen eine Marke, obwohl jede
+// für sich steht. Kopiert wird je Bildschirmzeile eine Zeile, ohne den Leerraum.
+void TestConPtyReplay::copyBreaksWhereAProgramPaddedToTheEdge() {
+    const QByteArray bytes(conptywrapcap::kClaudeInputBox.bytes,
+                           qsizetype(conptywrapcap::kClaudeInputBox.size));
+    for (const bool conPty : {true, false}) {
+        VtScreen s(29, 84);
+        s.setReflow(conPty);
+        s.inputWrite(bytes);
+        const int first = 10;                             // das Stück beginnt mit ESC[11;1H
+        const QStringList rows = s.screenText().split(QLatin1Char('\n')).mid(first, 6);
+        QCOMPARE(rows.size(), 6);
+        QVERIFY2(rows[0].endsWith(QStringLiteral("ANFANG und ENDE")), qPrintable(rows[0]));
+        QVERIFY2(rows[5].endsWith(QStringLiteral("aus und schreibe")), qPrintable(rows[5]));
+        // Die Marken stehen, in beiden Durchgängen: Gemessen wird die Regel, nicht ihr Fehlen.
+        QVERIFY(s.lineContinuation(first + 1));
+        QVERIFY(s.lineContinuation(first + 2));
+        QVERIFY(s.lineContinuation(first + 3));
+        QVERIFY(!s.lineContinuation(first + 4));
+
+        const QString text = copied(s, first, first + 5);
+        if (conPty) {
+            QCOMPARE(text, rows.join(QLatin1Char('\n')));
+        } else {
+            // Ohne ConPTY belegt die Marke, dass das Terminal selbst umbrochen hat: eine Zeile,
+            // samt dem Leerraum bis zum Rand. Dieselben Bytes, andere Herkunft.
+            QCOMPARE(text.count(QLatin1Char('\n')), 2);
+            QVERIFY(text.startsWith(rows[0] + QStringLiteral("     ") + rows[1]));
+        }
+    }
+}
+
+void TestConPtyReplay::shellSoftWrapCopiesAsOneLine_data() {
+    QTest::addColumn<QString>("which");
+    QTest::newRow("cmd") << QStringLiteral("cmd");
+    QTest::newRow("powershell") << QStringLiteral("powershell");
+}
+
+// Die Gegenrichtung, und sie wiegt schwerer: Eine Shell gibt eine 176 Zeichen lange Adresse aus,
+// ConPTY schickt sie am Stück, das Terminal bricht um. Kopiert ist das EINE Zeile, vor und nach
+// jeder Größenänderung, in der Befehlszeile wie in der Ausgabe. Ein Zeilenumbruch darin machte
+// aus einem eingefügten Befehl zwei.
+void TestConPtyReplay::shellSoftWrapCopiesAsOneLine() {
+    QFETCH(QString, which);
+    QString url = QStringLiteral("https://example.com/W/");
+    for (int i = 1; i <= 30; ++i) url += QStringLiteral("n%1/").arg(i, 3, 10, QLatin1Char('0'));
+    url += QStringLiteral("ende");
+    QCOMPARE(url.size(), 176);
+
+    struct Step { int cols, rows; QByteArray bytes; int occurrences; };
+    QList<Step> steps;
+    if (which == QLatin1String("cmd")) {
+        const int occurrences[] = {2, 2, 4, 4, 4};
+        const auto &cap = linkwrapcap::kConPtyEchoResize;
+        for (std::size_t i = 0; i < std::size(cap); ++i)
+            steps << Step{cap[i].cols, cap[i].rows, QByteArray(cap[i].bytes, qsizetype(cap[i].size)), occurrences[i]};
+    } else {
+        const auto &cap = conptywrapcap::kPowerShellEchoResize;
+        for (std::size_t i = 0; i < std::size(cap); ++i)
+            steps << Step{cap[i].cols, cap[i].rows, QByteArray(cap[i].bytes, qsizetype(cap[i].size)), 2};
+    }
+    QVERIFY(steps.size() >= 3);
+
+    VtScreen s(steps[0].rows, steps[0].cols);
+    s.setReflow(true);
+    for (int i = 0; i < steps.size(); ++i) {
+        if (i > 0) s.setSize(steps[i].rows, steps[i].cols);
+        s.inputWrite(steps[i].bytes);
+        const QString where = QStringLiteral("%1 nach Segment %2 (%3 Spalten)").arg(which).arg(i).arg(steps[i].cols);
+        QVERIFY2(steps[i].cols < url.size(), qPrintable(where));       // die Adresse ist umbrochen
+        QVERIFY2(copiedAll(s).count(url) == steps[i].occurrences,
+                 qPrintable(where + QStringLiteral(": %1 statt %2 mal am Stück")
+                                        .arg(copiedAll(s).count(url)).arg(steps[i].occurrences)));
+    }
+}
+
+// Der Reflow rechnet mit den Marken, wie sie sind, auch mit den falschen. Er muss: ConPTY
+// bricht seinen eigenen Puffer mit denselben Vermerken um und malt danach neu. Rechnete QTmux
+// anders, wanderten beim Schmalziehen mehr Zeilen in den Verlauf als bei ConPTY, und die
+// Neuzeichnung brächte sie ein zweites Mal (am Mitschnitt gemessen: zwei Zeilen doppelt).
+// Probe-Programm, 40 -> 60 -> 40 -> 30 -> 40 Spalten: nichts im Verlauf, jede Zeile einmal.
+void TestConPtyReplay::reflowFollowsConPtyNotTheCopyRule() {
+    const auto &cap = conptywrapcap::kProbeFullRows;
+    VtScreen s(cap[0].rows, cap[0].cols);
+    s.setReflow(true);
+    const QStringList once = {
+        QStringLiteral("P01 voll+CRLF"), QStringLiteral("P05 echt 50"), QStringLiteral("P07 leer40+CR+CUD"),
+        QStringLiteral("nach01"), QStringLiteral("nach05"), QStringLiteral("nach10"), QStringLiteral("ENDE1")};
+    for (std::size_t i = 0; i < std::size(cap); ++i) {
+        if (i > 0) s.setSize(cap[i].rows, cap[i].cols);
+        s.inputWrite(QByteArray(cap[i].bytes, qsizetype(cap[i].size)));
+        const QString where = QStringLiteral("nach Segment %1 (%2 Spalten)").arg(i).arg(cap[i].cols);
+        QVERIFY2(s.scrollbackCount() == 0,
+                 qPrintable(where + QStringLiteral(": %1 Zeilen im Verlauf").arg(s.scrollbackCount())));
+        const QString all = s.scrollbackText() + QLatin1Char('\n') + s.screenText();
+        for (const QString &line : once)
+            QVERIFY2(all.count(line) == 1, qPrintable(where + QStringLiteral(": „%1“ %2 mal").arg(line).arg(all.count(line))));
+    }
+    // ConPTY selbst hält die Zeilen für eine: Bei 60 Spalten malt es sie nebeneinander. Das Bild
+    // nach einer Größenänderung kommt von dort, QTmux kann es nicht richtigstellen.
+    VtScreen wide(cap[0].rows, cap[0].cols);
+    wide.setReflow(true);
+    wide.inputWrite(QByteArray(cap[0].bytes, qsizetype(cap[0].size)));
+    wide.setSize(cap[1].rows, cap[1].cols);
+    wide.inputWrite(QByteArray(cap[1].bytes, qsizetype(cap[1].size)));
+    QVERIFY(wide.screenText().contains(QString(40, QLatin1Char('B')) + QStringLiteral("nach02")));
+    QVERIFY(wide.screenText().contains(QString(40, QLatin1Char(' ')) + QStringLiteral("nach07")));
 }
 
 QTEST_GUILESS_MAIN(TestConPtyReplay)

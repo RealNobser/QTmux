@@ -41,6 +41,8 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 ### Terminal-Verhalten
 - **Scrollback** (Cap 10000) in `VtScreen`; **Soft-Wrap-Copy** via
   `sb_pushline4`-Continuation-Flags (eine logische Zeile ohne `\n` am weichen Umbruch).
+  Kopieren und Verlaufs-Abzug fragen dafür `VtScreen::joinsPreviousLine`; unter ConPTY zählt
+  die Marke dort nicht in jedem Fall (s. „Fortsetzungs-Marken unter ConPTY“).
 - **Auswahl (`core/TerminalSelection`, Gui-frei):** Sie markiert genau den ausgewählten Text oder
   sie verschwindet, nie fremden Text (Owner-Befund 2026-11-04). Zwei Mechanismen:
   **stabile Zeilennummern** (`absolute Zeile + VtScreen::scrollbackDropped()`) halten sie beim
@@ -241,16 +243,15 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
      endet und der Text folgt, öffnet nicht mehr.
      ⚠️ Lücke: Ein Zweizeiler, den ein Programm schmaler als das Fenster umbricht, ist nicht
      erkennbar; dort öffnet die erste Zeile weiter das abgeschnittene Stück.
-  🔑 **Unter ConPTY belegt eine Fortsetzungs-Marke nichts** (`VtScreen::conPtyHost`). ConPTY löscht
-  mit Leerzeichen-Läufen über Zeilengrenzen hinweg, jeder Überlauf setzt in libvterm eine Marke,
-  und sie bleibt stehen, wenn die Zeile danach per Cursor neu beschrieben wird (libvterm löscht
-  sie nur, wenn das Zeilenende davor gelöscht wird). Am Windows-Mitschnitt trägt fast jede Zeile
-  von Claude Code eine. Dort zählt die Randregel deshalb auch mit Marke, auf macOS und Linux ist
-  die Marke der Beleg, dass das Terminal umbrochen hat. Eine Shell unter ConPTY schickt lange
-  Zeilen dagegen am Stück, auch beim Neumalen nach einer Größenänderung; ihre Links bleiben ganz
-  (`tst_conptyreplay::wrappedUrlStaysOneLinkThroughEveryResize`). ⚠️ Dieselben falschen Marken
-  wirken auf Kopieren (kein Zeilenumbruch) und auf den Reflow; nicht untersucht, Kandidat für
-  QTMUX-153.
+  🔑 **Unter ConPTY belegt eine Fortsetzungs-Marke nichts** (`VtScreen::conPtyHost`). Am
+  Windows-Mitschnitt trägt fast jede Zeile von Claude Code eine. Dort zählt die Randregel
+  deshalb auch mit Marke, auf macOS und Linux ist die Marke der Beleg, dass das Terminal
+  umbrochen hat. Eine Shell unter ConPTY schickt lange Zeilen dagegen am Stück, auch beim
+  Neumalen nach einer Größenänderung; ihre Links bleiben ganz
+  (`tst_conptyreplay::wrappedUrlStaysOneLinkThroughEveryResize`). Woher die Marken kommen und
+  was sie für Kopieren, Verlaufs-Abzug und Reflow bedeuten: „Fortsetzungs-Marken unter ConPTY“
+  weiter unten. (Hier stand als Ursache „ConPTY löscht mit Leerzeichen-Läufen über
+  Zeilengrenzen“. Das war die Wirkung, nicht die Ursache.)
   **Ankündigung (`window/announceHyperlinks`, Vorgabe aus):** Claude Code sendet OSC 8 nur, wenn
   es das Terminal für fähig hält. Eine Abfrage gibt es nicht, es liest die Umgebung (Binary
   2.1.323: `FORCE_HYPERLINK`, sonst Namenslisten für `TERM_PROGRAM` u. a., `WT_SESSION`,
@@ -326,7 +327,8 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
 - **Wiederhergestellter Verlauf wartet auf die Pane-Breite (QTMUX-130).** Der Scrollback wird
   als ANSI-Strom gesichert (`VtScreen::serializeAnsi`), in dem weiche Umbrüche **bewusst
   ohne CRLF** stehen — das Terminal soll beim Einspielen selbst auf die aktuelle Breite
-  umbrechen. Genau daran scheiterte der Restore: `SessionModel` hängt jedes Backend mit den
+  umbrechen. (Was ein weicher Umbruch ist, sagt `joinsPreviousLine`, dieselbe Antwort wie beim
+  Kopieren.) Genau daran scheiterte der Restore: `SessionModel` hängt jedes Backend mit den
   geratenen Startwerten **80×24** an, und `Main.qml` lud den Dump unmittelbar danach; die
   echte Breite kommt aber erst über `TerminalItem::applyPendingResize` (Layout + 60 ms
   Entprellung, QTMUX-86). Der Verlauf wurde also bei 80 Spalten **hart in Zellen** umbrochen —
@@ -431,6 +433,55 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   ⚠️ `ESC[3J` reicht ConPTY durch, QTmux wertet es nicht aus (`sb_clear` in `VtScreen` ist nicht
   gesetzt), andere Terminals löschen dabei den Scrollback. Offene Entscheidung, gälte für alle
   Plattformen; Test `eraseScrollbackSequenceIsIgnored`.
+  🔑 **Fortsetzungs-Marken unter ConPTY (Auftrag 2026-11-14, gemessen an Windows 10.0.26200
+  mit einem Probe-Programm).** Die Windows-Konsole merkt sich eine Zeile als „umbrochen“,
+  sobald ein Programm in ihre **letzte Spalte** schreibt, und nimmt das nur bei einem
+  **Zeilenvorschub aus dieser Zeile** zurück. Verlässt das Programm die Zeile anders, bleibt
+  der Vermerk: `CR ESC[1B` (so tut es Claude Code), `ESC[<z>;1H`, `ESC[E`. Auch `ESC[2K`
+  löscht ihn nicht. ConPTY gibt eine so vermerkte Zeile **ohne CRLF** aus, bei kürzerem Inhalt
+  mit Leerzeichen bis zum Rand aufgefüllt, das nächste Zeichen bricht im Terminal regulär um,
+  und die Folgezeile trägt die Marke. 39 Zeichen in 40 Spalten tun es nicht, 40 mit `CR LF`
+  auch nicht. Mit der klassischen Konsolen-Schnittstelle (ohne VT) entsteht keine Marke.
+  - **Nicht unterscheidbar:** Der Bytestrom ist derselbe wie bei einer wirklich überlangen
+    Zeile (`CCCC…C` + `n` gegen `EEEE…E` + `E`). ConPTY selbst hält beides für eine Zeile:
+    Nach einer Größenänderung malt es `BBBB…Bnach02` nebeneinander. Was QTmux bekommt, hängt
+    zudem am Zeitpunkt: Dieselbe Schreibfolge, in kleinen Stücken geschrieben, kommt einmal
+    mit und einmal ohne Umbruch an.
+  - **Wer betroffen ist:** jedes Programm, das den Schirm per Cursor malt. Claude Code in
+    beiden Renderern (klassisch: 12 von 94 und 64 von 151 Zeilen, Vollbild: 24 von 29), am
+    Mac dieselbe Ausgabe mit 0 Marken. PowerShell 5.1 bei `Write-Host` einer genau
+    fensterbreiten Zeile (der Prompt danach klebt daran). cmd mit und ohne Clink in den
+    Proben nicht (`type`, `echo`, `dir`).
+  - **Kopieren und Verlaufs-Abzug (`VtScreen::joinsPreviousLine`):** Ein sicheres Kriterium
+    gibt es nicht. Es gilt eine Regel, die nie zusätzlich verbindet: Endet die vorige Zeile am
+    Rand mit **mindestens zwei leeren Zellen**, zählt die Marke unter ConPTY nicht. Das trifft
+    die Zeilen, die ein Programm mit Leerraum bis an den Rand gefüllt hat, und die von ConPTY
+    aufgefüllten (86 der 100 falschen Marken in den drei Claude-Mitschnitten). Ein Wort, ein
+    Befehl, eine Adresse über den Rand bleibt eine Zeile, auch mit EINEM Leerzeichen in der
+    letzten Spalte (jede Wortgrenze, die dorthin fällt). Am forkpty-Host gilt die Marke
+    unverändert. Preis: Fällt der Umbruch einer wirklich überlangen Zeile in einen Lauf aus
+    zwei oder mehr Leerzeichen (breite Tabellen), steht dort beim Kopieren ein Zeilenumbruch.
+    ⚠️ Grenze: Eine bis in die letzte Spalte mit **Zeichen** gefüllte Zeile klebt weiter an der
+    nächsten (Trennlinie und `❯` darunter, randvoller Text, `Write-Host`). Das abzustellen
+    hieße, unter Windows keinem Umbruch mehr zu trauen: Dann zerfiele jeder lange Befehl beim
+    Kopieren, und cmd führt beim Einfügen die erste Hälfte aus.
+  - **Der Reflow rechnet mit den Marken, wie sie sind.** ConPTY bricht seinen Puffer mit
+    denselben Vermerken um und malt danach neu. Gemessen an zwei Mitschnitten mit Claude-Inhalt
+    beim Schmalziehen auf 60 Spalten, gezählt in Zeichen ohne Leerraum (5117 bzw. 4442 davor):
+    mit Marken 14 bzw. 0 doppelt, ohne Marken 89 bzw. 0 doppelt, ohne Reflow fehlen 179 bzw.
+    193. Das verklebte Bild nach einer Größenänderung
+    (`lorem         ipsum` in einer Zeile, Umbruch mitten im Wort) malt ConPTY selbst, QTmux
+    kann es nicht richtigstellen. Claude Code übermalt es gleich darauf mit seiner eigenen
+    Neuzeichnung; an der Dopplung dort (QTMUX-153) haben die Marken keinen Anteil.
+  - Tests: `tst_conptyreplay` (`fullRowLeftWithoutLineFeedArrivesAsSoftWrap`,
+    `copyBreaksWhereAProgramPaddedToTheEdge`, `shellSoftWrapCopiesAsOneLine`,
+    `reflowFollowsConPtyNotTheCopyRule`) mit wörtlichen Mitschnitt-Stücken aus
+    `tests/conpty_wrap_captures.h`, `tst_terminalselection` (die Regel und ihre Grenzen),
+    `tst_vtscreen::serializeKeepsPaddedRowsApartUnderConPty`.
+  - Nicht gemessen: ein neueres ConPTY, das die Ausgabe des Programms durchreicht statt sie
+    neu zu malen (Windows Terminal und VS Code liefern ihr eigenes mit). Dort entstünde der
+    Vermerk im Terminal gar nicht erst. Das wäre die Abhilfe an der Wurzel, und eine
+    Abhängigkeit mehr.
   ⚠️ **Nebenbefunde aus denselben Mitschnitten:** ConPTY schaltet zu Beginn
   `ESC[?9001h` (win32-input-mode) und `ESC[?1004h` (Fokus-Meldungen) ein — beides kennt
   QTmux nicht, ConPTY fällt still auf normale VT-Eingabe zurück. ConPTY reicht DECSET

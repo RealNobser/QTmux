@@ -55,7 +55,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/core/VtScreen.{h,cpp}` | libvterm-Wrapper; `Cell` Qt-freundlich; OSC-Parser (133/9/777/Maus) |
 | `src/core/LinkDetector.{h,cpp}` | Gui-freie Link-Heuristik (URLs + existierende Dateipfade, Scheme-Whitelist) für klickbare Links (QTMUX-39) |
 | `src/core/ScreenLinks.{h,cpp}` | Gui-frei: Zellen ↔ Link (Hyperlinks des Programms per OSC 8 zuerst, sonst logische Zeile über weiche Umbrüche, Emoji-feste Spalten; ein am Rand abgeschnittener Text-Link ist keiner) + Link-Gesten aller drei Plattformen |
-| `src/core/TerminalSelection.{h,cpp}` | Gui-frei: Auswahl, die genau den markierten Text trägt oder verschwindet (stabile Zeilennummern + Inhaltsvergleich) |
+| `src/core/TerminalSelection.{h,cpp}` | Gui-frei: Auswahl, die genau den markierten Text trägt oder verschwindet (stabile Zeilennummern + Inhaltsvergleich); wo beim Kopieren kein Zeilenumbruch steht, sagt `VtScreen::joinsPreviousLine` |
 | `src/core/FileManagerReveal.{h,cpp}` | Gui-frei: „Im Finder/Explorer/Dateimanager zeigen" — Befehl je Plattform + lokale Existenzprüfung (QTMUX-138, Mechanik in der Feature-Referenz) |
 | `src/core/Session.{h,cpp}` | Backend + VtScreen; Activity/Attention/Progress; Login-Script; SSH-Passwort-Auto-Fill |
 | `src/viewmodels/SessionModel.{h,cpp}` | QAbstractListModel Sidebar; Persistenz/Restore; CWD-Vererbung |
@@ -893,11 +893,26 @@ QTMUX-40), ein am Rand abgeschnittener Text-Link ist keiner und sagt warum, Scha
 `window/announceHyperlinks` (Vorgabe aus). Mechanik und Grenzen: Feature-Referenz „Klickbare Links“,
 Rezept: [docs/owner-abnahmen.md](docs/owner-abnahmen.md). Messkommando für den Stand:
 `git log --oneline origin/main..HEAD`. Kein Jira-Ticket angelegt, keine CI gelaufen, Benutzerdoku
-nicht nachgezogen (alles mit dem Push). **Offene Owner-Entscheide:** (1) Schalter als Vorgabe
-einschalten? Ohne ihn bleibt eine von Claude Code umbrochene Adresse unklickbar, mit ihm schreiben
-manche Programme die Auszeichnung auch in Pipes. (2) Für Codeblöcke und Programme ohne OSC 8 bleibt
-nur „nicht geöffnet“; ein Ausweg wäre „Auswahl als Link öffnen“ im Kontextmenü. (3) Die falschen
-Fortsetzungs-Marken unter ConPTY wirken auch auf Kopieren und Reflow, nicht untersucht.
+nicht nachgezogen (alles mit dem Push). **Owner-Entscheide vom 2026-11-14** („1: Folge deiner
+Empfehlung / 2: so lassen / 3: ok / 4: beauftragen“): (1) Der Schalter bleibt mit Vorgabe AUS, der
+Owner schaltet ihn für sich ein. (2) Codeblöcke bleiben unklickbar, kein „Auswahl als Link öffnen“.
+(3) Die Randregel bleibt. (4) Die falschen Marken unter ConPTY wurden untersucht, s. nächster Absatz.
+Push und Release sind nicht freigegeben.
+
+🔧 **2026-11-14: Fortsetzungs-Marken unter ConPTY untersucht, eine Regel fürs Kopieren umgesetzt,
+nur lokal, unreleased.** Ursache gemessen: Die Windows-Konsole vermerkt jede Zeile als umbrochen,
+in deren letzte Spalte geschrieben wurde und die ohne Zeilenvorschub verlassen wird; ConPTY gibt
+sie ohne CRLF aus. Im Bytestrom ist das von einer überlangen Zeile nicht zu unterscheiden.
+Umgesetzt (`VtScreen::joinsPreviousLine`): Unter ConPTY zählt die Marke beim Kopieren und im
+Verlaufs-Abzug nicht, wenn die vorige Zeile am Rand mit zwei oder mehr leeren Zellen endet. Der
+Reflow bleibt, wie er ist, er muss ConPTY folgen. Mechanik, Zahlen und Grenze: Feature-Referenz
+„Fortsetzungs-Marken unter ConPTY“, Rezept: [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
+Kein Jira-Ticket, keine CI, Benutzerdoku nicht nachgezogen (alles mit dem Push). **Offene
+Owner-Entscheide:** (1) Die Regel ist eine Abwägung, kein sicheres Kriterium: so lassen,
+zurücknehmen, oder unter Windows gar keinem Umbruch mehr trauen (dann zerfällt jeder lange
+Shell-Befehl beim Kopieren)? (2) Ein neueres ConPTY mitliefern, das die Ausgabe durchreicht? Das
+wäre die Abhilfe an der Wurzel und eine Abhängigkeit mehr, nicht gemessen. An QTMUX-153 ändert
+dieser Stand nichts: Die Dopplung dort kommt von Claude Codes klassischer Darstellung.
 
 🔧 **2026-11-05: QTMUX-150…152 ausgeliefert mit 1.9.11, Owner-Abnahme steht aus.** Auswahl markiert nie
 mehr fremden Text; Link-Gesten treffen über Emoji und weiche Umbrüche und melden jedes Ergebnis in der

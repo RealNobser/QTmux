@@ -44,6 +44,18 @@
   schreiben, mit eingeschalteter VT-Verarbeitung, in Stücken, die kein UTF-8-Zeichen zerschneiden.
   ConPTY malt daraus sein eigenes Bild; so wurde gemessen, dass OSC 8 durchkommt und dass die
   Fortsetzungs-Marken dort nichts belegen (Feature-Referenz, „Klickbare Links“).
+- 🔑 **Was ConPTY aus einer Ausgabe macht, misst man mit Probe-Bytes, nicht mit dem Programm**
+  (2026-11-14, Fortsetzungs-Marken): eine Datei mit nummerierten Fällen (`P01 …`, je eine Art,
+  eine Zeile zu verlassen), binär auf die Konsole geschrieben, einmal am Stück und einmal in
+  kleinen Stücken. ⚠️ **Die zwei Läufe unterscheiden sich:** ConPTY malt in Bildern, und ob es
+  zwischen zwei Zeilen den Cursor setzt oder die Zeile einfach weiterlaufen lässt, hängt davon
+  ab, ob dazwischen ein Bild fertig wurde. Ein einzelner Lauf zeigt also nur eine der Formen.
+  Was ConPTY selbst für eine Zeile hält, zeigt die Größenänderung danach: Es malt neu, und was
+  zusammengehört, steht nebeneinander.
+- 🔑 **Wo eine Fortsetzungs-Marke entsteht, zeigt nur das byteweise Abspielen:** Mitschnitt Byte
+  für Byte durch `VtScreen`, nach jedem Byte die Marken aller Zeilen mit dem Stand davor
+  vergleichen, bei einer Änderung Offset und die 70 Bytes davor ausgeben. Das Endbild allein
+  zeigt nur, dass Marken da sind, nicht welche Bytes sie gesetzt haben.
 - 🔑 **Eine Gegenprobe, die nur die gewünschte Richtung misst, beweist nichts — prüfe BEIDES:
   ist das Neue da UND ist das Alte weg?** (2026-08-07, an einem Prefs-Text erlebt; RAFTNG hat
   die Regel danach übernommen.) Der neue Text allein belegt nicht, dass die alte Stelle

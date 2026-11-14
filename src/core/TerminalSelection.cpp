@@ -48,12 +48,10 @@ void chopTrailingSpaces(QString &s) {
     while (s.endsWith(QLatin1Char(' '))) s.chop(1);
 }
 
+// Gehört die Zeile ohne Zeilenumbruch zur vorigen? Die Antwort gibt `VtScreen`, weil der
+// Verlaufs-Abzug dieselbe Frage stellt und beide dasselbe antworten müssen.
 bool rowIsContinuation(const VtScreen &sc, int absRow) {
-    const int sb = sc.scrollbackCount();
-    if (absRow < 0) return false;
-    if (absRow < sb) return sc.scrollbackContinuation(absRow);
-    const int live = absRow - sb;
-    return live < sc.rows() && sc.lineContinuation(live);
+    return sc.joinsPreviousLine(absRow);
 }
 
 } // namespace

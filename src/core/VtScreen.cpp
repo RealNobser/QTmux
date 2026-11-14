@@ -329,10 +329,13 @@ QByteArray VtScreen::serializeAnsi() const {
     };
     // Alle Zeilen als (Zellen, continuation) sammeln: Scrollback zuerst, dann der
     // sichtbare Bildschirm bis zur letzten nicht-leeren Zeile (spart die ~20 Leerzeilen
-    // unter der Prompt). continuation = weicher Umbruch der Vorzeile.
+    // unter der Prompt). continuation = weicher Umbruch der Vorzeile, so wie ihn auch das
+    // Kopieren liest (`joinsPreviousLine`): Was hier ohne CRLF steht, verklebt das Terminal
+    // beim Einspielen in einer anderen Breite zu einer Zeile, und zwar für immer.
+    const int sbCount = int(m_scrollback.size());
     std::vector<std::pair<std::vector<Cell>, bool>> lines;
-    for (int i = 0; i < int(m_scrollback.size()); ++i)
-        lines.emplace_back(m_scrollback[i].cells, m_scrollback[i].continuation);
+    for (int i = 0; i < sbCount; ++i)
+        lines.emplace_back(m_scrollback[i].cells, joinsPreviousLine(i));
     int lastRow = -1;
     for (int r = 0; r < m_rows; ++r)
         for (int col = 0; col < m_cols; ++col) {
@@ -345,7 +348,7 @@ QByteArray VtScreen::serializeAnsi() const {
         std::vector<Cell> row;
         row.reserve(m_cols);
         for (int col = 0; col < m_cols; ++col) row.push_back(cell(r, col));
-        lines.emplace_back(std::move(row), lineContinuation(r));
+        lines.emplace_back(std::move(row), joinsPreviousLine(sbCount + r));
     }
 
     // Stil über den GESAMTEN Strom tracken (SGR persistiert über \r\n, wie im echten
@@ -470,6 +473,36 @@ bool VtScreen::lineContinuation(int row) const {
     if (!m_state || row < 0 || row >= m_rows) return false;
     const VTermLineInfo *info = vterm_state_get_lineinfo(m_state, row);
     return info && info->continuation;
+}
+
+bool VtScreen::joinsPreviousLine(int absRow) const {
+    const int sb = scrollbackCount();
+    if (absRow < 0 || absRow >= sb + m_rows) return false;
+    const bool marked = absRow < sb ? m_scrollback[absRow].continuation
+                                    : lineContinuation(absRow - sb);
+    if (!marked || !conPtyHost() || absRow == 0) return marked;
+
+    // Zellen der vorigen Zeile, gleich ob sie im Scrollback liegt oder sichtbar ist.
+    const int prev = absRow - 1;
+    const int width = prev < sb ? static_cast<int>(m_scrollback[prev].cells.size()) : m_cols;
+    const auto prevText = [&](int col) {
+        return prev < sb ? m_scrollback[prev].cells[col].text : cell(prev - sb, col).text;
+    };
+    const auto blank = [&](int col) {
+        const QString t = prevText(col);
+        return t.isEmpty() || t == QLatin1String(" ");
+    };
+    int last = width - 1;
+    // Passt ein breites Zeichen nicht mehr in die letzte Spalte, bleibt sie unbeschrieben und
+    // das Zeichen steht am Anfang dieser Zeile. Die Lücke ist dann kein Leerraum des Textes.
+    if (last >= 0 && prevText(last).isEmpty()) {
+        const quint8 firstWidth = absRow < sb ? (m_scrollback[absRow].cells.empty()
+                                                     ? quint8(1) : m_scrollback[absRow].cells[0].width)
+                                              : cell(absRow - sb, 0).width;
+        if (firstWidth == 2) --last;
+    }
+    if (last < 1) return marked;                  // zu schmal für eine Aussage
+    return !(blank(last) && blank(last - 1));
 }
 
 void VtScreen::cbOutput(const QByteArray &data) { emit outputToPty(data); }

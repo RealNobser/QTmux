@@ -107,6 +107,17 @@ public:
     bool scrollbackContinuation(int index) const { return m_scrollback[index].continuation; }
     /// Ist die sichtbare Zeile `row` eine Flow-Fortsetzung der vorigen Zeile?
     bool lineContinuation(int row) const;
+    /// Gehört die Zeile `absRow` (0 = älteste Scrollback-Zeile, danach der Sichtbereich) beim
+    /// Kopieren und im Verlaufs-Abzug zur vorigen Zeile, also OHNE Zeilenumbruch dazwischen?
+    ///
+    /// Am forkpty-Host ist das die Fortsetzungs-Marke, unverändert. Unter ConPTY sagt die Marke
+    /// weniger (s. `conPtyHost`): Dort trägt sie auch eine Zeile, die mit der vorigen nichts
+    /// zu tun hat. Sicher erkennen lässt sich das nicht, die Bytes sind dieselben. Deshalb gilt
+    /// dort nur eine Regel, die nie zusätzlich verbindet: Endet die vorige Zeile am Rand mit
+    /// mindestens zwei leeren Zellen, zählt die Marke nicht. Ein Umbruch dort fiele ohnehin in
+    /// Leerraum; ein Wort oder ein Befehl, der über den Rand läuft, bleibt eine Zeile.
+    /// Für den Reflow gilt die Regel NICHT: Er muss so rechnen wie ConPTY selbst.
+    bool joinsPreviousLine(int absRow) const;
 
     /// Bracketed-Paste-Markierungen (ESC[200~ / ESC[201~) ausgeben — libvterm sendet
     /// sie über die Output-Callback NUR, wenn die Anwendung DECSET 2004 aktiviert hat.
@@ -147,10 +158,16 @@ public:
     void setReflow(bool on);
     bool reflow() const { return m_reflow; }
     /// Kommen die Bytes aus ConPTY? Dasselbe Kennzeichen wie `reflow()`, hier für eine zweite
-    /// Folge: ConPTY malt sein eigenes Zeilenbild und löscht dabei mit Leerzeichen-Läufen über
-    /// Zeilengrenzen hinweg. Jeder Überlauf hinterlässt eine Fortsetzungs-Marke, die mit dem
-    /// Inhalt nichts zu tun hat. Eine Marke belegt dort also nicht, dass zwei Zeilen
-    /// zusammengehören (am Windows-Mitschnitt gemessen, s. `ScreenLinks`).
+    /// Folge: Unter ConPTY belegt eine Fortsetzungs-Marke nicht, dass zwei Zeilen
+    /// zusammengehören. Die Windows-Konsole merkt sich eine Zeile als „umbrochen“, sobald ein
+    /// Programm in ihre letzte Spalte schreibt, und nimmt das nur bei einem Zeilenvorschub aus
+    /// dieser Zeile zurück. Verlässt das Programm die Zeile per Cursor-Befehl (Claude Code tut
+    /// das: `CR`, `ESC[1B`), bleibt der Vermerk, auch über `ESC[2K` hinweg. ConPTY gibt so eine
+    /// Zeile ohne CRLF aus, bei kürzerem Inhalt mit Leerzeichen bis zum Rand aufgefüllt, und
+    /// das nächste Zeichen bricht hier ganz regulär um. Der Bytestrom ist derselbe wie bei
+    /// einer wirklich überlangen Zeile (an Windows 10.0.26200 mit Probe-Bytes gemessen,
+    /// Feature-Referenz „Fortsetzungs-Marken unter ConPTY“). Folgen: `joinsPreviousLine`
+    /// und die Randregel in `ScreenLinks`.
     bool conPtyHost() const { return m_reflow; }
     /// Hängende Eingabe-Reporting-Modi lösen (Maus-Tracking, SGR-Maus, Bracketed Paste)
     /// und Attribute/Cursor normalisieren — **ohne** den Bildschirm zu leeren oder den

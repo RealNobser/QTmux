@@ -43,6 +43,7 @@ private slots:
     void hyperlinkEndsWhereItShould();
     void hyperlinkLimits();
     void hyperlinkSurvivesSerialize();
+    void serializeKeepsPaddedRowsApartUnderConPty();
     void oversizedOscIsDropped();
     void osc52WritesClipboard();
     void osc52QueryIsRefused();
@@ -789,6 +790,50 @@ void TestVtScreen::hyperlinkSurvivesSerialize() {
     QCOMPARE(reopened.hyperlink(reopened.cell(0, 0).link), QStringLiteral("https://example.com/offen"));
     QCOMPARE(reopened.cell(1, 0).text, QStringLiteral("n"));
     QCOMPARE(reopened.cell(1, 0).link, quint32(0));
+}
+
+// Der Verlaufs-Abzug liest weiche Umbrüche wie das Kopieren (`joinsPreviousLine`). Unter ConPTY
+// trägt eine Zeile die Marke auch dann, wenn das Programm die vorige bis an den Rand mit
+// Leerraum gefüllt und per Cursor verlassen hat. Ohne CRLF im Abzug klebten beide nach einem
+// Neustart in anderer Breite für immer aneinander.
+void TestVtScreen::serializeKeepsPaddedRowsApartUnderConPty() {
+    const QByteArray bytes = "kurz" + QByteArray(16, ' ') + "naechste\r\n"
+                             "https://example.com/ein/langer/pfad\r\nEnde";
+    // Einmal steht alles auf dem Schirm, einmal liegen die vier Zeilen schon im Verlauf.
+    struct Case { bool conPty; bool inScrollback; };
+    for (const Case c : {Case{true, false}, Case{false, false}, Case{true, true}}) {
+        const bool conPty = c.conPty, inScrollback = c.inScrollback;
+        VtScreen vt(inScrollback ? 2 : 6, 20);
+        vt.setReflow(conPty);
+        vt.inputWrite(bytes);
+        if (inScrollback) {
+            vt.inputWrite("\r\n");
+            QCOMPARE(vt.scrollbackCount(), 4);
+            QVERIFY(vt.scrollbackContinuation(1));
+            QVERIFY(vt.scrollbackContinuation(3));
+        } else {
+            QVERIFY(vt.lineContinuation(1));
+            QVERIFY(vt.lineContinuation(3));
+        }
+        const QByteArray dump = vt.serializeAnsi();
+        VtScreen back(6, 30);                            // wiederhergestellt in anderer Breite
+        back.setReflow(conPty);
+        back.inputWrite(dump);
+        const QStringList rows = back.screenText().split(QLatin1Char('\n'));
+        if (conPty) {
+            QVERIFY2(dump.contains("kurz\r\n"), dump.constData());
+            QCOMPARE(rows.value(0), QStringLiteral("kurz"));
+            QCOMPARE(rows.value(1), QStringLiteral("naechste"));
+            // Die wirklich überlange Zeile bricht das Terminal weiter selbst um.
+            QCOMPARE(rows.value(2), QStringLiteral("https://example.com/ein/langer"));
+            QCOMPARE(rows.value(3), QStringLiteral("/pfad"));
+            QVERIFY(back.lineContinuation(3));
+            QCOMPARE(rows.value(4), QStringLiteral("Ende"));
+        } else {
+            // Ohne ConPTY ist die Marke der Beleg für einen Umbruch des Terminals: eine Zeile.
+            QCOMPARE(rows.value(0), QStringLiteral("kurz") + QString(16, QLatin1Char(' ')) + QStringLiteral("naechste"));
+        }
+    }
 }
 
 void TestVtScreen::oversizedOscIsDropped() {

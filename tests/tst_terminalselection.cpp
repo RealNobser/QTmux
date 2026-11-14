@@ -456,6 +456,140 @@ private slots:
         QVERIFY2(keptAfterChange > 50, qPrintable(QString::number(keptAfterChange)));
         QVERIFY2(cleared > 50, qPrintable(QString::number(cleared)));
     }
+
+    // --- Weiche Umbrüche beim Kopieren (Auftrag ConPTY-Marken 2026-11-14) -----------------------
+    // Unter ConPTY trägt auch eine Zeile die Fortsetzungs-Marke, die mit der vorigen nichts zu
+    // tun hat (`VtScreen::conPtyHost`). Sicher erkennen lässt sich das nicht. Es gilt eine Regel,
+    // die nie zusätzlich verbindet: Endet die vorige Zeile am Rand mit mindestens zwei leeren
+    // Zellen, zählt die Marke nicht.
+
+    // Kopiert die sichtbaren Zeilen [from, to].
+    static QString copyRows(const VtScreen &sc, int from, int to) {
+        TerminalSelection sel;
+        sel.begin(sc, 0, sc.scrollbackCount() + from);
+        sel.extendTo(sc, sc.cols() - 1, sc.scrollbackCount() + to);
+        return sel.text(sc);
+    }
+
+    void paddedRowIsItsOwnLineUnderConPty() {
+        // „kurz“, Leerzeichen bis in die letzte Spalte, dann ohne Zeilenwechsel weiter: So kommt
+        // unter ConPTY eine Zeile an, die das Programm per Cursor verlassen hat.
+        const QByteArray bytes = "kurz" + QByteArray(16, ' ') + "naechste";
+        for (const bool conPty : {true, false}) {
+            VtScreen sc(4, 20);
+            sc.setReflow(conPty);
+            sc.inputWrite(bytes);
+            QVERIFY(sc.lineContinuation(1));
+            QCOMPARE(sc.joinsPreviousLine(1), !conPty);
+            QCOMPARE(copyRows(sc, 0, 1),
+                     conPty ? QStringLiteral("kurz\nnaechste")
+                            : QStringLiteral("kurz") + QString(16, QLatin1Char(' ')) + QStringLiteral("naechste"));
+        }
+    }
+
+    void softWrapAtOneSpaceStaysOneLineUnderConPty() {
+        // Ein Befehl, dessen Wortgrenze genau in die letzte Spalte fällt. Das ist jeder sechste
+        // Umbruch in gewöhnlichem Text, und ein Zeilenumbruch dort zerlegte den Befehl beim
+        // Einfügen. EIN Leerzeichen am Rand ändert nichts.
+        VtScreen sc(4, 20);
+        sc.setReflow(true);
+        sc.inputWrite("echo aaaaaaaaaaaaaa bbbbbb");
+        QCOMPARE(sc.cell(0, 19).text, QStringLiteral(" "));
+        QCOMPARE(sc.cell(0, 18).text, QStringLiteral("a"));
+        QVERIFY(sc.joinsPreviousLine(1));
+        QCOMPARE(copyRows(sc, 0, 1), QStringLiteral("echo aaaaaaaaaaaaaa bbbbbb"));
+        // Ab ZWEI Leerzeichen am Rand ist es Leerraum, und die Zeilen stehen für sich.
+        VtScreen two(4, 20);
+        two.setReflow(true);
+        two.inputWrite("echo aaaaaaaaaaaaa  bbbbbb");
+        QCOMPARE(two.cell(0, 17).text, QStringLiteral("a"));
+        QVERIFY(two.lineContinuation(1));
+        QVERIFY(!two.joinsPreviousLine(1));
+        QCOMPARE(copyRows(two, 0, 1), QStringLiteral("echo aaaaaaaaaaaaa\nbbbbbb"));
+    }
+
+    void softWrapInsideAWordStaysOneLineUnderConPty() {
+        VtScreen sc(4, 20);
+        sc.setReflow(true);
+        sc.inputWrite("https://example.com/ein/langer/pfad");
+        QVERIFY(sc.joinsPreviousLine(1));
+        QCOMPARE(copyRows(sc, 0, 1), QStringLiteral("https://example.com/ein/langer/pfad"));
+    }
+
+    void wideCharThatDidNotFitIsNoPaddingUnderConPty() {
+        // Ein breites Zeichen passt nicht mehr in die letzte Spalte. Sie bleibt unbeschrieben,
+        // davor steht ein Leerzeichen des Textes: zwei leere Zellen am Rand, aber kein Leerraum,
+        // den jemand geschrieben hat. Kopiert wird dasselbe wie ohne ConPTY.
+        const QByteArray bytes = QByteArray("abcdefgh ") + QByteArray("\xf0\x9f\x98\x80") + "x";
+        QString texts[2];
+        for (const bool conPty : {false, true}) {
+            VtScreen sc(4, 10);
+            sc.setReflow(conPty);
+            sc.inputWrite(bytes);
+            QVERIFY(sc.cell(0, 9).text.isEmpty());
+            QCOMPARE(int(sc.cell(1, 0).width), 2);
+            QVERIFY(sc.lineContinuation(1));
+            QVERIFY(sc.joinsPreviousLine(1));
+            texts[conPty] = copyRows(sc, 0, 1);
+        }
+        QCOMPARE(texts[1], texts[0]);
+        QVERIFY(!texts[1].contains(QLatin1Char('\n')));
+        // Zwei GESCHRIEBENE Leerzeichen vor der Lücke sind dagegen Leerraum.
+        VtScreen sc(4, 10);
+        sc.setReflow(true);
+        sc.inputWrite(QByteArray("abcdefg  ") + QByteArray("\xf0\x9f\x98\x80") + "x");
+        QVERIFY(sc.lineContinuation(1));
+        QVERIFY(!sc.joinsPreviousLine(1));
+    }
+
+    void paddedRowStaysItsOwnLineInTheScrollback() {
+        VtScreen sc(3, 20);
+        sc.setReflow(true);
+        sc.inputWrite("kurz" + QByteArray(16, ' ') + "naechste\r\n");
+        sc.inputWrite("https://example.com/ein/langer/pfad\r\n");
+        for (int i = 0; i < 6; ++i) sc.inputWrite("mehr\r\n");
+        QVERIFY(sc.scrollbackCount() >= 4);
+        QVERIFY(sc.scrollbackContinuation(1));               // beide Marken stehen im Verlauf
+        QVERIFY(sc.scrollbackContinuation(3));
+        QVERIFY(!sc.joinsPreviousLine(1));
+        QVERIFY(sc.joinsPreviousLine(3));
+        TerminalSelection sel;
+        sel.begin(sc, 0, 0);
+        sel.extendTo(sc, sc.cols() - 1, 3);
+        QCOMPARE(sel.text(sc), QStringLiteral("kurz\nnaechste\nhttps://example.com/ein/langer/pfad"));
+    }
+
+    void paddedRowAtTheScrollbackEdgeIsItsOwnLine() {
+        // Die vorige Zeile ist die letzte im Verlauf, die Zeile selbst die erste sichtbare.
+        VtScreen sc(3, 20);
+        sc.setReflow(true);
+        sc.inputWrite("kurz" + QByteArray(16, ' ') + "naechste\r\nx\r\ny");
+        QCOMPARE(sc.scrollbackCount(), 1);
+        QVERIFY(sc.lineContinuation(0));
+        QVERIFY(!sc.joinsPreviousLine(1));
+        TerminalSelection sel;
+        sel.begin(sc, 0, 0);
+        sel.extendTo(sc, sc.cols() - 1, 1);
+        QCOMPARE(sel.text(sc), QStringLiteral("kurz\nnaechste"));
+        // Dieselbe Lage mit einer wirklich überlangen Zeile: eine Zeile.
+        VtScreen url(3, 20);
+        url.setReflow(true);
+        url.inputWrite("https://example.com/ein/langer/pfad\r\nx\r\ny");
+        QCOMPARE(url.scrollbackCount(), 1);
+        QVERIFY(url.joinsPreviousLine(1));
+    }
+
+    void fullRowThenNewTextStaysGluedUnderConPty() {
+        // Die Grenze der Regel, als Sollwert festgehalten: Eine bis in die letzte Spalte
+        // beschriebene Zeile, dann eine neue. So kommt `Write-Host` einer genau fensterbreiten
+        // Zeile samt dem Prompt danach aus ConPTY (PowerShell 5.1, gemessen), und genauso kommt
+        // jede überlange Zeile. Die Bytes sind dieselben, also bleibt es eine Zeile.
+        VtScreen sc(4, 20);
+        sc.setReflow(true);
+        sc.inputWrite(QByteArray(20, 'B') + "> ");
+        QVERIFY(sc.joinsPreviousLine(1));
+        QCOMPARE(copyRows(sc, 0, 1), QString(20, QLatin1Char('B')) + QStringLiteral(">"));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestTerminalSelection)

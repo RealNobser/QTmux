@@ -150,11 +150,12 @@ bool startsWithScheme(const Row &row, int col) {
 // 🔑 Eine Fortsetzungs-Marke auf der nächsten Zeile entlastet nur, wo Marken etwas belegen.
 // Läuft das Wort dort nahtlos weiter (Spalte 0), endet es gar nicht hier, und diese Frage
 // stellt sich nicht. Steht dort erst Leerraum, sagt die Marke: Das Terminal hat umbrochen,
-// die Zeile geht weiter, das Wort ist zu Ende. Unter ConPTY gilt das nicht. ConPTY löscht mit
-// Leerzeichen-Läufen über Zeilengrenzen hinweg, jeder Überlauf hinterlässt eine Marke, und
-// sie bleibt stehen, wenn die Zeile danach per Cursor-Positionierung neu beschrieben wird
-// (am Windows-Mitschnitt gemessen: fast jede Zeile von Claude Code trägt eine). Dort zählt
-// mit Marke noch die letzte Spalte: „Adresse, ein Leerzeichen, Umbruch“ bleibt Fließtext.
+// die Zeile geht weiter, das Wort ist zu Ende. Unter ConPTY gilt das nicht: Dort trägt auch
+// eine Zeile die Marke, die mit der vorigen nichts zu tun hat, sobald ein Programm die vorige
+// bis in die letzte Spalte beschrieben und ohne Zeilenvorschub verlassen hat
+// (`VtScreen::conPtyHost`; am Windows-Mitschnitt trägt fast jede Zeile von Claude Code eine).
+// Dort zählt mit Marke noch die letzte Spalte: „Adresse, ein Leerzeichen, Umbruch“ bleibt
+// Fließtext.
 //
 // `where` nennt die Spalten der nächsten Zeile, in denen die Fortsetzung stünde.
 bool mayContinueBelow(const VtScreen &sc, const Line &line, qsizetype endIdx,
