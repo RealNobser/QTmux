@@ -285,7 +285,8 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   🔴 Grenzen: Es ist eine Verbotsliste, und die ist nie vollständig. Ein Typ, der fehlt, öffnet
   ohne Rückfrage (Dokumente mit Makros, was ein nachinstalliertes Programm an sich bindet). Die gründlichere Bauart wäre umgekehrt: nur bekannte, harmlose Typen
   ohne Frage öffnen, oder das System fragen (Windows `AssocIsDangerous`, macOS der Typ laut
-  LaunchServices). Beides ist eine Owner-Entscheidung, nicht umgesetzt. Auf Laufwerken ohne
+  LaunchServices). Owner-Entscheid 2026-11-15: Die Verbotsliste geht so raus, die Umkehrung ist
+  QTMUX-156 und nicht umgesetzt. Auf Laufwerken ohne
   Unix-Rechte (FAT, viele Netzlaufwerke) trägt unter macOS und Linux jede Datei ein
   Ausführungsrecht, dort fragt QTmux bei jeder Datei. Im Zweifel wird gefragt. Tests: `test_executabletarget` (Regel), `test_execopendialog`
   (Vorgabe, Knöpfe, voller Pfad), `test_terminalitem` (Klick je Fall; die Antwort gibt der Test,
