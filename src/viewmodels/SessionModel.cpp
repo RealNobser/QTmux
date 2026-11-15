@@ -99,6 +99,8 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case GitBranchRole: return s->gitBranch();
     case GitDetachedRole: return s->gitDetached();
     case QueuedCountRole: return s->queuedCount();
+    case OwnerTypingRole: return s->ownerTyping();
+    case QueueNoteRole:   return s->queueNote();
     case GroupRole:   return s->group();
     case SessionRole: return QVariant::fromValue(static_cast<QObject *>(s));
     default:          return {};
@@ -122,6 +124,8 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
         {GitBranchRole, "gitBranch"},
         {GitDetachedRole, "gitDetached"},
         {QueuedCountRole, "queuedCount"},
+        {OwnerTypingRole, "ownerTyping"},
+        {QueueNoteRole, "queueNote"},
         {GroupRole, "group"},
         {SessionRole, "session"},
     };
@@ -136,7 +140,8 @@ void SessionModel::wireSession(Session *s, int row) {
             emit dataChanged(idx, idx,
                 {TitleRole, StateRole, AgentRole, AttentionRole, NotificationRole,
                  McpControllerRole, ProgressActiveRole, ProgressStateRole, ProgressValueRole,
-                 WorkingDirRole, GitBranchRole, GitDetachedRole, QueuedCountRole});
+                 WorkingDirRole, GitBranchRole, GitDetachedRole, QueuedCountRole,
+                 OwnerTypingRole, QueueNoteRole});
         }
     };
     connect(s, &Session::titleChanged, this, refresh);
@@ -150,6 +155,8 @@ void SessionModel::wireSession(Session *s, int row) {
     connect(s, &Session::workingDirectoryChanged, this, refresh);
     connect(s, &Session::gitBranchChanged, this, refresh);   // QTMUX-58
     connect(s, &Session::queueChanged, this, refresh);      // QTMUX-90
+    connect(s, &Session::ownerTypingChanged, this, refresh);
+    connect(s, &Session::queueNoteChanged, this, refresh);
     connect(s, &Session::stallChanged, this, refresh);      // QTMUX-139
 
     // Ruhezustands-Sperre an den Aktivitätszustand koppeln (QTMUX-89). Bewusst eine
@@ -590,6 +597,18 @@ void SessionModel::writeToAll(const QByteArray &data) {
         if (s) s->write(data);
 }
 
+void SessionModel::writeToAllFromUser(const QByteArray &data) {
+    for (Session *s : m_sessions)
+        if (s) s->writeFromUser(data);
+}
+
+QStringList SessionModel::sessionsWithOwnerTyping() const {
+    QStringList ids;
+    for (Session *s : m_sessions)
+        if (s && s->ownerTyping()) ids << QString::number(s->id());
+    return ids;
+}
+
 void SessionModel::sendText(int row, const QString &text, bool submit, int enterDelayMs) {
     if (row < 0 || row >= count() || text.isEmpty()) return;
     Session *s = m_sessions.at(row);
@@ -610,7 +629,20 @@ void SessionModel::sendText(int row, const QString &text, bool submit, int enter
 bool SessionModel::queueText(int row, const QString &text) {
     if (row < 0 || row >= count()) return false;
     Session *s = m_sessions.at(row);
-    return s ? s->queueText(text) : false;
+    // Dieser Weg ist der Dialog des Menschen in der Oberfläche; über MCP reiht
+    // McpServer mit dem dortigen Absender ein.
+    return s ? s->queueText(text, tr("Ihnen (Oberfläche)")) : false;
+}
+
+QStringList SessionModel::queuedSenders(int row) const {
+    if (row < 0 || row >= count()) return {};
+    Session *s = m_sessions.at(row);
+    return (s && s->promptQueue()) ? s->promptQueue()->senders() : QStringList{};
+}
+
+void SessionModel::releaseOwnerDraft(int row) {
+    if (row < 0 || row >= count()) return;
+    if (Session *s = m_sessions.at(row)) s->releaseOwnerDraft();
 }
 
 int SessionModel::queuedCount(int row) const {

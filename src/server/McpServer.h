@@ -158,6 +158,7 @@ signals:
 
 private:
     friend class TestMcpFocus;   // tests/tst_mcpfocus.cpp ruft callTool direkt
+    friend class TestMcpMessage; // tests/tst_mcpmessage.cpp: callTool + Aufrufer-Session
 
     void onReadyRead(QTcpSocket *sock);
     void sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status = 200,

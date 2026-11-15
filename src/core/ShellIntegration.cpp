@@ -28,6 +28,7 @@ const QStringList &fileList() {
         QStringLiteral("qtmux-emit.cmd"),
         QStringLiteral("qtmux-wait.sh"), QStringLiteral("qtmux-wait.ps1"),
         QStringLiteral("qtmux-wait.cmd"),
+        QStringLiteral("qtmux-inbox.sh"),
         QStringLiteral("README.md"),
     };
     return kFiles;

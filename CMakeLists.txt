@@ -85,6 +85,10 @@ add_library(qtmux_core STATIC
     src/core/HotkeyRegistry.cpp
     src/core/AgentEventHub.h
     src/core/AgentEventHub.cpp
+    src/core/AgentInbox.h
+    src/core/AgentInbox.cpp
+    src/core/OwnerDraft.h
+    src/core/OwnerDraft.cpp
     src/core/PromptQueue.h
     src/core/PromptQueue.cpp
     src/core/StallDetector.h
@@ -136,6 +140,7 @@ qt_add_resources(qtmux_core "shell_integration"
         shell-integration/qtmux-wait.sh
         shell-integration/qtmux-wait.ps1
         shell-integration/qtmux-wait.cmd
+        shell-integration/qtmux-inbox.sh
         shell-integration/README.md
 )
 
@@ -330,6 +335,8 @@ qt_add_qml_module(qtmux
         src/server/McpServer.cpp
         src/server/McpAccess.h
         src/server/McpAccess.cpp
+        src/server/AgentInboxClient.h
+        src/server/AgentInboxClient.cpp
 )
 target_include_directories(qtmux PRIVATE src/terminal src/viewmodels src/server
                                         "${CMAKE_CURRENT_BINARY_DIR}/generated")

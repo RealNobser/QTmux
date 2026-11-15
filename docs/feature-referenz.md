@@ -1037,6 +1037,65 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
   Existiert der gemeldete Pfad hier zufällig auch, läse man den Branch eines **anderen**
   Repositories und hängte ihn an diese Kachel. Test `gitBranchStaysEmptyForRemoteDirectory`
   (Gegentest ohne die Sperre: FAIL).
+- **Vorrang der Eingabe des Menschen (QTMUX-157):** Ein Agent hängte seine Meldung an
+  einen halb getippten Satz des Owners und schickte beides ab (Befund 2026-11-15). Kern
+  ist der Merker „der Mensch hat getippt und noch nicht abgeschickt“ als **reine
+  Zustandsfunktion** `nextOwnerDraft` in [OwnerDraft.h](src/core/OwnerDraft.h)
+  (`Clean`/`Counted`/`Open`; Regeln und Begründungen dort).
+  🔑 **Die Herkunft einer Eingabe kennt nur der Aufrufer.** Tastatur, Mausrad, MCP
+  `send_keys`, Einfügen, `send_text` und die Warteschlange mündeten alle in
+  `Session::write()` — an den Bytes ist ein Tastendruck des Menschen nicht von einem
+  `send_keys` zu unterscheiden. Darum zwei eigene Eingänge: `Session::writeFromUser`
+  (aus `TerminalItem::sendInput`, also `keyPressEvent`) und `pasteFromUser` (aus
+  `doPaste`); die Broadcast-Eingabe des Menschen geht über
+  `SessionModel::writeToAllFromUser`. `write`/`writePasted`/`writeWithEnter` bleiben der
+  maschinelle Weg und fassen den Merker nie an (sonst sperrte sich ein Agent mit seinem
+  eigenen `send_text` aus). Das Mausrad ist Navigation und bleibt bei `write`.
+  Wirkung: `mayDispatchNext` blockt bei `ownerTyping` in **beiden** Zweigen (auch bei
+  `Waiting` — dass der Agent auf eine Antwort wartet, heißt gerade, dass der Mensch sie
+  vielleicht eben tippt); MCP `send_text`/`send_keys` **lehnen ab** (Begründung in
+  [docs/MCP.md](MCP.md)), `force` überstimmt. Schickt der Mensch ab, stellt die Session
+  ihre Ruhe-Uhr neu — sonst fiele ein wartender Eintrag bei einer Session ohne eigene
+  Zustandsmeldung im selben Augenblick hinter sein Enter. Anzeige: `Session::queueNote`
+  („Von … — Nachricht wartet“) ersetzt an der Kachel die Verzeichniszeile; Dialog
+  `queueViewDialog` zeigt Absender und Text und hat bewusst **keinen** Bestätigen-Knopf
+  (Enter darf dort nichts auslösen, was in einen Entwurf schreiben könnte).
+  ⚠️ **Bekannte Grenze (Dauer-Merker ohne Entwurf):** Eine einzelne Taste, die das
+  Programm sofort verbraucht (Ziffer im Auswahldialog), sieht wie ein Entwurf aus; der
+  Merker steht dann bis Enter/Strg-C oder zur Freigabe in der Oberfläche. Einen
+  Zeitablauf gibt es bewusst nicht. ⚠️ Auto-Vorschläge des Programms stehen in
+  `read_screen` wie getippter Text in der Eingabezeile — der Merker steht dabei NICHT.
+  Tests: `test_ownerdraft` (Regel), `test_inputpriority` (Session), `test_terminalitem`
+  (Tasten am Item), `test_mcpmessage` (MCP); 32 Mutationsproben, s. Bericht.
+- **Nachrichten zwischen Sessions ohne Eingabezeile (QTMUX-157, MCP `send_message`):**
+  Claude Code öffnet je Sitzung einen Unix-Socket für „Nachrichten zwischen Sitzungen“.
+  Die Sitzung meldet ihn selbst (`set_agent_inbox`, per SessionStart-Hook
+  `shell-integration/qtmux-inbox.sh`) — QTmux sucht ihn bewusst nicht im
+  Sitzungsregister von Claude Code (`~/.claude/sessions/<pid>.json` trüge ihn; das ist
+  eine interne Datei). Regeln und Rahmen Gui-frei in
+  [AgentInbox.h](src/core/AgentInbox.h), das Schreiben in
+  [AgentInboxClient.cpp](src/server/AgentInboxClient.cpp) (`QLocalSocket`, darum nicht in
+  `qtmux_core`).
+  🔑 **Der Rahmen ist nicht dokumentiert** — am 2026-11-15 an 2.1.323 mitgeschnitten
+  (eine JSON-Zeile, `type:"user"`, Inhalt in `<cross-session-message from-name="…">`).
+  Der Socket antwortet nie; ein geändertes Format ist am Senden nicht zu erkennen.
+  🔑 **QTmux behauptet nicht, eine Claude-Sitzung zu sein:** keine `from`-Adresse (eine
+  fremde anzugeben ließe Antworten des Empfängers an der Prüfung „erwarteter Prozess“
+  scheitern), kein `from-mode` (damit ließe sich die Zurückhalte-Regel des Empfängers
+  umgehen). Der Absendername wird so normalisiert, wie Claude Code ihn selbst
+  normalisiert — sonst verwirft der Empfänger die Namensangabe (er prüft den Rahmen
+  gegen seine eigene Schreibweise); ein Ende-Tag im Text wird entschärft.
+  🔑 **Bindung an das Objekt:** Vor dem Schreiben liest der Client die PID des Lauschers
+  (`LOCAL_PEERPID`/`SO_PEERCRED`) und der Server prüft, dass sie im Prozessbaum der
+  Session-Shell liegt. Socket-Namen tragen die PID, PIDs werden wiederverwendet.
+  🔑 **Kein Rückfall in die nackte Shell:** Scheitert der Eingang und hat die
+  Session-Shell keinen Kindprozess, wird nicht eingereiht — die Nachricht liefe dort als
+  Befehl. (Bei der Probe am lebenden Objekt aufgefallen, nicht am Schreibtisch.)
+  ⚠️ Gemessen: Ohne den ausdrücklichen Zusatz „nicht per SendMessage antworten“ suchte der
+  Empfänger in seiner eigenen Sitzungsliste nach einem ähnlich benannten Ziel.
+  Der Schreibvorgang läuft im GUI-Thread mit Zeitgrenze (1,5 s); ein halb geschriebener
+  Rahmen ist für den Empfänger keine Nachricht. Windows: nicht gebaut (Named Pipe mit
+  Anmeldepflicht, nicht gemessen). Tests: `test_agentinbox`, `test_mcpmessage`.
 - **Prompt-Warteschlange (QTMUX-90):** `Session` hält eine `PromptQueue`, stempelt bei jeder
   Backend-Ausgabe eine `QElapsedTimer` (das ist `msSinceLastOutput`) und versucht die Abgabe
   über einen Timer, der **nur läuft, solange etwas ansteht**; abgegeben wird über
@@ -1713,7 +1772,7 @@ Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (40 Tools)
+### MCP-Server (42 Tools)
 `src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC, **Vorgabe** `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
 - **Netzzugang ist eine WAHL, und sie kostet ein Token (QTMUX-127).** Bind-Adresse:

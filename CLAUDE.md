@@ -58,6 +58,8 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/core/TerminalSelection.{h,cpp}` | Gui-frei: Auswahl, die genau den markierten Text trägt oder verschwindet (stabile Zeilennummern + Inhaltsvergleich); wo beim Kopieren kein Zeilenumbruch steht, sagt `VtScreen::joinsPreviousLine` |
 | `src/core/FileManagerReveal.{h,cpp}` | Gui-frei: „Im Finder/Explorer/Dateimanager zeigen" — Befehl je Plattform + lokale Existenzprüfung (QTMUX-138, Mechanik in der Feature-Referenz) |
 | `src/core/ExecutableTarget.{h,cpp}` | Gui-frei: Würde das System die Datei beim Öffnen ausführen? Regel je Plattform (Endungen, Ausführungsrecht, Bündel, Datenströme) für die Rückfrage vor dem Klick auf einen Datei-Link (QTMUX-151); der Dialog ist `qml/dialogs/ExecOpenDialog.qml` |
+| `src/core/OwnerDraft.{h,cpp}` | Gui-frei: Merker „der Mensch hat getippt und noch nicht abgeschickt“ als reine Zustandsfunktion (QTMUX-157) — solange er steht, wartet die Warteschlange und MCP `send_text`/`send_keys` lehnen ab. Eingänge: `Session::writeFromUser`/`pasteFromUser` |
+| `src/core/AgentInbox.{h,cpp}` + `src/server/AgentInboxClient.{h,cpp}` | Nachrichten an einen Agenten OHNE Eingabezeile (QTMUX-157, MCP `send_message`/`set_agent_inbox`): Regeln + Rahmen Gui-frei im Kern, das Schreiben auf den Sitzungs-Socket von Claude Code (`QLocalSocket`) beim Server. ⚠️ Rahmenformat undokumentiert, belegt an 2.1.323 |
 | `src/core/Session.{h,cpp}` | Backend + VtScreen; Activity/Attention/Progress; Login-Script; SSH-Passwort-Auto-Fill |
 | `src/viewmodels/SessionModel.{h,cpp}` | QAbstractListModel Sidebar; Persistenz/Restore; CWD-Vererbung |
 | `src/viewmodels/Theme.{h,cpp}` | QML-Singleton `Theme.*`; leitet ALLE Chrome-Farben aus dem aktiven Color-Scheme ab; Statusrollen `ok/warn/danger/muted` mit festem Hell-/Dunkel-Paar (QTMUX-142, Vertrag in `Theme.h`) |
@@ -65,7 +67,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
-| `src/server/McpServer.{h,cpp}` + `McpAccess.{h,cpp}` | Eingebetteter MCP-Server (40 Tools; Doku `docs/MCP.md`) + dessen Gui-freie **Zugriffsregeln** (Bind-Adresse, Token-Pflicht, QTMUX-127) |
+| `src/server/McpServer.{h,cpp}` + `McpAccess.{h,cpp}` | Eingebetteter MCP-Server (42 Tools; Doku `docs/MCP.md`) + dessen Gui-freie **Zugriffsregeln** (Bind-Adresse, Token-Pflicht, QTMUX-127) |
 | `third_party/updater/update/` + `src/viewmodels/UpdateViewModel.{h,cpp}` + `qml/dialogs/UpdateDialog.qml` | Online-Update (QTMUX-125): byte-identisch aus MacPCAN vendierter Kern (`appupdate`, Target `qtmux_updater`) + QTmux-Persistenz/Dialog; Abgleich `tools/check-updater-sync.sh`, Herkunft `third_party/updater/UPSTREAM.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
@@ -76,7 +78,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/StallDetector.{h,cpp}` | Gui-frei: Stillstand-Erkennung (QTMUX-139) — Agent zeigt „arbeitet" (Merkmal `AgentInfo::workingMarkers`), Bildschirm steht seit N min still → `needsAttention`; Mechanik in der Feature-Referenz |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **49** ctest-Tests: 42 QtTest-Binaries (pty, vtscreen, linkdetector, **screenlinks**, **terminalselection**, **terminalitem** — das echte Item mit Maus-Ereignissen, ohne Fenster, **filemanagerreveal**, **executabletarget**, **execopendialog** — der echte Dialog in einem Attrappen-Modul, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, statuscolors, combowidth, **conptyreplay** — echte ConPTY-Bytes, s. Feature-Referenz) + **5 × `I18n.*`** (Anrede-Wächter [tools/i18n/check_address.py](tools/i18n/check_address.py) + vier Positivproben, QTMUX-145 — brauchen Python 3, ohne Python entsteht ein roter ERROR-Test statt eines stillen Fehlens) + `test_doc_duplicates` (reines CMake-Skript) + `test_check_updater_sync` (bash-Skripttest des Vendoring-Wächters, QTMUX-144 — **nicht auf Windows**). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 48. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **53** ctest-Tests: 46 QtTest-Binaries (**ownerdraft**, **inputpriority**, **agentinbox**, **mcpmessage** — QTMUX-157, pty, vtscreen, linkdetector, **screenlinks**, **terminalselection**, **terminalitem** — das echte Item mit Maus-Ereignissen, ohne Fenster, **filemanagerreveal**, **executabletarget**, **execopendialog** — der echte Dialog in einem Attrappen-Modul, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, statuscolors, combowidth, **conptyreplay** — echte ConPTY-Bytes, s. Feature-Referenz) + **5 × `I18n.*`** (Anrede-Wächter [tools/i18n/check_address.py](tools/i18n/check_address.py) + vier Positivproben, QTMUX-145 — brauchen Python 3, ohne Python entsteht ein roter ERROR-Test statt eines stillen Fehlens) + `test_doc_duplicates` (reines CMake-Skript) + `test_check_updater_sync` (bash-Skripttest des Vendoring-Wächters, QTMUX-144 — **nicht auf Windows**). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 52. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -687,7 +689,7 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 Plugins + MacPCAN, Installer), dazu **Online-Update** (QTMUX-125) und die **GUI-Auffrischung
 Design 1a/2a** (einklappbare Seitenleiste + Flyout, Statusleiste, sechs Menüs, neugestaltetes
 Einstellungsfenster, Reset/Import/Export — Details im Abschnitt „Design 1a/2a" unten).
-**40 MCP-Tools** (GUI-MCP-Parität für den geplanten AI-Companion), i18n finalisiert,
+**42 MCP-Tools** (GUI-MCP-Parität für den geplanten AI-Companion), i18n finalisiert,
 Installer für alle drei Plattformen (DMG/MSI+ZIP/AppImage).
 
 **Window-Modell (QTMUX-83, seit v1.7.0):** Kein globales Split-Layout mehr, sondern das
@@ -921,6 +923,20 @@ durchreicht (Abhilfe an der Wurzel, eine Abhängigkeit mehr, nicht gemessen). (3
 auf ausführbare Dateien kam erst mit 1.9.13, s. nächster Absatz. Am echten Fenster ist nichts davon gesehen, Claude Code
 lief unter Windows nicht. An QTMUX-153 ändert dieser Stand nichts: Die Dopplung dort kommt von Claude Codes
 klassischer Darstellung, die falschen Marken tragen nicht dazu bei.
+
+🔧 **2026-11-15: Vorrang der Eingabe des Menschen + `send_message` (QTMUX-157), umgesetzt, geht mit
+1.9.14 hinaus (Owner-Wort „1–5 wie empfohlen“).** Owner-Befund: Worker hängten ihre Meldungen an halb
+getippte Sätze des Owners. Jetzt wartet die Warteschlange, solange der Mensch getippt und nicht
+abgeschickt hat, `send_text`/`send_keys` lehnen ab (`force` überstimmt), und `send_message` stellt
+Claude-Sitzungen über ihren Sitzungs-Socket zu, ohne die Eingabezeile. Mechanik und Grenzen:
+Feature-Referenz (zwei Absätze „QTMUX-157“) und [docs/MCP.md](docs/MCP.md); Rezept:
+[docs/owner-abnahmen.md](docs/owner-abnahmen.md) Zeile 157. Tests 53/53 auf macOS (Debug und Release,
+frische Bäume), 32 Mutationen rot; **Windows und Linux mit diesem Stand nicht gebaut**. Jira QTMUX-157
+dual „In Arbeit“ bis zum Release. Offen beim Owner: SessionStart-Hook
+`qtmux-inbox.sh` in seine Einstellungen (ohne ihn nimmt `send_message` die Warteschlange) und die
+Abnahme am echten Fenster (QTmux kann keine Tasten des Menschen nachstellen). 🔴 Das Rahmenformat des
+Sockets ist undokumentiert und an Claude Code 2.1.323 belegt — nach einem Claude-Code-Update die Probe
+(c) aus der Abnahme fahren.
 
 🔧 **2026-11-15: Rückfrage vor dem Öffnen ausführbarer Dateien (QTMUX-151 §8.4), ausgeliefert mit 1.9.13,
 Owner-Abnahme steht aus.** Owner-Wort „Ich würde sagen, JA!“. Ein Datei-Link aus dem Text, dessen Ziel das

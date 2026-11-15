@@ -129,6 +129,7 @@ add_test(NAME test_mcpaccess COMMAND test_mcpaccess)
 qt_add_executable(test_mcpfocus tst_mcpfocus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpServer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpAccess.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/AgentInboxClient.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/SessionModel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/Window.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/WindowModel.cpp)
@@ -140,6 +141,43 @@ target_include_directories(test_mcpfocus PRIVATE
 add_dependencies(test_mcpfocus qtmux_buildid)
 target_link_libraries(test_mcpfocus PRIVATE qtmux_core Qt6::Test Qt6::Qml Qt6::Network)
 add_test(NAME test_mcpfocus COMMAND test_mcpfocus)
+
+# Vorrang der Eingabe des Menschen + Nachrichten zwischen Sessions (send_message,
+# set_agent_inbox, Ablehnen von send_text/send_keys, Absender). Gleiche Bauart wie
+# test_mcpfocus: McpServer & Co. direkt mitkompiliert, serielle Sessions ohne Prozess.
+qt_add_executable(test_mcpmessage tst_mcpmessage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpServer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpAccess.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/AgentInboxClient.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/SessionModel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/Window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/WindowModel.cpp)
+target_include_directories(test_mcpmessage PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/plugins
+    ${CMAKE_BINARY_DIR}/generated)
+add_dependencies(test_mcpmessage qtmux_buildid)
+target_link_libraries(test_mcpmessage PRIVATE qtmux_core Qt6::Test Qt6::Qml Qt6::Network)
+add_test(NAME test_mcpmessage COMMAND test_mcpmessage)
+
+# Nachrichten-Eingang eines Agenten: Rahmen (Kern) + Schreiben auf den Socket gegen einen
+# Eingang, den der Test selbst aufmacht. Der Client liegt bei seinem Nutzer in src/server
+# (qtmux_core bleibt Qt6::Core-only, hier braucht es QLocalSocket).
+qt_add_executable(test_agentinbox tst_agentinbox.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/AgentInboxClient.cpp)
+target_include_directories(test_agentinbox PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/server)
+target_link_libraries(test_agentinbox PRIVATE qtmux_core Qt6::Test Qt6::Network)
+add_test(NAME test_agentinbox COMMAND test_agentinbox)
+
+# Merker „der Mensch hat getippt und noch nicht abgeschickt“: die Regel als reine Funktion
+# und ihre Verdrahtung in der Session (Warteschlange wartet, bis er abgeschickt hat).
+qt_add_executable(test_ownerdraft tst_ownerdraft.cpp)
+target_link_libraries(test_ownerdraft PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_ownerdraft COMMAND test_ownerdraft)
+qt_add_executable(test_inputpriority tst_inputpriority.cpp)
+target_link_libraries(test_inputpriority PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_inputpriority COMMAND test_inputpriority)
 
 # QTMUX-96: Scanner fuer Projekt-Befehle/Skills — arbeitet auf echten QTemporaryDirs.
 qt_add_executable(test_projectcommands tst_projectcommands.cpp)
@@ -351,7 +389,7 @@ add_test(NAME test_updateviewmodel COMMAND test_updateviewmodel)
 # WIN32_EXECUTABLE (Konsolen-Vererbung an Kindshells) gilt hier nicht — beide
 # Tests starten keine Prozesse.
 if(WIN32)
-    set_target_properties(test_updater test_updateviewmodel test_mcpaccess test_mcpfocus
+    set_target_properties(test_updater test_updateviewmodel test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox
                           PROPERTIES WIN32_EXECUTABLE FALSE)
 endif()
 

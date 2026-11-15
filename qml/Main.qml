@@ -986,12 +986,49 @@ ApplicationWindow {
         const s = window.sessionById(sid)
         return s ? (s.gitBranch || "") : ""
     }
-    // Anzahl eingereihter Prompts im aktiven Pane (QTMUX-90).
+    // Anzahl eingereihter Prompts über ALLE Panes des Windows (QTMUX-90). Nicht nur das
+    // aktive: Eine Nachricht, die in einem Nachbar-Pane wartet, wäre sonst unsichtbar.
     function windowQueuedCount(w) {
-        const sid = window.windowActiveSessionId(w)
-        if (sid < 0) return 0
-        const s = window.sessionById(sid)
-        return s ? (s.queuedCount || 0) : 0
+        if (!w) return 0
+        let n = 0
+        const ids = w.sessionIds()
+        for (let i = 0; i < ids.length; ++i) {
+            const s = window.sessionById(ids[i])
+            if (s) n += (s.queuedCount || 0)
+        }
+        return n
+    }
+    // Vorrang der Eingabe des Menschen: Hinweis „Von … — Nachricht wartet“ der ersten
+    // Session des Windows, in der Einträge NUR deshalb warten, weil dort getippt und
+    // noch nicht abgeschickt wurde. Leer, wenn das nirgends der Fall ist.
+    function windowQueueNote(w) {
+        if (!w) return ""
+        const ids = w.sessionIds()
+        for (let i = 0; i < ids.length; ++i) {
+            const s = window.sessionById(ids[i])
+            if (s && s.queueNote && s.queueNote.length > 0) return s.queueNote
+        }
+        return ""
+    }
+    // Erste Session des Windows mit wartenden Einträgen (-1 = keine) — Ziel des Dialogs.
+    function windowQueueSid(w) {
+        if (!w) return -1
+        const ids = w.sessionIds()
+        for (let i = 0; i < ids.length; ++i) {
+            const s = window.sessionById(ids[i])
+            if (s && (s.queuedCount || 0) > 0) return ids[i]
+        }
+        return -1
+    }
+    // Erste Session des Windows, in der der Mensch getippt und nicht abgeschickt hat.
+    function windowOwnerTypingSid(w) {
+        if (!w) return -1
+        const ids = w.sessionIds()
+        for (let i = 0; i < ids.length; ++i) {
+            const s = window.sessionById(ids[i])
+            if (s && s.ownerTyping) return ids[i]
+        }
+        return -1
     }
     function windowGitDetached(w) {
         const sid = window.windowActiveSessionId(w)
@@ -1029,6 +1066,8 @@ ApplicationWindow {
         if (!s) return ""
         // Ein Stillstand (QTMUX-139) bringt seinen eigenen, schon datierten Text mit.
         if (s.stalled) return s.stallNote
+        // Wartet eine Nachricht auf den Menschen, ist das die Auskunft, die er braucht.
+        if (s.queueNote && s.queueNote.length > 0) return s.queueNote
         const label = s.needsAttention ? qsTr("braucht Aufmerksamkeit")
                     : s.activity === 0 ? qsTr("untätig")
                     : s.activity === 1 ? qsTr("arbeitet")
@@ -1096,7 +1135,9 @@ ApplicationWindow {
         for (let i = 0; i < ids.length; ++i) { const s = window.sessionById(ids[i]); if (s && s.mcpController) return true }
         return false
     }
-    function broadcastWrite(data) { sessions.writeToAll(data) }
+    // Broadcast-Eingabe kommt aus einem Terminal, also vom Menschen: über den
+    // Menschen-Eingang, damit jede Session ihren Merker „getippt, nicht abgeschickt“ führt.
+    function broadcastWrite(data) { sessions.writeToAllFromUser(data) }
     function popupTermContextMenu(term) {
         // Link unter dem auslösenden Rechtsklick übernehmen (einmalig beim Öffnen —
         // das Menü ist modal, der Wert kann sich währenddessen nicht ändern).
@@ -3335,6 +3376,10 @@ ApplicationWindow {
                         readonly property string dispBranch: (window.sessionsRevision, window.windowsRevision, window.windowGitBranch(wobj))
                         readonly property bool dispDetached: (window.sessionsRevision, window.windowsRevision, window.windowGitDetached(wobj))
                         readonly property int queuedN: (window.sessionsRevision, window.windowsRevision, window.windowQueuedCount(wobj))
+                        // „Von … — Nachricht wartet“: steht, solange ein Eintrag nur auf
+                        // den Menschen wartet (er hat getippt und nicht abgeschickt).
+                        readonly property string queueNote: (window.sessionsRevision, window.windowsRevision, window.windowQueueNote(wobj))
+                        readonly property int queueSid: (window.sessionsRevision, window.windowsRevision, window.windowQueueSid(wobj))
                         readonly property int paneN: (window.windowsRevision, wobj ? wobj.sessionIds().length : 0)
                         readonly property int aggState: (window.sessionsRevision, window.windowRunState(wobj))
                         readonly property bool attention: (window.sessionsRevision, window.windowAttention(wobj))
@@ -3386,6 +3431,8 @@ ApplicationWindow {
                                 if (tile.dispBranch.length > 0)
                                     t += "\n" + (tile.dispDetached ? qsTr("Commit: %1") : qsTr("Branch: %1"))
                                               .arg(tile.dispBranch)
+                                if (tile.queueNote.length > 0)
+                                    t += "\n" + tile.queueNote + " — " + qsTr("Klick auf ⏱ zeigt den Text")
                                 return t
                             }
                         }
@@ -3399,6 +3446,8 @@ ApplicationWindow {
                                 windowMenu.currentGroup = tile.group
                                 windowMenu.isController = tile.controller
                                 windowMenu.currentDir = window.windowWorkingDir(tile.wobj)
+                                windowMenu.queueSid = tile.queueSid
+                                windowMenu.typingSid = window.windowOwnerTypingSid(tile.wobj)
                                 windowMenu.groupList = windows.groups()
                                 windowMenu.popup()
                             }
@@ -3549,6 +3598,8 @@ ApplicationWindow {
                                             color: Theme.accentText
                                             font.pixelSize: 9
                                         }
+                                        // Klick zeigt, was wartet und von wem.
+                                        TapHandler { onTapped: queueViewDialog.start(tile.queueSid) }
                                     }
                                     Text {
                                         text: tile.activeSid >= 0 ? "#" + tile.activeSid : ""
@@ -3574,8 +3625,20 @@ ApplicationWindow {
                                     // also nicht als Erstes wegelidiert werden.
                                     // 🔑 Beide Texte brauchen elide UND eine Grenze; sonst quetscht
                                     // einer den anderen auf null (Lektion aus QTMUX-96/-121).
+                                    // Wartet eine Nachricht auf den Menschen, steht das HIER statt
+                                    // Branch und Verzeichnis: Die Kachel ist zwei Zeilen hoch,
+                                    // und diese Auskunft ist die dringendere (beides zeigt der
+                                    // ToolTip weiterhin).
                                     Text {
-                                        visible: tile.dispBranch.length > 0
+                                        visible: tile.queueNote.length > 0
+                                        text: "✉ " + tile.queueNote
+                                        color: Theme.warn
+                                        font.pixelSize: 10
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        visible: tile.dispBranch.length > 0 && tile.queueNote.length === 0
                                         text: (tile.dispDetached ? "➟ " : "⎇ ") + tile.dispBranch
                                         color: Theme.textDim
                                         font.pixelSize: 10
@@ -3583,7 +3646,7 @@ ApplicationWindow {
                                         Layout.maximumWidth: parent.width * 0.5
                                     }
                                     Text {
-                                        visible: tile.dispDir.length > 0
+                                        visible: tile.dispDir.length > 0 && tile.queueNote.length === 0
                                         text: window.prettyDir(tile.dispDir)
                                         color: Theme.textDim
                                         font.pixelSize: 10
@@ -4684,6 +4747,136 @@ ApplicationWindow {
         }
     }
 
+    // Wartende Nachrichten einer Session ansehen (Vorrang der Eingabe des Menschen):
+    // wer hat geschickt, was steht drin — und der ausdrückliche Weg, sie trotz des
+    // Merkers zuzustellen. Bewusst OHNE Bestätigen-Knopf: Enter soll hier nichts
+    // auslösen, was in einen Entwurf schreiben könnte.
+    AppDialog {
+        id: queueViewDialog
+        width: 540
+        property int sid: -1
+        property var texts: []
+        property var froms: []
+        property bool typing: false
+        title: qsTr("Wartende Nachrichten")
+        standardButtons: Dialog.Close
+
+        function row() { return sid >= 0 ? window.rowForSessionId(sid) : -1 }
+        function refresh() {
+            const r = row()
+            texts = r >= 0 ? sessions.queuedEntries(r) : []
+            froms = r >= 0 ? sessions.queuedSenders(r) : []
+            const s = sid >= 0 ? window.sessionById(sid) : null
+            typing = s ? s.ownerTyping : false
+        }
+        function start(sessionId) {
+            if (sessionId < 0) return
+            sid = sessionId
+            refresh()
+            open()
+        }
+        Connections {
+            target: window
+            function onSessionsRevisionChanged() { if (queueViewDialog.visible) queueViewDialog.refresh() }
+        }
+        ColumnLayout {
+            spacing: 10
+            Label {
+                Layout.preferredWidth: 500
+                wrapMode: Text.WordWrap
+                color: Theme.textDim
+                font.pixelSize: 11
+                text: queueViewDialog.typing
+                      ? qsTr("Sie haben in Session #%1 getippt und noch nicht abgeschickt. Die Nachrichten warten, bis Sie dort mit Enter abschicken oder mit Strg+C verwerfen — so landet nichts in Ihrem Entwurf.").arg(queueViewDialog.sid)
+                      : qsTr("Die Nachrichten gehen an Session #%1, sobald sie frei ist.").arg(queueViewDialog.sid)
+            }
+            Label {
+                visible: queueViewDialog.texts.length === 0
+                color: Theme.textBright
+                text: qsTr("Es wartet nichts mehr.")
+            }
+            ScrollView {
+                visible: queueViewDialog.texts.length > 0
+                Layout.preferredWidth: 500
+                Layout.preferredHeight: Math.min(queueList.implicitHeight, 300)
+                clip: true
+                ColumnLayout {
+                    id: queueList
+                    width: 484
+                    spacing: 10
+                    Repeater {
+                        model: queueViewDialog.texts.length
+                        ColumnLayout {
+                            id: queueEntry
+                            required property int index
+                            Layout.fillWidth: true
+                            spacing: 2
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label {
+                                    Layout.fillWidth: true
+                                    elide: Label.ElideRight
+                                    color: Theme.textBright
+                                    font.bold: true
+                                    font.pixelSize: 12
+                                    text: {
+                                        const f = queueViewDialog.froms[queueEntry.index] || ""
+                                        return f.length > 0 ? qsTr("Von %1").arg(f) : qsTr("Absender unbekannt")
+                                    }
+                                }
+                                Label {
+                                    color: Theme.accent
+                                    font.pixelSize: 11
+                                    text: qsTr("Entfernen")
+                                    HoverHandler { cursorShape: Qt.PointingHandCursor }
+                                    TapHandler {
+                                        onTapped: {
+                                            const r = queueViewDialog.row()
+                                            if (r >= 0) sessions.removeQueuedAt(r, queueEntry.index)
+                                            queueViewDialog.refresh()
+                                        }
+                                    }
+                                }
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 14
+                                elide: Text.ElideRight
+                                color: Theme.textBright
+                                font.family: window.terminalFontFamily
+                                font.pixelSize: 11
+                                text: queueViewDialog.texts[queueEntry.index] || ""
+                            }
+                        }
+                    }
+                }
+            }
+            Label {
+                visible: queueViewDialog.typing && queueViewDialog.texts.length > 0
+                color: Theme.accent
+                font.pixelSize: 12
+                text: qsTr("Meine Eingabezeile ist leer — jetzt zustellen")
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
+                TapHandler {
+                    onTapped: {
+                        const r = queueViewDialog.row()
+                        if (r >= 0) sessions.releaseOwnerDraft(r)
+                        queueViewDialog.close()
+                    }
+                }
+            }
+            Label {
+                visible: queueViewDialog.typing && queueViewDialog.texts.length > 0
+                Layout.preferredWidth: 500
+                wrapMode: Text.WordWrap
+                color: Theme.textDim
+                font.pixelSize: 11
+                text: qsTr("Nur wählen, wenn in der Eingabezeile der Session nichts von Ihnen steht. Sonst wird die Nachricht an Ihren Text angehängt und mit ihm abgeschickt.")
+            }
+        }
+    }
+
     AppDialog {
         id: groupNameDialog
         width: 380
@@ -4733,6 +4926,28 @@ ApplicationWindow {
         // Arbeitsverzeichnis des aktiven Panes (QTMUX-103) — beim Öffnen des Menüs gesetzt,
         // damit die beiden Einträge nicht bei jedem Zeichnen einen Getter aufrufen.
         property string currentDir: ""
+        // Vorrang der Eingabe des Menschen: Session mit wartenden Einträgen bzw. mit
+        // getipptem, nicht abgeschicktem Text (-1 = keine).
+        property int queueSid: -1
+        property int typingSid: -1
+        AppMenuItem {
+            text: qsTr("Wartende Nachrichten …")
+            enabled: windowMenu.queueSid >= 0
+            icon.source: window.icon("broadcast")
+            onTriggered: queueViewDialog.start(windowMenu.queueSid)
+        }
+        AppMenuItem {
+            // Der Ausweg aus einem Merker, der ohne Entwurf steht (eine einzelne Taste in
+            // einem Auswahldialog sieht für QTmux wie ein angefangener Entwurf aus).
+            text: qsTr("Eingabe freigeben (Zeile ist leer)")
+            enabled: windowMenu.typingSid >= 0
+            icon.source: window.icon("terminal-window")
+            onTriggered: {
+                const row = window.rowForSessionId(windowMenu.typingSid)
+                if (row >= 0) sessions.releaseOwnerDraft(row)
+            }
+        }
+        MenuSeparator {}
         AppMenuItem {
             text: qsTr("Umbenennen …")
             icon.source: window.icon("terminal-window")

@@ -310,10 +310,13 @@ void TerminalItem::setBroadcast(bool on) {
 
 void TerminalItem::sendInput(const QByteArray &bytes) {
     if (bytes.isEmpty()) return;
+    // Hier kommen NUR echte Tastendrücke des Menschen an (keyPressEvent). Sie gehen über
+    // den Menschen-Eingang der Session, der den Merker „getippt, nicht abgeschickt“
+    // führt — MCP und Warteschlange schreiben an ihm vorbei (Session::writeFromUser).
     if (m_broadcast)
         emit inputForBroadcast(bytes);   // QML verteilt an ALLE Sessions (inkl. dieser)
     else if (m_session)
-        m_session->write(bytes);
+        m_session->writeFromUser(bytes);
 }
 
 void TerminalItem::setPointSize(int s) {
@@ -1200,7 +1203,7 @@ void TerminalItem::doPaste(const QByteArray &data) {
     // Session::writePasted rahmt (Modus 2004) und entfernt ein eingebettetes
     // ESC[201~ — eine Zwischenablage kann den End-Marker enthalten (etwa von einer
     // Webseite untergeschoben) und bräche sonst aus dem Rahmen aus.
-    if (m_session) m_session->writePasted(data);
+    if (m_session) m_session->pasteFromUser(data);   // Einfügung des Menschen
 }
 
 void TerminalItem::geometryChange(const QRectF &newGeo, const QRectF &oldGeo) {

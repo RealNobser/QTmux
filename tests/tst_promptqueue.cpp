@@ -102,7 +102,56 @@ private slots:
                                    .msSinceLastOutput = 100000, .quietMs = 500 }));
     }
 
+    void ownerTypingBlocksInBothBranches() {
+        // Der Mensch hat getippt und noch nicht abgeschickt: Der Eintrag hinge an seinem
+        // Entwurf. Das gilt für die Session, die sich meldet (auch bei `Waiting`, dem
+        // sonst wichtigsten Abgabefall) wie für die, die es nie tut.
+        for (const int a : { ActivityIdle, ActivityWaiting, ActivityError })
+            QVERIFY2(!mayDispatchNext({ .queueNotEmpty = true, .activityReported = true,
+                                        .activity = a, .ownerTyping = true }),
+                     qPrintable(QString::number(a)));
+        QVERIFY(!mayDispatchNext({ .queueNotEmpty = true, .activityReported = false,
+                                   .msSinceLastOutput = 100000, .quietMs = 500,
+                                   .ownerTyping = true }));
+        // Gegenprobe: dieselben Lagen OHNE den Merker geben ab — sonst prüfte der Fall
+        // oben nur, dass irgendetwas blockiert.
+        QVERIFY(mayDispatchNext({ .queueNotEmpty = true, .activityReported = true,
+                                  .activity = ActivityWaiting, .ownerTyping = false }));
+        QVERIFY(mayDispatchNext({ .queueNotEmpty = true, .activityReported = false,
+                                  .msSinceLastOutput = 100000, .quietMs = 500,
+                                  .ownerTyping = false }));
+    }
+
     // ---------------------------------------------------------------- Einreihen
+
+    void sendersTravelWithTheirEntries() {
+        // Der Absender gehört zum Eintrag: Er muss jedes Umsortieren, Löschen und
+        // Entnehmen mitmachen, sonst steht an der Kachel der falsche Name.
+        PromptQueue q;
+        QVERIFY(q.enqueue("eins", "#2 A"));
+        QVERIFY(q.enqueue("zwei"));                 // ohne Absender
+        QVERIFY(q.enqueue("drei", "#4 C"));
+        QCOMPARE(q.senders(), QStringList({ "#2 A", "", "#4 C" }));
+        QCOMPARE(q.senderAt(2), QString("#4 C"));
+        QCOMPARE(q.senderAt(7), QString());
+
+        QVERIFY(q.insert(1, "dazwischen", "#9 X"));
+        QCOMPARE(q.senders(), QStringList({ "#2 A", "#9 X", "", "#4 C" }));
+        QVERIFY(q.move(3, 0));
+        QCOMPARE(q.entries(), QStringList({ "drei", "eins", "dazwischen", "zwei" }));
+        QCOMPARE(q.senders(), QStringList({ "#4 C", "#2 A", "#9 X", "" }));
+        QVERIFY(q.removeAt(1));
+        QCOMPARE(q.senders(), QStringList({ "#4 C", "#9 X", "" }));
+
+        QCOMPARE(q.takeNext(), QString("drei"));
+        QCOMPARE(q.lastTakenSender(), QString("#4 C"));
+        QCOMPARE(q.senders(), QStringList({ "#9 X", "" }));
+        // Abgewiesener Text hinterlässt auch keinen Absender.
+        QVERIFY(!q.enqueue("   ", "#5 leer"));
+        QCOMPARE(q.senders().size(), q.entries().size());
+        q.clear();
+        QVERIFY(q.senders().isEmpty());
+    }
 
     void enqueueAppendsAndSignals() {
         PromptQueue q;

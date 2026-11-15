@@ -16,6 +16,7 @@ anderen Session **fertig** ist oder eine **Frage** hat).
 | `qtmux-emit.ps1` / `qtmux-emit.cmd` | Windows | dito für Windows |
 | `qtmux-wait.sh` | macOS/Linux | **Warten** auf ein Ereignis; blockiert und endet beim ersten Treffer — siehe unten |
 | `qtmux-wait.ps1` / `qtmux-wait.cmd` | Windows | dito für Windows |
+| `qtmux-inbox.sh` | macOS/Linux | meldet QTmux den **Nachrichten-Eingang** einer Claude-Code-Sitzung (SessionStart-Hook), damit `send_message` sie ohne Eingabezeile erreicht — siehe [docs/MCP.md](../docs/MCP.md) |
 
 ## Woher bekomme ich diese Dateien?
 

@@ -58,6 +58,8 @@ public:
         GitBranchRole,      // QTMUX-58: Branch bzw. kurzer SHA
         GitDetachedRole,
         QueuedCountRole,    // QTMUX-90: Anzahl eingereihter Prompts
+        OwnerTypingRole,    // Mensch hat getippt und noch nicht abgeschickt
+        QueueNoteRole,      // „Von … — Nachricht wartet“ (leer, wenn nichts deshalb wartet)
         GroupRole,
         SessionRole,
     };
@@ -113,10 +115,21 @@ public:
     /// Anzahl wartender Eintraege bzw. deren Inhalte — fuer Zaehler und Bearbeiten-Popup.
     Q_INVOKABLE int queuedCount(int row) const;
     Q_INVOKABLE QStringList queuedEntries(int row) const;
+    /// Absender der wartenden Einträge, deckungsgleich zu `queuedEntries`.
+    Q_INVOKABLE QStringList queuedSenders(int row) const;
+    /// Gibt die Eingabe einer Session frei (Mensch: „meine Zeile ist leer“) — danach
+    /// gehen wartende Einträge nach der normalen Regel hinaus.
+    Q_INVOKABLE void releaseOwnerDraft(int row);
     Q_INVOKABLE bool removeQueuedAt(int row, int index);
     Q_INVOKABLE int clearQueue(int row);
 
     Q_INVOKABLE void writeToAll(const QByteArray &data);
+    /// Dasselbe für Tasten des MENSCHEN (Broadcast-Eingabe aus einem Terminal): Jede
+    /// Session führt dabei ihren Merker „getippt, nicht abgeschickt“ nach. `writeToAll`
+    /// bleibt der maschinelle Weg (MCP `send_text` mit broadcast).
+    Q_INVOKABLE void writeToAllFromUser(const QByteArray &data);
+    /// IDs der Sessions, in denen der Mensch getippt und noch nicht abgeschickt hat.
+    QStringList sessionsWithOwnerTyping() const;
     /// Schickt `text` an EINE Session (QTMUX-96: der von der Palette ausgewählte
     /// Projekt-Befehl). Mit `submit` folgt ein Enter — und zwar **zeitlich abgesetzt**
     /// über `Session::writeWithEnter`, weil TUI-Agenten einen in einem Rutsch

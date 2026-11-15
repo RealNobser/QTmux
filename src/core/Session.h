@@ -5,6 +5,7 @@
 #include <QDateTime>
 #include <QElapsedTimer>
 
+#include "OwnerDraft.h"
 #include "PromptQueue.h"
 #include "StallDetector.h"
 #include <memory>
@@ -80,6 +81,14 @@ class Session : public QObject {
     Q_PROPERTY(bool gitDetached READ gitDetached NOTIFY gitBranchChanged)
     // Anzahl eingereihter Prompts (QTMUX-90) — treibt das Zaehler-Abzeichen auf der Kachel.
     Q_PROPERTY(int queuedCount READ queuedCount NOTIFY queueChanged)
+    // Vorrang der Eingabe des Menschen: Er hat in dieser Session getippt und noch nicht
+    // abgeschickt. Solange das steht, wartet die Warteschlange, und MCP `send_text`/
+    // `send_keys` schreiben nicht hinein. Regel: OwnerDraft.h.
+    Q_PROPERTY(bool ownerTyping READ ownerTyping NOTIFY ownerTypingChanged)
+    Q_PROPERTY(qint64 ownerTypingSinceMs READ ownerTypingSinceMs NOTIFY ownerTypingChanged)
+    // Anzeigetext „Von … — Nachricht wartet“ für die Kachel: gesetzt, solange Einträge
+    // NUR deshalb warten, weil der Mensch tippt. Leer sonst.
+    Q_PROPERTY(QString queueNote READ queueNote NOTIFY queueNoteChanged)
     // Stillstand (QTMUX-139): der Agent zeigt „arbeitet", der Bildschirm steht aber seit
     // der eingestellten Schwelle still. `stallNote` ist der Anzeigetext dazu (leer, solange
     // nichts steht) und zählt die Minuten mit.
@@ -155,7 +164,46 @@ public:
     int queuedCount() const;
     /// Reiht Text ein (oder schickt ihn sofort, wenn die Session gerade frei ist).
     /// Liefert false, wenn der Text abgewiesen wurde (leer nach dem Trimmen).
-    Q_INVOKABLE bool queueText(const QString &text);
+    /// `sender` ist ein Anzeigetext für den Absender (leer = unbekannt); er steht an der
+    /// Kachel und in der MCP-Antwort, solange der Eintrag wartet.
+    Q_INVOKABLE bool queueText(const QString &text, const QString &sender = QString());
+
+    // --- Vorrang der Eingabe des Menschen ------------------------------------
+    /// Eingang für ECHTE Tastendrücke aus der Oberfläche: führt den Merker nach
+    /// (OwnerDraft.h) und schreibt dann wie `write`. 🔑 `write`, `writePasted` und
+    /// `writeWithEnter` bleiben der Weg für alles Maschinelle (MCP, Warteschlange,
+    /// Mausrad) und fassen den Merker nicht an: Die Herkunft kennt nur der Aufrufer, an
+    /// den Bytes ist sie nicht zu erkennen (Tastatur und MCP `send_keys` erzeugen
+    /// dieselben).
+    void writeFromUser(const QByteArray &data);
+    /// Eingang für eine Einfügung des Menschen (Zwischenablage); rahmt wie `writePasted`.
+    void pasteFromUser(const QByteArray &data);
+    /// Hat der Mensch hier getippt und noch nicht abgeschickt?
+    bool ownerTyping() const { return m_ownerDraft.pending(); }
+    /// Zeitpunkt der ersten Taste des laufenden Entwurfs (ms seit Epoche), 0 = keiner.
+    qint64 ownerTypingSinceMs() const { return m_ownerDraft.pending() ? m_ownerTypingSinceMs : 0; }
+    /// Gibt die Eingabe ausdrücklich frei (Mensch in der Oberfläche: „meine Zeile ist
+    /// leer“). Wartende Einträge gehen danach nach der normalen Regel hinaus.
+    Q_INVOKABLE void releaseOwnerDraft();
+    /// Vermerkt, dass eine MASCHINELLE Eingabe die Zeile abgeschickt hat (erzwungenes
+    /// `send_text` mit Enter): Was der Mensch dort stehen hatte, ist mit hinausgegangen,
+    /// der Merker fällt also.
+    void noteLineSubmittedByAutomation();
+    QString queueNote() const { return m_queueNote; }
+
+    // --- Nachrichten-Eingang des Agenten (AgentInbox.h) ----------------------
+    /// Vom Agenten SELBST gemeldete Gegenstelle für Nachrichten ohne Eingabezeile
+    /// (MCP `set_agent_inbox`). Reiner Laufzeitzustand, nie persistiert: Der Socket
+    /// gehört zum laufenden Agentenprozess und ist nach dessen Ende wertlos.
+    /// Nicht zu verwechseln mit `agentSessionRef` (Fortsetzungs-Kennung, QTMUX-98).
+    void setAgentInbox(const QString &kind, const QString &address, const QString &version);
+    void clearAgentInbox();
+    bool hasAgentInbox() const { return !m_inboxAddress.isEmpty(); }
+    QString agentInboxKind() const { return m_inboxKind; }
+    QString agentInboxAddress() const { return m_inboxAddress; }
+    QString agentInboxVersion() const { return m_inboxVersion; }
+    /// Letzte Notiz zu einer zugestellten Nachricht (Absender), für Kachel und MCP.
+    void noteMessageDelivered(const QString &sender);
     /// Millisekunden seit der letzten Backend-Ausgabe; < 0 = noch nie etwas empfangen.
     qint64 msSinceLastOutput() const;
 
@@ -397,6 +445,8 @@ signals:
     void workingDirectoryChanged();
     void gitBranchChanged();
     void queueChanged();
+    void ownerTypingChanged();
+    void queueNoteChanged();
     void stallChanged();
     void groupChanged();
     void windowIdChanged();
@@ -419,6 +469,9 @@ private:
     void onPromptMarker(char kind, int exitCode); // OSC 133
     void onAgentEvent(const QString &kind, const QString &text); // OSC 777;qtmux-event
     void tryDispatchQueued();                   // QTMUX-90: Abgabe pruefen
+    void humanInput(const QByteArray &data, HumanInputKind kind);   // Merker nachführen
+    void setOwnerDraft(OwnerDraftState next);
+    void updateQueueNote();
     void onBackendData(const QByteArray &data); // QTMUX-130: puffern oder durchreichen
     void flushPendingHistory();                 // QTMUX-130: Verlauf + Puffer einspielen
 
@@ -428,6 +481,12 @@ private:
     QString m_title = QStringLiteral("Shell");
     QString m_workingDir;      // gecachtes Arbeitsverzeichnis (Polling oder OSC 7)
     std::unique_ptr<PromptQueue> m_queue;      // QTMUX-90
+    OwnerDraftState m_ownerDraft;              // Mensch hat getippt, nicht abgeschickt
+    qint64 m_ownerTypingSinceMs = 0;
+    QString m_queueNote;
+    QString m_inboxKind;      // Nachrichten-Eingang des Agenten (leer = keiner gemeldet)
+    QString m_inboxAddress;
+    QString m_inboxVersion;   // vom Agenten gemeldete eigene Fassung (optional)
     QElapsedTimer m_lastOutput;               // Uhr fuer msSinceLastOutput
     QTimer *m_dispatchTimer = nullptr;        // laeuft nur, solange etwas ansteht
     // QTMUX-130: wiederhergestellter Verlauf, der auf die erste echte Groesse wartet,

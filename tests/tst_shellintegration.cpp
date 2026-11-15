@@ -44,6 +44,8 @@ void TestShellIntegration::allBundledFilesExistInResources() {
     QVERIFY(files.contains(QStringLiteral("qtmux-wait.sh")));
     QVERIFY(files.contains(QStringLiteral("qtmux-emit.cmd")));
     QVERIFY(files.contains(QStringLiteral("qtmux-wait.cmd")));
+    // Der Hook-Helfer für den Nachrichten-Eingang (send_message ohne Eingabezeile).
+    QVERIFY(files.contains(QStringLiteral("qtmux-inbox.sh")));
 }
 
 void TestShellIntegration::installWritesEveryFile() {

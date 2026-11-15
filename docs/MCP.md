@@ -70,7 +70,7 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 
 | Tool | Argumente | Zweck |
 |---|---|---|
-| `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification, workingDir, progress*, stalled — s. „Stillstand") |
+| `list_sessions` | – | Alle Sessions (id, title, type, activity, agentId, needsAttention, lastNotification, workingDir, progress*, stalled — s. „Stillstand"; `ownerTyping`, `queued`, `queuedFrom`, `agentInbox` — s. „Vorrang der Eingabe des Menschen") |
 | `create_session` | `type` ("shell"/"serial"/"ssh"/"plugin"), `program?`, `cwd?`, `port?`, `baud?`, `host?`, `user?`, `identity?`, `pluginId?`, `typeId?`, `loginScript?`, `focus?` (Standard false) | Session in einem **neuen Window** (Tab) anlegen — **im Hintergrund**, der Fokus bleibt, wo er ist (s. „Kein Fokuswechsel") → gibt neue **id** zurück (Pane *im* aktiven Window: `split_pane`) |
 | `close_session` | `id` | Session schließen |
 | `set_session_group` | `id`, `group?` | Das **Window** dieser Session einer Sidebar-Gruppe zuordnen; leerer/fehlender `group` nimmt es heraus (Window-Modell) |
@@ -78,9 +78,11 @@ QTMUX_PROFILE=test QTMUX_MCP_PORT=7346 ./qtmux.app/Contents/MacOS/qtmux
 | `rename_group` | `from`, `to?` | Bestehende **Window-Gruppe** umbenennen (alle Mitglieder) bzw. **auflösen** (leeres `to`) |
 | `move_group` | `name`, `direction` | Ganze **Window-Gruppe** als Block in der Sidebar verschieben (`direction`: `up`/`down`) |
 | `focus_session` | `id` | **Window** aktivieren, in dem die Session als Pane liegt (Window-Modell) |
-| `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard größenabhängig, s. u.), `broadcast?` | Text als **Einfügung** in die Session (Bracketed Paste, wenn die App Modus 2004 aktiviert hat); Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt) |
-| `send_keys` | `id`, `keys` (string[]), `enterDelayMs?` (Standard 60) | **Benannte Tasten** im tmux-`send-keys`-Stil: Chords (`C-u`, `M-x`, `C-M-p`), Sondertasten (Enter, Escape, Tab, BTab, Backspace, Space, Pfeile, Home/End, PageUp/PageDown, Delete, Insert, F1–F12, auch `C-Right`), Unerkanntes = Literaltext (s. u.) |
-| `queue_text` | `id`, `text?`, `clear?` | Text **einreihen** statt sofort senden: Er geht raus, sobald die Session frei ist (s. u.). Ohne `text` nur abfragen, mit `clear:true` leeren |
+| `send_message` | `id`, `text` | **Nachricht an eine andere Session, ohne ihre Eingabezeile** — der Weg für Rückmeldungen und Aufträge zwischen Agenten (s. „Nachrichten zwischen Sessions"). Die Antwort nennt den Weg (`via`: `inbox` oder `queue`) |
+| `set_agent_inbox` | `kind`, `address`, `version?`, `sessionId?` | Meldet den **Nachrichten-Eingang** der eigenen Sitzung, damit `send_message` sie ohne Eingabezeile erreicht (für Claude Code per Hook, s. u.). Leere `address` löscht |
+| `send_text` | `id`, `text`, `enter?` (Standard true), `enterDelayMs?` (Standard größenabhängig, s. u.), `broadcast?`, `force?` | Text als **Einfügung** in die Session (Bracketed Paste, wenn die App Modus 2004 aktiviert hat); Enter geht **kurz danach** raus (s. u.). Mit `broadcast:true` an **alle** Sessions (`id` entfällt). **Lehnt ab, solange der Mensch dort tippt** (s. „Vorrang") |
+| `send_keys` | `id`, `keys` (string[]), `enterDelayMs?` (Standard 60), `force?` | **Benannte Tasten** im tmux-`send-keys`-Stil: Chords (`C-u`, `M-x`, `C-M-p`), Sondertasten (Enter, Escape, Tab, BTab, Backspace, Space, Pfeile, Home/End, PageUp/PageDown, Delete, Insert, F1–F12, auch `C-Right`), Unerkanntes = Literaltext (s. u.). **Lehnt ab, solange der Mensch dort tippt** |
+| `queue_text` | `id`, `text?`, `clear?` | Text **einreihen** statt sofort senden: Er geht raus, sobald die Session frei ist **und der Mensch dort nichts Angefangenes stehen hat** (s. u.). Ohne `text` nur abfragen, mit `clear:true` leeren |
 | `read_screen` | `id`, `scrollback?` | Sichtbaren Bildschirm als Klartext lesen; mit `scrollback:true` zusätzlich die Historie davor |
 | `attach_controller` | `id` | Markiert die Session als steuernde **MCP-Controller**-Session (roter Tab) |
 | `set_theme` | `mode` ("system"/"light"/"dark") | App-Design umschalten |
@@ -180,6 +182,165 @@ nach jedem Wechsel. Ein leerer `ref` löscht die Zuordnung.
 Ohne Meldung ist das kein Fehler: Der Anwender kann stattdessen „jüngste Unterhaltung im
 Verzeichnis" oder „Auswahl beim Start" wählen — dann starten Sie eben ohne diese Angabe.
 
+## Vorrang der Eingabe des Menschen (QTMUX-157)
+
+Der Befund dahinter (Owner, 2026-11-15): Ein Agent schickte einer Session per `queue_text`
+eine Meldung, während der Mensch dort einen Satz angefangen hatte. Der Text hing sich an
+den halben Satz, und beides ging zusammen hinaus.
+
+QTmux führt darum je Session einen Merker **„der Mensch hat getippt und noch nicht
+abgeschickt“** (`ownerTyping`). Er steht nur nach **echten Tasten und Einfügungen aus der
+Oberfläche** — nie nach `send_text`, `send_keys` oder einem Warteschlangen-Eintrag.
+Solange er steht:
+
+| Werkzeug | Verhalten |
+|---|---|
+| `queue_text`, Warteschlange | **wartet**, bis der Mensch abgeschickt oder verworfen hat |
+| `send_text`, `send_keys` | **lehnen ab** (`isError`, es wird nichts gesendet); die Meldung nennt die Auswege |
+| `send_text` mit `broadcast` | geht an **keine** Session, wenn in einer getippt wird |
+| `send_message` | über den Eingang des Agenten unberührt; über die Warteschlange wartet sie |
+
+**Warum ablehnen statt einreihen?** `send_text` und `send_keys` sind die Werkzeuge für
+„jetzt“: Der Aufrufer baut auf die Wirkung (ein `/clear` vor dem Auftrag, eine Taste für
+den Dialog, der gerade offen ist). Später zugestellt träfe dieselbe Taste einen anderen
+Zustand, und ein still eingereihter Text sähe für den Aufrufer wie ein gesendeter aus.
+Für „später“ gibt es `queue_text`, für eine Nachricht an einen Agenten `send_message`.
+
+**Wann fällt der Merker?** Enter (abgeschickt), Strg-C (verworfen), wenn alle selbst
+getippten Zeichen wieder zurückgelöscht sind, Strg-U bei einer einzelnen, vollständig
+selbst getippten Zeile — und wenn der Mensch die Eingabe in der Oberfläche freigibt
+(Kontextmenü der Kachel bzw. Dialog „Wartende Nachrichten“). Escape setzt **nicht**
+zurück, und einen Zeitablauf gibt es bewusst nicht: Ein halber Satz, den der Mensch
+stehen lässt, ist genau der Fall, um den es geht.
+
+> ⚠️ **QTmux sieht die Tasten des Menschen, nicht die Eingabezeile des Programms.**
+> Verbraucht das Programm eine einzelne Taste sofort (eine Ziffer in einem Auswahldialog,
+> `q` in `less`), sieht das wie ein angefangener Entwurf aus — der Merker bleibt stehen,
+> bis der Mensch dort Enter oder Strg-C drückt oder die Eingabe freigibt. Das ist die
+> gewollte Richtung des Irrtums (lieber wartet eine Nachricht zu lange). Umgekehrt setzt
+> nichts den Merker, was das Programm selbst in die Zeile legt.
+
+**Was ein Aufrufer sieht:** `list_sessions` meldet je Session `ownerTyping` (mit
+`ownerTypingForMs`), `queued` und `queuedFrom`. `queue_text` antwortet zusätzlich mit
+`ownerTyping` und `items` (`[{text, from}]`, dieselben Einträge wie `entries` mit Absender).
+In der Seitenleiste steht an der Kachel „✉ Von … — Nachricht wartet“; ein Klick auf das
+Abzeichen ⏱ zeigt die Texte.
+
+**Der Überstimmer `force: true`** (`send_text`, `send_keys`) schreibt trotz des Merkers.
+Der Text landet dann **im** Entwurf des Menschen und geht mit einem Enter zusammen mit ihm
+hinaus. Nur im Notfall und erst, wenn `read_screen` eine leere Eingabezeile zeigt —
+dafür ist er da: für den Merker, der ohne Entwurf steht.
+
+> ⚠️ `read_screen` zeigt auch **Auto-Vorschläge** des Programms in der Eingabezeile (bei
+> Claude Code grauer Text hinter `❯`). Sie sehen aus wie getippter Text, sind aber keiner:
+> Der Merker steht dann **nicht**.
+
+**Den Absender setzt QTmux selbst**: die Session, in deren Prozessbaum der aufrufende
+Client läuft. Es gibt kein Argument dafür — ein Absender, den der Absender wählt, wäre
+keiner. Ein Aufruf von außerhalb jeder Session heißt `unbekannt`.
+
+## Nachrichten zwischen Sessions: `send_message` (QTMUX-157)
+
+```json
+{"name":"send_message","arguments":{"id":3,"text":"Tests sind grün, Bericht liegt unter …"}}
+```
+
+`send_message` ist der Weg, einer anderen Session etwas zu **sagen** — im Unterschied zu
+`send_text`/`queue_text`, die etwas **eintippen**. Zwei Wege, die Antwort nennt den
+genommenen:
+
+| `via` | Wann | Was beim Empfänger geschieht |
+|---|---|---|
+| `inbox` | die Ziel-Session hat einen Nachrichten-Eingang gemeldet | die Nachricht erscheint als **eigene Zeile im Verlauf** („Message from @QTmux-…“), die Eingabezeile bleibt unberührt — auch während der Mensch tippt, der Agent arbeitet oder eine Rückfrage offen ist |
+| `queue` | kein Eingang gemeldet, oder die Zustellung scheiterte (`reason` sagt, warum) | wie `queue_text`, mit einer Kopfzeile „QTmux-Nachricht von Session …, nicht vom Menschen an diesem Terminal getippt“ — wartet also auf den Menschen |
+
+`status` ist `handed-over` (an den Eingang übergeben), `dispatched` (über die Warteschlange
+sofort hinausgegangen) oder `queued` (wartet). **`handed-over` heißt übergeben, nicht
+gelesen**: Der Eingang antwortet nicht. Ob der Empfänger die Nachricht annimmt oder für
+seinen Menschen zurückhält, erfährt QTmux nicht (s. „Grenzen“).
+
+**Kein Rückfall in eine nackte Shell.** Scheitert der Eingang und läuft in der
+Ziel-Session kein Programm mehr (nur die Shell — der typische Fall „Agent beendet“),
+stellt `send_message` **gar nicht** zu und meldet einen Fehler: Über die Eingabezeile
+würde die Nachricht dort Zeile für Zeile als Befehl ausgeführt. Gemessen wird das am
+Prozessbaum der Session (lokale Shells; bei SSH, seriell und Plugin lässt es sich nicht
+messen, dort bleibt es beim Einreihen).
+
+### Den Eingang melden (Claude Code)
+
+Claude Code öffnet je Sitzung einen Socket für Nachrichten zwischen Sitzungen und gibt
+seinen Hooks den Pfad als `CLAUDE_CODE_MESSAGING_SOCKET` mit. Ein **SessionStart-Hook**
+meldet ihn QTmux — das Skript liegt bei (`qtmux --install-shell-integration` schreibt es
+heraus, s. `shell-integration/README.md`):
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "/pfad/zu/qtmux-inbox.sh" } ] }
+    ]
+  }
+}
+```
+
+Das Skript ruft `set_agent_inbox` mit `kind: "claude-code"`, dem Socket-Pfad, der eigenen
+`$QTMUX_SESSION_ID` und — soweit der Hook sie sieht — der Fassung des Agenten. Läuft der
+Agent nicht in einer QTmux-Session oder hat er keinen Socket, tut es nichts. **Prüfen, ob
+es trägt:** Nach dem Start der Sitzung zeigt `list_sessions` bei ihr
+`"agentInbox":"claude-code"`.
+
+Drei Dinge dazu:
+
+* **QTmux schreibt nur, wenn am Socket ein Prozess aus genau dieser Session lauscht.** Der
+  Socket-Name trägt eine PID, und PIDs werden wiederverwendet — vor dem Schreiben liest
+  QTmux, wer am anderen Ende hängt, und prüft, dass er im Prozessbaum der Session-Shell
+  liegt. Sonst geht kein Byte hinaus.
+* **Der Empfänger entscheidet, ob er annimmt.** In Claude Code regelt das die Einstellung
+  `crossSessionInbound` (`accept`/`hold`/`refuse`). Ohne Einstellung nimmt eine Sitzung im
+  Modus `default`/`auto`/`acceptEdits` Nachrichten an (gemessen); eine Sitzung mit freien
+  Rechten hält sie für ihren Menschen zurück (so der Code von 2.1.323, nicht gemessen) —
+  dort braucht es `"crossSessionInbound": "accept"`. Eine geänderte Einstellungsdatei
+  wirkt ohne Neustart der Sitzung.
+* **Der Token der Sitzung wird nicht verwendet.** Unter macOS und Linux verlangt der
+  Eingang keine Anmeldung; QTmux liest `CLAUDE_CODE_MESSAGING_TOKEN` nicht und speichert
+  nichts davon.
+
+### Was der Empfänger sieht — und ob es sich mit dem Menschen verwechseln lässt
+
+Über den Eingang steht im Verlauf der Sitzung eine Zeile `› Message from @QTmux-<id>-<Titel>:
+<erste Zeile> (ctrl+o to expand)` — eine andere Darstellung als eine Eingabe des Menschen
+(`❯ …`). Das Modell bekommt die Nachricht mit dem Hinweis von Claude Code, sie stamme von
+einer anderen Sitzung und sei **nicht** von seinem Nutzer getippt; es behandelt sie als
+Bitte eines Teammitglieds, nicht als Anweisung des Nutzers, und darf sie nicht als dessen
+Zustimmung zu einer offenen Rückfrage werten. Den Namen setzt QTmux (`QTmux #<id>
+<Titel>` der aufrufenden Session); QTmux gibt weder eine Sitzungs-Adresse noch einen
+Rechte-Modus an, der Empfänger führt die Nachricht deshalb als „unidentified session“.
+Am Ende der Nachricht steht, wie man antwortet (`send_message` mit der ID des Absenders)
+und dass `SendMessage` von Claude Code den Absender **nicht** erreicht.
+
+Über die Warteschlange kommt die Nachricht dagegen als getippte Eingabe an — für das
+Programm nicht von einer Eingabe des Menschen zu unterscheiden. Darum die Kopfzeile.
+
+⚠️ Was QTmux **nicht** verhindern kann: dass der **Text** einer Nachricht etwas behauptet
+(„der Owner sagt …“). Belastbar ist allein der Absender in der Kopf- bzw. Namenszeile.
+
+### Grenzen
+
+* 🔴 **Das Rahmenformat des Sockets ist nicht dokumentiert.** Dokumentiert sind die
+  Umgebungsvariable und die Anmeldezeile; den Rahmen selbst hat QTmux am 2026-11-15 an
+  Claude Code **2.1.323** mitgeschnitten. Ein Update von Claude Code kann ihn ändern —
+  und QTmux merkt das **nicht** am Socket: Der nimmt die Zeile an und antwortet nie.
+  Zwei Hilfen: Meldet der Hook eine andere Fassung als die belegte, steht in der Antwort
+  von `send_message` ein `note`; und die Probe in `docs/owner-abnahmen.md` (QTMUX-157)
+  zeigt in einer Minute, ob eine Nachricht noch ankommt. Nach jedem Claude-Code-Update
+  lohnt sie sich.
+* **Kein Zustellbeleg.** Hält der Empfänger die Nachricht zurück (`hold`) oder lehnt er
+  ab (`refuse`), sieht das nur sein Mensch.
+* **Windows:** Dort ist der Eingang eine Named Pipe mit Anmeldepflicht — nicht gemessen
+  und nicht gebaut. `send_message` nimmt unter Windows immer die Warteschlange.
+* **Andere Agenten** als Claude Code haben (noch) keinen Eingang: `send_message` nimmt die
+  Warteschlange. Eine weitere Art ist eine Zeile in `AgentInbox` plus ein Rahmen.
+
 ## Sessions steuern: zwei Fallen, die Erfolg melden
 
 ### `queue_text` — einreihen statt dazwischenfunken (QTMUX-90)
@@ -204,7 +365,12 @@ Leerer Text wird abgewiesen. Das ist kein Sonderfall, sondern Absicht: Ein blank
 wäre in einem Agenten-TUI eine **Handlung** (es bestätigt die vorausgewählte Option einer
 Rückfrage).
 
-Die Antwort enthält `queued`, `count`, `cleared` und die aktuellen `entries`.
+Ein dritter Fall kam mit QTMUX-157 dazu: Hat der **Mensch** in der Session getippt und
+noch nicht abgeschickt, wartet der Eintrag ebenfalls (s. „Vorrang der Eingabe des
+Menschen“).
+
+Die Antwort enthält `queued`, `count`, `cleared`, `ownerTyping`, die aktuellen `entries`
+und dieselben Einträge als `items` mit Absender.
 
 ### `send_text` — das Enter geht abgesetzt raus (QTMUX-31)
 

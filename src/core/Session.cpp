@@ -101,6 +101,7 @@ Session::Session(QObject *parent)
     connect(m_dispatchTimer, &QTimer::timeout, this, &Session::tryDispatchQueued);
     connect(m_queue.get(), &PromptQueue::changed, this, [this]() {
         emit queueChanged();
+        updateQueueNote();
         if (m_queue->isEmpty()) m_dispatchTimer->stop();
         else if (!m_dispatchTimer->isActive()) m_dispatchTimer->start();
     });
@@ -129,8 +130,8 @@ qint64 Session::msSinceLastOutput() const {
     return m_lastOutput.isValid() ? m_lastOutput.elapsed() : -1;
 }
 
-bool Session::queueText(const QString &text) {
-    if (!m_queue || !m_queue->enqueue(text)) return false;
+bool Session::queueText(const QString &text, const QString &sender) {
+    if (!m_queue || !m_queue->enqueue(text, sender)) return false;
     // Sofort versuchen: Ist die Session ohnehin frei, soll der Text ohne die
     // Timer-Verzögerung rausgehen — sonst fühlte sich normales Tippen träge an.
     tryDispatchQueued();
@@ -147,6 +148,7 @@ void Session::tryDispatchQueued() {
         .activityReported  = m_activityReported,
         .activity          = activityInt(),
         .msSinceLastOutput = msSinceLastOutput(),
+        .ownerTyping       = ownerTyping(),
     };
     if (!mayDispatchNext(ctx)) return;
     const QString next = m_queue->takeNext();
@@ -528,6 +530,82 @@ void Session::start(int cols, int rows) {
 void Session::write(const QByteArray &data) {
     observeInput(data);
     if (m_backend) m_backend->write(data);
+}
+
+void Session::writeFromUser(const QByteArray &data) {
+    humanInput(data, HumanInputKind::Key);
+    write(data);
+}
+
+void Session::pasteFromUser(const QByteArray &data) {
+    humanInput(data, HumanInputKind::Paste);
+    writePasted(data);
+}
+
+void Session::humanInput(const QByteArray &data, HumanInputKind kind) {
+    if (data.isEmpty()) return;
+    // Der Mensch schickt ab oder verwirft: Die Ruhe-Uhr neu stellen, sonst fiele ein
+    // wartender Eintrag bei einer Session ohne eigene Zustandsmeldung im selben
+    // Augenblick hinterher (ihre letzte Ausgabe liegt lange zurück) — noch bevor das
+    // Programm auf das Enter des Menschen reagieren konnte.
+    if (endsOwnerDraft(data, kind)) m_lastOutput.restart();
+    setOwnerDraft(nextOwnerDraft(m_ownerDraft, data, kind));
+}
+
+void Session::setOwnerDraft(OwnerDraftState next) {
+    const bool was = m_ownerDraft.pending();
+    m_ownerDraft = next;
+    if (was == next.pending()) return;
+    if (next.pending()) m_ownerTypingSinceMs = QDateTime::currentMSecsSinceEpoch();
+    emit ownerTypingChanged();
+    updateQueueNote();
+    // Frei geworden: Wartendes prüfen. Verzögert, weil der Aufrufer das Enter des
+    // Menschen erst NACH dieser Stelle schreibt — die Abgabe darf nicht davor landen.
+    if (!next.pending() && m_queue && !m_queue->isEmpty())
+        QMetaObject::invokeMethod(this, &Session::tryDispatchQueued, Qt::QueuedConnection);
+}
+
+void Session::releaseOwnerDraft() { setOwnerDraft({}); }
+
+void Session::noteLineSubmittedByAutomation() { setOwnerDraft({}); }
+
+void Session::updateQueueNote() {
+    QString note;
+    const int n = queuedCount();
+    if (n > 0 && ownerTyping()) {
+        const QString from = m_queue->senderAt(0);
+        const QString who = from.isEmpty()
+            ? QCoreApplication::translate("Session", "unbekanntem Absender") : from;
+        // Absender ZUERST: Die Kachel ist schmal und kürzt hinten — am Bild gesehen
+        // blieb von „Nachricht wartet — von #2 Zsh“ genau der Absender auf der Strecke.
+        note = n == 1
+            ? QCoreApplication::translate("Session", "Von %1 — Nachricht wartet").arg(who)
+            : QCoreApplication::translate("Session", "Von %2 zuerst — %1 Nachrichten warten")
+                  .arg(QString::number(n), who);
+    }
+    if (note == m_queueNote) return;
+    m_queueNote = note;
+    emit queueNoteChanged();
+}
+
+void Session::setAgentInbox(const QString &kind, const QString &address,
+                            const QString &version) {
+    m_inboxKind = kind;
+    m_inboxAddress = address;
+    m_inboxVersion = version.trimmed();
+}
+
+void Session::clearAgentInbox() {
+    m_inboxKind.clear();
+    m_inboxAddress.clear();
+    m_inboxVersion.clear();
+}
+
+void Session::noteMessageDelivered(const QString &sender) {
+    m_lastNotification = sender.isEmpty()
+        ? QCoreApplication::translate("Session", "Nachricht zugestellt")
+        : QCoreApplication::translate("Session", "Nachricht zugestellt — von %1").arg(sender);
+    emit notificationChanged();
 }
 
 void Session::writeWithEnter(const QByteArray &data, int enterDelayMs) {

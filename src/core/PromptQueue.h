@@ -35,6 +35,9 @@ struct DispatchContext {
     int    activity          = ActivityRunning;   ///< zuletzt gemeldeter/angenommener Zustand
     qint64 msSinceLastOutput = -1;      ///< ms seit der letzten Backend-Ausgabe; < 0 = noch keine
     qint64 quietMs           = kDefaultQuietMs;   ///< Ruhefenster für ungemeldete Sessions
+    /// Hat der MENSCH in dieser Session getippt und noch nicht abgeschickt
+    /// (`OwnerDraftState::pending`)? Dann wird nichts abgegeben — s. `mayDispatchNext`.
+    bool   ownerTyping       = false;
 };
 
 /// **Die Abgabe-Bedingung** — reine Funktion, Gui-frei und ohne Zustand, damit sie ohne
@@ -67,8 +70,13 @@ struct DispatchContext {
 ///    ist keine Bildschirm-Auswertung (die Projektlinie aus QTMUX-30 verbietet, aus dem
 ///    *Inhalt* etwas abzuleiten) — gemessen wird nur, **ob** Bytes fließen.
 ///
-/// Zwei Zustände blockieren immer:
+/// Drei Zustände blockieren immer:
 /// - `Closed` — in eine tote Session schreibt niemand mehr, auch nicht nach langer Ruhe.
+/// - `ownerTyping` — der Mensch hat dort getippt und noch nicht abgeschickt. Ein Eintrag,
+///   der jetzt hinausginge, hinge an seinem Entwurf und schickte beides zusammen ab
+///   (Owner-Befund 2026-11-15). Das gilt in BEIDEN Zweigen und auch bei `Waiting`: Dass
+///   der Agent auf eine Antwort wartet, heißt gerade, dass der Mensch sie womöglich
+///   eben tippt. Woher der Wert kommt, steht in [OwnerDraft.h](OwnerDraft.h).
 /// - `msSinceLastOutput < 0` (noch **nie** Ausgabe) in Zweig 2 — eine Shell, die noch kein
 ///   Lebenszeichen gegeben hat, ist nicht ruhig, sondern **noch nicht bereit**; ihr Prompt
 ///   kommt erst. Hineinzuschreiben ist dieselbe Falle wie beim Login-Script (QTMUX-98).
@@ -97,6 +105,12 @@ public:
 
     // --- Lesen ---------------------------------------------------------------
     int count() const { return int(m_entries.size()); }
+    /// Absender des Eintrags an `index` (leer = unbekannt bzw. ungültiger Index). Ein
+    /// Anzeigetext, den die Anbindung beim Einreihen mitgibt — die Warteschlange deutet
+    /// ihn nicht. Läuft bei jedem Umsortieren und Entnehmen mit seinem Eintrag mit.
+    Q_INVOKABLE QString senderAt(int index) const;
+    /// Alle Absender, deckungsgleich zu `entries()`.
+    Q_INVOKABLE QStringList senders() const { return m_senders; }
     Q_INVOKABLE bool isEmpty() const { return m_entries.isEmpty(); }
     /// Alle Einträge in Abgabereihenfolge (Index 0 = der nächste).
     Q_INVOKABLE QStringList entries() const { return m_entries; }
@@ -107,11 +121,11 @@ public:
 
     // --- Ändern --------------------------------------------------------------
     /// Hängt hinten an. Liefert false, wenn der Text abgewiesen wurde (s. `isAcceptable`).
-    Q_INVOKABLE bool enqueue(const QString &text);
+    Q_INVOKABLE bool enqueue(const QString &text, const QString &sender = QString());
     /// Fügt an `index` ein; der Index wird auf [0, count] **geklemmt** statt abgewiesen —
     /// die Aufrufstelle ist eine Liste zum Umsortieren, und ein um eins verrutschter Index
     /// darf den Eintrag nicht verschlucken.
-    Q_INVOKABLE bool insert(int index, const QString &text);
+    Q_INVOKABLE bool insert(int index, const QString &text, const QString &sender = QString());
     /// Entfernt einen Eintrag. Ungültiger Index → false, Liste unverändert, kein Signal.
     Q_INVOKABLE bool removeAt(int index);
     /// Leert die Liste und liefert die Anzahl der entfernten Einträge. Auf einer bereits
@@ -134,6 +148,8 @@ public:
     /// zurückgegeben hat — auf der Leitung stünde #2 vor #1. Genau die Vertauschung, die
     /// eine Warteschlange verhindern soll.
     Q_INVOKABLE QString takeNext();
+    /// Absender des zuletzt per `takeNext()` entnommenen Eintrags.
+    QString lastTakenSender() const { return m_lastTakenSender; }
 
     /// Ist der Text als Eintrag zulässig? Verworfen wird nur, was **nach dem Trimmen**
     /// leer ist.
@@ -156,6 +172,8 @@ signals:
 
 private:
     QStringList m_entries;
+    QStringList m_senders;        ///< deckungsgleich zu m_entries (Invariante: gleiche Länge)
+    QString m_lastTakenSender;
     bool m_dispatching = false;   ///< Reentranz-Wächter für takeNext (s. dort)
 };
 

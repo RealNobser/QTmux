@@ -7,6 +7,8 @@
 #include "AgentEventHub.h"
 #include "ConnectionProfile.h"
 #include "KeyEncoding.h"
+#include "AgentInbox.h"
+#include "AgentInboxClient.h"
 
 #include "qtmux_version.h"   // generiert aus cmake/Version.h.in (PROJECT_VERSION)
 #include "qtmux_buildid.h"   // generiert bei jedem Build (cmake/BuildId.cmake)
@@ -23,6 +25,7 @@
 #include <QChar>
 #include <QRegularExpression>
 #include <QSettings>
+#include <QUuid>
 
 namespace qtmux {
 
@@ -658,7 +661,11 @@ QJsonObject McpServer::toolsList() const {
                       "Listet alle offenen Sessions mit Status (id, title, type, activity, "
                       "agentId, needsAttention, lastNotification, mcpController, workingDir, group, "
                       "progress, stalled — bei stalled=true zusätzlich stalledForMs und stallNote: "
-                      "Agent zeigt „arbeitet“, Bildschirm steht seit der Schwelle still).",
+                      "Agent zeigt „arbeitet“, Bildschirm steht seit der Schwelle still). Dazu "
+                      "ownerTyping: Der Mensch hat dort getippt und noch nicht abgeschickt (mit "
+                      "ownerTypingForMs) — dann wartet die Warteschlange, und send_text/send_keys "
+                      "lehnen ab. queued/queuedFrom nennen wartende Einträge samt Absender, "
+                      "agentInbox die gemeldete Gegenstelle für send_message (leer = keine).",
                       {}, {}));
     tools.append(tool("create_session",
                       "Erstellt eine Session in einem NEUEN Window (Tab) — im HINTERGRUND: "
@@ -731,12 +738,18 @@ QJsonObject McpServer::toolsList() const {
                       "kurz NACH dem Text raus (Standard 60 ms) — TUI-Anwendungen wie Claude "
                       "Code werten sonst einen in einem Rutsch ankommenden Block als "
                       "Einfügevorgang und das Enter landet als Zeilenumbruch im Eingabefeld, "
-                      "statt abzuschicken. Bei sehr trägen Oberflächen enterDelayMs erhöhen.",
+                      "statt abzuschicken. Bei sehr trägen Oberflächen enterDelayMs erhöhen. "
+                      "VORRANG DES MENSCHEN: Hat er in der Session getippt und noch nicht "
+                      "abgeschickt (ownerTyping in list_sessions), wird NICHTS gesendet und der "
+                      "Aufruf meldet einen Fehler — der Text hinge sonst an seinem Entwurf. "
+                      "Für Nachrichten an einen Agenten send_message nehmen, zum Warten "
+                      "queue_text.",
                       QJsonObject{{"id", intProp("Session-ID (entfällt bei broadcast)")},
                                   {"text", strProp("zu sendender Text")},
                                   {"enter", boolProp("Enter anhängen (Standard true)")},
                                   {"enterDelayMs", intProp("Verzögerung vor dem Enter in ms (Standard 60; 0 = sofort, im selben Block)")},
-                                  {"broadcast", boolProp("an alle Sessions senden (Standard false)")}},
+                                  {"broadcast", boolProp("an alle Sessions senden (Standard false)")},
+                                  {"force", boolProp("NOTFALL-ÜBERSTIMMER: trotz ownerTyping schreiben. Der Text landet dann IM Entwurf des Menschen und geht mit Enter zusammen mit ihm hinaus. Nur nach read_screen und nur, wenn die Eingabezeile nachweislich leer ist (Standard false)")}},
                       QJsonArray{"text"}));
     tools.append(tool("send_keys",
                       "Sendet benannte Tasten/Tastenkombinationen im tmux-send-keys-Stil an "
@@ -749,23 +762,58 @@ QJsonObject McpServer::toolsList() const {
                       "Unerkannte wird getippt): [\"C-u\",\"neuer Text\",\"Enter\"]. Ein "
                       "Enter als LETZTER Eintrag geht wie bei send_text zeitlich abgesetzt "
                       "raus (enterDelayMs). Ein Chord, der sich nicht übersetzen lässt, ist "
-                      "ein Fehler — dann wird NICHTS gesendet.",
+                      "ein Fehler — dann wird NICHTS gesendet. VORRANG DES MENSCHEN wie bei "
+                      "send_text: Bei ownerTyping wird nichts gesendet (Fehler) — ein C-u "
+                      "löschte sonst seinen Entwurf, ein Enter schickte ihn ab.",
                       QJsonObject{{"id", intProp("Session-ID")},
                                   {"keys", arrProp(QStringLiteral("string"),
                                                    QStringLiteral("Tasten/Chords/Literaltext, in Sendereihenfolge"))},
-                                  {"enterDelayMs", intProp("Verzögerung vor einem abschließenden Enter in ms (Standard 60; 0 = sofort)")}},
+                                  {"enterDelayMs", intProp("Verzögerung vor einem abschließenden Enter in ms (Standard 60; 0 = sofort)")},
+                                  {"force", boolProp("NOTFALL-ÜBERSTIMMER: trotz ownerTyping senden. Die Tasten treffen dann den Entwurf des Menschen. Nur nach read_screen (Standard false)")}},
                       QJsonArray{"id", "keys"}));
     tools.append(tool("queue_text",
                       "Reiht Text in die Warteschlange einer Session ein (QTMUX-90) statt ihn "
                       "sofort zu senden. Ist die Session gerade frei, geht er unmittelbar raus; "
                       "arbeitet sie noch, wartet er, bis sie fertig ist — so landet ein Auftrag "
-                      "nicht mitten in der Ausgabe eines laufenden Agenten. Ohne `text` liefert "
-                      "der Aufruf nur den aktuellen Stand der Warteschlange; mit clear=true wird "
-                      "sie geleert.",
+                      "nicht mitten in der Ausgabe eines laufenden Agenten. Hat der Mensch dort "
+                      "getippt und noch nicht abgeschickt (ownerTyping), wartet der Eintrag, bis "
+                      "er abgeschickt oder verworfen hat; die Kachel zeigt so lange „Nachricht "
+                      "wartet“ samt Absender. Ohne `text` liefert der Aufruf nur den aktuellen "
+                      "Stand der Warteschlange (count, entries, items mit Absender, "
+                      "ownerTyping); mit clear=true wird sie geleert. Den Absender setzt QTmux "
+                      "selbst aus dem aufrufenden Prozess.",
                       QJsonObject{{"id", intProp("Session-ID")},
                                   {"text", strProp("einzureihender Text (weglassen = nur abfragen)")},
                                   {"clear", boolProp("Warteschlange vorher leeren (Standard false)")}},
                       QJsonArray{"id"}));
+    tools.append(tool("send_message",
+                      "Stellt einer anderen Session eine NACHRICHT zu, ohne ihre Eingabezeile "
+                      "anzufassen — der Weg für Rückmeldungen und Aufträge zwischen Agenten. "
+                      "Hat die Ziel-Session einen Nachrichten-Eingang gemeldet (set_agent_inbox; "
+                      "bei Claude Code der Sitzungs-Socket), geht die Nachricht dorthin und "
+                      "erscheint dort als eigene Zeile im Verlauf, auch während der Mensch "
+                      "tippt oder eine Rückfrage offen ist. Sonst — oder wenn die Zustellung "
+                      "scheitert — kommt sie in die Warteschlange (wie queue_text, wartet also "
+                      "auf den Menschen). Die Antwort nennt den Weg: via 'inbox' oder 'queue', "
+                      "bei 'queue' mit reason. status 'handed-over' heißt übergeben, NICHT "
+                      "gelesen: ob der Empfänger die Nachricht annimmt oder zurückhält, meldet "
+                      "sein Eingang nicht. Den Absender setzt QTmux selbst aus dem aufrufenden "
+                      "Prozess; er lässt sich nicht angeben.",
+                      QJsonObject{{"id", intProp("Ziel-Session-ID")},
+                                  {"text", strProp("Nachricht (die erste Zeile sieht der Mensch als Vorschau)")}},
+                      QJsonArray{"id", "text"}));
+    tools.append(tool("set_agent_inbox",
+                      "Meldet den Nachrichten-Eingang IHRER Sitzung, damit send_message Sie "
+                      "ohne Eingabezeile erreicht. Für Claude Code: kind 'claude-code', address "
+                      "= Inhalt von $CLAUDE_CODE_MESSAGING_SOCKET (am einfachsten per "
+                      "SessionStart-Hook mit dem Skript qtmux-inbox.sh). Leere address löscht "
+                      "die Meldung. QTmux schreibt nur, wenn an der Adresse ein Prozess aus "
+                      "genau dieser Session lauscht.",
+                      QJsonObject{{"kind", strProp("Art des Eingangs: 'claude-code'")},
+                                  {"address", strProp("Adresse (absoluter Pfad des Sockets; leer = löschen)")},
+                                  {"version", strProp("optional: Fassung des Agenten, z. B. 2.1.323")},
+                                  {"sessionId", intProp("eigene Session-ID (sonst $QTMUX_SESSION_ID; Fallback Prozess-Heuristik)")}},
+                      QJsonArray{"kind", "address"}));
     tools.append(tool("read_screen",
                       "Liest den Bildschirm einer Session als Text. Mit scrollback=true zusätzlich "
                       "die gesamte Historie (Scrollback) vor dem sichtbaren Bereich.",
@@ -994,7 +1042,20 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             // QTMUX-139: immer vorhanden, damit ein Orchestrator nicht zwischen
             // „steht nicht" und „alte QTmux-Fassung kennt das Feld nicht" raten muss.
             {"stalled", s->stalled()},
+            // Vorrang des Menschen: immer vorhanden (gleiche Begründung wie `stalled`).
+            {"ownerTyping", s->ownerTyping()},
+            {"queued", s->queuedCount()},
+            {"agentInbox", s->agentInboxKind()},
         };
+        if (s->ownerTyping())
+            o.insert("ownerTypingForMs",
+                     static_cast<double>(QDateTime::currentMSecsSinceEpoch()
+                                         - s->ownerTypingSinceMs()));
+        if (s->queuedCount() > 0) {
+            QJsonArray from;
+            for (const QString &f : s->promptQueue()->senders()) from.append(f);
+            o.insert("queuedFrom", from);
+        }
         if (s->stalled()) {
             o.insert("stalledForMs", static_cast<double>(s->stalledForMs()));
             o.insert("stallNote", s->stallNote());
@@ -1182,10 +1243,180 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         text = QString::number(s ? s->id() : -1);
         return {};
     }
+    // Absender, wie QTmux ihn SELBST bestimmt: die Session, in deren Prozessbaum der
+    // aufrufende Client läuft. Bewusst NICHT das `sessionId`-Argument — das kann jeder
+    // Aufrufer frei setzen, und ein Absender, den der Absender wählt, ist keiner.
+    auto callerLabel = [this]() -> QString {
+        if (m_callerSessionId <= 0) return QStringLiteral("unbekannt");
+        Session *c = m_sessions->sessionById(m_callerSessionId);
+        const QString title = c ? c->title() : QString();
+        return agentinbox::frameSenderName(
+            QStringLiteral("#%1 %2").arg(m_callerSessionId).arg(title));
+    };
+
+    if (name == "set_agent_inbox") {
+        const int selfId = callerId();
+        Session *self = selfId > 0 ? m_sessions->sessionById(selfId) : nullptr;
+        if (!self) {
+            isError = true;
+            text = QStringLiteral("Keine eigene Session (sessionId fehlt/unbekannt).");
+            return {};
+        }
+        const QString address = args.value("address").toString();
+        if (address.isEmpty()) {
+            self->clearAgentInbox();
+            text = QStringLiteral("{\"sessionId\":%1,\"registered\":false}").arg(selfId);
+            return {};
+        }
+        const QString kind = args.value("kind").toString();
+        const QString problem = agentinbox::endpointProblem(kind, address);
+        if (!problem.isEmpty()) { isError = true; text = problem; return {}; }
+        self->setAgentInbox(kind, address, args.value("version").toString());
+        text = QString::fromUtf8(QJsonDocument(QJsonObject{
+            {"sessionId", selfId}, {"registered", true}, {"kind", kind}})
+                                     .toJson(QJsonDocument::Compact));
+        return {};
+    }
+
+    if (name == "send_message") {
+        const int targetId = args.value("id").toInt();
+        Session *target = m_sessions->sessionById(targetId);
+        if (!target) {
+            isError = true;
+            text = QStringLiteral("Unbekannte Ziel-Session (id %1). IDs liefert list_sessions.")
+                       .arg(targetId);
+            return {};
+        }
+        const QString body = args.value("text").toString();
+        if (body.trimmed().isEmpty()) {
+            isError = true;
+            text = QStringLiteral("Leere Nachricht wird nicht zugestellt.");
+            return {};
+        }
+        const QString from = callerLabel();
+        const bool known = m_callerSessionId > 0;
+        // Hinweis für den Empfänger, wie er antwortet — als LETZTE Zeile, weil der Mensch
+        // dort nur die erste Zeile als Vorschau sieht.
+        // 🔑 Der Zusatz „nicht per SendMessage“ ist gemessen nötig (2026-11-15): Ohne ihn
+        // suchte der Empfänger in seiner eigenen Sitzungsliste nach einem ähnlich
+        // benannten Ziel — und fand dort fremde, echte Sitzungen.
+        const QString replyHint = known
+            ? QStringLiteral("[Zugestellt von QTmux, Absender ist QTmux-Session %1. Das ist "
+                             "keine Claude-Sitzung: nicht per SendMessage antworten und keine "
+                             "ähnlich benannte Sitzung anschreiben. Antworten geht mit dem "
+                             "QTmux-MCP-Werkzeug send_message, id %2.]")
+                  .arg(from).arg(m_callerSessionId)
+            : QStringLiteral("[Zugestellt von QTmux, Absender unbekannt (kein Prozess einer "
+                             "QTmux-Session). Nicht per SendMessage antworten.]");
+
+        QJsonObject r{{"from", from}};
+        QString reason;
+        if (!target->hasAgentInbox()) {
+            reason = QStringLiteral("Die Ziel-Session hat keinen Nachrichten-Eingang gemeldet "
+                                    "(set_agent_inbox).");
+        } else if (body.toUtf8().size() > agentinbox::kMaxTextBytes) {
+            reason = QStringLiteral("Die Nachricht ist für den Eingang zu lang (mehr als %1 Bytes).")
+                         .arg(agentinbox::kMaxTextBytes);
+        } else {
+            const QByteArray frame = agentinbox::claudeCodeFrame(
+                body + QStringLiteral("\n\n") + replyHint,
+                QStringLiteral("QTmux ") + from,
+                QUuid::createUuid().toString(QUuid::WithoutBraces));
+            // An das Objekt binden: Am Socket muss ein Prozess aus dem Prozessbaum
+            // GENAU dieser Session lauschen.
+            const qint64 shellPid = target->processId();
+            const InboxDelivery d = deliverToInbox(
+                target->agentInboxAddress(), frame, [shellPid](qint64 peerPid) {
+                    return shellPid > 0 && procinfo::ancestorPids(peerPid).contains(shellPid);
+                });
+            if (d.ok) {
+                target->noteMessageDelivered(from);
+                r.insert("via", QStringLiteral("inbox"));
+                r.insert("status", QStringLiteral("handed-over"));
+                const QString v = target->agentInboxVersion();
+                if (v.isEmpty()
+                    || agentinbox::compareVersions(v, QLatin1String(agentinbox::kClaudeCodeVerifiedVersion)) != 0)
+                    r.insert("note",
+                             QStringLiteral("Das Rahmenformat ist an Claude Code %1 belegt; die "
+                                            "Ziel-Sitzung meldet %2. Ob die Nachricht dort "
+                                            "ankommt, kann QTmux nicht prüfen.")
+                                 .arg(QLatin1String(agentinbox::kClaudeCodeVerifiedVersion),
+                                      v.isEmpty() ? QStringLiteral("keine Fassung") : v));
+                text = QString::fromUtf8(QJsonDocument(r).toJson(QJsonDocument::Compact));
+                return {};
+            }
+            reason = QStringLiteral("Zustellung an den Eingang gescheitert: %1").arg(d.error);
+            // Eine Gegenstelle, die nicht (mehr) trägt, nicht wieder versuchen — der
+            // Agent meldet sie beim nächsten Start neu.
+            target->clearAgentInbox();
+        }
+        // Rückfall: Warteschlange mit dem Schutz der Eingabe des Menschen. Der Text kommt
+        // dort als getippte Eingabe an — die Kopfzeile sagt dem Empfänger, dass sie nicht
+        // vom Menschen an seinem Terminal stammt.
+        //
+        // 🔑 Vorher eine Frage, die sich messen lässt: Läuft dort überhaupt ein Programm?
+        // Steht die Session an der nackten Shell (kein Kindprozess), würde die Nachricht
+        // als BEFEHL ausgeführt, Zeile für Zeile. Das ist genau der Fall „Agent beendet,
+        // Socket weg“ — eine Nachricht an einen Agenten darf dann nicht zur Shell-Eingabe
+        // werden. Wo QTmux es nicht messen kann (SSH, seriell, Plugin), bleibt es beim
+        // Einreihen wie bei queue_text.
+        // (Nur auf Plattformen, deren Prozessliste QTmux lesen kann — anderswo liefert
+        // descendantPids immer leer, und „leer“ wäre dort keine Messung.)
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+        const bool bareShell = target->type() == Session::Type::Shell
+                               && target->processId() > 0
+                               && procinfo::descendantPids(target->processId()).isEmpty();
+#else
+        const bool bareShell = false;
+#endif
+        if (bareShell) {
+            isError = true;
+            text = QStringLiteral(
+                       "Nicht zugestellt. %1 Und in Session %2 läuft gerade kein Programm, "
+                       "nur die Shell: Über die Eingabezeile würde die Nachricht dort als "
+                       "Befehl ausgeführt. Starten Sie den Agenten (er meldet seinen Eingang "
+                       "dann selbst) oder nehmen Sie für eine Shell-Eingabe queue_text.")
+                       .arg(reason).arg(targetId);
+            return {};
+        }
+        const QString queuedText =
+            (known ? QStringLiteral("[QTmux-Nachricht von Session %1, nicht vom Menschen an "
+                                    "diesem Terminal getippt. Antworten: QTmux-MCP-Werkzeug "
+                                    "send_message mit id %2.]\n").arg(from).arg(m_callerSessionId)
+                   : QStringLiteral("[QTmux-Nachricht, Absender unbekannt, nicht vom Menschen "
+                                    "an diesem Terminal getippt.]\n"))
+            + body;
+        const int before = target->queuedCount();
+        if (!target->queueText(queuedText, from)) {
+            isError = true;
+            text = QStringLiteral("Die Nachricht ließ sich nicht einreihen.");
+            return {};
+        }
+        r.insert("via", QStringLiteral("queue"));
+        r.insert("reason", reason);
+        r.insert("status", target->queuedCount() > before ? QStringLiteral("queued")
+                                                         : QStringLiteral("dispatched"));
+        r.insert("ownerTyping", target->ownerTyping());
+        r.insert("count", target->queuedCount());
+        text = QString::fromUtf8(QJsonDocument(r).toJson(QJsonDocument::Compact));
+        return {};
+    }
+
     if (name == "send_text" && args.value("broadcast").toBool(false)) {
         // Broadcast: an alle Sessions, ohne id (Sync-Input-Modus, QTMUX-21).
         QByteArray data = args.value("text").toString().toUtf8();
         if (args.value("enter").toBool(true)) data += '\r';
+        // Vorrang des Menschen gilt auch hier: Tippt er in EINER Session, geht der
+        // Rundruf an keine — ein halber Rundruf wäre schwerer zu durchschauen.
+        const QStringList typing = m_sessions->sessionsWithOwnerTyping();
+        if (!typing.isEmpty() && !args.value("force").toBool(false)) {
+            isError = true;
+            text = QStringLiteral("Nicht gesendet: In Session %1 hat der Mensch getippt und "
+                                  "noch nicht abgeschickt. Der Rundruf ginge an seinen "
+                                  "Entwurf. force=true überstimmt (Notfall, nach read_screen).")
+                       .arg(typing.join(QStringLiteral(", ")));
+            return {};
+        }
         m_sessions->writeToAll(data);
         text = QStringLiteral("ok");
         return {};
@@ -1296,9 +1527,36 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         text = QStringLiteral("ok");
         return {};
     }
+    // Vorrang des Menschen: send_text und send_keys LEHNEN AB, statt einzureihen. Beide
+    // sind die Werkzeuge für „jetzt“ — der Aufrufer baut auf die Wirkung (ein /clear vor
+    // dem Auftrag, eine Taste für den Dialog, der gerade offen ist). Später zugestellt
+    // träfe dieselbe Taste einen anderen Zustand, und ein still eingereihter Text sähe
+    // für den Aufrufer wie ein gesendeter aus. Für „später“ gibt es queue_text.
+    auto ownerTypingRefusal = [&](Session *target) -> bool {
+        if (!target->ownerTyping() || args.value("force").toBool(false)) return false;
+        const qint64 sec = (QDateTime::currentMSecsSinceEpoch()
+                            - target->ownerTypingSinceMs()) / 1000;
+        isError = true;
+        text = QStringLiteral(
+                   "Nicht gesendet: In Session %1 hat der Mensch getippt und noch nicht "
+                   "abgeschickt (seit %2 s). Was Sie senden, landete in seinem Entwurf und "
+                   "ginge mit ihm zusammen hinaus. Stattdessen: send_message stellt einem "
+                   "Agenten ohne Eingabezeile zu; queue_text wartet, bis der Mensch "
+                   "abgeschickt oder verworfen hat. force=true überstimmt — nur im Notfall "
+                   "und erst, wenn read_screen eine leere Eingabezeile zeigt (QTmux sieht "
+                   "die Tasten des Menschen, nicht die Zeile: Der Merker kann auch nach "
+                   "einer einzelnen Taste in einem Auswahldialog noch stehen).")
+                   .arg(target->id()).arg(sec);
+        return true;
+    };
     if (name == "send_text") {
         if (!s) { isError = true; text = idProblem(); return {}; }
+        if (ownerTypingRefusal(s)) return {};
         const QByteArray data = args.value("text").toString().toUtf8();
+        // Erzwungen UND mit Enter: Die Zeile geht samt dem hinaus, was der Mensch dort
+        // stehen hatte — danach ist sie leer, der Merker fällt.
+        if (s->ownerTyping() && args.value("enter").toBool(true))
+            s->noteLineSubmittedByAutomation();
         if (args.value("enter").toBool(true)) {
             // QTMUX-31: Enter zeitlich abgesetzt — sonst schlucken TUI-Anwendungen es
             // als Teil eines vermeintlichen Einfügevorgangs (s. Session::writeWithEnter).
@@ -1316,6 +1574,7 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
     }
     if (name == "send_keys") {
         if (!s) { isError = true; text = idProblem(); return {}; }
+        if (ownerTypingRefusal(s)) return {};
         QJsonArray arr;
         const QJsonValue kv = args.value("keys");
         if (kv.isArray())       arr = kv.toArray();
@@ -1379,7 +1638,7 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         bool queued = false;
         if (args.contains(QStringLiteral("text"))) {
             const QString t = args.value("text").toString();
-            queued = s->queueText(t);
+            queued = s->queueText(t, callerLabel());
             if (!queued) {
                 // Nur leerer/whitespace-Text wird abgewiesen. Das ist kein Randfall,
                 // sondern Absicht: ein blankes Enter ist in einem Agenten-TUI eine
@@ -1391,10 +1650,17 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         }
         QJsonObject r{{"queued", queued},
                       {"count", s->queuedCount()},
-                      {"cleared", removed}};
-        QJsonArray entries;
-        for (const QString &e : s->promptQueue()->entries()) entries.append(e);
-        r.insert(QStringLiteral("entries"), entries);
+                      {"cleared", removed},
+                      {"ownerTyping", s->ownerTyping()}};
+        QJsonArray entries, items;
+        const QStringList texts = s->promptQueue()->entries();
+        const QStringList froms = s->promptQueue()->senders();
+        for (int i = 0; i < texts.size(); ++i) {
+            entries.append(texts.at(i));
+            items.append(QJsonObject{{"text", texts.at(i)}, {"from", froms.value(i)}});
+        }
+        r.insert(QStringLiteral("entries"), entries);   // wie bisher: nur die Texte
+        r.insert(QStringLiteral("items"), items);       // dieselben Einträge mit Absender
         text = QString::fromUtf8(QJsonDocument(r).toJson(QJsonDocument::Compact));
         return {};
     }

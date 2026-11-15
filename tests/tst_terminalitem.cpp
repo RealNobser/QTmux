@@ -608,6 +608,61 @@ private slots:
         QVERIFY(f.copied().contains(QStringLiteral("anders")));
     }
 
+    // --- Vorrang der Eingabe des Menschen: die Verdrahtung am Item ---------------------------
+    void keysOfTheHumanSetAndClearTheDraftFlag() {
+        // Der Weg Taste → TerminalItem → Session::writeFromUser. Ginge er über das
+        // gewöhnliche write(), stünde der Merker nie, und die Warteschlange schriebe wieder
+        // in den Entwurf (Owner-Befund 2026-11-15).
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        f.session.requestActivity(QStringLiteral("idle"));
+        const auto key = [&f](int k, const QString &text, Qt::KeyboardModifiers mods = Qt::NoModifier) {
+            QKeyEvent ev(QEvent::KeyPress, k, mods, text);
+            QCoreApplication::sendEvent(&f.item, &ev);
+        };
+        QVERIFY(!f.session.ownerTyping());
+        key(Qt::Key_H, QStringLiteral("h"));
+        key(Qt::Key_I, QStringLiteral("i"));
+        QVERIFY(f.session.ownerTyping());
+
+        // Eingereihter Text wartet …
+        QVERIFY(f.session.queueText(QStringLiteral("NACHRICHT"), QStringLiteral("#7 Worker")));
+        QTest::qWait(350);
+        QCOMPARE(f.session.queuedCount(), 1);
+        QCOMPARE(f.session.queueNote(), QStringLiteral("Von #7 Worker — Nachricht wartet"));
+
+        // … Umschalt+Enter ist ein Umbruch IM Entwurf, kein Abschicken …
+        key(Qt::Key_Return, QString(), Qt::ShiftModifier);
+        QVERIFY(f.session.ownerTyping());
+        QTest::qWait(200);
+        QCOMPARE(f.session.queuedCount(), 1);
+
+        // … erst Enter gibt frei.
+        key(Qt::Key_Return, QStringLiteral("\r"));
+        QVERIFY(!f.session.ownerTyping());
+        QTRY_COMPARE(f.session.queuedCount(), 0);
+    }
+
+    void pasteOfTheHumanSetsTheDraftFlag() {
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        QGuiApplication::clipboard()->setText(QStringLiteral("aus der Zwischenablage"));
+        f.item.paste();
+        QVERIFY(f.session.ownerTyping());
+    }
+
+    void wheelIsNavigationNotTyping() {
+        // Das Rad schickt der Anwendung Pfeiltasten (Alt-Screen) — das ist Blättern, kein
+        // Entwurf. Stünde der Merker danach, hielte jedes Scrollen die Nachrichten auf.
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        f.feed("\033[?1049h\033[?1007h");
+        QWheelEvent wheel(f.at(5, 5), f.at(5, 5), QPoint(), QPoint(0, 120), Qt::NoButton,
+                          Qt::NoModifier, Qt::NoScrollPhase, false);
+        for (int i = 0; i < 3; ++i) QCoreApplication::sendEvent(&f.item, &wheel);
+        QVERIFY(!f.session.ownerTyping());
+    }
+
     void scrolledViewStaysPutAtTheScrollbackLimit() {
         // An der Grenze steht scrollbackCount() still. Die Ansicht rückte dann nicht mehr nach und
         // lief unter dem Anwender weg, samt allem, was er gerade ansieht.

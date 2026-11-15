@@ -11,6 +11,10 @@ bool mayDispatchNext(const DispatchContext &ctx) {
     // aussagekräftig, wenn die Session nie selbst etwas gemeldet hat.
     if (ctx.activity == ActivityClosed) return false;
 
+    // Der Mensch tippt dort gerade: nichts abgeben, in keinem der beiden Zweige. Der
+    // Eintrag hinge sonst an seinem Entwurf und ginge mit ihm zusammen hinaus.
+    if (ctx.ownerTyping) return false;
+
     // Zweig 1: Die Session meldet ihren Zustand selbst → ihrer Meldung wird geglaubt.
     // Alles außer „arbeitet gerade" ist ein Ruhezustand (Begründung im Header).
     if (ctx.activityReported) return ctx.activity != ActivityRunning;
@@ -33,17 +37,24 @@ QString PromptQueue::at(int index) const {
     return m_entries.at(index);
 }
 
-bool PromptQueue::enqueue(const QString &text) {
+QString PromptQueue::senderAt(int index) const {
+    if (index < 0 || index >= m_senders.size()) return {};
+    return m_senders.at(index);
+}
+
+bool PromptQueue::enqueue(const QString &text, const QString &sender) {
     if (!isAcceptable(text)) return false;
     m_entries.append(text);          // ungetrimmt ablegen (s. isAcceptable)
+    m_senders.append(sender);
     emit changed();
     return true;
 }
 
-bool PromptQueue::insert(int index, const QString &text) {
+bool PromptQueue::insert(int index, const QString &text, const QString &sender) {
     if (!isAcceptable(text)) return false;
     const int pos = qBound(0, index, int(m_entries.size()));   // klemmen statt abweisen
     m_entries.insert(pos, text);
+    m_senders.insert(pos, sender);
     emit changed();
     return true;
 }
@@ -51,6 +62,7 @@ bool PromptQueue::insert(int index, const QString &text) {
 bool PromptQueue::removeAt(int index) {
     if (index < 0 || index >= m_entries.size()) return false;
     m_entries.removeAt(index);
+    m_senders.removeAt(index);
     emit changed();
     return true;
 }
@@ -59,6 +71,7 @@ int PromptQueue::clear() {
     const int n = int(m_entries.size());
     if (n == 0) return 0;            // kein Signal für ein Nichts-Ereignis
     m_entries.clear();
+    m_senders.clear();
     emit changed();
     return n;
 }
@@ -70,6 +83,7 @@ bool PromptQueue::move(int from, int to) {
     // Aufrufers und soll sichtbar scheitern, nicht stillschweigend etwas anderes tun.
     if (from < 0 || from >= n || to < 0 || to >= n || from == to) return false;
     m_entries.move(from, to);
+    m_senders.move(from, to);
     emit changed();
     return true;
 }
@@ -84,6 +98,7 @@ QString PromptQueue::takeNext() {
     // Erst entnehmen, DANN melden: ein Slot, der auf `changed` hin einreiht, landet
     // dadurch zwangsläufig hinter den noch wartenden Einträgen.
     const QString next = m_entries.takeFirst();
+    m_lastTakenSender = m_senders.takeFirst();
     emit changed();
     m_dispatching = false;
     return next;
