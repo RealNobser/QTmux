@@ -239,6 +239,7 @@ Item {
                     // Rad in Vollbild-Apps ohne Maus-Tracking (Codex): s. core/AltScroll.h.
                     altScrollMode: win.altScrollMode
                     onMultilinePasteWarning: (lines) => win.askMultilinePaste(paneTerm, lines)
+                    onExecutableOpenRequested: (path) => win.askOpenExecutable(paneTerm, path)
                     // Fokus (Klick/Tab) macht dieses Pane aktiv.
                     onActiveFocusChanged: if (activeFocus) win.setActivePaneById(pane.paneId, paneTerm)
                     // Cmd/Strg+Mausrad -> global zoomen.

@@ -251,6 +251,45 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
      endet und der Text folgt, öffnet nicht mehr.
      ⚠️ Lücke: Ein Zweizeiler, den ein Programm schmaler als das Fenster umbricht, ist nicht
      erkennbar; dort öffnet die erste Zeile weiter das abgeschnittene Stück.
+  **Rückfrage vor dem Öffnen ausführbarer Dateien (QTMUX-151, Owner-Entscheid 2026-11-15).**
+  Ein Datei-Link aus dem Text, dessen Ziel das System AUSFÜHREN würde, öffnet erst nach einer
+  Rückfrage. Der Pfad stammt aus fremder Ausgabe; ohne sie startete ein Strg-/Cmd-Klick das
+  Programm sofort. Die Regel steht Gui-frei in `ExecutableTarget::asksBeforeOpen` und ist auf
+  jedem Host für alle drei Plattformen prüfbar:
+  - **Windows:** der Name entscheidet. Gefragt wird bei jeder Datei **ohne Endung** (die Shell
+    hängt beim Öffnen selbst eine Programm-Endung an, `werkzeug` startet `werkzeug.exe`), bei
+    jedem **benannten Datenstrom** (`notiz.txt:x`, `werkzeug.exe::$DATA`) und nach Endung: die
+    Vorgabe von PATHEXT (`.com .exe .bat .cmd .vbs .vbe .js .jse .wsf .wsh .msc`, gilt immer),
+    was PATHEXT auf dem Rechner zusätzlich nennt, Installer (`.msi .msp .msix .msixbundle .appx
+    .appxbundle .appinstaller .application .appref-ms .gadget .diagcab`), Abbilder (`.iso .img
+    .vhd .vhdx`), Verknüpfungen (`.lnk .url .pif .settingcontent-ms .website .library-ms
+    .search-ms .searchconnector-ms`; die ersten drei auch dann, wenn Qt ein Verzeichnis meldet,
+    weil es einer `.lnk` auf einen Ordner folgt), Programme unter anderem Namen (`.scr .cpl
+    .xll`), Skripte (`.ps1 .psc1 .hta .jar .jnlp .wsc .sct .ws .chm .py .pyw`) und `.reg`. Punkte und Leerzeichen am Ende
+    zählen nicht (Windows ignoriert sie beim Öffnen), nur der letzte Abschnitt entscheidet.
+  - **macOS:** nach Endung, **auch als Verzeichnis** (dort sind das Bündel): `.app .command
+    .tool .terminal .pkg .mpkg .prefPane .saver .workflow .action .fileloc .inetloc .webloc .dmg
+    .jar`. Dazu
+    jede Datei mit einem Ausführungsrecht.
+  - **Linux:** jede Datei mit einem Ausführungsrecht, dazu `.desktop .AppImage .run .sh .jar
+    .deb .rpm .flatpakref .flatpak .snap`.
+  - Geprüft werden der genannte Pfad und sein Ziel hinter symbolischen Verknüpfungen.
+  - **Ohne Rückfrage:** URLs, Verzeichnisse (außer den macOS-Bündeln oben), gewöhnliche Dateien
+    und die Zeigen-Geste (sie führt nichts aus). Hyperlinks des Programms nennen ohnehin nie
+    eine Datei.
+  Ablauf: `TerminalItem` merkt sich den Pfad und sendet `executableOpenRequested(path)`. Das QML
+  (`qml/dialogs/ExecOpenDialog.qml`) zeigt den vollständigen Pfad und antwortet mit
+  `confirmOpenExecutable()` oder `cancelOpenExecutable()`. QML nennt dabei nie ein Ziel, und eine
+  Bestätigung gilt einmal. Die Vorgabe ist Abbrechen: `Dialog.Open` zählt in `AppDialog` nicht als
+  Bestätigen-Knopf, Enter lehnt ab. Es gibt bewusst kein „nicht mehr fragen“.
+  🔴 Grenzen: Es ist eine Verbotsliste, und die ist nie vollständig. Ein Typ, der fehlt, öffnet
+  ohne Rückfrage (Dokumente mit Makros, was ein nachinstalliertes Programm an sich bindet). Die gründlichere Bauart wäre umgekehrt: nur bekannte, harmlose Typen
+  ohne Frage öffnen, oder das System fragen (Windows `AssocIsDangerous`, macOS der Typ laut
+  LaunchServices). Beides ist eine Owner-Entscheidung, nicht umgesetzt. Auf Laufwerken ohne
+  Unix-Rechte (FAT, viele Netzlaufwerke) trägt unter macOS und Linux jede Datei ein
+  Ausführungsrecht, dort fragt QTmux bei jeder Datei. Im Zweifel wird gefragt. Tests: `test_executabletarget` (Regel), `test_execopendialog`
+  (Vorgabe, Knöpfe, voller Pfad), `test_terminalitem` (Klick je Fall; die Antwort gibt der Test,
+  ein modaler Dialog hinge offscreen für immer).
   🔑 **Unter ConPTY belegt eine Fortsetzungs-Marke nichts** (`VtScreen::conPtyHost`). Am
   Windows-Mitschnitt trägt fast jede Zeile von Claude Code eine. Dort zählt die Randregel
   deshalb auch mit Marke, auf macOS und Linux ist die Marke der Beleg, dass das Terminal

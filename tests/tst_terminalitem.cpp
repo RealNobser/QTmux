@@ -349,6 +349,154 @@ private slots:
         QCOMPARE(m_opened.first().toLocalFile(), QStringLiteral("/tmp/x.txt"));
     }
 
+    // --- Links: Rückfrage vor dem Öffnen ausführbarer Dateien (QTMUX-151) ---------------------
+    // Der Dialog lebt im QML. Das Item meldet nur, dass gefragt werden muss, und wartet auf Ja
+    // oder Nein; der Test gibt die Antwort selbst, ein modaler Dialog hinge offscreen für immer.
+private:
+    struct ExecTree {
+        QTemporaryDir dir;
+        QString exe, plain, folder;
+        bool ok = false;
+        ExecTree() {
+            if (!dir.isValid()) return;
+            const QDir d(dir.path());
+            if (!d.mkpath(QStringLiteral("p/ordner"))) return;
+#ifdef Q_OS_WIN
+            exe = d.absoluteFilePath(QStringLiteral("p/werkzeug.bat"));          // Endung entscheidet
+#else
+            exe = d.absoluteFilePath(QStringLiteral("p/werkzeug.command"));      // macOS: Endung
+#endif
+            plain = d.absoluteFilePath(QStringLiteral("p/notiz.txt"));
+            folder = d.absoluteFilePath(QStringLiteral("p/ordner"));
+            for (const QString &p : {exe, plain}) {
+                QFile f(p);
+                if (!f.open(QIODevice::WriteOnly)) return;
+            }
+#ifndef Q_OS_WIN
+            // Linux: Ausführungsrecht entscheidet. Die gewöhnliche Datei hat ausdrücklich keins.
+            if (!QFile::setPermissions(exe, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner)) return;
+            if (!QFile::setPermissions(plain, QFile::ReadOwner | QFile::WriteOwner)) return;
+#endif
+            ok = true;
+        }
+        QByteArray cwdSequence() const {
+            return "\033]7;" + QUrl::fromLocalFile(QDir(dir.path()).absolutePath()).toEncoded() + "\033\\";
+        }
+        static bool same(const QString &a, const QString &b) {
+            return QFileInfo(a).canonicalFilePath() == QFileInfo(b).canonicalFilePath();
+        }
+    };
+
+private slots:
+    void executableFileAsksAndCancelOpensNothing() {
+        ExecTree tree;
+        QVERIFY(tree.ok);
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        QSignalSpy asked(&f.item, &TerminalItem::executableOpenRequested);
+        f.feed(tree.cwdSequence());
+        f.feed("p/" + QFileInfo(tree.exe).fileName().toUtf8() + "\r\n");
+        f.click(f.at(3, 0), Qt::ControlModifier);
+        // Gefragt, nicht geöffnet. Genannt wird der vollständige Pfad.
+        QCOMPARE(asked.count(), 1);
+        const QString path = asked.first().first().toString();
+        QVERIFY2(QDir::isAbsolutePath(path), qPrintable(path));
+        QVERIFY2(ExecTree::same(path, tree.exe), qPrintable(path));
+        QCOMPARE(f.item.pendingExecutable(), path);
+        QVERIFY(m_opened.isEmpty());
+        QVERIFY(!f.item.hasSelection());                               // der Klick ist verbraucht
+        // Abbrechen öffnet nichts und sagt es.
+        f.item.cancelOpenExecutable();
+        QVERIFY(m_opened.isEmpty());
+        QVERIFY(f.item.pendingExecutable().isEmpty());
+        QVERIFY2(f.item.linkNotice().contains(QStringLiteral("Nicht geöffnet")), qPrintable(f.item.linkNotice()));
+        // Eine verspätete Bestätigung gilt nicht mehr.
+        f.item.confirmOpenExecutable();
+        QVERIFY(m_opened.isEmpty());
+    }
+
+    void executableFileOpensOnceAfterConfirm() {
+        ExecTree tree;
+        QVERIFY(tree.ok);
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        QSignalSpy asked(&f.item, &TerminalItem::executableOpenRequested);
+        f.feed(tree.cwdSequence());
+        f.feed("p/" + QFileInfo(tree.exe).fileName().toUtf8() + "\r\n");
+        f.click(f.at(3, 0), Qt::ControlModifier);
+        QCOMPARE(asked.count(), 1);
+        QVERIFY(m_opened.isEmpty());
+        f.item.confirmOpenExecutable();
+        QCOMPARE(m_opened.size(), 1);
+        QVERIFY(m_opened.first().isLocalFile());
+        QVERIFY(ExecTree::same(m_opened.first().toLocalFile(), tree.exe));
+        QVERIFY(f.item.pendingExecutable().isEmpty());
+        // Jede Bestätigung gilt einmal.
+        f.item.confirmOpenExecutable();
+        QCOMPARE(m_opened.size(), 1);
+        f.item.cancelOpenExecutable();
+        QCOMPARE(m_opened.size(), 1);
+    }
+
+    void ordinaryFileFolderAndUrlOpenWithoutAsking() {
+        ExecTree tree;
+        QVERIFY(tree.ok);
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        QSignalSpy asked(&f.item, &TerminalItem::executableOpenRequested);
+        f.feed(tree.cwdSequence());
+        f.feed("p/notiz.txt\r\np/ordner\r\nhttps://example.com/werkzeug.bat\r\n");
+        f.click(f.at(3, 0), Qt::ControlModifier);
+        QCOMPARE(m_opened.size(), 1);
+        QVERIFY(ExecTree::same(m_opened.last().toLocalFile(), tree.plain));
+        f.click(f.at(3, 1), Qt::ControlModifier);
+        QCOMPARE(m_opened.size(), 2);
+        QVERIFY(ExecTree::same(m_opened.last().toLocalFile(), tree.folder));
+        f.click(f.at(3, 2), Qt::ControlModifier);
+        QCOMPARE(m_opened.size(), 3);
+        QCOMPARE(m_opened.last(), QUrl(QStringLiteral("https://example.com/werkzeug.bat")));
+        QCOMPARE(asked.count(), 0);
+        QVERIFY(f.item.pendingExecutable().isEmpty());
+    }
+
+    void revealingAnExecutableDoesNotAsk() {
+        ExecTree tree;
+        QVERIFY(tree.ok);
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        QSignalSpy asked(&f.item, &TerminalItem::executableOpenRequested);
+        f.feed(tree.cwdSequence());
+        f.feed("p/" + QFileInfo(tree.exe).fileName().toUtf8() + "\r\n");
+        f.click(f.at(3, 0), revealMods());
+        QCOMPARE(f.revealed.size(), 1);
+        QVERIFY(ExecTree::same(f.revealed.first(), tree.exe));
+        QCOMPARE(asked.count(), 0);
+        QVERIFY(m_opened.isEmpty());
+    }
+
+    void fileUrlToAnExecutableAsksToo() {
+        // Als `file:///…` ausgeschrieben ist es derselbe Datei-Link.
+        ExecTree tree;
+        QVERIFY(tree.ok);
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        QSignalSpy asked(&f.item, &TerminalItem::executableOpenRequested);
+        f.feed(QUrl::fromLocalFile(tree.exe).toEncoded() + "\r\n");     // darf die Zeile sprengen
+        f.click(f.at(9, 0), Qt::ControlModifier);
+        QCOMPARE(asked.count(), 1);
+        QVERIFY(ExecTree::same(asked.first().first().toString(), tree.exe));
+        QVERIFY(m_opened.isEmpty());
+    }
+
+    void confirmWithoutAQuestionDoesNothing() {
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        f.item.confirmOpenExecutable();
+        f.item.cancelOpenExecutable();
+        QVERIFY(m_opened.isEmpty());
+        QCOMPARE(f.item.linkNotice(), QString());
+    }
+
     // --- Auswahl: die Regel erreicht das Item --------------------------------------------------
     void dragSelectsAndCopies() {
         Fixture f;

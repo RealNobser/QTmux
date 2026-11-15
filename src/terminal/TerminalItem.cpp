@@ -7,6 +7,7 @@
 #include "VtScreen.h"
 #include "LinkDetector.h"
 #include "FileManagerReveal.h"
+#include "ExecutableTarget.h"
 
 #include <QDesktopServices>
 #include <QHoverEvent>
@@ -1017,16 +1018,44 @@ void TerminalItem::activateLink(ScreenLinks::Gesture gesture, const ScreenLinks:
                            .arg(hit.target));
         return;
     }
+    // Eine Datei, die das System ausführen würde, öffnet erst nach einer Rückfrage: Der Pfad
+    // stammt aus fremder Ausgabe, und der Klick startete sonst sofort ein Programm. URLs und
+    // Verzeichnisse fragen nicht, die Zeigen-Geste oben auch nicht (sie führt nichts aus).
+    if (url.isLocalFile()) {
+        const QString path = url.toLocalFile();
+        if (ExecutableTarget::asksBeforeOpen(path)) {
+            m_pendingExecutable = path;
+            emit executableOpenRequested(path);
+            return;
+        }
+    }
+    openUrlAndReport(url, hit.target);
+}
+
+void TerminalItem::openUrlAndReport(const QUrl &url, const QString &shown) {
     // openUrl meldet false, wenn das System ablehnt, z. B. eine Datei ohne verknüpftes
     // Programm. Das bliebe sonst spurlos und sähe aus wie ein nicht erkannter Klick.
     if (QDesktopServices::openUrl(url)) {
-        showLinkNotice(QCoreApplication::translate("TerminalItem", "Wird geöffnet: %1")
-                           .arg(hit.target));
+        showLinkNotice(QCoreApplication::translate("TerminalItem", "Wird geöffnet: %1").arg(shown));
     } else {
         showLinkNotice(QCoreApplication::translate(
                            "TerminalItem", "Das System konnte das Ziel nicht öffnen: %1")
-                           .arg(hit.target));
+                           .arg(shown));
     }
+}
+
+void TerminalItem::confirmOpenExecutable() {
+    // Geöffnet wird genau der Pfad, nach dem gefragt wurde. Eine Bestätigung ohne offene
+    // Rückfrage tut nichts, und jede gilt nur einmal.
+    if (m_pendingExecutable.isEmpty()) return;
+    const QString path = std::exchange(m_pendingExecutable, QString());
+    openUrlAndReport(QUrl::fromLocalFile(path), path);
+}
+
+void TerminalItem::cancelOpenExecutable() {
+    if (m_pendingExecutable.isEmpty()) return;
+    const QString path = std::exchange(m_pendingExecutable, QString());
+    showLinkNotice(QCoreApplication::translate("TerminalItem", "Nicht geöffnet: %1").arg(path));
 }
 
 QString TerminalItem::linkTargetAt(const QPointF &pos) {

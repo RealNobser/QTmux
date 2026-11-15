@@ -633,6 +633,17 @@ ApplicationWindow {
         pasteWarnDialog.open()
     }
 
+    // Klick auf einen Datei-Link, den das System ausführen würde (QTMUX-151): das betroffene
+    // Terminal merken und nachfragen. Das Ziel behält das Terminal, hier wird nur gezeigt.
+    property var pendingExecTerm: null
+    function askOpenExecutable(term, path) {
+        // Eine noch offene Rückfrage eines anderen Terminals gilt als abgelehnt.
+        if (pendingExecTerm && pendingExecTerm !== term) pendingExecTerm.cancelOpenExecutable()
+        pendingExecTerm = term
+        execOpenDialog.path = path
+        execOpenDialog.open()
+    }
+
     // Aktuell wirksame Shell (für Häkchen in den Menüs): die gewählte, sonst die
     // erste verfügbare (= Plattform-Vorgabe).
     function currentShellProgram() {
@@ -4480,6 +4491,13 @@ ApplicationWindow {
             color: Theme.textBright
             text: qsTr("Die Datei konnte nicht als Farbschema gelesen werden (unterstützt: iTerm .itermcolors, Xresources, Ghostty).")
         }
+    }
+
+    // --- Rückfrage vor dem Öffnen einer ausführbaren Datei (QTMUX-151) -----
+    ExecOpenDialog {
+        id: execOpenDialog
+        onAccepted: if (window.pendingExecTerm) window.pendingExecTerm.confirmOpenExecutable()
+        onRejected: if (window.pendingExecTerm) window.pendingExecTerm.cancelOpenExecutable()
     }
 
     // --- Mehrzeilige-Einfügung-Warnung -------------------------------------

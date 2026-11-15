@@ -59,6 +59,8 @@ add_library(qtmux_core STATIC
     src/core/TerminalSelection.cpp
     src/core/FileManagerReveal.h
     src/core/FileManagerReveal.cpp
+    src/core/ExecutableTarget.h
+    src/core/ExecutableTarget.cpp
     src/core/KeyEncoding.h
     src/core/KeyEncoding.cpp
     src/core/TerminalGrid.h
@@ -278,6 +280,7 @@ qt_add_qml_module(qtmux
         qml/PrefsWindow.qml
         qml/dialogs/UpdateDialog.qml
         qml/dialogs/ProxyAuthDialog.qml
+        qml/dialogs/ExecOpenDialog.qml
         qml/Ui/IconToolButton.qml
         qml/Ui/ShortcutMenuItem.qml
         qml/Ui/AppMenuItem.qml

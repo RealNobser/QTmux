@@ -139,6 +139,11 @@ public:
     Q_INVOKABLE void confirmPaste();
     /// Verwirft eine zurückgehaltene Einfügung.
     Q_INVOKABLE void cancelPaste();
+    /// Öffnet die ausführbare Datei, für die `executableOpenRequested` nachgefragt hat. Das Ziel
+    /// merkt sich das Item selbst: QML sagt nur Ja oder Nein und kann kein anderes nennen.
+    Q_INVOKABLE void confirmOpenExecutable();
+    /// Verwirft die Rückfrage, nichts wird geöffnet.
+    Q_INVOKABLE void cancelOpenExecutable();
     /// Ob aktuell etwas selektiert ist (für Menü-Aktivierung).
     Q_INVOKABLE bool hasSelection() const { return m_selection.hasSelection(); }
     /// Selektiert den GESAMTEN Inhalt: Scrollback + Live-Screen (Design 1a, Teil A).
@@ -182,6 +187,10 @@ signals:
     void appMouseHintChanged();
     /// Mehrzeilige Einfügung erkannt — QML fragt nach (lineCount = Zeilenzahl).
     void multilinePasteWarning(int lineCount);
+    /// Klick auf einen Datei-Link, dessen Ziel das System AUSFÜHREN würde (QTMUX-151). Geöffnet
+    /// ist noch nichts: QML fragt nach und antwortet mit confirmOpenExecutable() oder
+    /// cancelOpenExecutable(). `path` ist der vollständige lokale Pfad.
+    void executableOpenRequested(const QString &path);
     void linkNoticeChanged();
     /// Link unter der Maus hat gewechselt (Ziel geändert) — QML aktualisiert den Tooltip.
     void hoverLinkChanged();
@@ -332,6 +341,10 @@ private:
 
     QString m_linkNotice;
     std::function<bool(const QString &)> m_revealFn;
+    /// Lokaler Pfad, für den gerade nachgefragt wird (leer = keine Rückfrage offen).
+    QString m_pendingExecutable;
+    /// Gibt `url` an das System und meldet das Ergebnis; `shown` steht in der Pille.
+    void openUrlAndReport(const QUrl &url, const QString &shown);
     QTimer m_linkNoticeTimer;
 
     // Link unter dem letzten Rechtsklick (leer = keiner) — Grundlage für den
@@ -357,6 +370,8 @@ public:
     /// jedem Testlauf ein Finder- oder Explorer-Fenster aufgeht.
     void setRevealFunction(std::function<bool(const QString &)> fn) { m_revealFn = std::move(fn); }
     QString contextLinkTarget() const { return m_contextLink; }
+    /// Pfad, für den eine Rückfrage offen ist (leer = keine). Für Tests.
+    QString pendingExecutable() const { return m_pendingExecutable; }
 };
 
 } // namespace qtmux

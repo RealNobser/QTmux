@@ -35,6 +35,12 @@ qt_add_executable(test_filemanagerreveal tst_filemanagerreveal.cpp)
 target_link_libraries(test_filemanagerreveal PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_filemanagerreveal COMMAND test_filemanagerreveal)
 
+# QTMUX-151: Rückfrage vor dem Öffnen ausführbarer Dateien. Die Regel je Plattform auf jedem
+# Host + die Angaben echter Dateien in einem Temp-Ordner.
+qt_add_executable(test_executabletarget tst_executabletarget.cpp)
+target_link_libraries(test_executabletarget PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_executabletarget COMMAND test_executabletarget)
+
 # QTMUX-141: Jeder Icon-Verweis im QML/C++ (auch zusammengesetzte über icon(name))
 # muss als Ressource existieren. Bettet dieselbe Liste ein wie die App
 # (QTMUX_ICON_FILES im Haupt-CMakeLists) — eine eigene Liste hier verdeckte die Drift.
@@ -73,6 +79,15 @@ qt_add_resources(test_combowidth "test_combowidth_res"
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/../resources/icons/caret-down.svg"
 )
 add_test(NAME test_combowidth COMMAND test_combowidth)
+
+# QTMUX-151: Rückfrage vor dem Öffnen einer ausführbaren Datei — der Dialog. Lädt die echten
+# qml/Ui/AppDialog.qml und qml/dialogs/ExecOpenDialog.qml in ein Attrappen-Modul (wie
+# test_combowidth) und prüft: Abbrechen ist die Vorgabe, zwei Knöpfe, voller Pfad.
+qt_add_executable(test_execopendialog tst_execopendialog.cpp)
+target_compile_definitions(test_execopendialog PRIVATE
+    QTMUX_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
+target_link_libraries(test_execopendialog PRIVATE Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+add_test(NAME test_execopendialog COMMAND test_execopendialog)
 
 # QTMUX-139: Stillstand-Erkennung fuer Agent-Sessions — Zeit injiziert, keine echten Minuten.
 qt_add_executable(test_stalldetector tst_stalldetector.cpp)
