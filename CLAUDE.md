@@ -710,39 +710,41 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.9.12 — Wartungsrelease (2026-11-15, Owner-Auftrag „Release veröffentlichen“).**
-Tag `v1.9.12` (annotiert) auf dem Bau-Commit `d3a7979`, Bump 15/15 Zeilen plus Abnahme-Zeilen. Inhalt
-gegenüber 1.9.11: QTMUX-40 (OSC 8), QTMUX-154 (umbrochene Links, Randregel, Schalter), QTMUX-155 (Kopieren
-unter ConPTY). Alle vier Artefakte aus `d3a7979`, Build-ID `1.9.12+d3a7979` je Artefakt EINZELN gemessen
-(ASCII + UTF-16 je 1×, kein `-dirty`/`+unknown`, 0 Reste von `1.9.11`/`b1137f4`/`2b2cee5`/`52682b2`):
+**Ausgeliefert: v1.9.13 — Wartungsrelease (2026-11-15, Owner-Wort „1 ja / 2–4 so“).**
+Tag `v1.9.13` (annotiert) auf dem Bau-Commit `1531102`, Bump 15/15 Zeilen plus Abnahme-Zeile. Inhalt
+gegenüber 1.9.12: Rückfrage vor dem Öffnen ausführbarer Dateien (QTMUX-151 §8.4, `e816537`). Alle vier
+Artefakte aus `1531102`, Build-ID `1.9.13+1531102` je Artefakt EINZELN gemessen (ASCII + UTF-16 je 1×, kein
+`-dirty`/`+unknown`, 0 Reste von `1.9.12`/`d3a7979`/`e816537`/`c755adb`):
 
 | Artefakt | Bytes | SHA256 |
 |---|---|---|
-| `QTmux-1.9.12-macos.dmg` | 59 225 493 | `dede6435b6f18a90d222370630a942350f6dd178e214a170897dee2c22a6e61b` |
-| `QTmux-1.9.12-win64.msi` | 31 972 011 | `5866cc8790bae64c8e5fadf0a45473b45e48186e07848d2bbc63d1144fe473cc` |
-| `QTmux-1.9.12-win64-portable.zip` | 39 320 379 | `3f45d14e77840eeae194c2d331325c65bc8cc54fea16c38c566e1ec156593774` |
-| `QTmux-1.9.12-x86_64.AppImage` | 44 927 480 | `1f585e08909b3f45c92436b6a9601dbc6c10af613242e4ba31ed446ff931dd61` |
+| `QTmux-1.9.13-macos.dmg` | 59 588 295 | `c7e444049f968287c45f762fb6868fe7720fc02a3846082ac5982fb6c097c9be` |
+| `QTmux-1.9.13-win64.msi` | 31 984 299 | `3d293ff5754a941763145de86886b3fb2c282a4d7547db9790e39b7c71fa10c5` |
+| `QTmux-1.9.13-win64-portable.zip` | 39 334 014 | `e38ac9e40dc5030c3188cf388fe7e4affbcb80832fc7dab658b7de74ee32bcbb` |
+| `QTmux-1.9.13-x86_64.AppImage` | 44 935 672 | `c95894b58addf57a714532151d832a063bd4495a7c407ae6ce3113f216025670` |
 
-CI: Push-Läufe `43724250679` (`2b2cee5`) und `43725522659` (`52682b2`, Windows im 2. Versuch), main-Lauf
-`43729246269`, Tag-Lauf `43729247628`, je macOS/Linux 47/47, Windows 45/45 (ohne `test_pty`, CI-Vorgabe).
-DMG: DR `certificate root`, 168/168 Mach-O, Plugin + PCBUSB enthalten, Starttest aus dem gemounteten Image
-ohne Fenster (`--install-shell-integration`). Eigene Publish-Abnahme:
-Index-Diff = genau qtmux `1.9.11`→`1.9.12`, Signatur gegen die Client-Bytes gültig, beide Gegentests
-fallen, drei Artefakte `cmp`-gleich. Benutzerdoku dual (on-prem v29, Cloud v28), Jira QTMUX-40/154/155 dual
-Done, 153 offen.
-🔑 **Größen gegen 1.9.11 am Inhalt erklärt:** DMG −1 192 193 B bei Inhalt +57 600 B und gleicher
-Dateiliste (`qtmux` +34 480, Echo-Plugin +3 424, MacPCAN-Plugin +19 696), der Rest ist hdiutil-Streuung.
-MSI und ZIP gleiche Dateiliste, nur `qtmux.exe` +40 448 und Echo-Plugin +7 680. AppImage gleiche
-Dateiliste, max GLIBC 2.38 wie zuvor, `qtmux` +49 152, Echo-Plugin +22 256, dazu `libpcre2-8.so.0` gleich
-groß mit anderem Inhalt (Version 10.42 beide Male, neueres Runner-Image).
+CI: Push-Lauf `43743057315` (`e816537`), main-Lauf `43743829277`, Tag-Lauf `43744430216` (4/4), je macOS und
+Linux 49/49, Windows 47/47 (ohne `test_pty` und `test_check_updater_sync`); `test_executabletarget`,
+`test_execopendialog` und `test_terminalitem` in jedem Job als Passed gelesen. DMG: DR `certificate root`,
+168/168 Mach-O, Plugin + PCBUSB enthalten, Starttest aus dem gemounteten Image ohne Fenster. Eigene
+Publish-Abnahme: Index-Diff = genau qtmux `1.9.12`→`1.9.13`, Signatur gegen die Client-Bytes gültig, beide
+Gegentests fallen, drei Artefakte `cmp`-gleich; GitHub „Latest“, vier Assets ohne Anmeldung geladen und
+`cmp`-gleich. Benutzerdoku dual (on-prem v30, Cloud v29), QTMUX-151 dual nachgezogen (bleibt Done),
+QTMUX-156 (Erlaubnisliste) dual offen.
+🔑 **Größen gegen 1.9.12 am Inhalt erklärt:** Dateilisten in allen vier Paketen gleich. DMG +362 802 B bei
+Inhalt +17 840 B (nur `qtmux`), der Rest ist hdiutil-Streuung. MSI +12 288 B und ZIP +13 635 B, nur
+`qtmux.exe` +38 400. AppImage +8 192 B, nur `usr/bin/qtmux` +40 960, max GLIBC 2.38. Das Echo-Plugin ist im
+ZIP und im AppImage gleich groß mit anderem Inhalt.
+
+Davor: **v1.9.12** — Wartungsrelease (2026-11-15, `d3a7979`, Build-ID `1.9.12+d3a7979`, QTMUX-40/154/155;
+Artefakttabelle in der Git-Historie dieser Datei). Dauerhaft daraus:
 🔴 **Sicherheitsprüfung nach dem Push, vor dem Tag abwarten:** Der Harness prüft einen Push im
-Hintergrund und meldete hier zwei Punkte im OSC-8-Code, als die Commits schon öffentlich waren. Owner-
-Entscheid „C: B + kein file: aus OSC 8“, behoben mit `52682b2` vor dem Versions-Commit (Mechanik:
-Feature-Referenz „Klickbare Links“). Beim nächsten Release nach dem Code-Push ein paar Minuten warten,
-bevor Versions-Commit und Tag folgen.
+Hintergrund und meldete bei 1.9.12 zwei Punkte im OSC-8-Code, als die Commits schon öffentlich waren
+(behoben mit `52682b2` vor dem Versions-Commit). Nach dem Code-Push ein paar Minuten warten, bevor
+Versions-Commit und Tag folgen.
 ⚠️ **Windows-Testschritt hing einmal ohne Log** (Lauf `43725522659`, 1. Versuch: 25 min im Schritt „Tests“
-statt ~30 s, nach Abbruch kein Log abrufbar, HTTP 404). Die Wiederholung und zwei weitere Läufe auf
-demselben Code waren grün. Ursache ungemessen. Die Jobs haben keine `timeout-minutes`, ein solcher Hänger
+statt ~30 s, nach Abbruch kein Log abrufbar, HTTP 404). Die Wiederholung und alle späteren Läufe waren
+grün. Ursache ungemessen. Die Jobs haben keine `timeout-minutes`, ein solcher Hänger
 liefe bis zur GitHub-Grenze von 6 h (Kandidat, nicht beauftragt).
 
 Davor: **v1.9.11** — Wartungsrelease (2026-11-05, `b1137f4`, Build-ID `1.9.11+b1137f4`, QTMUX-150…152;
@@ -856,7 +858,7 @@ Davor: v1.9.1 (einzige Änderung ggü. 1.9.0: Windows-Updater-Fix msiexec 1619 a
 Pin in `third_party/updater/UPSTREAM.md`) · v1.9.0 (Meilenstein, voller Update-Zyklus am
 lebenden Objekt, macOS-Zweig); Auslieferungs-Sollwerte in
 [docs/update-regressionsliste.md](docs/update-regressionsliste.md). Jira dual synchron bis
-**QTMUX-155** (QTMUX-40 OSC 8, 154 umbrochene Links, 155 Kopieren unter ConPTY, 2026-11-15 beidseitig Done am Ticket gelesen; davor QTMUX-150…152 Auswahl, Links, Netzpfade, 2026-11-05 beidseitig Done am Ticket gelesen, 153 Resize-Befund bewusst offen; davor QTMUX-149 ConPTY-Fixes aus dem Clink-Befund, 2026-11-03 beidseitig Done am Ticket gelesen; davor QTMUX-148 alte `.part`-Reste eines harten Endes räumt der nächste Download ab, Hub `4a645a4` vendiert, + TMPDIR-Messung macOS-CI, 2026-10-16 dual angelegt; davor QTMUX-147 Download ersetzt den Zielnamen statt hineinzuschreiben, Hub `f2d9ac7` vendiert, 2026-10-15 dual angelegt; davor QTMUX-146 Update-Dialog ohne Rechtsklick-Rat + Hub-`quarantineState`, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
+**QTMUX-157** (2026-11-15 beidseitig als höchste Nummer gelesen; 156 Erlaubnisliste für die Rückfrage, offen; 157 gehört dem Auftrag „Eingabe-Vorrang“ einer anderen Session; QTMUX-151 trägt den Nachtrag zu 1.9.13 und bleibt Done; davor QTMUX-40 OSC 8, 154 umbrochene Links, 155 Kopieren unter ConPTY, 2026-11-15 beidseitig Done am Ticket gelesen; davor QTMUX-150…152 Auswahl, Links, Netzpfade, 2026-11-05 beidseitig Done am Ticket gelesen, 153 Resize-Befund bewusst offen; davor QTMUX-149 ConPTY-Fixes aus dem Clink-Befund, 2026-11-03 beidseitig Done am Ticket gelesen; davor QTMUX-148 alte `.part`-Reste eines harten Endes räumt der nächste Download ab, Hub `4a645a4` vendiert, + TMPDIR-Messung macOS-CI, 2026-10-16 dual angelegt; davor QTMUX-147 Download ersetzt den Zielnamen statt hineinzuschreiben, Hub `f2d9ac7` vendiert, 2026-10-15 dual angelegt; davor QTMUX-146 Update-Dialog ohne Rechtsklick-Rat + Hub-`quarantineState`, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-145 deutsche Oberfläche siezt + Wächter, Proxy-Art-Auswahl, 2026-10-14 beidseitig Done am Ticket gelesen; davor QTMUX-144 check-updater-sync ohne grünen Nachweis ohne Messung, 2026-10-10, beidseitig Done am Ticket gelesen; davor QTMUX-143 Startmenü-Verknüpfung ohne MSI-Icon-Tabelle, 2026-10-10; davor QTMUX-142 Statusfarben als Theme-Rollen, 2026-10-10; davor QTMUX-141 Icon „Im Finder zeigen" + Wächter, 2026-10-08 dual angelegt; davor 139
 Stillstand, 140 macOS-Signatur — am 2026-10-07 beidseitig Done am Ticket gelesen; davor QTMUX-138 „Im Finder/Explorer zeigen",
 2026-09-30, beidseitig Done am Ticket gelesen; davor
 QTMUX-137 Windows-App-Icon 2026-09-29; seit QTMUX-136 nicht neu gezählt — rechnerisch 112/26). Davor **110 Done / 26 offen**
@@ -867,9 +869,9 @@ Transition hinterher. Vorher 107/26 bis QTMUX-133, gemessen im Jira-Audit 2026-0
 QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
 Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 
-**Teststände:** **49** Tests auf macOS/Linux, **48** auf Windows seit dem lokalen Commit der Rückfrage
-(2026-11-15, `executabletarget` und `execopendialog` kamen hinzu; nur am Mac gezählt, 1.9.12 selbst hat
-47 und 46). Davor 47 und 46 (s. Dateitabelle; per
+**Teststände:** **49** Tests auf macOS/Linux, **48** auf Windows seit der Rückfrage (1.9.13, 2026-11-15,
+`executabletarget` und `execopendialog` kamen hinzu; am Mac per `ctest -N` gezählt, die CI lässt unter
+Windows 47 laufen, also ohne `test_pty`). Davor 47 und 46 (s. Dateitabelle; per
 `ctest -N` am 2026-11-04 gezählt — `screenlinks`, `terminalselection`, `terminalitem` kamen mit
 dem Auftrag Links/Auswahl hinzu; davor am 2026-11-03 44 — `conptyreplay` kam mit dem Clink-Auftrag hinzu, lokal 44/44
 in frisch angelegtem Debug- **und** Release-Baum (`build/wclink`, `build/wclinkr`); davor
@@ -882,8 +884,9 @@ Windows; davor `statuscolors` mit QTMUX-142, `icons` mit QTMUX-141; lokal vor de
 lässt `test_pty` mitlaufen; Linux (rtzsvr02-Container) und Windows nehmen ihn per `-E` aus
 (umgebungsbedingt: nicht-interaktive Shell/ConPTY; unter Windows braucht `ctest` zusätzlich
 Qt-`bin` im PATH, sonst `0xc0000135`) — dort eine um 1 kleinere Zahl erwarten. Aktuellste
-Grün-Messung: main-Lauf `43729246269` und Tag-Lauf `43729247628` (1.9.12, 2026-11-15) macOS/Linux
-47/47, Windows 45/45 (dort zusätzlich ohne `test_check_updater_sync`), Tag-Lauf 4/4 grün. Fallzahlen der
+Grün-Messung: main-Lauf `43743829277` und Tag-Lauf `43744430216` (1.9.13, 2026-11-15) macOS/Linux
+49/49, Windows 47/47 (dort zusätzlich ohne `test_check_updater_sync`), Tag-Lauf 4/4 grün. Davor main-Lauf
+`43729246269` und Tag-Lauf `43729247628` (1.9.12) macOS/Linux 47/47, Windows 45/45. Fallzahlen der
 betroffenen Programme, lokal gezählt (die CI druckt sie nicht): `test_screenlinks` 86, `test_vtscreen` 33,
 `test_conptyreplay` 26, `test_terminalselection` 40, `test_terminalitem` 28. Davor main-Lauf
 `42036454172` und Tag-Lauf `42037643668` (1.9.11) mit denselben Bilanzen. Davor
@@ -915,24 +918,23 @@ Schalter bleibt mit Vorgabe AUS, Codeblöcke bleiben unklickbar, die Randregel b
 kein file: aus OSC 8“): die Härtung oben. **Weiter offen:** (1) Die Kopier-Regel ist eine Abwägung, einzeln
 nicht entschieden, ausgeliefert ist „so lassen“. (2) Ein neueres ConPTY mitliefern, das die Ausgabe
 durchreicht (Abhilfe an der Wurzel, eine Abhängigkeit mehr, nicht gemessen). (3) Die Rückfrage bei Strg-Klick
-auf ausführbare Dateien ist entschieden und umgesetzt, aber nicht in 1.9.12, s. nächster Absatz. Am echten Fenster ist nichts davon gesehen, Claude Code
+auf ausführbare Dateien kam erst mit 1.9.13, s. nächster Absatz. Am echten Fenster ist nichts davon gesehen, Claude Code
 lief unter Windows nicht. An QTMUX-153 ändert dieser Stand nichts: Die Dopplung dort kommt von Claude Codes
 klassischer Darstellung, die falschen Marken tragen nicht dazu bei.
 
-🔧 **2026-11-15: Rückfrage vor dem Öffnen ausführbarer Dateien (QTMUX-151 §8.4), umgesetzt, nur lokal,
-unreleased.** Owner-Wort „Ich würde sagen, JA!“. Ein Datei-Link aus dem Text, dessen Ziel das System
-ausführen würde, öffnet erst nach einer Rückfrage; Vorgabe Abbrechen, kein „nicht mehr fragen“, die
+🔧 **2026-11-15: Rückfrage vor dem Öffnen ausführbarer Dateien (QTMUX-151 §8.4), ausgeliefert mit 1.9.13,
+Owner-Abnahme steht aus.** Owner-Wort „Ich würde sagen, JA!“. Ein Datei-Link aus dem Text, dessen Ziel das
+System ausführen würde, öffnet erst nach einer Rückfrage; Vorgabe Abbrechen, kein „nicht mehr fragen“, die
 Zeigen-Geste, URLs und Verzeichnisse fragen nicht. Mechanik, Listen und Grenzen: Feature-Referenz
 „Klickbare Links“ (Absatz „Rückfrage“), Rezept: [docs/owner-abnahmen.md](docs/owner-abnahmen.md) Zeile 151.
-Messkommando für den Stand: `git log --oneline origin/main..HEAD`. **Sie sollte in 1.9.12 und kam zu
-spät:** Ich hatte die erste Antwort des Auftraggebers aus der eigenen Warteschlange gelesen, bevor sie
-zugestellt war; sie wurde danach durch eine Fassung mit diesem zweiten Entscheid ersetzt. 🔑 Eine Nachricht
-in der Warteschlange ist nicht gesendet, erst nach der Zustellung handeln. **Push und ein Release 1.9.13
-sind nicht freigegeben**, das Owner-Wort steht aus. Mit dem Push fällig: QTMUX-151 nachziehen (dort steht
-noch „§8.4 weiter offen“), Benutzerdoku und Release-Notes je ein Satz, CI je Job (Windows und Linux liefen
-mit diesem Stand noch nicht). **Offene Owner-Entscheidung:** Die Regel ist eine Verbotsliste und nie
-vollständig; die gründlichere Bauart (nur bekannte, harmlose Typen ohne Frage öffnen, oder das System
-fragen) ist nicht umgesetzt.
+**Sie sollte in 1.9.12 und kam zu spät:** Ich hatte die erste Antwort des Auftraggebers aus der eigenen
+Warteschlange gelesen, bevor sie zugestellt war; sie wurde danach durch eine Fassung mit diesem zweiten
+Entscheid ersetzt. 🔑 Eine Nachricht in der Warteschlange ist nicht gesendet, erst nach der Zustellung
+handeln, und vor jedem Schritt nach außen (Push, Tag, Publish) die Warteschlange erneut lesen.
+**Owner-Entscheid 2026-11-15 („1 ja / 2–4 so“):** Die Verbotsliste geht so raus; unter Windows fragen auch
+Dateien ohne Endung; auf Laufwerken ohne Unix-Rechte fragt unter macOS und Linux jede Datei. Die Umkehrung
+(nur bekannte, harmlose Typen ohne Frage öffnen, oder das System fragen) ist **QTMUX-156** und nicht
+umgesetzt. Am echten Fenster ist der Dialog nie gesehen, belegt sind die Tests auf allen drei Plattformen.
 
 🔧 **2026-11-05: QTMUX-150…152 ausgeliefert mit 1.9.11, Owner-Abnahme steht aus.** Auswahl markiert nie
 mehr fremden Text; Link-Gesten treffen über Emoji und weiche Umbrüche und melden jedes Ergebnis in der
@@ -942,7 +944,7 @@ nicht am echten Desktop reproduziert, die Pille macht es jetzt unterscheidbar. O
 Scrollback-Suche nutzt weiter die Spalten-Zeichen-Gleichsetzung (`absLineText`) und setzt ihre Treffer
 hinter Emoji daneben; `m_matches` rutschen auch an der Scrollback-Grenze. Die zwei damals offenen Owner-Entscheide aus
 QTMUX-151 sind entschieden: OSC 8 ist mit 1.9.12 ausgeliefert, die Rückfrage bei Strg-Klick auf
-ausführbare Dateien liegt lokal (s. oben).
+ausführbare Dateien mit 1.9.13 (s. oben).
 
 🔧 **2026-11-04: Owner-Befund „Windows + Clink + Resize gibt immer noch Artefakte“, QTMUX-153 offen.**
 Ursache gemessen: Claude Codes **klassischer** Renderer, nicht ConPTY, nicht Clink, nicht der Reflow
@@ -1215,6 +1217,8 @@ und mit 1.8.1 **ausgeliefert** — Mechanik in der Feature-Referenz; Jira-Status
 **Done** (am 2026-09-06 per REST in beiden Systemen gemessen). ·
 **40** (OSC-8-Hyperlinks — mit 1.9.12 ausgeliefert, über eine Kennung im libvterm-Stift statt
 Span-Tracking; Ticket dual Done) ·
+**156** (Datei-Links: Erlaubnisliste statt Verbotsliste für die Rückfrage vor dem Öffnen — Owner-Entscheid
+2026-11-15: als Ticket anlegen, nicht umsetzen; offene Fragen stehen im Ticket) ·
 **13** (native macOS-Menü-Icons — deferred; Qt reicht `icon.source`/`icon.name` in nativen
 Menüs nicht durch, einziger Weg wäre ein QMenuBar-Umbau; [[qtmux-native-menu-icons]]) ·
 **126** (Marken-Badge „Q" in Menüleiste + App-Icon; Farbe **`#B239EA`** (Violett), festgelegt 2026-08-05 nachdem `#0284C7` sich als die Farbe des **Deskstarters** herausstellte. 🔑 Eine weitere **Blaustufe war rechnerisch nicht möglich**: Der Bereich H 184–275 ist von MacPCAN, Deskstarter und AstroCAN dreifach belegt, jede Blaustufe scheitert am Abstand zu MacPCAN oder geht im **Dunkel**-Design unter. Belege — ΔE2000 und WCAG-Kontrast gegen **beide** Designs samt Kopfleiste — stehen in der Spec; Backlog; Spec
