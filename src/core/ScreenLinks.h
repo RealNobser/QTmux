@@ -19,7 +19,8 @@ class VtScreen;
 /// Zwei Quellen, in dieser Reihenfolge:
 ///  1. **Hyperlinks des Programms (OSC 8).** Das Programm nennt das Ziel selbst, jede Zelle
 ///     trägt es. Das ist der einzige sichere Weg für Links, die ein Programm über mehrere
-///     Zeilen SELBST umbricht.
+///     Zeilen SELBST umbricht. Weil das Ziel nicht der sichtbare Text ist, öffnet so nie eine
+///     Datei (`Blocked::RefusedFile`).
 ///  2. **Erkannter Text** (`LinkDetector`), über weiche Umbrüche verbunden. Hart umbrochene
 ///     Zeilen werden NICHT zusammengesetzt: Gemessen an Claude Code sieht eine hart umbrochene
 ///     Adresse genauso aus wie eine Adresse am Zeilenende mit einem neuen Wort darunter. Ein
@@ -77,16 +78,18 @@ struct Hit {
         None,
         MaybeCut,   // Text-Link endet am Rand und könnte in der nächsten Zeile weitergehen
         Refused,    // Hyperlink des Programms mit einem Ziel, das nicht geöffnet wird
+        RefusedFile, // Hyperlink des Programms, der eine Datei nennt: wird nie geöffnet
     };
     Blocked blocked = Blocked::None;
-    QString refused;             // bei Refused: das abgelehnte Ziel
+    QString refused;             // bei Refused und RefusedFile: das abgelehnte Ziel
 
     bool valid() const { return !target.isEmpty(); }
 };
 
 /// Hyperlink des Programms (OSC 8) an der Zelle. `blocked == Refused`, wenn dort einer steht,
-/// dessen Ziel nicht durch `LinkDetector::declaredTarget` kommt. Leer und nicht blockiert,
-/// wenn die Zelle keinen trägt oder sein Ziel aus der Tabelle gefallen ist.
+/// dessen Ziel nicht durch `LinkDetector::declaredTarget` kommt; `RefusedFile`, wenn er eine
+/// Datei nennt. Leer und nicht blockiert, wenn die Zelle keinen trägt oder sein Ziel aus der
+/// Tabelle gefallen ist.
 Hit hyperlinkAt(const qtmux::VtScreen &screen, int absRow, int col);
 
 /// Erkannter Text-Link an der Zelle (`absRow`, `col`) einer logischen Zeile. Ein Treffer, der

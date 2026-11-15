@@ -76,15 +76,38 @@ bool isRemoteFileUrl(const QUrl &url) {
 }
 
 QString declaredTarget(const QString &uri) {
-    // Leerraum und Steuerzeichen gehören in kein Ziel. Sie kämen beim Öffnen als etwas anderes an
-    // als das, was die Pille zeigt.
-    for (const QChar c : uri)
-        if (c.isSpace() || c.unicode() < 0x20 || c.unicode() == 0x7f) return {};
+    // Leerraum, Steuer- und Formatzeichen gehören in kein Ziel. Sie kämen beim Öffnen als etwas
+    // anderes an als das, was die Pille zeigt: Eine Richtungsumkehr (U+202E) dreht die Anzeige,
+    // ein Zeichen ohne Breite versteckt sich in ihr. Geprüft wird je Codepunkt, nicht je
+    // UTF-16-Einheit, sonst entgingen die Formatzeichen jenseits von U+FFFF (Tag-Zeichen), und
+    // eine halbe Ersatzzeichen-Folge ist ohnehin kein Zeichen.
+    for (qsizetype i = 0; i < uri.size(); ++i) {
+        char32_t cp = uri.at(i).unicode();
+        if (uri.at(i).isHighSurrogate() && i + 1 < uri.size() && uri.at(i + 1).isLowSurrogate()) {
+            cp = QChar::surrogateToUcs4(uri.at(i), uri.at(i + 1));
+            ++i;
+        }
+        if (QChar::isSpace(cp)) return {};
+        switch (QChar::category(cp)) {
+        case QChar::Other_Control:      // U+0000–001F, U+007F–009F
+        case QChar::Other_Format:       // U+00AD, U+200B–200F, U+202A–202E, U+2066–2069, U+FEFF, …
+        case QChar::Other_Surrogate:    // einzelne Hälfte, kein gültiges Zeichen
+            return {};
+        default:
+            break;
+        }
+    }
+    // Nie eine Datei, auch keine lokale: Der sichtbare Text sagt nicht, wohin der Link zeigt.
+    if (isDeclaredFileTarget(uri)) return {};
     const QUrl url(uri);
     if (!url.isValid() || url.scheme().isEmpty() || !isAllowedScheme(url.scheme())) return {};
-    if (url.scheme().compare(QLatin1String("file"), Qt::CaseInsensitive) == 0 && isRemoteFileUrl(url))
-        return {};
     return uri;
+}
+
+bool isDeclaredFileTarget(const QString &uri) {
+    // Am Anfang der Zeichenkette gelesen, nicht über QUrl: Auch eine ungültige `file:`-Angabe
+    // ist eine, und die Schreibweise des Schemas ist beliebig.
+    return uri.startsWith(QLatin1String("file:"), Qt::CaseInsensitive);
 }
 
 bool isNetworkPath(const QString &path) {

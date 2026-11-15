@@ -252,7 +252,8 @@ Hit hyperlinkAt(const VtScreen &sc, int absRow, int col) {
     hit.declared = true;
     hit.target = LinkDetector::declaredTarget(uri);
     if (hit.target.isEmpty()) {
-        hit.blocked = Hit::Blocked::Refused;
+        hit.blocked = LinkDetector::isDeclaredFileTarget(uri) ? Hit::Blocked::RefusedFile
+                                                              : Hit::Blocked::Refused;
         hit.refused = uri;
         return hit;
     }

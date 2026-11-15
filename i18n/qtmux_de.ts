@@ -3562,7 +3562,12 @@ ame</translation>
         <translation>Das System konnte das Ziel nicht öffnen: %1</translation>
     </message>
     <message>
-        <location filename="../src/terminal/TerminalItem.cpp" line="1254"/>
+        <location filename="../src/terminal/TerminalItem.cpp" line="1243"/>
+        <source>Nicht geöffnet: Das Programm nennt als Linkziel eine Datei. Dateien öffnet QTmux nur, wenn ihr Pfad sichtbar im Text steht. Ziel: %1</source>
+        <translation>Nicht geöffnet: Das Programm nennt als Linkziel eine Datei. Dateien öffnet QTmux nur, wenn ihr Pfad sichtbar im Text steht. Ziel: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/terminal/TerminalItem.cpp" line="1264"/>
         <source>Kein Link an dieser Stelle</source>
         <translation>Kein Link an dieser Stelle</translation>
     </message>

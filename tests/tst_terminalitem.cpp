@@ -322,6 +322,33 @@ private slots:
         QVERIFY(f.item.linkNotice().contains(QStringLiteral("file://server/freigabe/x")));
     }
 
+    void declaredFileTargetNeverOpens() {
+        // Ein Programm schreibt eine harmlose Adresse und nennt dahinter eine lokale Datei. Der
+        // Klick öffnet nichts, weder die Datei noch die Adresse, und die Pille sagt, warum.
+        Fixture f;
+        QTRY_VERIFY(f.ready());
+        f.feed("\033]8;;file:///tmp/x.txt\033\\https://example.com/harmlos\033]8;;\033\\\r\n");
+        f.hover(f.at(5, 0));
+        QCOMPARE(f.item.hoverLinkTarget(), QString());
+        f.click(f.at(5, 0), Qt::ControlModifier);
+        QVERIFY(m_opened.isEmpty());
+        const QString fileNotice = f.item.linkNotice();
+        QVERIFY2(fileNotice.contains(QStringLiteral("Datei")), qPrintable(fileNotice));
+        QVERIFY2(fileNotice.contains(QStringLiteral("file:///tmp/x.txt")), qPrintable(fileNotice));
+        QVERIFY(!f.item.hasSelection());                               // der Klick ist verbraucht
+        // Ein anderes abgelehntes Ziel meldet etwas anderes: Der Grund ist nicht derselbe.
+        f.feed("\033]8;;javascript:alert(1)\033\\https://example.com/harmlos\033]8;;\033\\\r\n");
+        f.click(f.at(5, 1), Qt::ControlModifier);
+        QVERIFY(m_opened.isEmpty());
+        QVERIFY(f.item.linkNotice() != fileNotice);
+        QVERIFY(f.item.linkNotice().contains(QStringLiteral("javascript:alert(1)")));
+        // Gegenprobe: Steht dieselbe Angabe sichtbar im Text, öffnet sie wie bisher.
+        f.feed("file:///tmp/x.txt\r\n");
+        f.click(f.at(5, 2), Qt::ControlModifier);
+        QCOMPARE(m_opened.size(), 1);
+        QCOMPARE(m_opened.first().toLocalFile(), QStringLiteral("/tmp/x.txt"));
+    }
+
     // --- Auswahl: die Regel erreicht das Item --------------------------------------------------
     void dragSelectsAndCopies() {
         Fixture f;

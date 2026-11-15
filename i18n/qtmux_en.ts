@@ -3537,7 +3537,12 @@ Left untouched: the open windows and sessions, and the secrets vault (which is s
         <translation>The system could not open the target: %1</translation>
     </message>
     <message>
-        <location filename="../src/terminal/TerminalItem.cpp" line="1254"/>
+        <location filename="../src/terminal/TerminalItem.cpp" line="1243"/>
+        <source>Nicht geöffnet: Das Programm nennt als Linkziel eine Datei. Dateien öffnet QTmux nur, wenn ihr Pfad sichtbar im Text steht. Ziel: %1</source>
+        <translation>Not opened: the program names a file as the link target. QTmux opens files only when their path is visible in the text. Target: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/terminal/TerminalItem.cpp" line="1264"/>
         <source>Kein Link an dieser Stelle</source>
         <translation>No link at this position</translation>
     </message>

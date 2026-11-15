@@ -538,38 +538,114 @@ private slots:
 
     void refusedDeclaredTargets_data() {
         QTest::addColumn<QByteArray>("uri");
-        QTest::newRow("javascript") << QByteArray("javascript:alert(1)");
-        QTest::newRow("fremdes Schema") << QByteArray("vscode://datei/x");
-        QTest::newRow("data") << QByteArray("data:text/html,x");
-        QTest::newRow("ohne Schema") << QByteArray("example.com/x");
-        QTest::newRow("relativer Pfad") << QByteArray("src/main.cpp");
-        QTest::newRow("file mit Rechner") << QByteArray("file://server/freigabe/x");
-        QTest::newRow("file localhost") << QByteArray("file://localhost/etc/hosts");
-        QTest::newRow("file Netzpfad") << QByteArray("file:////server/freigabe/x");
-        QTest::newRow("file kodierter Netzpfad") << QByteArray("file:///%2Fserver/freigabe/x");
-        QTest::newRow("file Punkt-Segmente") << QByteArray("file:///x/..//server/y");
-        QTest::newRow("UNC") << QByteArray("\\\\server\\freigabe\\x");
-        QTest::newRow("Leerzeichen") << QByteArray("https://example.com/a b");
+        QTest::addColumn<bool>("file");
+        QTest::newRow("javascript") << QByteArray("javascript:alert(1)") << false;
+        QTest::newRow("fremdes Schema") << QByteArray("vscode://datei/x") << false;
+        QTest::newRow("data") << QByteArray("data:text/html,x") << false;
+        QTest::newRow("ohne Schema") << QByteArray("example.com/x") << false;
+        QTest::newRow("relativer Pfad") << QByteArray("src/main.cpp") << false;
+        QTest::newRow("UNC") << QByteArray("\\\\server\\freigabe\\x") << false;
+        QTest::newRow("Leerzeichen") << QByteArray("https://example.com/a b") << false;
+        // Eine Datei nennt ein Hyperlink des Programms nie, auch keine lokale: Der sichtbare
+        // Text sagt nicht, wohin er zeigt.
+        QTest::newRow("file lokal") << QByteArray("file:///tmp/datei.txt") << true;
+        QTest::newRow("file lokal, Programm") << QByteArray("file:///Applications/Rechner.app") << true;
+        QTest::newRow("file Laufwerk") << QByteArray("file:///C:/Windows/System32/calc.exe") << true;
+        QTest::newRow("file gross geschrieben") << QByteArray("FILE:///tmp/datei.txt") << true;
+        QTest::newRow("file ohne Schraegstriche") << QByteArray("file:/tmp/datei.txt") << true;
+        QTest::newRow("file mit Rechner") << QByteArray("file://server/freigabe/x") << true;
+        QTest::newRow("file localhost") << QByteArray("file://localhost/etc/hosts") << true;
+        QTest::newRow("file Netzpfad") << QByteArray("file:////server/freigabe/x") << true;
+        QTest::newRow("file kodierter Netzpfad") << QByteArray("file:///%2Fserver/freigabe/x") << true;
+        QTest::newRow("file Punkt-Segmente") << QByteArray("file:///x/..//server/y") << true;
+        // Zeichen, die die Pille anders zeigt, als sie beim Öffnen ankommen.
+        QTest::newRow("Richtungsumkehr U+202E") << QByteArray("https://example.com/\xE2\x80\xAEgpj.exe") << false;
+        QTest::newRow("Richtungs-Isolat U+2066") << QByteArray("https://example.com/\xE2\x81\xA6x") << false;
+        QTest::newRow("Leerzeichen ohne Breite U+200B") << QByteArray("https://example.com/a\xE2\x80\x8B" "b") << false;
+        QTest::newRow("weiches Trennzeichen U+00AD") << QByteArray("https://exam\xC2\xADple.com/") << false;
+        QTest::newRow("Byte-Reihenfolge-Marke U+FEFF") << QByteArray("https://example.com/\xEF\xBB\xBFx") << false;
+        QTest::newRow("Tag-Zeichen U+E0041") << QByteArray("https://example.com/\xF3\xA0\x81\x81x") << false;
+        QTest::newRow("Zeilentrenner U+2028") << QByteArray("https://example.com/a\xE2\x80\xA8" "b") << false;
     }
 
     void refusedDeclaredTargets() {
-        // Für ein Ziel des Programms gelten dieselben Grenzen wie für erkannten Text. Wird es
-        // abgelehnt, öffnet auch der Text an der Stelle nichts: Er ist nicht das Ziel.
+        // Wird das Ziel eines Programms abgelehnt, öffnet auch der Text an der Stelle nichts:
+        // Er ist nicht das Ziel.
         QFETCH(QByteArray, uri);
+        QFETCH(bool, file);
         VtScreen sc(5, 60);
         sc.inputWrite("\033]8;;" + uri + "\033\\https://example.com/sichtbar\033]8;;\033\\\r\n");
         QVERIFY(sc.cell(0, 3).link != 0);
         const auto hit = ScreenLinks::linkAt(sc, 0, 3);
         QVERIFY(!hit.valid());
-        QCOMPARE(hit.blocked, Blocked::Refused);
+        QCOMPARE(hit.blocked, file ? Blocked::RefusedFile : Blocked::Refused);
         QCOMPARE(hit.refused, QString::fromUtf8(uri));
         QVERIFY(hit.segments.isEmpty());
+    }
+
+    void declaredFileNeverOpensButTheSamePathAsTextDoes() {
+        // Dieselbe vorhandene Datei, zweimal: als Ziel hinter fremdem Text (öffnet nie) und als
+        // sichtbarer Pfad (öffnet wie bisher). Der Unterschied ist, was der Anwender liest.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("werkzeug.command"));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.close();
+        const QByteArray target = QUrl::fromLocalFile(path).toEncoded();
+        QVERIFY(target.startsWith("file:///"));
+
+        VtScreen sc(5, 200);
+        sc.inputWrite("\033]8;;" + target + "\033\\https://example.com/harmlos\033]8;;\033\\\r\n");
+        sc.inputWrite(path.toUtf8() + "\r\n");
+        const auto hidden = ScreenLinks::linkAt(sc, 0, 5, dir.path());
+        QVERIFY(!hidden.valid());
+        QCOMPARE(hidden.blocked, Blocked::RefusedFile);
+        QCOMPARE(hidden.refused, QString::fromUtf8(target));
+        const auto visible = ScreenLinks::linkAt(sc, 1, 5, dir.path());
+        QVERIFY(visible.valid());
+        QVERIFY(!visible.declared);
+        QCOMPARE(visible.kind, LinkDetector::Span::FilePath);
+        QCOMPARE(QFileInfo(visible.target).canonicalFilePath(), QFileInfo(path).canonicalFilePath());
+        // Und die Angabe als Text, `file:///…` ausgeschrieben, bleibt ein Link wie in 1.9.11.
+        VtScreen text(5, 200);
+        text.inputWrite(target + "\r\n");
+        QVERIFY(ScreenLinks::linkAt(text, 0, 5, dir.path()).valid());
+    }
+
+    void declaredTargetRejectsWhatThePillCannotShow() {
+        // Direkt an der Prüfung, ohne Terminal davor: Sie darf sich nicht darauf verlassen, was
+        // ein Parser durchreicht.
+        const QString base = QStringLiteral("https://example.com/a");
+        QCOMPARE(LinkDetector::declaredTarget(base), base);
+        for (const char32_t cp : {char32_t(0x1B), char32_t(0x7F), char32_t(0x85), char32_t(0x9C),
+                                  char32_t(0xAD), char32_t(0x200D), char32_t(0x202A), char32_t(0x202E),
+                                  char32_t(0x2069), char32_t(0x2029), char32_t(0xFEFF),
+                                  char32_t(0xE0001), char32_t(0xE007F)}) {
+            // Nicht über QString::fromUcs4: Das liest ein führendes U+FEFF als Marke und entfernt es.
+            const QString uri = base + QStringView(QChar::fromUcs4(cp)).toString() + QStringLiteral("b");
+            QCOMPARE(uri.size(), base.size() + (cp > 0xFFFF ? 2 : 1) + 1);
+            QVERIFY2(LinkDetector::declaredTarget(uri).isEmpty(),
+                     qPrintable(QStringLiteral("U+%1").arg(uint(cp), 4, 16, QLatin1Char('0'))));
+        }
+        // Eine halbe Ersatzzeichen-Folge ist kein Zeichen, gleich an welcher Stelle.
+        QVERIFY(LinkDetector::declaredTarget(base + QChar(0xD83D)).isEmpty());
+        QVERIFY(LinkDetector::declaredTarget(base + QChar(0xDE00) + QStringLiteral("b")).isEmpty());
+        // Gegenprobe: Buchstaben und Bildzeichen bleiben erlaubt, auch jenseits von U+FFFF.
+        for (const QString &ok : {QString::fromUtf8("https://example.com/gr\xC3\xBC\xC3\x9F" "e"),
+                                  QString::fromUtf8("https://example.com/\xF0\x9F\x98\x80"),
+                                  QString::fromUtf8("https://example.com/\xE6\x97\xA5\xE6\x9C\xAC")})
+            QCOMPARE(LinkDetector::declaredTarget(ok), ok);
     }
 
     void allowedDeclaredTargets() {
         for (const QByteArray &uri : {QByteArray("https://example.com/x?a=1&b=2#teil"),
                                       QByteArray("http://example.com/"), QByteArray("mailto:jemand@example.com"),
-                                      QByteArray("ftp://example.com/datei"), QByteArray("file:///tmp/datei.txt")}) {
+                                      QByteArray("ftp://example.com/datei"),
+                                      // Buchstaben und Bildzeichen jenseits von ASCII sind keine
+                                      // Formatzeichen, auch nicht jenseits von U+FFFF.
+                                      QByteArray("https://example.com/gr\xC3\xBC\xC3\x9F" "e"),
+                                      QByteArray("https://example.com/\xF0\x9F\x98\x80")}) {
             VtScreen sc(5, 60);
             sc.inputWrite("\033]8;;" + uri + "\033\\Text\033]8;;\033\\\r\n");
             QCOMPARE(ScreenLinks::linkAt(sc, 0, 1).target, QString::fromUtf8(uri));

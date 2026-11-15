@@ -223,14 +223,22 @@ im Shader. **Damage-Gating:** teurer Inhalt nur bei `m_geomDirty`, Overlay
      ist keines, der älteste Eintrag fällt heraus und seine Zellen sind wieder Text). Gleiche
      Angaben (`id`-Parameter und Ziel) bekommen dieselbe Kennung, so gehören die Zeilen eines
      umbrochenen Links zusammen. `ScreenLinks::hyperlinkAt` hat Vorrang vor der Texterkennung.
-     Für das Ziel gelten dieselben Grenzen wie für Text (`LinkDetector::declaredTarget`:
-     Schema-Liste, `file:` nur lokal und ohne Rechnernamen, keine Netzpfade, kein Leerraum).
-     Wird es abgelehnt, öffnet auch der Text an der Stelle nichts, die Pille nennt das Ziel.
+     Für das Ziel gelten engere Grenzen als für Text (`LinkDetector::declaredTarget`), weil
+     es nicht das ist, was der Anwender liest: Schema-Liste, kein Leerraum, keine Steuer- und
+     keine Formatzeichen (Richtungsumkehr U+202E, Zeichen ohne Breite; je Codepunkt geprüft,
+     sonst zeigte die Pille etwas anderes, als geöffnet wird), und 🔴 **nie `file:`**. Ein
+     Programm, eine per `cat` angezeigte Datei oder eine entfernte Gegenstelle könnte sonst
+     sichtbar eine harmlose Adresse schreiben und dahinter eine lokale Datei nennen, auch eine
+     ausführbare. Die Pille sagt „Nicht geöffnet: Das Programm nennt als Linkziel eine Datei …“
+     (`Hit::Blocked::RefusedFile`). Ein Dateipfad oder `file:///…`, der sichtbar im Text steht,
+     öffnet unverändert. Wird ein Ziel abgelehnt, öffnet auch der Text an der Stelle nichts, die
+     Pille nennt das Ziel.
      SGR 0 und Cursor-Zurückholen beenden einen Link nicht; ein Reset, der Notausgang
      „Terminal-Eingabe zurücksetzen“ und der Prompt-Marker OSC 133;A tun es, sonst trüge nach
      einem Abbruch alles Folgende das alte Ziel. Der Verlaufs-Abzug (`serializeAnsi`) gibt die
      Links mit. ConPTY reicht OSC 8 durch (Windows 10.0.26200 gemessen, eigene `id`, ST statt BEL).
-     ⚠️ `ls --hyperlink` meldet `file://<rechnername>/…`; das gilt als entfernt und ist kein Link.
+     ⚠️ Damit sind auch die Dateilinks von `ls --hyperlink`, `eza`, `delta` und ähnlichen
+     Programmen keine Links (Owner-Entscheid 2026-11-15, nach der Sicherheitsprüfung des Pushes).
   2. **Kein abgeschnittenes Ziel** (`ScreenLinks::mayContinueBelow`, `Hit::Blocked::MaybeCut`).
      Ein Text-Link ist keiner, wenn er am Rand endet und die nächste Zeile Text enthält, der ihn
      fortsetzen könnte. Drei Formen: letzte oder vorletzte Spalte (die vorletzte, weil Claude

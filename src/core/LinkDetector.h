@@ -35,10 +35,19 @@ bool isAllowedScheme(const QString &scheme);
 bool isNetworkPath(const QString &path);
 
 // Ziel eines Hyperlinks, den das PROGRAMM ausgezeichnet hat (OSC 8), auf Öffnen prüfen. Rückgabe:
-// das Ziel, wenn es geöffnet werden darf, sonst leer. Es gelten dieselben Grenzen wie für erkannten
-// Text: nur freigegebene Schemata, `file:` nur lokal und ohne Rechnernamen, keine Netzpfade. Ein
-// Ziel ohne Schema ist keines; relative Angaben löst QTmux nicht auf.
+// das Ziel, wenn es geöffnet werden darf, sonst leer. Es gelten engere Grenzen als für erkannten
+// Text, weil das Ziel hier NICHT das ist, was der Anwender liest:
+//  - nur freigegebene Schemata; ein Ziel ohne Schema ist keines, relative Angaben löst QTmux nicht auf
+//  - 🔴 nie `file:`. Ein Programm (oder eine angezeigte Datei, eine entfernte Gegenstelle) könnte
+//    sonst sichtbar eine harmlose Adresse schreiben und dahinter eine lokale Datei nennen, auch eine
+//    ausführbare. Ein Dateipfad öffnet nur, wenn er als Text dasteht.
+//  - kein Leerraum, keine Steuer- und keine Formatzeichen (Richtungsumkehr, Zeichen ohne Breite):
+//    Mit ihnen zeigte die Pille etwas anderes, als geöffnet wird.
 QString declaredTarget(const QString &uri);
+
+// Nennt ein Hyperlink des Programms eine Datei (Schema `file`)? Nur für die Rückmeldung, warum
+// das Ziel nicht geöffnet wird; geöffnet wird ein solches Ziel nie.
+bool isDeclaredFileTarget(const QString &uri);
 
 // Zeigt eine `file:`-URL auf einen anderen Rechner? Jeder Host zählt, auch `localhost`
 // (`toLocalFile` macht daraus `//localhost/…`). Ungültige URLs gelten ebenfalls als entfernt.

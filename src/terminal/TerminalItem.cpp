@@ -1239,6 +1239,16 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
                 event->accept();
                 return;
             }
+            if (hit.blocked == ScreenLinks::Hit::Blocked::RefusedFile) {
+                showLinkNotice(QCoreApplication::translate(
+                                   "TerminalItem",
+                                   "Nicht geöffnet: Das Programm nennt als Linkziel eine Datei. "
+                                   "Dateien öffnet QTmux nur, wenn ihr Pfad sichtbar im Text steht. "
+                                   "Ziel: %1")
+                                   .arg(hit.refused));
+                event->accept();
+                return;
+            }
             if (hit.blocked == ScreenLinks::Hit::Blocked::MaybeCut) {
                 showLinkNotice(cutLinkNotice());
                 event->accept();
