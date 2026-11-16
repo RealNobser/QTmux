@@ -712,36 +712,41 @@ Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fall
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.9.14 — Wartungsrelease (2026-11-15, Owner-Wort „1–5 wie empfohlen“).**
-Tag `v1.9.14` (annotiert) auf dem Bau-Commit `78086dd`, Bump 15/15 Zeilen plus Abnahme-Zeile. Inhalt
-gegenüber 1.9.13: Vorrang der Eingabe des Menschen und `send_message` (QTMUX-157, `54358fe`). Alle vier
-Artefakte aus `78086dd`, Build-ID `1.9.14+78086dd` je Artefakt EINZELN gemessen (ASCII + UTF-16 je 1×, kein
-`-dirty`/`+unknown`, 0 Reste von `1.9.13`/`1531102`/`54358fe`/`0a26922`):
+**Ausgeliefert: v1.9.15 — Wartungsrelease (2026-11-17, „RELEASE FREI QTMUX“ nach Hub 0.7.0 und RAFTNG 0.11.0).**
+Tag `v1.9.15` (annotiert) auf dem Bau-Commit `2000c70`, Bump 15/15 Zeilen. Inhalt gegenüber 1.9.14:
+Update-Härtung V1 (QTMUX-159, `539ae88`). Alle vier Artefakte aus `2000c70`, Build-ID `1.9.15+2000c70` je
+Artefakt EINZELN gemessen (ASCII + UTF-16 je 1×, kein `-dirty`/`+unknown`, 0 Reste von `1.9.14`/`78086dd`/
+`33aab7d`/`539ae88`):
 
 | Artefakt | Bytes | SHA256 |
 |---|---|---|
-| `QTmux-1.9.14-macos.dmg` | 60 369 986 | `8a8af0d12d99a0723a4a18661349465815548ee817febbb27a9f60e435ef20da` |
-| `QTmux-1.9.14-win64.msi` | 32 017 067 | `2110c00da678d825be2887a6e4b552674ede83b1f533a9e2c676497770a78b53` |
-| `QTmux-1.9.14-win64-portable.zip` | 39 376 522 | `b3dc5e37e55af29be9bc024eff399a548817627677dbf3263cb57a2b0790021c` |
-| `QTmux-1.9.14-x86_64.AppImage` | 44 980 728 | `94fa3238cf0a4a7d550af406302462d4e8dc9d32bdda49f17c2d8aa6643cdd8c` |
+| `QTmux-1.9.15-macos.dmg` | 60 235 109 | `48deb85aa63bb3929a842a6fed65fbac43113bcebcf96b540b7caf96b60d94e4` |
+| `QTmux-1.9.15-win64.msi` | 32 025 259 | `864ee0e880c068feddd9b440afdb09e0108ca7ea1b26d09e34a5bfc5a98f21cb` |
+| `QTmux-1.9.15-win64-portable.zip` | 39 382 817 | `606dda3ad9c8026d664dac8bd0ae14df4e5fe3e337dc8f0ef3ab22bc8149be66` |
+| `QTmux-1.9.15-x86_64.AppImage` | 44 988 920 | `13ab7137e5b63755d4e11fe227efab7bb0909bd05e6906a50296b9133fe69f02` |
 
-CI: Push-Lauf `43757941029` (`54358fe`), main-Lauf `43758653045`, Tag-Lauf `43759524567` (4/4), je macOS und
-Linux 53/53, Windows 51/51 (ohne `test_pty` und `test_check_updater_sync`); `test_ownerdraft`,
-`test_inputpriority`, `test_agentinbox`, `test_mcpmessage`, `test_promptqueue`, `test_terminalitem` und
-`test_shellintegration` in jedem Job als Passed gelesen — der erste Beleg für QTMUX-157 unter Windows und
-Linux. DMG: DR `certificate root`, 168/168 Mach-O, Plugin + PCBUSB enthalten, Starttest aus dem gemounteten
-Image ohne Fenster schreibt 12 Helfer, `qtmux-inbox.sh` gleich der Repo-Datei. Eigene Publish-Abnahme:
-Index-Diff = genau qtmux `1.9.13`→`1.9.14`, Signatur gegen die Client-Bytes gültig, beide Gegentests
-fallen, drei Artefakte `cmp`-gleich; GitHub „Latest“, vier Assets ohne Anmeldung geladen und `cmp`-gleich.
-Benutzerdoku dual (on-prem v31, Cloud v30), QTMUX-157 dual Done, QTMUX-158 (Windows-Pipe, Zustellbeleg,
-Empfänger mit freien Rechten) dual offen.
-🔑 **Größen gegen 1.9.13 am Inhalt erklärt:** Dateilisten in allen vier Paketen gleich. DMG +781 691 B bei
-Inhalt +141 936 B (`qtmux` +103 728, beide Plugins je +19 104, sie linken `qtmux_core` statisch), der Rest
-ist hdiutil-Streuung. MSI +32 768 B und ZIP +42 508 B: `qtmux.exe` +113 152, Echo-Plugin +7 168. AppImage
-+45 056 B: `usr/bin/qtmux` +126 976, Echo-Plugin +22 360, max GLIBC 2.38.
+CI: main-Lauf `43967061676`, Tag-Lauf `43968245072` (4/4), je macOS und Linux 54/54, Windows 52/52;
+`test_updatehardening`, `test_settingsio`, `test_updater`, `test_updateviewmodel` in jedem Job als Passed
+gelesen. DMG: DR `certificate root`, 168/168 Mach-O, Plugin + PCBUSB enthalten. Live-Manifest mit
+`serial 1794873078`, Signatur gegen die Client-Bytes gültig, beide Gegentests fallen, drei Artefakte
+`cmp`-gleich, Index-Diff = qtmux `1.9.14`→`1.9.15` plus Top-Level `updated` (Publish nach Mitternacht).
+Abnahme mit dem neuen Client (eigenes Profil, stille Startprüfung, gemerkter Stand in den QSettings): nimmt
+das Live-Manifest über HTTPS und `file://` an; ein gültig signiertes RAFTNG-Manifest unter `/qtmux/`, ein
+höherer gemerkter Stand und ein Manifest ohne `serial` lassen den Stand unverändert. Benutzerdoku dual
+(on-prem v32, Cloud v31), QTMUX-159 dual Done mit Auslieferungs-Kommentar.
+🔑 **Größen gegen 1.9.14 am Inhalt erklärt:** Dateilisten in allen vier Paketen gleich, größer ist allein das
+Hauptbinary (`qtmux` +17 280, `qtmux.exe` +14 336, `usr/bin/qtmux` +16 384; die Plugins linken den Updater
+nicht). DMG −134 877 B (hdiutil-Streuung), MSI +8 192, ZIP +6 295, AppImage +8 192.
+⚠️ **Eine Ruhe-Messung ist eine Momentaufnahme:** Der EmbyStudio-Tag-Lauf entstand 8 s nach der Messung vor
+dem Windows-Fernbau, deren Ansage-Zeile kam gleichzeitig. Der MSI-Bau lief darum 26 statt 4 min parallel zu
+deren Windows-Job. Wenn die Gegenseite gerade fertig geworden ist, mit dem Start kurz warten und die
+Ansage-Datei unmittelbar vor dem Fernbau erneut lesen.
 ⚠️ **Selbsttreffer bei Prozess-Proben:** `ps … | grep <muster>` zählt die eigene Befehlszeile mit, sobald
 das Muster (oder ein Dateiname, der es enthält) darin steht — vor dem Publish meldete so eine Probe zweimal
 einen „fremden Lauf“. Das Muster gehört in eine Skriptdatei, nicht auf die Befehlszeile.
+
+Davor: **v1.9.14** — Wartungsrelease (2026-11-15, `78086dd`, Build-ID `1.9.14+78086dd`, Vorrang der Eingabe +
+`send_message`, QTMUX-157; Artefakttabelle in der Git-Historie dieser Datei).
 
 Davor: **v1.9.13** — Wartungsrelease (2026-11-15, `1531102`, Build-ID `1.9.13+1531102`, Rückfrage vor dem
 Öffnen ausführbarer Dateien, QTMUX-151 §8.4; Artefakttabelle in der Git-Historie dieser Datei).
