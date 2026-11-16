@@ -381,6 +381,20 @@ target_compile_definitions(test_updateviewmodel PRIVATE
 target_link_libraries(test_updateviewmodel PRIVATE qtmux_updater Qt6::Test Qt6::Network)
 add_test(NAME test_updateviewmodel COMMAND test_updateviewmodel)
 
+# Update-Haertung, Vertrag V1 (2026-11-16): Verdrahtung von Produktbindung,
+# Seriennummer-Speicher (update/last_serial/qtmux) und Groessengrenze im
+# ViewModel. Signiert zur LAUFZEIT mit einem Wegwerf-Schluessel (Monocypher aus
+# qtmux_updater), braucht also den Produktionsschluessel nicht.
+qt_add_executable(test_updatehardening tst_updatehardening.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/UpdateViewModel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core/ProxyCredentials.cpp)
+target_include_directories(test_updatehardening PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_BINARY_DIR}/generated)
+target_link_libraries(test_updatehardening PRIVATE qtmux_updater Qt6::Test Qt6::Network)
+add_test(NAME test_updatehardening COMMAND test_updatehardening)
+
 # 🔑 Diese beiden Tests auf Windows als KONSOLEN-Programme bauen.
 # `qt_add_executable` macht dort standardmaessig GUI-Programme — die schreiben
 # nichts auf die Konsole, und `ctest --output-on-failure` zeigt dann NUR
@@ -389,7 +403,7 @@ add_test(NAME test_updateviewmodel COMMAND test_updateviewmodel)
 # WIN32_EXECUTABLE (Konsolen-Vererbung an Kindshells) gilt hier nicht — beide
 # Tests starten keine Prozesse.
 if(WIN32)
-    set_target_properties(test_updater test_updateviewmodel test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox
+    set_target_properties(test_updater test_updateviewmodel test_updatehardening test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox
                           PROPERTIES WIN32_EXECUTABLE FALSE)
 endif()
 

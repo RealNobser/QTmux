@@ -37,7 +37,11 @@ AppDialog {
         case dlg.stUpToDate:    return qsTr("Kein Update verfügbar")
         case dlg.stDownloading: return qsTr("Update wird geladen")
         case dlg.stReady:       return qsTr("Update bereit zur Installation")
-        case dlg.stFailed:      return qsTr("Update fehlgeschlagen")
+        // Ein abgelehntes Manifest (Vertrag V1) hat eine eigene Überschrift
+        // aus dem ViewModel; alles andere bleibt „fehlgeschlagen“.
+        case dlg.stFailed:      return Updates.failureTitle !== ""
+                                       ? Updates.failureTitle
+                                       : qsTr("Update fehlgeschlagen")
         default:                return qsTr("Update verfügbar")
         }
     }

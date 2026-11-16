@@ -53,6 +53,12 @@ class UpdateViewModel : public QObject {
     Q_PROPERTY(double downloadProgress READ downloadProgress NOTIFY downloadProgressChanged)
     Q_PROPERTY(QString downloadedPath READ downloadedPath NOTIFY downloadedPathChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    /// Überschrift des Dialogs im Zustand `Failed`. Leer = die allgemeine
+    /// („Update fehlgeschlagen“). Eigene Überschriften haben nur die Ablehnungen
+    /// aus Vertrag V1 (Update-Härtung 2026-11-16): Ein veraltetes oder fremdes
+    /// Manifest ist keine gescheiterte Prüfung, der Server hat geantwortet, nur
+    /// mit etwas, das diese Installation nicht nehmen darf.
+    Q_PROPERTY(QString failureTitle READ failureTitle NOTIFY lastErrorChanged)
     /// Gibt es für DIESES Betriebssystem überhaupt ein Paket? QTmux liefert alle
     /// drei (DMG/MSI/AppImage) — ein leerer Schlüssel ist trotzdem zulässig und
     /// muss als „kein Paket für dieses System" erscheinen, nicht als Fehler.
@@ -122,6 +128,7 @@ public:
     double downloadProgress() const { return m_progress; }
     QString downloadedPath() const { return m_downloadedPath; }
     QString lastError() const { return m_lastError; }
+    QString failureTitle() const { return m_failureTitle; }
     bool hasPackageForThisSystem() const;
     QString installHint() const;
 
@@ -256,20 +263,46 @@ public:
     /// Nebenwirkung.
     [[nodiscard]] appupdate::ProxyConfig currentProxyConfig() const;
 
+    // ---- Vertrag V1: Produktbindung und Replay-Schutz (2026-11-16) ----------
+    //
+    // Der Hub prüft (vendiert, `UpdateChecker`/`UpdatePolicy`), QTmux speichert.
+    // `lastSerial` liegt je Produkt unter `appupdate::policy::lastSerialSettingsKey`
+    // = `update/last_serial/qtmux` in den QSettings, als Zahl. Er gehört NICHT in
+    // die Export-Allowlist von SettingsIo und wird darum auch von „Alles
+    // zurücksetzen“ nicht angefasst: Er ist Sicherheitszustand dieser
+    // Installation, keine Einstellung. Eine importierte Exportdatei könnte ihn
+    // sonst zurückdrehen (dann nähme der Client ein Replay an) oder hochdrehen
+    // (dann lehnte er jedes echte Update ab).
+
+    /// Kanal, dem QTmux folgt. Fest `stable` — QTmux hat keinen zweiten.
+    static QString expectedChannel();
+
+    /// Das bisher höchste angenommene `serial` für `product` aus den QSettings.
+    /// 0 = keins, ebenso bei einem unlesbaren Wert oder einem über uint32.
+    static quint32 storedLastSerial(const QString &product);
+
+    /// Nur für Tests: ein anderer Ed25519-Schlüssel (32 Byte roh). Leer = der
+    /// eingebaute Produktionsschlüssel (`UpdateKeys.hpp`). Kein Q_INVOKABLE,
+    /// also weder aus QML noch über MCP erreichbar.
+    void setUpdatePublicKey(const QByteArray &publicKey32);
+
 private:
     void startCheck(bool manual);
     void setState(State s);
-    void setError(const QString &err);
+    void setError(const QString &err, const QString &title = QString());
     void rebuildChecker();
-    /// Lib-Fehlertext um den sprechenden Proxy-Grund ergänzen.
+    /// Lib-Fehlertext um den sprechenden Grund ergänzen (Proxy, Vertrag V1).
     [[nodiscard]] QString decorateError(const QString &raw) const;
+    /// Eigene Überschrift zum letzten Fehler des Kerns, sonst leer.
+    [[nodiscard]] QString titleForLastError() const;
     /// Text zu `UpdateChecker::ErrorKind` (als int, damit der Header den
     /// Lib-Typ nicht in die Signatur ziehen muss).
-    [[nodiscard]] QString proxyErrorText(int kind) const;
+    [[nodiscard]] QString errorKindText(int kind) const;
 
     std::unique_ptr<appupdate::UpdateChecker> m_checker;
     std::optional<appupdate::UpdateManifest> m_manifest;
     QString m_checkerBase;   ///< Basis-URL, für die m_checker gebaut wurde
+    QByteArray m_publicKey;  ///< leer = Produktionsschlüssel (nur Tests setzen ihn)
 
     State m_state = Idle;
     bool m_available = false;
@@ -278,6 +311,7 @@ private:
     double m_progress = 0.0;
     QString m_downloadedPath;
     QString m_lastError;
+    QString m_failureTitle;
     QString m_language;
 
     /// Nur im Arbeitsspeicher, nie persistiert — s. ProxyCredentials.h.

@@ -78,7 +78,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/StallDetector.{h,cpp}` | Gui-frei: Stillstand-Erkennung (QTMUX-139) — Agent zeigt „arbeitet" (Merkmal `AgentInfo::workingMarkers`), Bildschirm steht seit N min still → `needsAttention`; Mechanik in der Feature-Referenz |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **53** ctest-Tests: 46 QtTest-Binaries (**ownerdraft**, **inputpriority**, **agentinbox**, **mcpmessage** — QTMUX-157, pty, vtscreen, linkdetector, **screenlinks**, **terminalselection**, **terminalitem** — das echte Item mit Maus-Ereignissen, ohne Fenster, **filemanagerreveal**, **executabletarget**, **execopendialog** — der echte Dialog in einem Attrappen-Modul, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, statuscolors, combowidth, **conptyreplay** — echte ConPTY-Bytes, s. Feature-Referenz) + **5 × `I18n.*`** (Anrede-Wächter [tools/i18n/check_address.py](tools/i18n/check_address.py) + vier Positivproben, QTMUX-145 — brauchen Python 3, ohne Python entsteht ein roter ERROR-Test statt eines stillen Fehlens) + `test_doc_duplicates` (reines CMake-Skript) + `test_check_updater_sync` (bash-Skripttest des Vendoring-Wächters, QTMUX-144 — **nicht auf Windows**). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 52. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **54** ctest-Tests: 47 QtTest-Binaries (**ownerdraft**, **inputpriority**, **agentinbox**, **mcpmessage** — QTMUX-157, pty, vtscreen, linkdetector, **screenlinks**, **terminalselection**, **terminalitem** — das echte Item mit Maus-Ereignissen, ohne Fenster, **filemanagerreveal**, **executabletarget**, **execopendialog** — der echte Dialog in einem Attrappen-Modul, session, sessiongroups, windowmodel, agent, profiles, hotkeys, vault, sftp, plugins, agenteventhub, macpcan, keyencoding, terminalsearch, terminalgrid, settingsio, i18n, shellintegration, gitinfo, projectcommands, promptqueue, updater, updateviewmodel, **updatehardening** — Vertrag V1, QTMUX-159, mcpaccess, proxycredentials, safefileread, restorehistory, pastewrite, mcpfocus, stalldetector, icons, statuscolors, combowidth, **conptyreplay** — echte ConPTY-Bytes, s. Feature-Referenz) + **5 × `I18n.*`** (Anrede-Wächter [tools/i18n/check_address.py](tools/i18n/check_address.py) + vier Positivproben, QTMUX-145 — brauchen Python 3, ohne Python entsteht ein roter ERROR-Test statt eines stillen Fehlens) + `test_doc_duplicates` (reines CMake-Skript) + `test_check_updater_sync` (bash-Skripttest des Vendoring-Wächters, QTMUX-144 — **nicht auf Windows**). `test_i18n` entsteht nur, wenn `qtbase_*.qm` in der Qt-Installation liegt — sonst 53. Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -879,7 +879,9 @@ Transition hinterher. Vorher 107/26 bis QTMUX-133, gemessen im Jira-Audit 2026-0
 QTMUX-60 mit Vermerk bewusst offen; QTMUX-2 on-prem fehlte bis zum Audit der
 Abschlusskommentar vom 30.07., am 2026-09-06 nachgezogen).
 
-**Teststände:** **53** Tests auf macOS/Linux, **52** auf Windows seit QTMUX-157 (1.9.14, 2026-11-15,
+**Teststände:** **54** Tests auf macOS/Linux, **53** auf Windows seit QTMUX-159 (Update-Härtung V1,
+2026-11-16, unreleased: `updatehardening` kam hinzu; lokal 54/54 in frischem Debug- **und** Release-Baum
+`build/wuh`, `build/wuhr`; die CI lässt unter Windows 52 laufen). Davor **53** und **52** seit QTMUX-157 (1.9.14, 2026-11-15,
 `ownerdraft`, `inputpriority`, `agentinbox` und `mcpmessage` kamen hinzu; die CI lässt unter Windows 51
 laufen, also ohne `test_pty`; main-Lauf `43758653045` und Tag-Lauf `43759524567` je 53/53/51). Davor 49 und
 48 seit der Rückfrage (1.9.13, `executabletarget` und `execopendialog`). Davor 47 und 46 (s. Dateitabelle; per
@@ -917,6 +919,16 @@ Windows-**Debug**-Build ist dafür das einzige taugliche Messmittel (`-DQT_FORCE
 trägt nicht, es wirkt nur in den *Headern*).
 
 ### Nächster Schritt (Wiedereinstieg nach /compact)
+
+🔧 **2026-11-16: Update-Härtung Vertrag V1 (QTMUX-159), unreleased, Familienauftrag der
+Orchestrator-Session.** Vendierter Kern auf Hub `2b560a8` (MAC-108, Pin in
+`third_party/updater/UPSTREAM.md`): Produkt/Kanal gebunden, `serial` gegen Replay, Download auf
+`size` begrenzt. QTmux speichert `update/last_serial/qtmux` (nicht exportiert, nicht
+zurückgesetzt) und zeigt Ablehnungen mit eigener Überschrift. Mechanik, Wächter und
+Mutationsproben: Feature-Referenz „Online-Update“, Absatz „Vertrag V1“. Release nur nach
+Freigabe durch den Orchestrator, nach Hub und RAFTNG. Offen: Die QML-Überschrift
+(`failureTitle`) ist im Test nur am ViewModel belegt, nicht am gerenderten Dialog; nach dem
+Release prüft der neue Client sein Live-Manifest (trägt dann `serial`).
 
 🔧 **2026-11-15: QTMUX-40, 154 und 155 ausgeliefert mit 1.9.12, Owner-Abnahme steht aus.** Umbrochene
 Links: OSC 8 (libvterm-Patch 5), ein am Rand abgeschnittener Text-Link ist keiner und sagt warum, Schalter

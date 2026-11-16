@@ -38,6 +38,7 @@ private slots:
     void importRejectsForeignFile();
     void importIgnoresUnknownKeysButShowsThem();
     void importTranslatesLegacyAutoCheckKey();
+    void lastSerialIsNeitherExportedNorResetNorImported();
 
 private:
     void seedSettings();
@@ -375,6 +376,38 @@ void tst_settingsio::importTranslatesLegacyAutoCheckKey() {
     QVERIFY(s.contains(QStringLiteral("update/auto_check")));
     QCOMPARE(s.value(QStringLiteral("update/auto_check")).toBool(), false);
     QVERIFY(!s.contains(QStringLiteral("update/autoCheck")));
+}
+
+// Vertrag V1 (Update-Härtung 2026-11-16): `update/last_serial/<produkt>` ist der
+// Replay-Schutz DIESER Installation. Ein Import dürfte ihn weder zurückdrehen
+// (dann nähme QTmux ein altes Manifest an) noch hochdrehen (dann lehnte es jedes
+// echte Update ab), und „Alles zurücksetzen“ lässt ihn stehen.
+void tst_settingsio::lastSerialIsNeitherExportedNorResetNorImported() {
+    const QString key = QStringLiteral("update/last_serial/qtmux");
+    QSettings s;
+    s.setValue(key, qulonglong(1794856570ull));
+    s.setValue(QStringLiteral("update/auto_check"), false);
+    s.sync();
+
+    SettingsIo io;
+    QVERIFY(!io.exportableKeys().contains(key));
+    const QByteArray json = io.exportJson();
+    QVERIFY(json.contains("update/auto_check"));   // Positivkontrolle: update/ geht mit
+    QVERIFY(!json.contains("last_serial"));
+
+    io.resetAll();
+    QCOMPARE(QSettings().value(key).toULongLong(), 1794856570ull);
+
+    const QString path = m_dir.filePath(QStringLiteral("serial.json"));
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write("{ \"format\": \"qtmux-settings\", \"formatVersion\": 1, \"keys\": {"
+            " \"update/last_serial/qtmux\": 1,"
+            " \"update/auto_check\": true } }");
+    f.close();
+    QCOMPARE(io.importFile(QUrl::fromLocalFile(path)),
+             QStringList{ QStringLiteral("update/auto_check") });
+    QCOMPARE(QSettings().value(key).toULongLong(), 1794856570ull);
 }
 
 QTEST_MAIN(tst_settingsio)

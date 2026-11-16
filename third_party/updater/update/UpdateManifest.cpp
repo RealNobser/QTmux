@@ -57,6 +57,20 @@ std::optional<UpdateManifest> UpdateManifest::fromJson(const QByteArray& bytes,
                         .arg(m.versionString));
     }
 
+    // serial: optional, but when present it must be exactly what the
+    // contract says. QJsonValue holds every number as a double; uint32 fits
+    // exactly, so "integral and in range" is a lossless test.
+    const QJsonValue serial = root.value(QStringLiteral("serial"));
+    if (!serial.isUndefined()) {
+        const double s = serial.toDouble(-1.0);
+        if (!serial.isDouble() || s != static_cast<double>(static_cast<qint64>(s))
+            || s < 1.0 || s > 4294967295.0) {
+            return fail(QStringLiteral("manifest serial is not an integer in "
+                                       "1..4294967295"));
+        }
+        m.serial = static_cast<quint32>(s);
+    }
+
     m.channel   = root.value(QStringLiteral("channel")).toString();
     m.published = root.value(QStringLiteral("published")).toString();
 

@@ -3792,87 +3792,87 @@ ame</translation>
         <translation>Update bereit zur Installation</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="40"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="44"/>
         <source>Update fehlgeschlagen</source>
         <translation>Update fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="41"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="45"/>
         <source>Update verfügbar</source>
         <translation>Update verfügbar</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="50"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="54"/>
         <source>%1 MB</source>
         <translation>%1 MB</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="51"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="55"/>
         <source>%1 kB</source>
         <translation>%1 kB</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="52"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="56"/>
         <source>%1 Bytes</source>
         <translation>%1 Bytes</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="67"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="71"/>
         <source>QTmux fragt den Update-Server …</source>
         <translation>QTmux fragt den Update-Server …</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="69"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="73"/>
         <source>QTmux %1 ist aktuell.</source>
         <translation>QTmux %1 ist aktuell.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="71"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="75"/>
         <source>QTmux %1</source>
         <translation>QTmux %1</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="72"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="76"/>
         <source>QTmux %1 ist verfügbar — installiert ist %2.</source>
         <translation>QTmux %1 ist verfügbar — installiert ist %2.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="86"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="90"/>
         <source>Veröffentlicht am %1 · %2</source>
         <translation>Veröffentlicht am %1 · %2</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="88"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="92"/>
         <source>Veröffentlicht am %1</source>
         <translation>Veröffentlicht am %1</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="108"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="112"/>
         <source>Achtung: Das ist eine ÄLTERE Version als die installierte. Eine Rückstufung kann Einstellungen und gespeicherte Sitzungen betreffen, die eine neuere Fassung geschrieben hat.</source>
         <translation>Achtung: Das ist eine ÄLTERE Version als die installierte. Eine Rückstufung kann Einstellungen und gespeicherte Sitzungen betreffen, die eine neuere Fassung geschrieben hat.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="121"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="125"/>
         <source>Für dieses Betriebssystem liegt in dieser Veröffentlichung kein Paket bereit.</source>
         <translation>Für dieses Betriebssystem liegt in dieser Veröffentlichung kein Paket bereit.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="127"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="131"/>
         <source>Was ist neu</source>
         <translation>Was ist neu</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="160"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="164"/>
         <source>Heruntergeladen und geprüft: %1</source>
         <translation>Heruntergeladen und geprüft: %1</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="161"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="165"/>
         <source>%1 %</source>
         <translation>%1 %</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="175"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="179"/>
         <source>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die Datei oben ist geprüft und kann von Hand installiert werden.</source>
         <translation>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die Datei oben ist geprüft und kann von Hand installiert werden.</translation>
     </message>
@@ -3889,37 +3889,37 @@ ame</translation>
         <translation type="vanished">Hinweis: Das Paket ist nicht signiert. QTmux prüft den Download selbst über eine Ed25519-Signatur und eine SHA-256-Summe.</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="213"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="217"/>
         <source>Herunterladen</source>
         <translation>Herunterladen</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="219"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="223"/>
         <source>Installieren …</source>
         <translation>Installieren …</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="233"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="237"/>
         <source>Erneut versuchen</source>
         <translation>Erneut versuchen</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="240"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="244"/>
         <source>Abbrechen</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="246"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="250"/>
         <source>Version überspringen</source>
         <translation>Version überspringen</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="253"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="257"/>
         <source>Später</source>
         <translation>Später</translation>
     </message>
     <message>
-        <location filename="../qml/dialogs/UpdateDialog.qml" line="253"/>
+        <location filename="../qml/dialogs/UpdateDialog.qml" line="257"/>
         <source>Schließen</source>
         <translation>Schließen</translation>
     </message>
@@ -3956,13 +3956,13 @@ ame</translation>
 <context>
     <name>qtmux::SettingsIo</name>
     <message>
-        <location filename="../src/viewmodels/SettingsIo.cpp" line="224"/>
+        <location filename="../src/viewmodels/SettingsIo.cpp" line="230"/>
         <source>Kein Zielpfad angegeben.</source>
         <translation>Kein Zielpfad angegeben.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/SettingsIo.cpp" line="231"/>
-        <location filename="../src/viewmodels/SettingsIo.cpp" line="236"/>
+        <location filename="../src/viewmodels/SettingsIo.cpp" line="237"/>
+        <location filename="../src/viewmodels/SettingsIo.cpp" line="242"/>
         <source>Datei kann nicht geschrieben werden: %1</source>
         <translation>Datei kann nicht geschrieben werden: %1</translation>
     </message>
@@ -3971,12 +3971,12 @@ ame</translation>
         <translation type="vanished">Datei kann nicht gelesen werden: %1</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/SettingsIo.cpp" line="257"/>
+        <location filename="../src/viewmodels/SettingsIo.cpp" line="263"/>
         <source>Keine gültige JSON-Datei: %1</source>
         <translation>Keine gültige JSON-Datei: %1</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/SettingsIo.cpp" line="262"/>
+        <location filename="../src/viewmodels/SettingsIo.cpp" line="268"/>
         <source>Keine QTmux-Einstellungsdatei.</source>
         <translation>Keine QTmux-Einstellungsdatei.</translation>
     </message>
@@ -4096,32 +4096,57 @@ ame</translation>
         <translation>Falls sich „QTmux“ nicht öffnen lässt, klicken Sie unter Systemeinstellungen › Datenschutz &amp; Sicherheit auf „Dennoch öffnen“.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="324"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="361"/>
+        <source>Veraltete Update-Information abgelehnt</source>
+        <translation>Veraltete Update-Information abgelehnt</translation>
+    </message>
+    <message>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="362"/>
+        <source>Unpassende Update-Information abgelehnt</source>
+        <translation>Unpassende Update-Information abgelehnt</translation>
+    </message>
+    <message>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="374"/>
         <source>Der Proxy verlangt eine Anmeldung.</source>
         <translation>Der Proxy verlangt eine Anmeldung.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="326"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="376"/>
         <source>Der Proxy hat die Anmeldung abgelehnt.</source>
         <translation>Der Proxy hat die Anmeldung abgelehnt.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="328"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="378"/>
         <source>Der Proxy %1 antwortet nicht.</source>
         <translation>Der Proxy %1 antwortet nicht.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="330"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="380"/>
         <source>Die Proxy-Einstellung des Systems ließ sich nicht ermitteln. Häufigste Ursache ist eine hinterlegte Konfigurationsdatei (PAC/WPAD), die nicht erreichbar ist — „Direkt“ umgeht sie.</source>
         <translation>Die Proxy-Einstellung des Systems ließ sich nicht ermitteln. Häufigste Ursache ist eine hinterlegte Konfigurationsdatei (PAC/WPAD), die nicht erreichbar ist — „Direkt“ umgeht sie.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="422"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="386"/>
+        <source>Der Update-Server hat eine Update-Information geliefert, die älter ist als die, die diese Installation schon kennt. Sie wurde nicht verwendet. Das kann ein Fehler auf dem Server sein oder der Versuch, eine veraltete Version anzubieten.</source>
+        <translation>Der Update-Server hat eine Update-Information geliefert, die älter ist als die, die diese Installation schon kennt. Sie wurde nicht verwendet. Das kann ein Fehler auf dem Server sein oder der Versuch, eine veraltete Version anzubieten.</translation>
+    </message>
+    <message>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="391"/>
+        <source>Der Update-Server hat eine Update-Information geliefert, die nicht für QTmux auf diesem Kanal bestimmt ist. Sie wurde nicht verwendet.</source>
+        <translation>Der Update-Server hat eine Update-Information geliefert, die nicht für QTmux auf diesem Kanal bestimmt ist. Sie wurde nicht verwendet.</translation>
+    </message>
+    <message>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="395"/>
+        <source>Der Server hat eine andere Datenmenge geschickt, als die Update-Information angibt. Der Download wurde abgebrochen und gelöscht.</source>
+        <translation>Der Server hat eine andere Datenmenge geschickt, als die Update-Information angibt. Der Download wurde abgebrochen und gelöscht.</translation>
+    </message>
+    <message>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="490"/>
         <source>Für dieses Betriebssystem liegt kein Paket bereit.</source>
         <translation>Für dieses Betriebssystem liegt kein Paket bereit.</translation>
     </message>
     <message>
-        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="459"/>
+        <location filename="../src/viewmodels/UpdateViewModel.cpp" line="527"/>
         <source>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die geprüfte Datei liegt hier — bitte von Hand installieren:
 %1</source>
         <translation>QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht selbst ersetzen. Die geprüfte Datei liegt hier — bitte von Hand installieren:

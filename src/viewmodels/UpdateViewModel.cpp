@@ -252,9 +252,33 @@ void UpdateViewModel::setState(State s) {
     emit stateChanged();
 }
 
-void UpdateViewModel::setError(const QString &err) {
+void UpdateViewModel::setError(const QString &err, const QString &title) {
     m_lastError = err;
+    m_failureTitle = err.isEmpty() ? QString() : title;
     emit lastErrorChanged();
+}
+
+// --- Vertrag V1: Speicher für lastSerial (Begründung im Header) --------------
+QString UpdateViewModel::expectedChannel() {
+    return QString::fromLatin1(appupdate::policy::kDefaultChannel);
+}
+
+quint32 UpdateViewModel::storedLastSerial(const QString &product) {
+    // SHARED.md: als qulonglong schreiben, mit toULongLong lesen. Ein Wert, den
+    // jemand von Hand verbogen hat (Text, negativ, über uint32), zählt als 0 —
+    // das ist der Übergang, nie eine Sperre aller künftigen Updates.
+    bool ok = false;
+    const qulonglong v = QSettings()
+                             .value(appupdate::policy::lastSerialSettingsKey(product))
+                             .toULongLong(&ok);
+    if (!ok || v > 0xFFFFFFFFull) return 0;
+    return static_cast<quint32>(v);
+}
+
+void UpdateViewModel::setUpdatePublicKey(const QByteArray &publicKey32) {
+    if (publicKey32 == m_publicKey) return;
+    m_publicKey = publicKey32;
+    m_checker.reset();   // der Schlüssel hängt am Konstruktor des Checkers
 }
 
 // Die QTmux-Einstellungen in die Lib-Struktur übersetzen (QTMUX-129).
@@ -280,9 +304,25 @@ appupdate::ProxyConfig UpdateViewModel::currentProxyConfig() const {
 void UpdateViewModel::rebuildChecker() {
     const QString base = baseUrl();
     if (!m_checker || m_checkerBase != base) {
-        m_checker = std::make_unique<appupdate::UpdateChecker>(QUrl(base),
-                                                               QLatin1String(kProduct));
+        // (Ein neuer Schlüssel per setUpdatePublicKey setzt m_checker zurück.)
+        m_checker = std::make_unique<appupdate::UpdateChecker>(
+            QUrl(base), QLatin1String(kProduct), m_publicKey);
         m_checkerBase = base;
+        // Vertrag V1: Produkt (`qtmux`, Konstruktor) und Kanal binden das
+        // Manifest an diese App; der Speicher macht aus der Seriennummer einen
+        // Replay-Schutz. Der Kern ruft `store` erst nach bestandener Signatur-,
+        // Produkt- und Replay-Prüfung, und auch dann, wenn niemand installiert.
+        // Ohne Speicher gäbe es KEINEN Replay-Schutz (der Kern warnt dann nur).
+        m_checker->setExpectedChannel(expectedChannel());
+        appupdate::SerialStore store;
+        store.load = [](const QString &product) { return storedLastSerial(product); };
+        store.store = [](const QString &product, quint32 serial) {
+            QSettings s;
+            s.setValue(appupdate::policy::lastSerialSettingsKey(product),
+                       qulonglong(serial));
+            s.sync();   // überlebt auch ein hartes Ende direkt danach
+        };
+        m_checker->setSerialStore(std::move(store));
         connect(m_checker.get(), &appupdate::UpdateChecker::downloadProgress, this,
                 [this](qint64 got, qint64 total) {
                     m_progress = (total > 0) ? double(got) / double(total) : 0.0;
@@ -309,15 +349,25 @@ void UpdateViewModel::rebuildChecker() {
 // bei einer Rückfrage das, was zählt.
 QString UpdateViewModel::decorateError(const QString &raw) const {
     if (!m_checker) return raw;
-    const QString proxy = proxyErrorText(int(m_checker->lastErrorKind()));
-    if (proxy.isEmpty()) return raw;
-    return raw.isEmpty() ? proxy : proxy + QStringLiteral("\n(") + raw + QLatin1Char(')');
+    const QString spoken = errorKindText(int(m_checker->lastErrorKind()));
+    if (spoken.isEmpty()) return raw;
+    return raw.isEmpty() ? spoken : spoken + QStringLiteral("\n(") + raw + QLatin1Char(')');
+}
+
+QString UpdateViewModel::titleForLastError() const {
+    if (!m_checker) return {};
+    using EK = appupdate::UpdateChecker::ErrorKind;
+    switch (m_checker->lastErrorKind()) {
+    case EK::Replay:       return tr("Veraltete Update-Information abgelehnt");
+    case EK::WrongProduct: return tr("Unpassende Update-Information abgelehnt");
+    default:               return {};
+    }
 }
 
 // Sprechender Text zum typisierten Fehler. 🔑 Der Sinn der Proxy-Fälle ist genau
 // dieser: Ohne sie liest sich ein falsch eingestellter Proxy als „Server nicht
 // erreichbar", und man sucht an der falschen Stelle.
-QString UpdateViewModel::proxyErrorText(int kind) const {
+QString UpdateViewModel::errorKindText(int kind) const {
     using EK = appupdate::UpdateChecker::ErrorKind;
     switch (static_cast<EK>(kind)) {
     case EK::ProxyAuthenticationRequired:
@@ -330,6 +380,21 @@ QString UpdateViewModel::proxyErrorText(int kind) const {
         return tr("Die Proxy-Einstellung des Systems ließ sich nicht ermitteln. "
                   "Häufigste Ursache ist eine hinterlegte Konfigurationsdatei "
                   "(PAC/WPAD), die nicht erreichbar ist — „Direkt“ umgeht sie.");
+    // Vertrag V1 (2026-11-16). Ein Replay darf nie wie „kein Update“ aussehen:
+    // eigener Satz, der technische Grund des Kerns bleibt darunter stehen.
+    case EK::Replay:
+        return tr("Der Update-Server hat eine Update-Information geliefert, die "
+                  "älter ist als die, die diese Installation schon kennt. Sie "
+                  "wurde nicht verwendet. Das kann ein Fehler auf dem Server sein "
+                  "oder der Versuch, eine veraltete Version anzubieten.");
+    case EK::WrongProduct:
+        return tr("Der Update-Server hat eine Update-Information geliefert, die "
+                  "nicht für QTmux auf diesem Kanal bestimmt ist. Sie wurde "
+                  "nicht verwendet.");
+    case EK::Size:
+        return tr("Der Server hat eine andere Datenmenge geschickt, als die "
+                  "Update-Information angibt. Der Download wurde abgebrochen und "
+                  "gelöscht.");
     default:
         return QString();
     }
@@ -376,9 +441,12 @@ void UpdateViewModel::startCheck(bool manual) {
     m_checker->checkForUpdate([this, manual](std::optional<appupdate::UpdateManifest> m,
                                             QString error) {
         if (!m) {
-            // Still scheitern, wenn niemand danach gefragt hat.
+            // Still scheitern, wenn niemand danach gefragt hat. Das gilt auch
+            // für ein abgelehntes Manifest (Vertrag V1: die stille Prüfung
+            // bleibt still, die manuelle nennt den Grund). `Idle` ist dabei
+            // nie „aktuell“: Ein Replay sieht so nicht wie „kein Update“ aus.
             if (manual) {
-                setError(decorateError(error));
+                setError(decorateError(error), titleForLastError());
                 setState(Failed);
             } else {
                 setState(Idle);
@@ -432,9 +500,9 @@ void UpdateViewModel::download() {
     m_checker->downloadArtifact(*art, downloadDir(),
                                 [this](QString localPath, QString error) {
         if (!error.isEmpty()) {
-            // Bei SHA-Abweichung hat der Kern die Datei bereits gelöscht — ein
+            // Bei SHA- oder Größenabweichung hat der Kern die Datei bereits gelöscht — ein
             // beschädigter Installer darf nicht liegen bleiben.
-            setError(decorateError(error));
+            setError(decorateError(error), titleForLastError());
             setState(Failed);
             return;
         }

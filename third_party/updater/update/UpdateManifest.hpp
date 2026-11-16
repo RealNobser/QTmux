@@ -4,8 +4,15 @@
 // (schema 1, shared across RAFTNG / MacPCAN / QTmux / DeskStarter /
 // EnzoEnigmaNG / AstroCAN modules):
 //
-//   { schema, product, channel, version, published, notes{de,en},
+//   { schema, product, channel, version[, serial], published, notes{de,en},
 //     artifacts{ <key>: {url,size,sha256,kind[,minOsVersion][,minHw][,sig]} } }
+//
+// `serial` (contract V1, 2026-11-16, docs/SHARED.md „Update-Härtung“): UTC
+// Unix seconds at manifest creation, 1…4294967295, written by publish.py into
+// every manifest. Optional while the fleet of manifests migrates — absent is
+// legal, present-but-invalid (not an integer, 0, negative, above uint32) is a
+// parse error, because a publisher that wrote it meant something by it.
+// Schema stays 1: older clients ignore the unknown field.
 //
 // The signature contract lives one layer up: UpdateChecker verifies the
 // Ed25519 detached signature over the EXACT manifest bytes BEFORE this
@@ -61,6 +68,7 @@ public:
     QString channel;
     QVersionNumber version;
     QString versionString;  // verbatim, for display ("1.2.0-beta1")
+    std::optional<quint32> serial;  // absent in manifests before contract V1
     QString published;      // ISO date string, verbatim
     QString notesDe;
     QString notesEn;

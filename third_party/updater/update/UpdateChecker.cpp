@@ -2,6 +2,7 @@
 
 #include "update/Ed25519Verify.hpp"
 #include "update/UpdateKeys.hpp"
+#include "update/UpdatePolicy.hpp"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -260,6 +261,7 @@ UpdateChecker::UpdateChecker(const QUrl& baseUrl, const QString& product,
     , m_baseUrl(baseUrl)
     , m_product(product)
     , m_publicKey(publicKey32)
+    , m_channel(QString::fromLatin1(policy::kDefaultChannel))
 {
     if (m_publicKey.isEmpty()) {
         m_publicKey = QByteArray(
@@ -447,11 +449,31 @@ void UpdateChecker::finishActive(QNetworkReply* reply)
     }
 }
 
+void UpdateChecker::setExpectedChannel(const QString& channel)
+{
+    m_channel = channel;
+}
+
+void UpdateChecker::setSerialStore(SerialStore store)
+{
+    m_serialStore = std::move(store);
+}
+
 void UpdateChecker::checkForUpdate(CheckCallback callback)
 {
     if (busy()) {
         callback(std::nullopt, QStringLiteral("a request is already running"));
         return;
+    }
+    // Every check answers for itself. Before contract V1 the kind was only
+    // ever SET on transport failures, so a signature or parse failure kept
+    // whatever the previous request had left behind.
+    m_lastErrorKind = ErrorKind::None;
+    if (!hasSerialStore() && !m_warnedNoSerialStore) {
+        m_warnedNoSerialStore = true;
+        qWarning("update: %s is checked without a serial store — no replay "
+                 "protection (docs/SHARED.md „Update-Härtung“)",
+                 qPrintable(m_product));
     }
 
     // Step 1: the 64-byte detached signature.
@@ -467,6 +489,7 @@ void UpdateChecker::checkForUpdate(CheckCallback callback)
         }
         const QByteArray sig = sigReply->readAll();
         if (sig.size() != 64) {
+            m_lastErrorKind = ErrorKind::Signature;
             callback(std::nullopt,
                      QStringLiteral("signature has %1 bytes, expected 64")
                          .arg(sig.size()));
@@ -487,6 +510,7 @@ void UpdateChecker::checkForUpdate(CheckCallback callback)
             }
             const QByteArray bytes = manReply->readAll();
             if (!verifyEd25519(sig, m_publicKey, bytes)) {
+                m_lastErrorKind = ErrorKind::Signature;
                 callback(std::nullopt,
                          QStringLiteral("manifest signature verification failed"));
                 return;
@@ -494,8 +518,51 @@ void UpdateChecker::checkForUpdate(CheckCallback callback)
             QString parseError;
             auto manifest = UpdateManifest::fromJson(bytes, &parseError);
             if (!manifest) {
+                m_lastErrorKind = ErrorKind::Parse;
                 callback(std::nullopt, parseError);
                 return;
+            }
+
+            // Contract V1, rule A2.1: a signature proves the OWNER wrote the
+            // manifest — not that it is the one for THIS product and channel.
+            // Every product is signed with the same key, so without this a
+            // manifest copied from another product's directory would be
+            // offered as an update here.
+            const QString mismatch =
+                policy::productMismatch(*manifest, m_product, m_channel);
+            if (!mismatch.isEmpty()) {
+                m_lastErrorKind = ErrorKind::WrongProduct;
+                callback(std::nullopt, mismatch);
+                return;
+            }
+
+            // Rule A2.2: an old manifest, validly signed, must not come back.
+            const quint32 last =
+                hasSerialStore() ? m_serialStore.load(m_product) : 0;
+            switch (policy::checkSerial(last, manifest->serial)) {
+            case policy::SerialVerdict::ReplayWithoutSerial:
+                m_lastErrorKind = ErrorKind::Replay;
+                callback(std::nullopt,
+                         QStringLiteral("manifest carries no serial, but serial "
+                                        "%1 was accepted before — refusing an "
+                                        "outdated manifest (replay)").arg(last));
+                return;
+            case policy::SerialVerdict::ReplayOlderSerial:
+                m_lastErrorKind = ErrorKind::Replay;
+                callback(std::nullopt,
+                         QStringLiteral("manifest serial %1 is older than the "
+                                        "accepted %2 — refusing an outdated "
+                                        "manifest (replay)")
+                             .arg(*manifest->serial).arg(last));
+                return;
+            case policy::SerialVerdict::Accept:
+                break;
+            }
+            // Stored now, before the callback, whether or not anything gets
+            // installed: an accepted serial is a fact about the server.
+            const quint32 next = policy::nextLastSerial(last, manifest->serial);
+            if (hasSerialStore() && next != last) {
+                m_serialStore.store(m_product, next);
             }
             callback(std::move(manifest), QString());
         });
@@ -510,7 +577,18 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
         callback(QString(), QStringLiteral("a request is already running"));
         return;
     }
+    m_lastErrorKind = ErrorKind::None;
+    // Contract V1, rule A3: `size` is the bound, so without one there is
+    // nothing to hold the server to — refused before a byte is fetched.
+    if (artifact.size <= 0) {
+        m_lastErrorKind = ErrorKind::Size;
+        callback(QString(), QStringLiteral("the manifest gives no size for this "
+                                           "artifact — refusing an unbounded "
+                                           "download"));
+        return;
+    }
     if (!QDir().mkpath(destDir)) {
+        m_lastErrorKind = ErrorKind::File;
         callback(QString(), QStringLiteral("cannot create %1").arg(destDir));
         return;
     }
@@ -524,6 +602,7 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
     }
     const QString fileName = QFileInfo(url.path()).fileName();
     if (fileName.isEmpty()) {
+        m_lastErrorKind = ErrorKind::Parse;
         callback(QString(), QStringLiteral("artifact url carries no file name"));
         return;
     }
@@ -541,39 +620,94 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
     sweepStaleParts(destDir, fileName);  // remnants of a hard end, see there
     auto part = std::make_shared<PartFile>(localPath);
     if (!part->isOpen()) {
+        m_lastErrorKind = ErrorKind::File;
         callback(QString(), QStringLiteral("cannot write %1.XXXXXX.part: %2")
                                 .arg(localPath, part->lastError()));
         return;
     }
 
+    // Rule A3: never more than `size` bytes reach the disk. Counted here,
+    // not taken from Content-Length or downloadProgress — the server's own
+    // claim is exactly what is not trusted, and Qt throttles the progress
+    // signal. The chunk that would cross the bound is not written; the
+    // reply is aborted on the spot, so an endless body costs at most one
+    // read buffer, not the disk.
+    struct Budget {
+        qint64 limit = 0;
+        qint64 received = 0;
+        bool exceeded = false;
+    };
+    auto budget = std::make_shared<Budget>();
+    budget->limit = artifact.size;
     QNetworkReply* reply = get(url);
+    const auto drain = [reply, part, budget]() {
+        if (budget->exceeded) {
+            reply->readAll();  // discard; abort is already under way
+            return;
+        }
+        const QByteArray chunk = reply->readAll();
+        if (budget->received + chunk.size() > budget->limit) {
+            budget->exceeded = true;
+            budget->received += chunk.size();
+            reply->abort();
+            return;
+        }
+        budget->received += chunk.size();
+        part->file().write(chunk);
+    };
     connect(reply, &QNetworkReply::downloadProgress, this,
             &UpdateChecker::downloadProgress);
     // Stream to disk — installers are large, buffering them in RAM helps
     // nobody.
-    connect(reply, &QNetworkReply::readyRead, this,
-            [reply, part]() { part->file().write(reply->readAll()); });
+    connect(reply, &QNetworkReply::readyRead, this, drain);
     connect(reply, &QNetworkReply::finished, this,
-            [this, reply, part, localPath, expectedSha = artifact.sha256,
-             callback = std::move(callback)]() {
+            [this, reply, part, budget, drain, localPath,
+             expectedSha = artifact.sha256, callback = std::move(callback)]() {
         finishActive(reply);
         QFile& file = part->file();
-        file.write(reply->readAll());
+        drain();
         const bool written = file.flush() && file.error() == QFile::NoError;
         const QString writeError = file.errorString();
         const QString partPath = part->path();
         file.close();  // really closed: Windows renames no open file
 
+        // Before the transport error: the abort above IS a transport error
+        // (OperationCanceled), and reporting it as "download failed" would
+        // hide that the server overstepped the manifest.
+        if (budget->exceeded) {
+            part->discard();
+            m_lastErrorKind = ErrorKind::Size;
+            callback(QString(),
+                     QStringLiteral("the server sent more than the %1 bytes the "
+                                    "manifest declares (at least %2) — download "
+                                    "aborted, file deleted")
+                         .arg(budget->limit).arg(budget->received));
+            return;
+        }
         if (reply->error() != QNetworkReply::NoError) {
             part->discard();
+            m_lastErrorKind = classifyFailure(reply, QStringLiteral("download")).kind;
+            if (m_lastErrorKind == ErrorKind::NotPublished) {
+                m_lastErrorKind = ErrorKind::Http;  // a listed artifact is missing
+            }
             callback(QString(), QStringLiteral("download failed: %1")
                                     .arg(reply->errorString()));
             return;
         }
         if (!written) {
             part->discard();
+            m_lastErrorKind = ErrorKind::File;
             callback(QString(), QStringLiteral("cannot write %1: %2")
                                     .arg(partPath, writeError));
+            return;
+        }
+        if (budget->received < budget->limit) {
+            part->discard();
+            m_lastErrorKind = ErrorKind::Size;
+            callback(QString(),
+                     QStringLiteral("the server sent %1 of the %2 bytes the "
+                                    "manifest declares — file deleted")
+                         .arg(budget->received).arg(budget->limit));
             return;
         }
 
@@ -599,12 +733,14 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
         }
         if (!hashed) {
             part->discard();
+            m_lastErrorKind = ErrorKind::File;
             callback(QString(), QStringLiteral("cannot hash %1").arg(partPath));
             return;
         }
         const QString actual = QString::fromLatin1(digest);
         if (actual.compare(expectedSha, Qt::CaseInsensitive) != 0) {
             part->discard();
+            m_lastErrorKind = ErrorKind::Hash;
             callback(QString(),
                      QStringLiteral("sha256 mismatch (expected %1, got %2) — "
                                     "file deleted")
@@ -614,6 +750,7 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
         QString why;
         if (!replaceName(partPath, localPath, &why)) {
             part->discard();
+            m_lastErrorKind = ErrorKind::File;
             callback(QString(), QStringLiteral("cannot replace %1: %2")
                                     .arg(localPath, why));
             return;

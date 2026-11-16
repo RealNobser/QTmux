@@ -1392,6 +1392,44 @@ vendierten Stand. Mutationsproben am vendierten Kern (danach per `--update` zur�
 Belegungsriegel aus · Altersfrist aus · Muster gelockert · **beide** Symlink-Riegel aus (einer
 allein bleibt grün — der zweite fängt ihn, so gewollt).
 
+🔑 **Vertrag V1: Produktbindung, Seriennummer, Größengrenze (QTMUX-159, Hub-Stand MAC-108,
+2026-11-16).** Eine gültige Signatur beweist nur, dass der Herausgeber das Manifest geschrieben
+hat — alle Produkte tragen denselben Schlüssel. Seit dem Hub-Stand prüft der vendierte Kern
+nach der Signatur, in dieser Reihenfolge: (1) `product` = `qtmux` und `channel` = `stable`,
+ein fehlendes Feld ist eine Abweichung, nie ein Platzhalter (`ErrorKind::WrongProduct`);
+(2) `serial` (UTC-Sekunden der Manifest-Erzeugung, vom Hub-`publish.py` geschrieben) gegen das
+höchste bisher angenommene: kleiner, oder fehlend nachdem schon eines angenommen war, ist ein
+Replay (`ErrorKind::Replay`); solange noch keines angenommen war, gilt jedes signierte Manifest
+des richtigen Produkts (Übergang, so sehen alle Manifeste vor V1 aus). (3) Beim Download bricht
+der Kern ab, sobald mehr als `size` Bytes angekommen sind, und weniger als `size` am Ende ist
+ebenso ein Fehler (`ErrorKind::Size`); die Teildatei wird gelöscht, eine ältere Datei gleichen
+Namens bleibt. **QTmux' Anteil** ist die Bedeutung: `UpdateViewModel::rebuildChecker` gibt dem
+Kern den Kanal und einen `SerialStore` über die QSettings, Schlüssel
+`update/last_serial/qtmux` (Hub-Schreibweise `policy::lastSerialSettingsKey`, als Zahl; ein
+unlesbarer Wert oder einer über uint32 zählt als 0). Geschrieben wird erst nach bestandener
+Signatur-, Produkt- und Replay-Prüfung, auch beim stillen Check und ohne Installation. Der
+Schlüssel steht **nicht** in der Export-Allowlist: Er ist Sicherheitszustand der Installation,
+ein Import könnte ihn zurückdrehen (Replay würde angenommen) oder hochdrehen (jedes echte
+Update würde abgelehnt), und „Alles zurücksetzen“ lässt ihn stehen. Ein Testprofil
+(`QTMUX_PROFILE`) hat seinen eigenen. Die manuelle Prüfung zeigt Replay und fremdes Manifest
+mit eigener Überschrift (`failureTitle`) und eigenem Satz, der Grund des Kerns steht darunter;
+die stille Prüfung bleibt still und endet in `Idle`, nie in `UpToDate` — ein Replay sieht so nie
+wie „kein Update“ aus. Ein `Size`-Fehler bekommt beim Download einen eigenen Satz.
+⚠️ Ohne `setSerialStore` gäbe es Produktbindung, aber **keinen** Replay-Schutz, und der Kern
+sagte das nur per `qWarning` („checked without a serial store“) — `test_updatehardening` macht
+diese Warnung in jedem Fall rot.
+Wächter: `test_updatehardening` (signiert zur Laufzeit mit einem Wegwerf-Schlüssel, die Test-Naht
+`UpdateViewModel::setUpdatePublicKey` ist kein `Q_INVOKABLE`): fremdes Produkt (T-4), falscher
+und fehlender Kanal, älteres und fehlendes `serial`, Übergang ohne `serial`, Speichern ohne
+Installation, Rückzug mit neuem `serial`, gefälschte Signatur speichert nichts, unlesbarer
+Wert = 0, `serial` je Produkt, `size`±1 über `file://` **und** HTTP (T-20), genaue Größe lädt;
+dazu `tst_settingsio::lastSerialIsNeitherExportedNorResetNorImported`. Mutationsproben an der
+Verdrahtung 12/12 rot, am vendierten Kern (Produktprüfung, beide Replay-Zweige, Ober- und
+Untergrenze; danach Wächter `check-updater-sync` Exit 0) 5/5 rot.
+⚠️ Nebenbefund im Kern: Nach dem Abbruch an der Obergrenze liest der `finished`-Zweig die
+abgebrochene Antwort noch einmal und Qt meldet `QIODevice::read (…): device not open` als
+Warnung — harmlos, aber Rauschen im Log; Behebung gehört in den Hub.
+
 🔑 **Signierte Fixtures brauchen `-text` in `.gitattributes`.** Auf der Windows-Maschine
 (`core.autocrlf=true`) machte git aus 935 Byte `manifest.json` 966 Byte — 31 eingefügte CR.
 Die Ed25519-Signatur steht über die **exakten** Bytes, also fiel `test_updateviewmodel` mit

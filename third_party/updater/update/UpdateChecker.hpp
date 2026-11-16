@@ -7,13 +7,22 @@
 //
 // Check flow: GET <base>/<product>/manifest.json.sig (64 raw bytes), then
 // GET <base>/<product>/manifest.json, verify the Ed25519 signature over the
-// EXACT manifest bytes BEFORE parsing, then parse. http(s) fetches are
+// EXACT manifest bytes BEFORE parsing, then parse, then — contract V1,
+// docs/SHARED.md „Update-Härtung“ — bind it to this client: `product` and
+// `channel` must be the expected ones (ErrorKind::WrongProduct), and its
+// `serial` must not be older than the highest one accepted before
+// (ErrorKind::Replay, lastSerial from the app's SerialStore). Only a
+// manifest that passed all of it reaches the callback, and only then is a
+// higher serial handed to the store. http(s) fetches are
 // cache-busted (?ts=<epoch> + AlwaysNetwork) because manifest.json is the
 // one mutable file on the webspace; file:// URLs are left untouched, which
 // is what makes fixture-based dry-runs free.
 //
 // Download flow: streams the artifact to a temp file <filename>.XXXXXX.part
-// in <destDir>, emits progress, verifies the SHA-256 from the manifest on
+// in <destDir>, emits progress, aborts the moment more than the manifest's
+// `size` has arrived and refuses fewer at the end (ErrorKind::Size — a
+// server cannot fill the disk or hand over a truncated file), verifies the
+// SHA-256 from the manifest on
 // what landed on disk, and only then REPLACES the name <destDir>/<filename>
 // (rename, never an overwrite of the old file — docs/SHARED.md „Downloader:
 // ersetzen, nie überschreiben“). A mismatch, an abort or a failed replace
@@ -42,6 +51,7 @@
 // failures on the device and mean nothing here.
 
 #include "update/ProxyConfig.hpp"
+#include "update/SerialStore.hpp"
 #include "update/UpdateManifest.hpp"
 
 #include <QAuthenticator>
@@ -74,6 +84,22 @@ public:
     using CheckCallback =
         std::function<void(std::optional<UpdateManifest>, QString error)>;
     void checkForUpdate(CheckCallback callback);
+
+    // ---- Contract V1: product binding and replay protection -------------
+    // The channel the manifest must name. Default "stable"
+    // (policy::kDefaultChannel). The product is the constructor's slug.
+    void setExpectedChannel(const QString& channel);
+    [[nodiscard]] QString expectedChannel() const { return m_channel; }
+
+    // Where the app keeps lastSerial — see SerialStore.hpp for the contract.
+    //
+    // Without a store lastSerial is 0 on every check: every signed manifest
+    // of the right product is accepted, i.e. NO replay protection. That is
+    // the transition behaviour, not a mode to stay in — checkForUpdate warns
+    // once per checker (qWarning) when it runs without one.
+    using SerialStore = appupdate::SerialStore;
+    void setSerialStore(SerialStore store);
+    [[nodiscard]] bool hasSerialStore() const { return m_serialStore.isSet(); }
 
     using DownloadCallback =
         std::function<void(QString localPath, QString error)>;
@@ -120,6 +146,12 @@ public:
         Parse,        // manifest unreadable
         Hash,         // artifact SHA-256 mismatch
         File,         // could not write the download
+        // Contract V1 (2026-11-16). Each its own kind, because each demands
+        // a different reaction — and none of them may read as "no update":
+        // a replayed manifest is an attack or a broken server, not news.
+        WrongProduct,  // signed, but product/channel are not ours (or absent)
+        Replay,        // serial older than accepted before, or missing
+        Size,          // the server sent more (or fewer) bytes than `size`
         // Proxy-specific, so a misconfigured proxy never reads as
         // "server unreachable" — the operator would search in the wrong
         // place, which is exactly what these exist to prevent.
@@ -155,6 +187,9 @@ private:
     QUrl m_baseUrl;
     QString m_product;
     QByteArray m_publicKey;
+    QString m_channel;
+    SerialStore m_serialStore;
+    bool m_warnedNoSerialStore = false;
 
     ProxyConfig m_proxy;
     ProxyCredentialProvider m_credentialProvider;

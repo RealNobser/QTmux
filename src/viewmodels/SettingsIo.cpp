@@ -122,6 +122,12 @@ QStringList SettingsIo::patternsFor(const QString &category) {
                  // die ist zum Weitergeben gedacht, und ein Domänen-Benutzername
                  // ist Personenbezug. Ein PASSWORT existiert als Schlüssel gar
                  // nicht: es lebt nur im Sitzungsspeicher (ProxyCredentials.h).
+                 // 🔑 Ebenso BEWUSST NICHT: `update/last_serial/<produkt>`
+                 // (Vertrag V1, Replay-Schutz). Das ist Sicherheitszustand dieser
+                 // Installation, keine Einstellung — ein Import könnte ihn
+                 // zurückdrehen (Replay würde angenommen) oder hochdrehen (jedes
+                 // echte Update würde abgelehnt), und „Alles zurücksetzen“ löscht
+                 // nur, was hier steht. Begründung in UpdateViewModel.h.
     if (category == QLatin1String("erscheinungsbild"))
         return { QStringLiteral("colorSchemes/") };
     if (category == QLatin1String("terminal"))

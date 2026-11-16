@@ -9,9 +9,24 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `4a645a4d59adc443d059c4412547616c20b6a1fd` |
-| Datum | 2026-10-16 |
-| Betreff | `MAC-98/99/100: hartes Ende der App nimmt den Claude-Code-Baum mit, .part-Reste werden abgeraeumt, TMPDIR der Mac-Jobs` |
+| Commit | `2b560a896d52111595442283735a9e0a5035ccd5` |
+| Datum | 2026-11-16 |
+| Betreff | `MAC-108: OTA-v4 EOF_ACK-Grund 7 WrongImageType, Spec-Spiegel aus AstroCAN 6e1e4d0` |
+
+Abgleich 2026-11-16 (QTMUX-159, Update-Härtung Vertrag V1): `git log 4a645a4..2b560a8 --
+src/update/` nennt genau **einen** Commit, `b5ca76c` (MAC-108, Update-Härtung V1). Er bringt
+eine **neue** Datei, `SerialStore.hpp`, und ändert fünf: `UpdateChecker.{hpp,cpp}`,
+`UpdateManifest.{hpp,cpp}` und `UpdatePolicy.hpp` (+307/−8). Die beiden Folge-Commits
+`5465eb9` und `2b560a8` berühren `src/update/` nicht; gepinnt ist der Hub-`main`-Stand.
+**Verhalten:** Nach der Signatur prüft der Kern `product`/`channel` gegen das Erwartete
+(`ErrorKind::WrongProduct`) und `serial` gegen das bisher höchste angenommene
+(`ErrorKind::Replay`, Speicher über `setSerialStore`); der Download bricht bei mehr als `size`
+Bytes ab und lehnt weniger ab (`ErrorKind::Size`). Speicher und Anzeige liefert QTmux
+(`UpdateViewModel`, Feature-Referenz „Online-Update“). Der Wächter meldete vorher Exit 1
+(„FEHLT VENDIERT (upstream neu)“ für `SerialStore.hpp`, „ABWEICHUNG“ für die fünf), nach
+`--update` Exit 0 mit 20/8/5/1 verglichenen Dateien; zusätzlich `git ls-tree -r 2b560a8
+src/update/` gegen `git hash-object` der vendierten Dateien blob-gleich (20/20). Kein
+CMake-Eingriff: `qtmux_updater` rastert `update/*.cpp`, die neue Datei ist ein Header.
 
 Abgleich 2026-10-16 (QTMUX-148): `git log f2d9ac7..4a645a4 -- src/update/` nennt genau
 **einen** Commit, `4a645a4`, und der ändert genau **eine** Datei, `UpdateChecker.cpp` (keine
