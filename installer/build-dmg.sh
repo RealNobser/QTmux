@@ -111,8 +111,9 @@ ln -s /Applications "$DMG_ROOT/Applications"
 # Bau dann ohne Wiederholung ab. dmg-image.sh wiederholt nur diesen einen Fehler
 # (diskutil „error code 156“), höchstens dreimal mit 15 s Pause. Jeder andere
 # Fehler bricht sofort ab und nennt den Text des Werkzeugs; jeder Fall hat einen
-# eigenen Exit-Code. Bei gleichem Inhalt ist das Image kleiner als mit hdiutil,
-# weil diskutil stärker packt und das Volume knapper anlegt.
+# eigenen Exit-Code. Bei gleichem Inhalt ist das Image kleiner als mit hdiutil:
+# diskutil packt stärker (etwa zlib-Stufe 5), und die hdiutil-Datei trug rund
+# 7,8 MB außerhalb ihrer Chunks.
 # Das Skript ist aus MacPCAN vendiert (Kontrakt 5 im Sync-Wächter).
 "$REPO/installer/macos/dmg-image.sh" create "$DMG_ROOT" "QTmux $VERSION" "$DMG"
 rm -rf "$DMG_ROOT"
