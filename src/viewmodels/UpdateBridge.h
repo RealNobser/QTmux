@@ -155,6 +155,8 @@ signals:
     void settingsChanged();
     void runningSessionsChanged();
     void sessionPasswordChanged();
+    /// Nur Bildmodus: Main.qml öffnet Einstellungen › Updates.
+    void settingsPageRequested();
     void notesChanged();
     void textsChanged();
 

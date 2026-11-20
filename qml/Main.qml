@@ -2557,6 +2557,10 @@ ApplicationWindow {
                 id: cmdBar
                 Layout.preferredWidth: 340
                 Layout.maximumWidth: 340
+                // Darf schmaler werden, damit die Knöpfe rechts neben dem Update-Hinweis
+                // Platz behalten (sonst schnitte die Leiste sie bei 1100 px ab).
+                Layout.minimumWidth: 140
+                Layout.fillWidth: true
                 Layout.preferredHeight: 28
                 Layout.alignment: Qt.AlignVCenter
                 radius: 6
@@ -4545,6 +4549,11 @@ ApplicationWindow {
         target: Updates.flow
         // Zustand 10, „Proxy-Einstellungen“: Einstellungen › Updates.
         function onProxySettingsRequested() { prefs.open("updates") }
+    }
+    Connections {
+        target: Updates
+        // Nur im Bildmodus (--update-picture settings).
+        function onSettingsPageRequested() { prefs.open("updates") }
     }
     // Einstiegspunkt für das Einstellungsfenster (eigenes Window, sieht die IDs aus
     // Main.qml nicht — es kommt über `host.app` hierher, s. PrefsWindow-Brücke).

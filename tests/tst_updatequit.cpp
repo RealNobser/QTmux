@@ -31,6 +31,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
@@ -55,13 +56,11 @@ struct Run {
 void removeProfile(const QString &profile)
 {
     const QString app = QStringLiteral("QTmux-%1").arg(profile);
-    {
-        QSettings s(QStringLiteral("QTmux"), app);
-        s.clear();
-        s.sync();
-        const QString file = s.fileName();
-        if (file.contains(app)) QFile::remove(file);
-    }
+    // Erst den Dateinamen holen, das QSettings-Objekt abbauen und DANN löschen: Ein
+    // lebendes Objekt (oder clear()) schriebe die Datei beim Abbau leer wieder hin
+    // (unter macOS über cfprefsd, gemessen: 44 leere Profile nach einigen Läufen).
+    const QString file = QSettings(QStringLiteral("QTmux"), app).fileName();
+    if (file.contains(app)) QFile::remove(file);
     const QString before = QCoreApplication::applicationName();
     const QString beforeOrg = QCoreApplication::organizationName();
     QCoreApplication::setOrganizationName(QStringLiteral("QTmux"));
@@ -188,6 +187,36 @@ private slots:
         QVERIFY2(!QDir(work.filePath(QStringLiteral("downloads")))
                       .isEmpty(QDir::Files | QDir::NoDotAndDotDot),
                  qPrintable(out));
+    }
+
+    void thePictureModeWritesAnImageOfTheScene()
+    {
+        // Bildmodus (UpdateSelfTest.h): Der Ablauf erreicht die Szene, dann entsteht
+        // das Bild; eine unbekannte Szene endet mit Exit 2, ohne Bild.
+        QTemporaryDir work;
+        QVERIFY(work.isValid());
+        const QString fixture =
+            QUrl::fromLocalFile(QStringLiteral(QTMUX_UPDATE_FIXTURE_DIR "/good")).toString();
+        const QString png = work.filePath(QStringLiteral("scene-3.png"));
+        const Run r = runSelfTest(work,
+                                  {QStringLiteral("--update-base-url"), fixture,
+                                   QStringLiteral("--update-picture"), QStringLiteral("3"),
+                                   QStringLiteral("--screenshot"), png},
+                                  90000);
+        QVERIFY2(r.finished && r.code == 0, qPrintable(r.out));
+        QVERIFY2(r.out.contains(QLatin1String("QTmux update-picture: state 3")), qPrintable(r.out));
+        QVERIFY2(!r.out.contains(QLatin1String("qrc:/qt/qml/QTmux/")), qPrintable(r.out));
+        QVERIFY2(QFileInfo(png).size() > 10000, qPrintable(r.out));
+
+        const QString none = work.filePath(QStringLiteral("none.png"));
+        const Run bad = runSelfTest(work,
+                                    {QStringLiteral("--update-base-url"), fixture,
+                                     QStringLiteral("--update-picture"), QStringLiteral("no-such"),
+                                     QStringLiteral("--screenshot"), none},
+                                    60000);
+        QVERIFY2(bad.finished, qPrintable(bad.out));
+        QCOMPARE(bad.code, 2);
+        QVERIFY(!QFileInfo::exists(none));
     }
 
     void aSelfTestWithoutAnOverriddenSourceStopsAtOnce()

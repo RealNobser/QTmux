@@ -1,13 +1,15 @@
 import QtQuick
-import QtQuick.Effects
+import QtQuick.Controls.impl
 import QTmux
 
 // Ein Icon des Update-Wegs (Phosphor „regular“), eingefärbt in seiner Rollenfarbe.
 // Den Namen nennt der Hub-Ablauf (view.iconName, hint.iconName …); `Updates.iconSource`
 // lässt nur Namen aus `UpdateFlow::iconNames()` zu — ein unbekannter bleibt leer und
 // steht als Warnung im Log, statt still ein falsches Bild zu zeigen.
-// Färben wie im Einstellungsfenster: schwarzes SVG erst auf Weiß heben, dann
-// einfärben (sonst gewichtet die Colorization mit der Luminanz ~0).
+// Gefärbt wie die Icons der Knöpfe (`icon.color`), über IconImage: Das rendert auch
+// offscreen. Ein MultiEffect fehlte dort ersatzlos und ohne Warnung (docs/e2e-fallen.md),
+// jedes Bild des Update-Dialogs wäre ohne Icons gewesen. IconImage steckt in einem Item,
+// weil es selbst eine FINAL-Eigenschaft `name` hat.
 Item {
     id: root
     property string name: ""
@@ -17,19 +19,12 @@ Item {
     implicitHeight: size
     visible: name.length > 0
 
-    Image {
-        id: img
+    IconImage {
         anchors.fill: parent
+        color: root.color
         source: Updates.iconSource(root.name)
-        sourceSize.width: root.size * 2
-        sourceSize.height: root.size * 2
-        visible: false
-    }
-    MultiEffect {
-        anchors.fill: img
-        source: img
-        brightness: 1.0
-        colorization: 1.0
-        colorizationColor: root.color
+        sourceSize.width: root.size
+        sourceSize.height: root.size
+        fillMode: Image.PreserveAspectFit
     }
 }

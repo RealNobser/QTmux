@@ -204,6 +204,12 @@ int main(int argc, char *argv[])
 
     QString shotPath;          // --screenshot <png>: stiller Selbst-Screenshot (s. u.)
     QString updateSelfTestDir; // --selftest-update <ordner>: Update-Weg am echten Programm
+    // --update-picture <szene> (mit --selftest-update und --screenshot): Bild eines
+    // Update-Zustands; --picture-theme light|dark und --picture-language de|en wählen
+    // Design und Sprache im eigenen Profil (UpdateSelfTest.h).
+    QString updatePicture;
+    QString pictureTheme;
+    QString pictureLanguage;
     int shotSettleMs = 700;    // --settle <ms>: Wartezeit, damit das Layout sich setzt
     for (int i = 1; i + 1 < argc; ++i) {
         const QByteArray a(argv[i]);
@@ -217,6 +223,16 @@ int main(int argc, char *argv[])
             shotSettleMs = qMax(50, QByteArray(argv[i + 1]).toInt());
         else if (a == "--selftest-update")
             updateSelfTestDir = QString::fromLocal8Bit(argv[i + 1]);
+        else if (a == "--update-picture")
+            updatePicture = QString::fromLocal8Bit(argv[i + 1]);
+        else if (a == "--picture-theme")
+            pictureTheme = QString::fromLocal8Bit(argv[i + 1]);
+        else if (a == "--picture-language")
+            pictureLanguage = QString::fromLocal8Bit(argv[i + 1]);
+    }
+    if (!updatePicture.isEmpty() && (updateSelfTestDir.isEmpty() || shotPath.isEmpty())) {
+        qCritical("QTmux: --update-picture braucht --selftest-update <ordner> und --screenshot <png>.");
+        return 2;
     }
     // Der Update-Selbsttest läuft nie im Profil des Anwenders: Er schreibt
     // Update-Einstellungen und beendet sich über den Update-Weg.
@@ -270,6 +286,14 @@ int main(int argc, char *argv[])
     // Version kommt generiert aus `project(QTmux VERSION …)` (cmake/Version.h.in) —
     // nicht mehr als Literal, das beim Bump vergessen werden kann.
     QGuiApplication::setApplicationVersion(QStringLiteral(QTMUX_VERSION_STRING));
+    // Bildmodus: Design und Sprache ins (eigene) Profil, BEVOR Theme und AppController
+    // sie lesen.
+    if (!updatePicture.isEmpty()) {
+        QSettings s;
+        if (pictureTheme == QLatin1String("light")) s.setValue(QStringLiteral("ui/themeMode"), 1);
+        if (pictureTheme == QLatin1String("dark")) s.setValue(QStringLiteral("ui/themeMode"), 2);
+        if (!pictureLanguage.isEmpty()) s.setValue(QStringLiteral("ui/language"), pictureLanguage);
+    }
 
 #if defined(Q_OS_MACOS)
     // Die nativen App-Menü-Standarditems (Über/Einstellungen/Dienste/Ausblenden/
@@ -393,7 +417,7 @@ int main(int argc, char *argv[])
     // Screenshot-Modus: nach kurzer Settle-Zeit die Root-QQuickWindow-Szene grabben,
     // als PNG speichern und mit dem Ergebnis-Code beenden. Der Timer läuft auf dem
     // GUI-Thread; grabWindow() rendert die (offscreen) Szene und liest sie zurück.
-    if (!shotPath.isEmpty()) {
+    if (!shotPath.isEmpty() && updatePicture.isEmpty()) {
         if (!shotOnVisibleWindow.isEmpty())
             qWarning("QTmux: %s", qPrintable(shotOnVisibleWindow));
         QTimer::singleShot(shotSettleMs, &app, [&engine, shotPath]() {
@@ -414,7 +438,7 @@ int main(int argc, char *argv[])
     // und prüft danach alle 6 h — Vertrag V2 §4.2, E1).
     // 🔑 Im Screenshot-Modus NIE — der Lauf soll ein Bild machen und sich beenden,
     // nicht ins Netz gehen.
-    if (shotPath.isEmpty()) {
+    if (shotPath.isEmpty() || !updatePicture.isEmpty()) {
         const bool selfTest = !updateSelfTestDir.isEmpty();
         QTimer::singleShot(0, &updates, [&app, selfTest]() {
             updates.start(app.arguments());
@@ -428,8 +452,43 @@ int main(int argc, char *argv[])
                 QCoreApplication::exit(2);
             }
         });
-        if (!updateSelfTestDir.isEmpty())
+        if (!updatePicture.isEmpty()) {
+            // Bild, sobald der Treiber die Szene erreicht hat (plus Settle-Zeit). Die
+            // Szene „settings“ zeigt das Einstellungsfenster, ein eigenes Window.
+            const bool ok = qtmux::driveUpdatePicture(
+                updates, updatePicture,
+                [&engine, shotPath, shotSettleMs, updatePicture](bool prefsWindow) {
+                    const QList<QObject *> roots0 = engine.rootObjects();
+                    auto *main0 = roots0.isEmpty() ? nullptr
+                                                   : qobject_cast<QQuickWindow *>(roots0.first());
+                    // „…-narrow“: schmales Fenster, der Hinweis muss trotzdem stehen.
+                    if (main0 && updatePicture.endsWith(QLatin1String("-narrow")))
+                        main0->setWidth(720);
+                    QTimer::singleShot(shotSettleMs, qApp, [&engine, shotPath, prefsWindow]() {
+                        const QList<QObject *> roots = engine.rootObjects();
+                        auto *main = roots.isEmpty() ? nullptr
+                                                     : qobject_cast<QQuickWindow *>(roots.first());
+                        QQuickWindow *win = main;
+                        if (prefsWindow) {
+                            win = nullptr;
+                            for (QWindow *w : QGuiApplication::topLevelWindows()) {
+                                auto *q = qobject_cast<QQuickWindow *>(w);
+                                if (q && q != main && q->isVisible()) { win = q; break; }
+                            }
+                        }
+                        int rc = 2;
+                        if (win) {
+                            const QImage img = win->grabWindow();
+                            rc = (!img.isNull() && img.save(shotPath, "PNG")) ? 0 : 1;
+                        }
+                        qInfo("QTmux update-picture: %s rc=%d", qPrintable(shotPath), rc);
+                        QCoreApplication::exit(rc);
+                    });
+                });
+            if (!ok) return 2;
+        } else if (!updateSelfTestDir.isEmpty()) {
             qtmux::driveUpdateSelfTest(updates);
+        }
     }
 
     // Laufzeitwechsel über das Sprachmenü neu laden.
