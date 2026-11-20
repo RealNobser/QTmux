@@ -180,7 +180,7 @@ Early-Adopter-Stand.
 | Windows | [`installer\build-msi.ps1`](installer/build-msi.ps1) `-Version 1.9.15` | `dist\QTmux-1.9.15-win64.msi` (+ portables ZIP) |
 | Linux | [`installer/build-appimage.sh`](installer/build-appimage.sh) `1.9.15` | `dist/QTmux-1.9.15-x86_64.AppImage` |
 
-**macOS (DMG):** Release-Build → `macdeployqt` → Signatur mit eigener Identität → `hdiutil`.
+**macOS (DMG):** Release-Build → `macdeployqt` → Signatur mit eigener Identität → `diskutil image`.
 Nicht notarisiert: Wurde das DMG per Browser geladen, lässt sich QTmux beim ersten Start erst
 über Systemeinstellungen › Datenschutz & Sicherheit › „Dennoch öffnen" starten (seit macOS 15
 hilft Rechtsklick → „Öffnen" nicht mehr), alternativ
@@ -380,7 +380,7 @@ early-adopter state.
 | Linux | [`installer/build-appimage.sh`](installer/build-appimage.sh) `1.9.15` | `dist/QTmux-1.9.15-x86_64.AppImage` |
 
 **macOS (DMG):** release build → `macdeployqt` → signing with a self-issued identity →
-`hdiutil`. Not notarized: if the DMG was downloaded with a browser, the first launch needs
+`diskutil image`. Not notarized: if the DMG was downloaded with a browser, the first launch needs
 System Settings › Privacy & Security › "Open Anyway" (since macOS 15, right-click → "Open"
 no longer helps), or `xattr -dr com.apple.quarantine /Applications/QTmux.app`. Updates
 through the built-in update dialog are not affected — they carry no quarantine. If an instance is already running

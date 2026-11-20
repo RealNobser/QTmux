@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prueft, ob die aus MacPCAN vendierten Baeume noch byte-identisch zur
-# kanonischen Quelle sind. Vier Kontrakte:
+# kanonischen Quelle sind. Fuenf Kontrakte:
 #   1. third_party/updater/update/  <->  MacPCAN/src/update/   (QTMUX-125, Paket E1)
 #   2. plugins/macpcan/vendor/      <->  MacPCAN/src/          (Auswahl, s. unten)
 #   3. installer/{msiexec-path-smoke.ps1,msi-shortcut-icon-check.ps1,smoke/}
@@ -8,6 +8,8 @@
 #      Symbol-Riegel, explizite Liste, s. installer/smoke/UPSTREAM.md)
 #   4. installer/macos/sign-bundle.sh <-> MacPCAN/platform/macos/sign-bundle.sh
 #      (macOS-Signatur mit Familien-Identitaet, seit 2026-10-07)
+#   5. installer/macos/dmg-image.sh  <-> MacPCAN/platform/macos/dmg-image.sh
+#      (DMG per diskutil image mit gezielter Wiederholung, seit 2026-11-20)
 #
 # 🔑 Warum ein Skript und kein ctest: Die Pruefung braucht einen MacPCAN-Checkout
 # neben QTmux. Auf CI-Runnern und Build-Maschinen gibt es den nicht — ein Test,
@@ -43,7 +45,7 @@
 # absoluten Pfad uebersetzt; alles danach arbeitet nur mit absoluten Pfaden.
 #
 # Exit-Codes — jeder Fall hat seinen eigenen, ein Werkzeugfehler ist NIE gruen:
-#   0  alle vier Kontrakte gemessen und byte-identisch (je Kontrakt >= 1 Datei
+#   0  alle fuenf Kontrakte gemessen und byte-identisch (je Kontrakt >= 1 Datei
 #      verglichen) — oder: Hub am Standardort fehlt (Banner "NICHTS GEPRUEFT")
 #   1  Befund: Drift oder Fremd-Include
 #   2  Werkzeugfehler: MACPCAN_DIR gesetzt, aber unbrauchbar; Verzeichnis oder
@@ -105,12 +107,13 @@ else
             echo "  Das Verzeichnis existiert, enthaelt aber keine Quellen — liegt dort"
             echo "  wirklich der Hub? (~/Projects/GitHub/MacPCAN z. B. enthaelt NUR build/.)"
         fi
-        echo "Alle VIER Vendoring-Kontrakte bleiben damit UNGEPRUEFT:"
+        echo "Alle FUENF Vendoring-Kontrakte bleiben damit UNGEPRUEFT:"
         echo "  1. third_party/updater/update/               (Updater-Kern)"
         echo "  2. plugins/macpcan/vendor/                   (CAN-Plugin-Auswahl)"
         echo "  3. installer/msiexec-path-smoke.ps1 + smoke/ (1619-Riegel)"
         echo "     + installer/msi-shortcut-icon-check.ps1    (Verknuepfungs-Symbol)"
         echo "  4. installer/macos/sign-bundle.sh            (macOS-Signatur)"
+        echo "  5. installer/macos/dmg-image.sh              (macOS-DMG)"
         echo "Dieser Lauf ist KEIN Nachweis von Synchronitaet. Auf einer Maschine mit"
         echo "Hub-Checkout wiederholen oder MACPCAN_DIR=/pfad/zum/Hub setzen."
         exit 0
@@ -364,8 +367,35 @@ else
     fi
 fi
 
+# --- Fuenfter Kontrakt: macOS-DMG <-> MacPCAN/platform/macos/ ---------------
+#
+# installer/build-dmg.sh baut das Image ueber installer/macos/dmg-image.sh —
+# byte-identisch zu MacPCANs platform/macos/dmg-image.sh (diskutil image statt
+# hdiutil, wiederholt nur "error code 156", seit 2026-11-20). Der Selbsttest
+# des Skripts liegt im Hub (ctest DmgImage.SelfTest) und deckt diese Kopie ueber
+# die Byte-Gleichheit mit ab. Aufbau wie Kontrakt 4.
+dm_drift=0
+n5=0
+dm_a="$macpcan_root/platform/macos/dmg-image.sh"
+dm_b="$here/installer/macos/dmg-image.sh"
+if [ ! -f "$dm_a" ]; then
+    echo "  DMG NUR VENDIERT (upstream geloescht?):  installer/macos/dmg-image.sh"; dm_drift=1
+elif [ ! -f "$dm_b" ]; then
+    echo "  DMG FEHLT VENDIERT:                      installer/macos/dmg-image.sh"; dm_drift=1
+    [ "$mode" = "update" ] && uebernehmen "$dm_a" "$dm_b" -p
+else
+    n5=1
+    if ! gleich "$dm_a" "$dm_b"; then
+        echo "  DMG ABWEICHUNG:                          installer/macos/dmg-image.sh"
+        echo "      upstream $(hash_of "$dm_a")"
+        echo "      vendiert $(hash_of "$dm_b")"
+        dm_drift=1
+        [ "$mode" = "update" ] && uebernehmen "$dm_a" "$dm_b" -p
+    fi
+fi
+
 if [ "$mode" = "update" ]; then
-    if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ] || [ "$sm_drift" = "1" ] || [ "$sg_drift" = "1" ]; then
+    if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ] || [ "$sm_drift" = "1" ] || [ "$sg_drift" = "1" ] || [ "$dm_drift" = "1" ]; then
         echo "check-updater-sync: Dateien uebernommen. UPSTREAM.md-Commit nachziehen:"
         ( cd "$macpcan_root" && git rev-parse HEAD 2>/dev/null ) \
             || echo "  (Hub-Commit nicht lesbar — in $macpcan_root von Hand nachsehen)"
@@ -375,7 +405,7 @@ if [ "$mode" = "update" ]; then
     exit 0
 fi
 
-if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ] || [ "$sm_drift" = "1" ] || [ "$sg_drift" = "1" ]; then
+if [ "$drift" = "1" ] || [ "$mp_drift" = "1" ] || [ "$sm_drift" = "1" ] || [ "$sg_drift" = "1" ] || [ "$dm_drift" = "1" ]; then
     echo "check-updater-sync: DRIFT gegenueber MacPCAN. Beheben mit:"
     echo "  tools/check-updater-sync.sh --update"
     exit 1
@@ -384,7 +414,7 @@ fi
 # Positivkontrolle: "byte-identisch" nur, wenn je Kontrakt wirklich Dateien
 # gelesen und verglichen wurden. Ein leerer Baum hiesse sonst "gruen, weil
 # nichts zu vergleichen war".
-for k in "1:$n1" "2:$n2" "3:$n3" "4:$n4"; do
+for k in "1:$n1" "2:$n2" "3:$n3" "4:$n4" "5:$n5"; do
     [ "${k#*:}" -gt 0 ] \
         || werkzeugfehler "Kontrakt ${k%%:*}: 0 Dateien verglichen — der Waechter hat nichts gemessen"
 done
@@ -393,4 +423,5 @@ echo "check-updater-sync: byte-identisch zu $upstream ($n1 Dateien verglichen)"
 echo "check-updater-sync: byte-identisch zu $mp_upstream (macpcan-Vendor-Auswahl, $n2 Dateien verglichen)"
 echo "check-updater-sync: byte-identisch zu $sm_upstream (msiexec-Pfad-Smoke, $n3 Dateien verglichen)"
 echo "check-updater-sync: byte-identisch zu $sg_a (macOS-Signatur, $n4 Datei verglichen)"
+echo "check-updater-sync: byte-identisch zu $dm_a (macOS-DMG, $n5 Datei verglichen)"
 exit 0

@@ -11,7 +11,8 @@
 #      unseres Echo-Plugins in Contents/PlugIns) werden hineinkopiert und die
 #      rpaths umgeschrieben. -qmldir=qml lässt macdeployqt die genutzten
 #      QML-Importe (QtQuick, Controls, …) auflösen.
-#   3. Ein „Drag-to-Applications"-DMG via hdiutil bauen (kein Zusatztool nötig):
+#   3. Ein „Drag-to-Applications"-DMG per diskutil image bauen
+#      (installer/macos/dmg-image.sh, kein Zusatztool nötig):
 #      Inhalt = QTmux.app + Symlink auf /Applications.
 #
 # Ergebnis: dist/QTmux-<Version>-macos.dmg  (dist/ ist git-ignoriert).
@@ -97,15 +98,45 @@ fi
 echo "    Signatur (Familien-Identität, sonst ad-hoc mit Warnung) …"
 "$REPO/installer/macos/sign-bundle.sh" "$APP"
 
-echo "==> 4/4  DMG bauen (hdiutil, Drag-to-Applications)"
+echo "==> 4/4  DMG bauen (diskutil image, Drag-to-Applications)"
 mkdir -p "$REPO/dist"
 rm -f "$DMG"
 DMG_ROOT="$(mktemp -d)"
 cp -R "$APP" "$DMG_ROOT/QTmux.app"
 ln -s /Applications "$DMG_ROOT/Applications"
-hdiutil create -volname "QTmux $VERSION" -srcfolder "$DMG_ROOT" \
-    -ov -format UDZO "$DMG" >/dev/null
+# ⚠️ Das Image entsteht über installer/macos/dmg-image.sh, nie direkt über
+# hdiutil (2026-11-20, gemessen unter macOS 27.2.1). Erstens meldet sich
+# `hdiutil create` bei jedem Aufruf als „deprecated“. Zweitens kann das eigene
+# Zwischen-Volume beim Aushängen einmalig belegt sein (EBUSY); hdiutil brach den
+# Bau dann ohne Wiederholung ab. dmg-image.sh wiederholt nur diesen einen Fehler
+# (diskutil „error code 156“), höchstens dreimal mit 15 s Pause. Jeder andere
+# Fehler bricht sofort ab und nennt den Text des Werkzeugs; jeder Fall hat einen
+# eigenen Exit-Code. Bei gleichem Inhalt ist das Image kleiner als mit hdiutil,
+# weil diskutil stärker packt und das Volume knapper anlegt.
+# Das Skript ist aus MacPCAN vendiert (Kontrakt 5 im Sync-Wächter).
+"$REPO/installer/macos/dmg-image.sh" create "$DMG_ROOT" "QTmux $VERSION" "$DMG"
 rm -rf "$DMG_ROOT"
+
+# Die App muss als QTmux.app in der Wurzel des Volumes liegen, neben dem Link
+# auf /Applications. diskutil legt den INHALT der Quelle ab; wer ihm die App
+# selbst gibt, bekommt Contents/ in der Wurzel und ein DMG ohne startbare App,
+# bei Exit 0 (2026-11-20 gemessen; dmg-image.sh lehnt eine solche Quelle schon
+# ab). Diese Prüfung am eingehängten Image fängt denselben Fehler, falls der
+# Aufruf je anders zusammengesetzt wird, und nennt ihn beim Namen. Eingehängt
+# wird schreibgeschützt und verborgen; der leere Einhängeordner wird nur per
+# rmdir entfernt, nie per rm -rf (er könnte noch eingehängt sein).
+echo "    Prüfung am eingehängten Image …"
+DMG_MP="$(mktemp -d)"
+"$REPO/installer/macos/dmg-image.sh" attach "$DMG" "$DMG_MP"
+if [[ ! -f "$DMG_MP/QTmux.app/Contents/Info.plist" || ! -L "$DMG_MP/Applications" ]]; then
+    echo "FEHLER: Im DMG liegt keine QTmux.app mit Link auf /Applications in der Wurzel." >&2
+    ls -A "$DMG_MP" >&2
+    "$REPO/installer/macos/dmg-image.sh" eject "$DMG_MP" && rmdir "$DMG_MP"
+    exit 1
+fi
+"$REPO/installer/macos/dmg-image.sh" eject "$DMG_MP"
+rmdir "$DMG_MP"
+echo "    QTmux.app und Link auf /Applications liegen in der Wurzel."
 
 echo "Fertig: $DMG"
 du -h "$DMG" | cut -f1 | xargs -I{} echo "  Größe: {}"

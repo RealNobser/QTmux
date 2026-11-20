@@ -28,7 +28,7 @@ trap 'chmod -R u+rwX "$root" 2>/dev/null; rm -rf "$root"' EXIT
 fehler=0
 faelle=0
 
-# Legt die Attrappe frisch an: identische Baeume in allen vier Kontrakten.
+# Legt die Attrappe frisch an: identische Baeume in allen fuenf Kontrakten.
 attrappe() {
     rm -rf "$root/ws" && mkdir -p "$root/ws" || exit 2
     local q="$root/ws/QTmux" h="$root/ws/MacPCAN" d
@@ -58,9 +58,10 @@ attrappe() {
         done
     done
     printf 'QTmux-eigen\n' > "$q/installer/build-msi.ps1"
-    # Kontrakt 4: Einzeldatei
+    # Kontrakte 4 und 5: je eine Einzeldatei
     for d in "$q/installer/macos" "$h/platform/macos"; do
         mkdir -p "$d" && printf '#!/bin/sh\necho sign\n' > "$d/sign-bundle.sh"
+        printf '#!/bin/sh\necho dmg\n' > "$d/dmg-image.sh"
     done
 }
 
@@ -103,6 +104,8 @@ fall "identisch, Standardort" 0 "byte-identisch .*(4 Dateien verglichen)" "WERKZ
 # 2. Relativer MACPCAN_DIR aus der Repo-Wurzel -> gruen
 fall "identisch, relativ aus Repo-Wurzel" 0 "macOS-Signatur, 1 Datei verglichen" "No such file" -- \
     lauf_in "$(Q)" MACPCAN_DIR=../MacPCAN --
+fall "identisch, Kontrakt 5 gemessen" 0 "macOS-DMG, 1 Datei verglichen" "WERKZEUGFEHLER" -- \
+    lauf_in "$(Q)" --
 
 # 3. Relativer MACPCAN_DIR aus einem ANDEREN Verzeichnis, mit Koeder-CDPATH
 mkdir -p "$root/koeder/MacPCAN/src/update"
@@ -129,7 +132,8 @@ fall "Standardort ohne Hub -> Banner" 0 "NICHTS GEPRUEFT" "byte-identisch" -- \
 
 # 7. Je Kontrakt eine verfaelschte Datei -> Abweichung
 for ziel in third_party/updater/update/Checker.hpp plugins/macpcan/vendor/core/Frame.hpp \
-            installer/smoke/marker.txt installer/macos/sign-bundle.sh; do
+            installer/smoke/marker.txt installer/macos/sign-bundle.sh \
+            installer/macos/dmg-image.sh; do
     attrappe
     printf 'verfaelscht\n' >> "$root/ws/QTmux/$ziel"
     fall "verfaelscht: $ziel" 1 "ABWEICHUNG" "byte-identisch" -- \
@@ -178,6 +182,27 @@ fall "--update uebernimmt" 0 "Dateien uebernommen" "" -- \
     lauf_in "$(Q)" MACPCAN_DIR=../MacPCAN -- --update
 fall "nach --update identisch" 0 "src/update (5 Dateien verglichen)" "" -- \
     lauf_in "$(Q)" --
+
+# 14. Kontrakt 5: Hub-Stand ohne dmg-image.sh (aelter als 2026-11-20) -> Drift
+attrappe
+rm "$root/ws/MacPCAN/platform/macos/dmg-image.sh"
+fall "Hub ohne dmg-image.sh -> Drift" 1 "DMG NUR VENDIERT (upstream geloescht?)" "byte-identisch" -- \
+    lauf_in "$(Q)" --
+
+# 15. Kontrakt 5: QTmux ohne dmg-image.sh -> Drift; --update uebernimmt es,
+#     und es ist danach ausfuehrbar (build-dmg.sh ruft es direkt auf). Geprueft
+#     wird das ERGEBNIS: cp uebernimmt die Rechte der Hub-Datei auch ohne -p
+#     (Mutationsprobe "ohne -p" bleibt darum gruen); faellt das Recht schon im
+#     Hub weg (chmod unten weglassen), wird der letzte Fall rot.
+attrappe
+rm "$root/ws/QTmux/installer/macos/dmg-image.sh"
+chmod 755 "$root/ws/MacPCAN/platform/macos/dmg-image.sh"
+fall "QTmux ohne dmg-image.sh -> Drift" 1 "DMG FEHLT VENDIERT" "byte-identisch" -- \
+    lauf_in "$(Q)" --
+fall "--update uebernimmt dmg-image.sh" 0 "Dateien uebernommen" "" -- \
+    lauf_in "$(Q)" -- --update
+fall "dmg-image.sh danach ausfuehrbar" 0 "^dmg$" "" -- \
+    "$root/ws/QTmux/installer/macos/dmg-image.sh"
 
 echo "----"
 echo "$((faelle - fehler))/$faelle Faelle bestanden"
