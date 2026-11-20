@@ -4533,8 +4533,8 @@ ApplicationWindow {
     // --- Online-Update, Vertrag V2 (K2) ---------------------------------------
     // Beide Flächen öffnen und schließen sich auf Signale des Ablaufs
     // (dialogRequested, closeDialogRequested, proxyAuth.pending). Ein Fund der stillen
-    // Prüfung öffnet KEIN Fenster, nur den Hinweis in der Kopfleiste (Owner-Entscheid
-    // „Fund beim Start: kein Fenster, nur Hinweis“); einmalig von selbst geht der
+    // Prüfung öffnet KEIN Fenster, nur den Hinweis in der Kopfleiste (Regel: ein Fund
+    // beim Start unterbricht die Arbeit nicht); einmalig von selbst geht der
     // Dialog nur nach einer gescheiterten Installation auf (Entwurf, Zustand 13).
     UpdateDialog { id: updateDialog }
     ProxyAuthDialog { id: proxyAuthDialog }

@@ -11,8 +11,8 @@ import QTmux
 // 🔑 Die manuellen Proxy-Felder werden AUSGEBLENDET, nicht ausgegraut (Entwurf §2); ihre
 // Werte bleiben beim Umschalten erhalten.
 // 🔑 Ein Port außerhalb 0…65535 wird nicht gespeichert und am Feld sichtbar markiert
-// (Rand in Gefahrfarbe), ohne eigenen Satz: Der Wortlaut für „unvollständig“ wartet
-// auf den Designer (Owner-Entscheid; Sammlung für die Designer-Runde).
+// (Rand in Gefahrfarbe), ohne eigenen Satz: Einen Satz für „unvollständig“ gibt
+// es im gemeinsamen Katalog noch nicht.
 CatPage {
     id: page
     // Sätze mit der Textrevision lesen, damit ein Sprachwechsel neu auswertet.
