@@ -1,5 +1,12 @@
 # Update-Dialog — Design-Spezifikation
 
+> ⚠️ **Historisch, Stand bis 1.9.15.** Seit 1.10.0 zeigt QTmux den gemeinsamen Ablauf der
+> Familie: Zustände, Sätze und Knöpfe kommen aus `appupdate::UpdateFlow` und dem
+> Hub-Katalog, gezeichnet nach dem Entwurf des Designers
+> ([qml/dialogs/UpdateDialog.qml](../qml/dialogs/UpdateDialog.qml), Mechanik in der
+> Feature-Referenz, Abschnitt „Online-Update“). `UpdateViewModel` und die Texte unten gibt es
+> nicht mehr; das Dokument bleibt als Herkunft des gemeinsamen Dialogs stehen.
+
 > **Wozu:** Der QTmux-Update-Dialog wird das Vorbild für alle drei Desktop-Apps
 > (Owner, 2026-08-07). Übertragen wird das **Design**, nicht der Code: QTmux ist Qt Quick,
 > RAFTNG und MacPCAN sind Widgets; der geteilte Widgets-Dialog entsteht danach im Hub.

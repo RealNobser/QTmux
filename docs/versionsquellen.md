@@ -18,11 +18,11 @@
 |---|---|
 | [src/app/main.cpp](../src/app/main.cpp) `setApplicationVersion` | Qt-Anwendungsversion |
 | [src/server/McpServer.cpp](../src/server/McpServer.cpp) (2×) | MCP `get_server_info` — **daran liest ein Agent die Version ab** |
-| [src/viewmodels/UpdateViewModel.cpp](../src/viewmodels/UpdateViewModel.cpp) `currentVersion` | Vergleich gegen das Update-Manifest |
+| [src/viewmodels/UpdateBridge.cpp](../src/viewmodels/UpdateBridge.cpp) `Config::version` (bis 1.9.15 `UpdateViewModel::currentVersion`) | Vergleich gegen das Update-Manifest |
 
 🔑 **Warum genau diese drei zuerst umgestellt wurden:** Sie zeigten den Wert **hart** und
 liefen zwangsläufig auseinander. Die MCP-Antwort und der Update-Vergleich sind dabei die
-teuersten: Ein hart kodierter Wert im `UpdateViewModel` hätte die App gegen ein Manifest
+teuersten: Ein hart kodierter Wert im damaligen `UpdateViewModel` hätte die App gegen ein Manifest
 vergleichen lassen, das eine andere Version meint — der Update-Weg wäre still falsch
 gewesen, ohne dass irgendetwas rot geworden wäre.
 
@@ -106,7 +106,7 @@ kanonische Baustein kommt aus MacPCAN; getauscht wird dann nur die Quelle, nicht
 
 🔑 **Die Trennung ist am laufenden Programm belegt:** `get_server_info` liefert
 `version: 1.8.0` (Vergleichsgröße, unverändert) **und** `buildId: 1.8.0+54c9b81-dirty`
-(Anzeige). Käme die Build-ID in `UpdateViewModel::currentVersion`, schlüge der
+(Anzeige). Käme die Build-ID in die Version des Update-Ablaufs (`Config::version`), schlüge der
 Manifest-Vergleich fehl oder böte dauerhaft ein „Update" an.
 
 ⚠️ **Signierte Artefakte:** Der Hash im Binary ändert dessen SHA-256. Beim Veröffentlichen

@@ -357,3 +357,348 @@ Inhalt wäre nur Rauschen im Board.
 QTMUX-124 bis **131** (u. a. Online-Update, MCP im LAN, Proxy, „Link kopieren") sowie der
 familienweite **AppImage-Tool-Pin** (`d782a5a`) — alle selbst verifiziert und in `main`;
 die dauerhaften Lektionen stehen jeweils im zuständigen Fachabschnitt, nicht hier.
+
+### Online-Update bis 1.9.15 (eigener Automat, aus der Feature-Referenz)
+Wörtlich die Fassung aus `docs/feature-referenz.md` bis zum Umstieg auf den gemeinsamen Ablauf (K2, 1.10.0). Die Mechanik dieser Absätze liegt seither im Hub; die Wächter-Namen sind die damaligen.
+
+
+Kern **byte-identisch aus MacPCAN vendiert** (`third_party/updater/update/`, Namespace
+`appupdate`, Target **`qtmux_updater`** = STATIC + Qt6::Core/Network). Bewusst **nicht** in
+`qtmux_core` — der bleibt Qt6::Core-only. Abgleich `tools/check-updater-sync.sh`
+(`--update` zieht nach; Exit-Codes, Positivkontrolle und relative `MACPCAN_DIR` im
+CLAUDE.md-Abschnitt „Vendoring-Wächter", QTMUX-144), Herkunft/Pin in
+[third_party/updater/UPSTREAM.md](third_party/updater/UPSTREAM.md).
+🔑 **Die Kopie liegt in einem Verzeichnis namens `update`**, weil sich der Kern selbst mit
+dem Präfix `update/` inkludiert; flach vendiert müsste man jede `#include`-Zeile ändern und
+gäbe die Byte-Identität — und damit den Sync-Wächter — auf.
+⚠️ **Einbahnstraße:** nie lokal editieren. Erlebt und bewährt: Der Windows-Build fand einen
+Fehler IM KERN (s. u.); der Fix ging nach MacPCAN, wurde dort gepusht und kam per
+`--update` zurück.
+
+📐 **Der Dialog ist als Design-Spezifikation ausgeschrieben:**
+[docs/update-dialog-spec.md](update-dialog-spec.md) — Zustände und Übergänge, Layout und
+Maße, Elementmatrix je Zustand, **alle** Texte in DE und EN, Verhalten (Skip, Abbrechen je
+Phase, Fortschritt, Übergabe an den Installer) und ein Abschnitt „bewusste Entscheidungen".
+Anlass: Der Owner hat ihn zum **Vorbild für alle drei Desktop-Apps** erklärt (2026-08-07);
+der geteilte Widgets-Dialog entsteht danach im Hub. Wer hier etwas ändert, ändert damit die
+Vorlage — **die Spec mitziehen**, sonst driften Beschreibung und Sache auseinander.
+
+**App-Seite:** [`UpdateViewModel`](src/viewmodels/UpdateViewModel.h) (Context-Property
+`Updates`, Zustandsautomat Idle/Checking/UpToDate/Available/Downloading/Ready/Failed,
+QSettings `update/auto_check|lastCheck|skippedVersion|baseUrl`; bis 1.9.3 `update/autoCheck`) +
+[`qml/dialogs/UpdateDialog.qml`](qml/dialogs/UpdateDialog.qml) + Hilfe-Menü + zwei
+Palette-Einträge + Einstellungen → Allgemein → „Aktualisierung". Start-Hook in `main.cpp`
+(3 s nach dem Start; im Screenshot-Modus nie). Basis-URL `https://nobser.de/updates`,
+Produkt `qtmux` → `…/qtmux/manifest.json`.
+
+**Owner-Regeln, die im Code hängen** (jede hat einen Grund, keine ist Geschmack):
+- Start-Check **höchstens 1×/Tag, abschaltbar, Fehler bleiben STILL** — ein Rechner ohne
+  Netz darf nicht jeden Morgen mit einem Fehlerdialog begrüßen.
+- Der Zeitstempel wird **auch nach einem Fehlschlag** geschrieben; sonst wird aus
+  „1×/Tag" bei unerreichbarem Server „bei jedem Start".
+  ✅ **Seit 1.9.4 steht der Zeitstempel VOR dem Request** (Koordinator-Entscheid
+  2026-08-07, RAFTNG macht es so), nicht mehr im Callback. Der Unterschied trifft genau
+  einen Fall: eine Antwort, die *nie* kommt (hängender Server, Anwender beendet QTmux vor
+  dem Timeout) — früher blieb der Stempel dann aus und der nächste Start fragte erneut.
+  Wächter `tst_updateviewmodel::throttleStampIsWrittenBeforeTheRequest` (Server nimmt an,
+  antwortet nie; Mutationsprobe „Stempel zurück in den Callback" macht ihn rot).
+
+**Vertrags-Abgleich „Beim-Start-Update-Check" (Owner-Vorgabe 2026-08-07, workspace-weit für
+alle drei Desktop-Apps):** In QTmux war der Vertrag **bereits vollständig erfüllt** — es gab
+nichts zu bauen. Punkt für Punkt gemessen, nicht aus dem Code geschlossen:
+
+| Vertragspunkt | Stand in QTmux |
+|---|---|
+| Einstellung, Default EIN | „Beim Start automatisch nach Updates suchen", Einstellungen → **Allgemein → Aktualisierung** (`CatAllgemein.qml`, `objectName: swUpdateAutoCheck`); `value(kKeyAutoCheck, **true**)` |
+| Start nie blockieren | `QTimer::singleShot(**3000**, …)` in `main.cpp`, nach Layout/Session-Wiederherstellung |
+| Still, sichtbar nur bei neuerer Version | Callback: `if (manual) setError/Failed; **else setState(Idle)**` |
+| Kein Netz ⇒ lautlos | derselbe Zweig — der stille Pfad kennt keinen Fehlerzustand |
+| Menüweg unverändert | `checkNow()` → `startCheck(manual=**true**)`, eigener Pfad, unberührt |
+| Strings in beiden `.ts` | **0 unfinished** in `qtmux_de.ts` und `qtmux_en.ts`; EN: „Check for updates automatically at startup" |
+| Settings-Text mit Deckung | beschreibt, was er **tut** („Höchstens einmal am Tag und still: Gibt es nichts Neues oder ist der Server nicht erreichbar, passiert gar nichts") — keine Zusage „hält aktuell" |
+| Proxy: nie Auth-Dialog beim stillen Check | `answerProxyChallenge` prüft `m_manual`; Wächter `tst_updateviewmodel::silentStartupCheckNeverAsksForProxyCredentials` |
+
+✅ **Key-Angleichung `update/autoCheck` → `update/auto_check` — seit 1.9.4, MIT Migration**
+(Koordinator-Entscheid 2026-08-07; RAFTNG und MacPCAN nutzen dieselbe Schreibweise).
+⚠️ **Ein Angleichen ohne Migration wäre ein Übergriff gewesen:** Es hätte jeden Anwender,
+der den Schalter bewusst ausgeschaltet hat, stillschweigend auf EIN zurückgesetzt.
+Mechanik: `UpdateViewModel::migrateSettings()` läuft im Konstruktor — alten Key lesen,
+Wert übernehmen, **erst dann** gilt der neue; steht der neue schon, gewinnt er; der alte
+wird in beiden Fällen entfernt. **Zweite Tür:** Exportdateien bis 1.9.3 tragen den alten
+Key — `SettingsIo::readFile()` übersetzt ihn, sonst fiele ein exportiertes AUS als
+„fremder Schlüssel" durch die Allowlist. Wächter: `legacyOffSwitchSurvivesTheKeyMigration`,
+`keyMigrationKeepsOnAndPrefersTheNewKey`, `tst_settingsio::importTranslatesLegacyAutoCheckKey`
+(je per Mutationsprobe rot gesehen). Die zwei früher blinden Negativprüfungen des
+Start-Checks (`qWait(200)` + `count()==0`) prüfen seither **fristfrei** auf
+`stateChanged`: ein Start setzt `Checking` synchron im Aufruf.
+
+🔑 **Zwei Messfallen, beide hier hineingelaufen** — wer den Start-Check nachmisst, verliert
+sonst eine halbe Stunde an einem Messgerät, das schweigt:
+1. **`--screenshot` löst den Start-Check absichtlich NIE aus** (`if (shotPath.isEmpty())` in
+   `main.cpp`). Ein Beleglauf mit dem Screenshot-Schalter misst also garantiert nichts — und
+   sieht dabei exakt so aus wie ein abgeschalteter Check.
+2. **QSettings ersetzt `/` durch `.`, sobald der Wert in der macOS-plist landet.** Der Key
+   heißt im Code `update/lastCheck`, in `defaults read` aber **`update.lastCheck`**. Ein
+   `defaults write …  "update/auto_check"` schreibt einen Schlüssel, den die App **nie liest**
+   — der Gegentest lief damit gegen die Vorgabe statt gegen den ausgeschalteten Schalter und
+   „bestätigte" fälschlich. Erkennbar war es nur daran, dass Test und Gegentest **dasselbe**
+   Ergebnis lieferten.
+
+**Beleg „Default EIN" (2026-08-07, mit scharfem Gegentest; damals noch unter dem alten
+Key — ab 1.9.4 heißt er in der plist `update.auto_check`, ein gesetztes `update.autoCheck`
+wird beim Start migriert und entfernt):**
+```bash
+# A: frische Config, Key NICHT gesetzt  -> Vorgabe muss greifen
+env -i HOME=$HOME ./build/macos-release/qtmux.app/Contents/MacOS/qtmux \
+    --profile belegA --mcp-port 7353 &     # 14 s laufen lassen, dann TERM
+defaults read com.qtmux.QTmux-belegA | grep update
+#   -> "update.lastCheck" = "2026-08-07T21:18:36";     Pruefung LIEF
+
+# C: Gegentest, Schalter ausdruecklich AUS (Punkt-Schreibweise!)
+defaults write com.qtmux.QTmux-belegC "update.autoCheck" -bool false
+env -i HOME=$HOME … --profile belegC --mcp-port 7355 &
+defaults read com.qtmux.QTmux-belegC | grep update
+#   -> nur "update.autoCheck" = 0;   KEIN lastCheck  ->  Pruefung lief NICHT
+```
+- **„Version überspringen" bindet nur den stillen Check.** Von Hand sieht man sie weiter —
+  sonst wäre ein Fehlklick unwiderruflich.
+- **Downgrade** erlaubt (Owner), aber nur auf ausdrückliche Anforderung und mit Warnung;
+  der Start-Check bietet ihn nie an, sonst fragte er jeden Entwickler-Build täglich.
+- **Kein Silent-Self-Replace:** QTmux startet den Installer und bleibt stehen.
+
+🔑 **Linux ohne `$APPIMAGE` hat keinen Start-Plan** — die AppImage-„Installation" IST die
+Selbstersetzung von `$APPIMAGE`; läuft QTmux aus einem Distributionspaket oder einem
+Entwickler-Build, gibt es nichts zu ersetzen. Der Dialog blendet „Installieren …" dann aus
+und nennt stattdessen den Pfad der geprüften Datei (`canLaunchInstaller()`). Aufgefallen ist
+das erst am **Linux-Build** — auf macOS/Windows gibt es den Fall nicht.
+
+🔑 **Der Update-Download trägt KEINE Quarantäne — darum kein Gatekeeper-Rat im Dialog
+(QTMUX-146, gemessen 2026-10-14).** Bis 1.9.8 riet der Dialog fest zu „Rechtsklick →
+„Öffnen““. Das war doppelt falsch: Seit macOS 15 gibt der Rechtsklick nichts mehr frei (nur
+Systemeinstellungen › Datenschutz & Sicherheit › „Dennoch öffnen“), und auf diesem Weg gibt es
+nichts freizugeben. Download-Weg: `UpdateViewModel::download()` →
+`appupdate::UpdateChecker::downloadArtifact` (vendiert, schreibt per `QFile`), kein eigener
+Weg in C++/QML. Gemessen mit einem Messprogramm auf genau diesem Code:
+
+| Fall | Quelle | geladene Datei |
+|---|---|---|
+| `file://`, Quarantäne an der Quelle gesetzt | `com.apple.quarantine` + `com.apple.provenance` | nur `com.apple.provenance` |
+| HTTPS vom Produktions-Update-Server (1.9.8-DMG, sha256 = Manifest) | — | nur `com.apple.provenance` |
+| App per `ditto` aus dem eingehängten DMG kopiert | — | 0 von 2538 Einträgen mit Quarantäne |
+| **Positivkontrolle:** dasselbe DMG mit gesetzter Quarantäne, eingehängt, App per `ditto` kopiert | Quarantäne | **2538 von 2538** mit Quarantäne |
+
+⚠️ **Im eingehängten Volume selbst ist `xattr -r` blind** — es zählte 0 auch beim
+quarantänierten DMG (die Markierung hängt am Mount, nicht an den Dateien). Tragfähig ist nur
+die Zählung NACH dem Kopieren. Am lebenden Objekt bestätigt: alle sieben DMGs, die der
+Updater einer echten Installation über die Versionen 1.8.1…1.9.8 geladen hatte, tragen keine
+Quarantäne, die installierte App ebenso wenig. Die Info.plist hat kein
+`LSFileQuarantineEnabled`, das Bundle keine Sandbox-Entitlements — sonst setzte macOS die
+Markierung an jede geschriebene Datei. Der Finder-Zug in „Programme“ selbst ist nicht
+automatisierbar (kein Bedienungshilfen-Recht); `ditto` ist das Ersatzmaß.
+Deshalb sagt der Hinweis jetzt, was „Installieren …“ je Plattform tut (`open <dmg>` ·
+`msiexec /i` eines `perMachine`-MSI, also UAC mit unbekanntem Herausgeber · Selbstersetzung
+des AppImage mit `.old` daneben), und nennt „Dennoch öffnen“ nur, wenn die geladene Datei die
+Quarantäne an der Datei gemessen trägt (`updatehint::afterDownload`). Gemessen wird über die
+Hub-Mechanik `appupdate::quarantineState` (vendiert, `Quarantine.hpp`, MAC-94): nur `Present`
+gibt die Abhilfe. ⚠️ **`Unreadable` ist kein „nein“** (Datei weg, keine Rechte, fremdes
+Dateisystem): Der Hinweis bleibt dann beim Satz, was der Knopf tut — er behauptet also nichts
+über die Quarantäne —, und QTmux protokolliert den Grund per `qWarning`. Realistisch ist eine
+Datei, die nach dem Download verschwand; dann scheitert „Installieren …“ ohnehin sichtbar.
+Windows: `QFile` schreibt
+keinen `Zone.Identifier`, SmartScreen bewertet nur Dateien mit dieser Markierung — abgeleitet,
+nicht unter Windows gemessen. Wächter in `tst_updateviewmodel`: kein Rechtsklick-Rat in den
+lebenden Katalogeinträgen beider Sprachen, alle übersetzt; Abhilfe genau bei `Present`
+(echtes xattr auf macOS, Hub-Probe `setQuarantineProbeForTests` mit allen vier Zuständen auf
+jedem Runner); `Unreadable` ohne Abhilfe, aber mit Warnung (auch echt: verschwundene Datei);
+die Messung selbst läuft bei jedem macOS-Lauf mit (Quelle quarantäniert, Download `Absent` —
+zusätzlich per direktem `getxattr` als unabhängigem Messgerät). Mutationsproben, alle rot:
+alter Satz zurück · Quarantäne immer wahr · Abhilfe nie angehängt · alles außer `Absent`
+zählt als Quarantäne · `Unreadable` still · Hub-Messung ignoriert.
+
+🔑 **Der Download ERSETZT den Zielnamen, er schreibt nicht hinein (QTMUX-147, Hub-Stand
+MAC-95, gemessen 2026-10-15).** Die Tabelle oben galt bis dahin nur für einen **freien**
+Namen: Der Downloader öffnete `<Download-Ordner>/<Name aus der URL>` mit
+`WriteOnly|Truncate`. Lag dort schon eine Datei gleichen Namens — derselbe Installer, früher
+per Browser geladen —, behielt sie Inode **und** `com.apple.quarantine`; der Dialog riet dann
+zu Recht zu „Dennoch öffnen“. Ein Symlink an der Stelle wurde bis in sein Ziel beschrieben,
+ein SHA-Fehler zerstörte eine ältere Datei gleichen Namens, und wer die alte Datei offen
+hatte, las plötzlich die neuen Bytes. Seitdem landen die Bytes in `<Name>.XXXXXX.part`
+daneben (`QFile` mit `NewOnly`, kein `QTemporaryFile` — dessen `close()` hält unter Windows
+das Handle offen, und `MoveFileExW` scheitert dann an jedem Download), der SHA-256 wird von
+der Platte gelesen, und erst dann ersetzt `rename()` bzw. `MoveFileExW(REPLACE_EXISTING)`
+den **Namen**. Ein Link wird ersetzt, nie durchschrieben; ein Fehler (auch ein abgelehntes
+Ersetzen, unter Windows bei einer offen gehaltenen Datei möglich) lässt die alte Datei
+unberührt und keinen `*.part`-Rest. `QSaveFile` wäre falsch: es löst einen Symlink am
+Zielnamen auf und ersetzt dessen ZIEL.
+Wächter: `tst_updater` auf allen drei Plattformen — vorhandener Name wird ersetzt (Inhalt,
+unter POSIX neues Inode; unter Windows ist das der einzige Test, der `MoveFileExW` auf einen
+besetzten Namen fährt), SHA-Fehler lässt die ältere Datei stehen, eine offen gehaltene Datei
+bekommt immer eine Antwort (Ersetzen oder Fehler mit Grund, protokolliert per `qInfo`),
+Symlink wird ersetzt (nicht unter Windows: `QFile::link` legt dort eine `.lnk` an), nach
+jedem Ausgang kein `*.part`. `tst_updateviewmodel` auf macOS: markierte Bestandsdatei im
+Download-Ordner → Download trägt keine Marke (direkt per `getxattr`), neues Inode,
+`quarantineState` = `Absent`, Hinweis ohne Abhilfe. Positivkontrolle: dieselben fünf Tests
+gegen den vorherigen vendierten Stand sind alle rot (Marke geerbt, Inode gleich, Linkziel mit
+Installer-Bytes überschrieben, ältere Datei nach SHA-Fehler leer, Haltender liest neue Bytes).
+
+🔑 **Reste eines harten Endes räumt der nächste Download ab (QTMUX-148, Hub-Stand MAC-99,
+gemessen 2026-10-16).** „Kein `*.part`-Rest“ oben gilt für jeden Ausgang, den die App
+**erlebt**. Stirbt sie zwischen dem Anlegen der Zwischendatei und dem Umbenennen (SIGKILL,
+Absturz, Strom weg), bleibt `<Name>.XXXXXX.part` im Ordner `QTmux-Updates` liegen — ein
+Update-Paket wiegt 30–60 MB. Der nächste Download **desselben Namens** in **denselben**
+Ordner löscht solche Reste, und nur, was nachweislich einer ist: genau das Muster
+`<Name>.<6 Zeichen [A-Za-z0-9]>.part` · eine gewöhnliche Datei (kein Symlink, kein Ordner;
+unter POSIX zweiter Riegel `O_NOFOLLOW`) · zuletzt vor mehr als **10 min** geschrieben
+(deckt nur den Augenblick zwischen Anlegen und Sperren bei einer zweiten Instanz) · **nicht
+belegt**: ein lebender Download hält unter POSIX ein `flock()` auf seiner Zwischendatei
+(vom Anlegen bis zum Umbenennen, der Kernel gibt es mit dem Prozess frei — wie auch immer er
+endet), unter Windows öffnet Qt ohne `FILE_SHARE_DELETE`, das Löschen scheitert und die Datei
+bleibt mit Warnung. Das Alter allein beweist nichts: der Downloader kennt keine Frist, ein
+hängender Download einer zweiten Instanz hält eine **alte** Zwischendatei. Jede Löschung steht
+per `qWarning` im Log (`update: removed download remnant <Pfad> (<Bytes> bytes, last written
+<UTC>)`). Ein Rest eines **anderen** Pakets (andere Version) bleibt bis zu einem Download
+genau dieses Namens liegen.
+Wächter, alle drei Plattformen: `tst_updater::aRemnantOfAnEarlierDownloadIsRemovedAndLogged`
+(Rest weg + genau eine Logzeile; anderer Name, Beinahe-Treffer, junge Datei und — POSIX — ein
+Link mit Musternamen bleiben, Linkziel unberührt) · `aPartHeldByALivingDownloadStays`
+(belegter alter Rest bleibt, nach Freigabe räumt der nächste Download ihn ab) ·
+`tst_updateviewmodel::aRemnantInTheUpdateFolderIsClearedByTheNextDownload` (Weg über das
+ViewModel in den echten Update-Ordner). Positivkontrolle: alle drei rot gegen den vorherigen
+vendierten Stand. Mutationsproben am vendierten Kern (danach per `--update` zurück), alle rot:
+Belegungsriegel aus · Altersfrist aus · Muster gelockert · **beide** Symlink-Riegel aus (einer
+allein bleibt grün — der zweite fängt ihn, so gewollt).
+
+🔑 **Vertrag V1: Produktbindung, Seriennummer, Größengrenze (QTMUX-159, Hub-Stand MAC-108,
+2026-11-16).** Eine gültige Signatur beweist nur, dass der Herausgeber das Manifest geschrieben
+hat — alle Produkte tragen denselben Schlüssel. Seit dem Hub-Stand prüft der vendierte Kern
+nach der Signatur, in dieser Reihenfolge: (1) `product` = `qtmux` und `channel` = `stable`,
+ein fehlendes Feld ist eine Abweichung, nie ein Platzhalter (`ErrorKind::WrongProduct`);
+(2) `serial` (UTC-Sekunden der Manifest-Erzeugung, vom Hub-`publish.py` geschrieben) gegen das
+höchste bisher angenommene: kleiner, oder fehlend nachdem schon eines angenommen war, ist ein
+Replay (`ErrorKind::Replay`); solange noch keines angenommen war, gilt jedes signierte Manifest
+des richtigen Produkts (Übergang, so sehen alle Manifeste vor V1 aus). (3) Beim Download bricht
+der Kern ab, sobald mehr als `size` Bytes angekommen sind, und weniger als `size` am Ende ist
+ebenso ein Fehler (`ErrorKind::Size`); die Teildatei wird gelöscht, eine ältere Datei gleichen
+Namens bleibt. **QTmux' Anteil** ist die Bedeutung: `UpdateViewModel::rebuildChecker` gibt dem
+Kern den Kanal und einen `SerialStore` über die QSettings, Schlüssel
+`update/last_serial/qtmux` (Hub-Schreibweise `policy::lastSerialSettingsKey`, als Zahl; ein
+unlesbarer Wert oder einer über uint32 zählt als 0). Geschrieben wird erst nach bestandener
+Signatur-, Produkt- und Replay-Prüfung, auch beim stillen Check und ohne Installation. Der
+Schlüssel steht **nicht** in der Export-Allowlist: Er ist Sicherheitszustand der Installation,
+ein Import könnte ihn zurückdrehen (Replay würde angenommen) oder hochdrehen (jedes echte
+Update würde abgelehnt), und „Alles zurücksetzen“ lässt ihn stehen. Ein Testprofil
+(`QTMUX_PROFILE`) hat seinen eigenen. Die manuelle Prüfung zeigt Replay und fremdes Manifest
+mit eigener Überschrift (`failureTitle`) und eigenem Satz, der Grund des Kerns steht darunter;
+die stille Prüfung bleibt still und endet in `Idle`, nie in `UpToDate` — ein Replay sieht so nie
+wie „kein Update“ aus. Ein `Size`-Fehler bekommt beim Download einen eigenen Satz.
+⚠️ Ohne `setSerialStore` gäbe es Produktbindung, aber **keinen** Replay-Schutz, und der Kern
+sagte das nur per `qWarning` („checked without a serial store“) — `test_updatehardening` macht
+diese Warnung in jedem Fall rot.
+Wächter: `test_updatehardening` (signiert zur Laufzeit mit einem Wegwerf-Schlüssel, die Test-Naht
+`UpdateViewModel::setUpdatePublicKey` ist kein `Q_INVOKABLE`): fremdes Produkt (T-4), falscher
+und fehlender Kanal, älteres und fehlendes `serial`, Übergang ohne `serial`, Speichern ohne
+Installation, Rückzug mit neuem `serial`, gefälschte Signatur speichert nichts, unlesbarer
+Wert = 0, `serial` je Produkt, `size`±1 über `file://` **und** HTTP (T-20), genaue Größe lädt;
+dazu `tst_settingsio::lastSerialIsNeitherExportedNorResetNorImported`. Mutationsproben an der
+Verdrahtung 12/12 rot, am vendierten Kern (Produktprüfung, beide Replay-Zweige, Ober- und
+Untergrenze; danach Wächter `check-updater-sync` Exit 0) 5/5 rot.
+⚠️ Nebenbefund im Kern: Nach dem Abbruch an der Obergrenze liest der `finished`-Zweig die
+abgebrochene Antwort noch einmal und Qt meldet `QIODevice::read (…): device not open` als
+Warnung — harmlos, aber Rauschen im Log; Behebung gehört in den Hub.
+
+🔑 **Signierte Fixtures brauchen `-text` in `.gitattributes`.** Auf der Windows-Maschine
+(`core.autocrlf=true`) machte git aus 935 Byte `manifest.json` 966 Byte — 31 eingefügte CR.
+Die Ed25519-Signatur steht über die **exakten** Bytes, also fiel `test_updateviewmodel` mit
+6 von 11 Fällen und sah dabei nach einem Fehler im Update-Code aus. Gilt für jedes signierte
+Artefakt im Ökosystem.
+
+🔑 **`busy()` darf im Abschluss-Callback nicht mehr wahr sein.** Der Kern hielt seine
+`QPointer` auf die Reply bis zur nächsten Event-Loop-Runde (nur `deleteLater()`), also
+meldete `busy()` „ja", während der Aufrufer schon „fertig" hörte. Wer daraus die nächste
+Anfrage startet — Check → Download, also genau die GUI, weil erst dieser Callback den
+Dialog aufgehen lässt — bekam `a request is already running`: **Der Dialog ging auf und
+sein erster Knopf tat nichts.** Fix in MacPCAN `59a9e35` (`finishActive()`).
+🔑 **Die Lehre daneben ist wertvoller als der Fix:** Das sah zwei Läufe lang wie ein
+**Flake** aus (einmal rtzbld01, einmal CI-Windows) und verschwand beim Wiederholen. Es
+trat nur über **HTTP** auf, weil `file://` anders verschränkt. **Ein sporadischer
+Fehlschlag, der nur auf EINEM Transportweg auftritt, ist ein Timing-Fehler, kein
+Rauschen.** Sichtbar wurde er erst, nachdem die Windows-Testbinaries auf das
+Konsolen-Subsystem umgestellt waren — vorher meldete die CI nur „***Failed" ohne Fall.
+
+🔑 **Auf Windows muss ein Datei-Handle VOR dem Löschen zu sein.** Bei SHA-Mismatch löscht der
+Kern den Download — mit noch offenem Read-Back-Handle ist das dort ein stilles No-op: Der
+Aufrufer bekam „file deleted", der beschädigte Installer blieb in Downloads liegen. Unter
+POSIX unsichtbar (offene Dateien lassen sich entlinken). Fix in MacPCAN `d0ed07b`.
+
+🔑 **`file://` prüft den echten Transportweg NICHT.** Zwei Dinge gehen daran vorbei: die
+Cache-Bust-Abfrage `?ts=<epoch>` (der Kern hängt sie nur an http(s) an — an einem
+Datei-URL zerstörte sie die Pfadauflösung) und ein Download, der in Häppchen ankommt und
+darum überhaupt Fortschritt meldet. Deshalb hat `tst_updateviewmodel` einen eigenen
+In-Process-HTTP-Server; genau dort ist der `busy()`-Fehler oben aufgeschlagen.
+
+**Proxy (QTMUX-129):** Der Mechanismus kommt aus `appupdate` (MacPCAN, MAC-36) und wird
+vendiert; GUI und Persistenz liegen bei uns — Sitzungsspeicher
+[ProxyCredentials.h](src/core/ProxyCredentials.h), Settings `update/proxy*`,
+[ProxyAuthDialog.qml](qml/dialogs/ProxyAuthDialog.qml).
+🔑 **Warum der Dialog nichts zurückgibt:** `proxyAuthenticationRequired` ist **synchron**,
+der `QAuthenticator*` gilt nur im Slot — ein QML-Dialog antwortet asynchron. Also fragt die
+Lib einen **Lieferanten**, der nur aus dem Speicher antwortet und nie blockiert; ist er leer,
+endet die Anfrage sauber, QML fragt den Menschen, und `provideProxyCredentials()` legt ab und
+**wiederholt** den unterbrochenen Vorgang.
+🔑 **Die Ein-Versuch-Regel MUSS bei uns sitzen** (an MacPCAN `0934eff` gelesen): `appupdate`
+reicht `previousAttemptFailed` nur durch und erzwingt **keine** Obergrenze. Mehrere
+Fehlversuche sperren in einer AD-Umgebung das **Domänen-Konto** — dieselbe Lektion wie beim
+SSH-Passwort-Auto-Fill. Kein Keychain (drei Implementierungen, Linux endete wie beim
+`SleepInhibitor` als Stub), nicht der Vault (er startet **gesperrt**, der stille Start-Check
+dürfte also nach dem Master-Passwort fragen).
+🔑 **Der stille Start-Check fragt NIE nach dem Proxy-Passwort** (`answerProxyChallenge` prüft
+`m_manual`): Ein ungefragt aufspringendes Passwortfenster drei Sekunden nach dem Start ist
+genau das, was die Regel „Start-Check bleibt still" verbietet — und es käme, wenn der
+Anwender auf sein Terminal wartet. Gefragt wird beim Check von Hand und beim Download.
+Wächter `tst_updateviewmodel::silentStartupCheckNeverAsksForProxyCredentials`.
+
+🔑 **Regressionsliste für den Update-Weg:**
+[docs/update-regressionsliste.md](docs/update-regressionsliste.md) — fünf Minuten an einem
+1.8.0-Build (Manifest-Abruf, Signatur **mit Gegentest**, Versionsvergleich, „ist aktuell").
+Gedacht als schneller Gegencheck **nach jedem Re-Vendoring**, weil die kommende
+Proxy-Unterstützung auf **beide** Netzwege wirkt (Manifest **und** Artefakt-Download) und
+QTmux der Konsument ist, bei dem eine Regression zuerst auffällt. Alle Sollwerte sind
+gemessen, die Befehle laufen wörtlich.
+
+**Nächste Version veröffentlichen — das Rezept** (einmal komplett gefahren für 1.8.0):
+1. Bump an den Stellen aus den Konventionen; `qtmux_version.h` danach **gegenlesen**.
+2. Alle drei Plattformen bauen + testen, committen, pushen, CI abwarten.
+3. Installer: `installer/build-dmg.sh <ver>` lokal · auf rtzbld01
+   `C:\Tools\qtmux-build\build_msi.cmd <ver>` (Version ist **Argument** — s. Falle im
+   Arbeitsstand) · AppImage aus dem **Draft-Release des Tags** — nach dem Tag-Push hängt
+   der CI-Job `linux-release` es dort an (QTMUX-136):
+   `gh release download v<ver> -p 'QTmux-*-x86_64.AppImage' -D dist/`. (Bis 1.9.5 war es
+   ein Actions-Artefakt; die Quota dafür ist account-weit und lief am 2026-09-28 voll.)
+4. **Am Artefakt gegenprüfen, nicht am Build-Log:** je Binary Treffer auf die neue
+   Nummer **und 0 Reste der alten**. DMG mounten, ZIP entpacken, AppImage mit
+   `--appimage-extract` auspacken (squashfs — ein `grep` aufs AppImage selbst findet nie
+   etwas und sähe wie ein Fehler aus).
+5. DMG/MSI/ZIP per `gh release upload v<ver> …` an **dasselbe** Draft (kein
+   `gh release create` — das Draft legt der Tag-Lauf an), dann
+   `UPDATES_SFTP_HOST=… python3 ../MacPCAN/tools/updates/publish.py --product qtmux
+   --version <ver> --notes-de … --notes-en … --artifact <key>=<datei>,kind=<art> …
+   --upload --verify`. Schlüssel und Zielpfad kennt `publish.py` als Vorgabe
+   (`~/.ssh/updates_publish_ed25519`, `public_html/updates`).
+6. Gegenprobe: `curl` + `openssl pkeyutl -verify` auf die Live-Bytes und ein manueller
+   Check aus der App. Erst danach das GitHub-Release veröffentlichen:
+   `gh release edit v<ver> --draft=false`.
+
+🔑 **Der Zyklus-Nachweis braucht eine ÄLTERE Instanz MIT Feature** — dafür ein
+`git worktree` auf den Vor-Bump-Commit, dort ein temporäres Gerüst in `main.cpp`, das
+`checkForUpdates` → `download()` → `launchInstaller()` durchruft und mitloggt. Der
+Hauptbaum bleibt sauber, das Gerüst wird danach mit dem Worktree entfernt.
+🔑 **Beleg für „kein stiller Selbsttausch":** SHA-256 **und** mtime des laufenden
+Binaries vor und nach `launchInstaller()` vergleichen — beides unverändert.
+
+**Tests:** `test_updater` (13 Fälle, Kern; Fixtures zur Laufzeit erzeugt und mit dem
+mitkompilierten Monocypher signiert, dazu ein **RFC-8032-Vektor** als Gegenprobe gegen eine
+nur zu sich selbst passende Krypto) und `test_updateviewmodel` (11 Fälle, App-Seite gegen
+committete, mit dem **Produktionsschlüssel** signierte Fixtures unter
+`tests/fixtures/update/`). 🔑 Letzteres ist zugleich der Interop-Nachweis der
+ausgelieferten App (openssl signiert, das vendierte Monocypher verifiziert) — ein
+Schlüsselwechsel macht den Test rot, und genau das ist der gewollte Alarm.

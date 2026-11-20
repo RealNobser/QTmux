@@ -108,8 +108,9 @@ Ehrlich halten, sonst wiegt sie in Sicherheit:
   **AppImage-Selbsttausch** (Linux) sind bloß als *Start-Plan* geprüft.
 - **`file://`-Fixtures ersetzen den Transportweg nicht.** Zwei Dinge gehen daran vorbei:
   die Cache-Bust-Abfrage (nur an http(s) angehängt) und ein in Häppchen ankommender
-  Download, der überhaupt erst Fortschritt meldet. Deshalb hat `tst_updateviewmodel` einen
-  eigenen In-Process-HTTP-Server — dort ist der `busy()`-Fehler aufgeschlagen.
+  Download, der überhaupt erst Fortschritt meldet. Deshalb hatte `tst_updateviewmodel` (bis
+  1.9.15) einen eigenen In-Process-HTTP-Server — dort ist der `busy()`-Fehler aufgeschlagen;
+  seit 1.10.0 prüfen die Hub-Suiten den Netzweg mit eigenem Server.
 - **Ein sporadischer Fehlschlag auf genau EINEM Transportweg ist kein Rauschen, sondern ein
   Timing-Fehler.** Diese Regel hat den `busy()`-Fall aufgeklärt.
 - **Unit-Tests decken die Krypto ab, nicht die Kette:** `test_updater` (13 Fälle, Kern) und

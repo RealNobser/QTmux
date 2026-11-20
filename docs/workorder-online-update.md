@@ -1,5 +1,9 @@
 # Workorder: Online-Update-Epic — Anteil QTmux
 
+> ⚠️ **Historisch.** Der Auftrag von 2026-08 ist erledigt; seit 1.10.0 ersetzt der gemeinsame
+> Ablauf der Familie das hier beschriebene ViewModel (Feature-Referenz, Abschnitt
+> „Online-Update“).
+
 > Auftraggeber: Orchestrator-Session (QTmux #23, `_ClaudeWorkspace`), 2026-08-02.
 > Masterplan: `/Users/nobser/Projects/_ClaudeWorkspace/online-update-masterplan.md` (maßgeblich bei Widersprüchen).
 > Jira: **QTMUX-125** existiert (aktualisieren, nicht neu anlegen), dual. Autarke Auftragsgrundlage.
