@@ -35,7 +35,6 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
-#include <QSettings>
 #include <QStandardPaths>
 #include <QTcpServer>
 #include <QTemporaryDir>
@@ -56,11 +55,9 @@ struct Run {
 void removeProfile(const QString &profile)
 {
     const QString app = QStringLiteral("QTmux-%1").arg(profile);
-    // Erst den Dateinamen holen, das QSettings-Objekt abbauen und DANN löschen: Ein
-    // lebendes Objekt (oder clear()) schriebe die Datei beim Abbau leer wieder hin
-    // (unter macOS über cfprefsd, gemessen: 44 leere Profile nach einigen Läufen).
-    const QString file = QSettings(QStringLiteral("QTmux"), app).fileName();
-    if (file.contains(app)) QFile::remove(file);
+    // Die Einstellungen selbst legt QTmux im Selbsttest als INI-Datei in den
+    // Selbsttest-Ordner (main.cpp); sie gehen mit dem QTemporaryDir. Eine native
+    // Profil-Domain hier zu löschen trug nicht: cfprefsd schrieb sie verzögert neu.
     const QString before = QCoreApplication::applicationName();
     const QString beforeOrg = QCoreApplication::organizationName();
     QCoreApplication::setOrganizationName(QStringLiteral("QTmux"));

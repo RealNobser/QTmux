@@ -286,6 +286,14 @@ int main(int argc, char *argv[])
     // Version kommt generiert aus `project(QTmux VERSION …)` (cmake/Version.h.in) —
     // nicht mehr als Literal, das beim Bump vergessen werden kann.
     QGuiApplication::setApplicationVersion(QStringLiteral(QTMUX_VERSION_STRING));
+    // Selbsttest und Bildmodus: Alle Einstellungen als INI-Datei im Selbsttest-Ordner.
+    // Sie verschwinden mit ihm; unter macOS bliebe eine Profil-Domain sonst als Datei
+    // zurück (cfprefsd schreibt sie nach dem Ende verzögert neu, gemessen).
+    if (!updateSelfTestDir.isEmpty()) {
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
+                           updateSelfTestDir + QStringLiteral("/settings"));
+    }
     // Bildmodus: Design und Sprache ins (eigene) Profil, BEVOR Theme und AppController
     // sie lesen.
     if (!updatePicture.isEmpty()) {
