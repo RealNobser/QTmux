@@ -553,6 +553,13 @@ set_target_properties(qtmux PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "QTmux"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.qtmux.app"
     MACOSX_BUNDLE_ICON_FILE "qtmux.icns"
+    # Beide Versionsfelder ausdrücklich = PROJECT_VERSION (Vertrag V2 §6, K2). Das
+    # Selbst-Ersetzen vergleicht CFBundleVersion des neuen Bundles mit der Version
+    # aus dem Manifest; die setzte Qt bisher schon selbst. Die Kurzversion (Finder,
+    # „Über“) stand ohne diese Zeilen auf „1.9“ (gemessen an 1.9.15).
+    # Wächter: test_installer_self_update_contract.
+    MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
 )
 # Das .icns landet in QTmux.app/Contents/Resources; MACOSX_BUNDLE_ICON_FILE oben
 # trägt nur den Dateinamen in die Info.plist ein.

@@ -478,3 +478,28 @@ add_test(NAME test_update_consumer_guard_bites
         "-DSRC_DIRS=src;qml" "-DROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update-consumer-bad"
         -DMIN_FILES=2 -DEXPECT_ALL_RULES=ON
         -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckUpdateConsumer.cmake")
+
+# K2 (Vertrag V2 §6): Bau fürs Selbst-Ersetzen — Installationsort im MSI, unter
+# macOS beide Versionsfelder der GEBAUTEN Info.plist, Vorgabe-Version des DMG.
+# Die Hilfsprogramme (update-swap, update-helper.exe) prüft er nicht; sie kommen
+# mit dem Hub-Nachzug.
+set(qtmux_selfupdate_args
+    "-DWXS=${CMAKE_SOURCE_DIR}/installer/QTmux.wxs"
+    "-DDMG_SCRIPT=${CMAKE_SOURCE_DIR}/installer/build-dmg.sh"
+    "-DVERSION=${PROJECT_VERSION}")
+if(APPLE)
+    list(APPEND qtmux_selfupdate_args "-DPLIST=$<TARGET_BUNDLE_CONTENT_DIR:qtmux>/Info.plist")
+endif()
+add_test(NAME test_installer_self_update_contract
+    COMMAND ${CMAKE_COMMAND} ${qtmux_selfupdate_args}
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckSelfUpdateBuild.cmake")
+# Gegenprobe: Über tests/fixtures/self-update-bad (nie gebaut) muss der Wächter
+# genau seine 7 Befunde liefern (darunter eine nur auskommentierte, richtige Zeile).
+set(qtmux_selfupdate_bad "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/self-update-bad")
+add_test(NAME test_installer_self_update_contract_bites
+    COMMAND ${CMAKE_COMMAND}
+        "-DWXS=${qtmux_selfupdate_bad}/QTmux.wxs"
+        "-DPLIST=${qtmux_selfupdate_bad}/Info.plist"
+        "-DDMG_SCRIPT=${qtmux_selfupdate_bad}/build-dmg.sh"
+        "-DVERSION=${PROJECT_VERSION}" -DEXPECT_PROBLEMS=7
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckSelfUpdateBuild.cmake")

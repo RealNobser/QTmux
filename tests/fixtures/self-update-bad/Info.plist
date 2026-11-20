@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Gegenprobe: CFBundleVersion fehlt, Kurzversion falsch (2). -->
+<plist version="1.0">
+<dict>
+	<key>CFBundleShortVersionString</key>
+	<string>1.9</string>
+</dict>
+</plist>

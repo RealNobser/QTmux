@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Gegenprobe fuer tests/CheckSelfUpdateBuild.cmake: absichtlich falsch, wird nie gebaut.
+     Erwartet: After falsch, Sequence, Condition, Nutzlast nicht in INSTALLFOLDER (4). -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Bad" Version="1.0.0" Manufacturer="Bad" UpgradeCode="00000000-0000-0000-0000-000000000000">
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Bad" />
+    </StandardDirectory>
+    <!-- <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" /> -->
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostInitialize" Sequence="ui" Condition="NEVER" />
+    <ComponentGroup Id="Payload" Directory="OTHERFOLDER" />
+  </Package>
+</Wix>
