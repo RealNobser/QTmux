@@ -3,127 +3,195 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QTmux
 
-// QTMUX-129: Anmeldung am Netzwerk-Proxy.
-//
-// 🔑 Warum dieser Dialog KEINE Antwort zurückgibt, sondern nur etwas ablegt:
-// Qts `proxyAuthenticationRequired` wird **synchron** zugestellt — der
-// `QAuthenticator*` gilt nur während des Slot-Aufrufs, ein QML-Dialog antwortet
-// aber asynchron. Deshalb ist der Ablauf zweistufig: Die Lib fragt einen
-// Lieferanten, der nur aus dem Sitzungsspeicher antwortet; ist er leer, endet
-// die Anfrage mit „Anmeldung erforderlich", DIESER Dialog geht auf, und
-// `Updates.provideProxyCredentials()` legt ab und **wiederholt** den Vorgang.
-//
-// ⚠️ Genau EIN Versuch je Passwort — die Regel sitzt in `ProxyCredentials`
-// (C++), nicht hier: Wiederholtes Anmelden sperrt in einer AD-Umgebung das
-// Domänen-Konto. Der Dialog erfährt über `retry`, dass es schiefging, und sagt
-// es — sonst fragt er wortgleich noch einmal und wirkt kaputt.
-AppDialog {
+// Proxy-Anmeldung (Zustand 15 des Entwurfs, Vertrag V2 §4.1). Zweistufig wie bisher in
+// QTmux: Der Ablauf antwortet Qt nur aus seinem Sitzungsspeicher; fehlt etwas, meldet
+// er `proxyAuth.pending`, dieser Dialog fragt, und `provideProxyCredentials()`
+// wiederholt genau den unterbrochenen Vorgang. Jede Eingabe geht genau EINMAL hinaus
+// (eine abgelehnte kommt nie wieder, sonst sperrt das Firmenkonto). Texte, Host und
+// „vorheriger Versuch abgelehnt“ kommen fertig aus `Updates.flow.proxyAuth`.
+// Form: 420 px breit, sonst wie der Update-Dialog. Nach einer Ablehnung bleibt der
+// Benutzername, das Passwortfeld ist leer und hat den Fokus.
+Popup {
     id: dlg
-    width: 460
+    readonly property var a: (Updates.textRevision, Updates.flow.proxyAuth)
+
+    parent: Overlay.overlay
+    anchors.centerIn: parent
+    width: 420
+    padding: 0
     modal: true
-    title: qsTr("Anmeldung am Proxy")
+    focus: true
+    closePolicy: Popup.NoAutoClose
 
-    property string proxyHost: ""
-    property int proxyPort: 0
-    property bool retry: false
+    readonly property bool canSignIn: userField.text.length > 0 && pwField.text.length > 0
 
-    function ask(host, port, wasRejected) {
-        dlg.proxyHost = host
-        dlg.proxyPort = port
-        dlg.retry = wasRejected
-        // Der Benutzername bleibt stehen (er ist kein Geheimnis und oft
-        // `DOMÄNE\name`), das Passwort nie.
+    Connections {
+        target: Updates.flow
+        // Direkt am Ablauf lesen: Die Bindung `a` hängt am selben Signal und ist
+        // hier womöglich noch nicht neu ausgewertet.
+        function onProxyAuthChanged() {
+            const pending = Updates.flow.proxyAuth.pending === true
+            if (pending && !dlg.opened) dlg.open()
+            else if (!pending && dlg.opened) dlg.close()
+        }
+        function onQuitStarting() { dlg.close() }
+    }
+    onOpened: {
+        userField.text = Updates.flow.proxyAuth.user || ""
         pwField.text = ""
-        dlg.open()
-        // Beim zweiten Mal gehört der Fokus aufs Passwort — der Name stimmt ja
-        // meist schon.
-        if (wasRejected) pwField.forceActiveFocus()
-        else userField.forceActiveFocus()
+        remember.checked = false
+        if (userField.text.length === 0) userField.forceActiveFocus()
+        else pwField.forceActiveFocus()
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 12
+    function signIn() {
+        if (!dlg.canSignIn) return
+        Updates.provideProxyCredentials(userField.text, pwField.text, remember.checked)
+        pwField.text = ""
+    }
+    function cancel() { pwField.text = ""; Updates.cancelProxyAuth() }
+    // Kein Passwort bleibt im verborgenen Feld liegen, gleich wie der Dialog schließt.
+    onClosed: pwField.text = ""
 
-        Text {
+    Shortcut { sequences: ["Escape"]; enabled: dlg.opened; onActivated: dlg.cancel() }
+
+    Overlay.modal: Rectangle { color: Qt.alpha(Theme.dark ? Theme.terminalBg : Theme.textBright, 0.45) }
+    background: Rectangle {
+        color: Theme.bgElevated
+        radius: 10
+        border.width: 1
+        border.color: Theme.border
+    }
+
+    contentItem: ColumnLayout {
+        spacing: 0
+        Item {
             Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            color: Theme.textBright
-            text: dlg.proxyPort > 0
-                  ? qsTr("Der Proxy %1:%2 verlangt eine Anmeldung.").arg(dlg.proxyHost).arg(dlg.proxyPort)
-                  : qsTr("Der Proxy %1 verlangt eine Anmeldung.").arg(dlg.proxyHost)
+            implicitHeight: 40
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 24
+                anchors.verticalCenter: parent.verticalCenter
+                text: dlg.a.title || ""
+                color: Theme.textDim
+                font.pixelSize: 12
+                font.weight: Font.Medium
+            }
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
         }
-
-        // Die Fehlzeile ist der Grund, warum `retry` überhaupt durchgereicht
-        // wird: ohne sie sieht der zweite Anlauf aus wie der erste.
-        Text {
+        ColumnLayout {
             Layout.fillWidth: true
-            visible: dlg.retry
-            wrapMode: Text.WordWrap
-            color: Theme.danger
-            text: qsTr("Die letzte Anmeldung wurde abgelehnt. Es wird bewusst nur EIN Versuch "
-                       + "je Eingabe unternommen — mehrere Fehlversuche sperren in einer "
-                       + "Firmenumgebung das Benutzerkonto.")
-        }
-
-        GridLayout {
-            Layout.fillWidth: true
-            columns: 2
-            columnSpacing: 10
-            rowSpacing: 8
-
-            Text { text: qsTr("Benutzer"); color: Theme.textDim }
+            Layout.margins: 24
+            spacing: 0
+            RowLayout {
+                spacing: 10
+                UpdateIcon { name: "lock-key"; color: Theme.accent; size: 20 }
+                Text {
+                    Layout.fillWidth: true
+                    text: dlg.a.title || ""
+                    color: Theme.textBright
+                    font.pixelSize: 17
+                    font.weight: Font.DemiBold
+                    wrapMode: Text.WordWrap
+                }
+            }
+            Text {
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+                text: dlg.a.lead || ""
+                color: Theme.textBright
+                font.pixelSize: 14
+                lineHeight: 20
+                lineHeightMode: Text.FixedHeight
+                wrapMode: Text.WordWrap
+            }
+            Rectangle {
+                visible: dlg.a.previousRejected === true
+                Layout.fillWidth: true
+                Layout.topMargin: 16
+                radius: 8
+                color: Qt.alpha(Theme.danger, 0.14)
+                implicitHeight: rejText.implicitHeight + 24
+                Text {
+                    id: rejText
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    anchors.leftMargin: 14
+                    anchors.rightMargin: 14
+                    text: dlg.a.rejected || ""
+                    color: Theme.textBright
+                    font.pixelSize: 13
+                    lineHeight: 20
+                    lineHeightMode: Text.FixedHeight
+                    wrapMode: Text.WordWrap
+                }
+            }
+            Text {
+                Layout.topMargin: 16
+                text: dlg.a.userLabel || ""
+                color: Theme.textBright
+                font.pixelSize: 13
+                font.weight: Font.Medium
+            }
             TextField {
                 id: userField
                 Layout.fillWidth: true
+                Layout.topMargin: 6
+                implicitHeight: 32
                 color: Theme.textBright
-                placeholderText: qsTr("Benutzername, ggf. mit Domäne")
                 onAccepted: pwField.forceActiveFocus()
             }
-
-            Text { text: qsTr("Passwort"); color: Theme.textDim }
+            Text {
+                Layout.topMargin: 12
+                text: dlg.a.passwordLabel || ""
+                color: Theme.textBright
+                font.pixelSize: 13
+                font.weight: Font.Medium
+            }
             TextField {
                 id: pwField
                 Layout.fillWidth: true
+                Layout.topMargin: 6
+                implicitHeight: 32
                 color: Theme.textBright
                 echoMode: TextInput.Password
-                onAccepted: dlg.submit()
+                onAccepted: dlg.signIn()
+            }
+            CheckBox {
+                id: remember
+                Layout.topMargin: 12
+                Layout.leftMargin: -6
+                text: dlg.a.rememberLabel || ""
+                palette.windowText: Theme.textBright
+            }
+            Text {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                text: dlg.a.never || ""
+                color: Theme.textDim
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
             }
         }
-
-        Text {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            font.pixelSize: 12
-            color: Theme.textDim
-            // Ehrlich sagen, was passiert — das ist im Firmenumfeld die Frage,
-            // die als Erstes kommt.
-            text: qsTr("Die Anmeldedaten gelten nur für diese Sitzung. Sie werden nicht "
-                       + "gespeichert und erscheinen in keiner Exportdatei.")
-        }
-
+        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
         RowLayout {
             Layout.fillWidth: true
+            Layout.margins: 16
+            Layout.leftMargin: 24
+            Layout.rightMargin: 24
             spacing: 8
             Item { Layout.fillWidth: true }
-            Button {
-                text: qsTr("Abbrechen")
-                onClicked: { Updates.cancelProxyAuthentication(); dlg.close() }
+            UpdateButton {
+                role: "Secondary"
+                text: dlg.a.cancel || ""
+                onClicked: dlg.cancel()
             }
-            Button {
-                text: qsTr("Anmelden")
-                enabled: pwField.text.length > 0
-                onClicked: dlg.submit()
+            UpdateButton {
+                role: "Primary"
+                text: dlg.a.signIn || ""
+                enabled: dlg.canSignIn
+                onClicked: dlg.signIn()
             }
         }
-    }
-
-    function submit() {
-        if (pwField.text.length === 0) return
-        // Legt ab UND wiederholt den unterbrochenen Vorgang — der Mensch soll
-        // nicht selbst noch einmal „Nach Updates suchen" anstoßen müssen.
-        Updates.provideProxyCredentials(userField.text, pwField.text)
-        pwField.text = ""
-        dlg.close()
     }
 }

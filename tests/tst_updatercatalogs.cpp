@@ -17,7 +17,7 @@
 
 namespace {
 
-// Dasselbe Muster wie in tst_updateviewmodel (QTMUX-146), dazu die schwedischen
+// Das Muster aus dem früheren tst_updateviewmodel (QTMUX-146), dazu die schwedischen
 // Wörter: Seit macOS 15 gibt Rechtsklick › Öffnen die Gatekeeper-Quarantäne nicht
 // mehr frei; kein Satz darf dazu raten.
 const QRegularExpression kRightClickAdvice(
@@ -75,9 +75,9 @@ private slots:
     void noSentenceAdvisesRightClickOpen()
     {
         // Prüft den Hub-Wortlaut in allen drei Sprachen, die der Hub mitbringt.
-        // QTmux zeigt ihn erst, sobald die Oberfläche auf den Hub-Ablauf umgestellt
-        // ist (K2, nächster Stapel); bis dahin prüft tst_updateviewmodel die
-        // eigenen Texte weiter.
+        // Seit K2 kommen die Sätze des Update-Dialogs, der Proxy-Anmeldung und der
+        // Seite „Updates“ von dort; die eigenen Update-Texte (bisher von
+        // tst_updateviewmodel geprüft) gibt es nicht mehr.
         const QStringList keys = appupdate::UpdateTexts::keys();
         for (const QString lang :
              {QStringLiteral("de"), QStringLiteral("en"), QStringLiteral("sv")}) {

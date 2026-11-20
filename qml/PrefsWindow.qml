@@ -105,6 +105,9 @@ Window {
     // Kategorien und Zuordnung nach Tabelle A4 der Design-Referenz.
     readonly property var categories: [
         { id: "allgemein",       icon: "gear",            label: qsTr("Allgemein") },
+        // Online-Update, Vertrag V2 (K2): eigene Seite wie in den Widgets-Apps; der Name
+        // kommt aus dem Hub-Katalog wie jeder Satz der Seite.
+        { id: "updates",         icon: "arrow-circle-up", label: (Updates.textRevision, Updates.text("set.section")) },
         { id: "erscheinungsbild",icon: "moon",            label: qsTr("Erscheinungsbild") },
         { id: "terminal",        icon: "terminal-window", label: qsTr("Darstellung & Shell") },
         { id: "eingabe",         icon: "clipboard",       label: qsTr("Eingabe & Zwischenablage") },
@@ -121,7 +124,7 @@ Window {
     // (`prefs.categories`). Die Überschriften leben nur in dieser Anzeige-Liste; damit
     // überspringt die Tastatur-Navigation sie automatisch, ohne Sonderfall.
     readonly property var railGroups: [
-        { heading: qsTr("Arbeitsplatz"), ids: ["allgemein", "erscheinungsbild"] },
+        { heading: qsTr("Arbeitsplatz"), ids: ["allgemein", "updates", "erscheinungsbild"] },
         { heading: qsTr("Terminal"),     ids: ["terminal", "eingabe", "hotkeys"] },
         { heading: qsTr("Agenten & Geräte"), ids: ["agenten", "verbindungen", "vault", "erweiterungen"] }
     ]
@@ -206,7 +209,8 @@ Window {
             { cat: "allgemein",        key: "allgemein.window",      label: qsTr("Sessions beim Start wiederherstellen"), keywords: "sessions sitzungen wiederherstellen restore start neustart layout fenster panes verlauf scrollback leer" },
             { cat: "allgemein",        key: "allgemein.window",      label: qsTr("Quake-Modus"),                       keywords: "quake hotkey einblenden ausblenden global" },
             { cat: "allgemein",        key: "allgemein.energie",     label: qsTr("Ruhezustand verhindern"),            keywords: "ruhezustand schlaf sleep energie akku wach standby agenten arbeiten" },
-            { cat: "allgemein",        key: "allgemein.updates",     label: qsTr("Automatisch nach Updates suchen"),   keywords: "update updates aktualisierung version neu download herunterladen installer prüfen" },
+            { cat: "updates",          key: "updates.check",         label: (Updates.textRevision, Updates.text("set.auto")),                  keywords: "update updates aktualisierung version neu download herunterladen installer prüfen" },
+            { cat: "updates",          key: "updates.proxy",         label: (Updates.textRevision, Updates.text("set.proxy.group")),           keywords: "proxy netzwerk firma http socks5 server port anmeldung passwort" },
             { cat: "erscheinungsbild", key: "erscheinung.schemes",   label: qsTr("Farbschema (Dunkel)"),               keywords: "farbschema schema dunkel ansi farben iterm ghostty xresources import" },
             { cat: "erscheinungsbild", key: "erscheinung.schemes",   label: qsTr("Farbschema (Hell)"),                 keywords: "farbschema schema hell ansi farben import" },
             { cat: "terminal",         key: "terminal.options",      label: qsTr("Schriftart"),                        keywords: "schrift font monospace terminal" },
@@ -606,6 +610,7 @@ Window {
     function viewFor(id) {
         switch (id) {
         case "allgemein":        return cAllgemein
+        case "updates":          return cUpdates
         case "erscheinungsbild": return cErscheinungsbild
         case "terminal":         return cTerminal
         case "eingabe":          return cEingabe
@@ -619,6 +624,7 @@ Window {
     }
 
     Component { id: cAllgemein;        CatAllgemein        { host: root } }
+    Component { id: cUpdates;          CatUpdates          { host: root } }
     Component { id: cErscheinungsbild; CatErscheinungsbild { host: root } }
     Component { id: cTerminal;         CatTerminal         { host: root } }
     Component { id: cEingabe;          CatEingabe          { host: root } }
@@ -634,10 +640,21 @@ Window {
     property int ioRev: 0
     Connections {
         target: SettingsIo
-        function onChanged(keys) { root.ioRev++ }
+        function onChanged(keys) {
+            root.ioRev++
+            // Import/Zurücksetzen von außen: Die Seite „Updates“ liest neu.
+            Updates.reloadSettings()
+        }
     }
 
     function resetPage() {
+        // Die Seite „Updates“ setzt der gemeinsame Ablauf zurück (Vorgaben der Familie,
+        // dazu Benutzername und Sitzungspasswort) — nicht nur ihre exportierbaren Schlüssel.
+        if (root.category === "updates") {
+            Updates.restoreDefaults()
+            root.ioStatus = qsTr("%1 zurückgesetzt").arg(root.categoryLabel(root.category))
+            return
+        }
         const keys = SettingsIo.resetCategory(root.category)
         root.ioStatus = keys.length > 0
             ? qsTr("%1 zurückgesetzt: %2 Einstellungen").arg(root.categoryLabel(root.category)).arg(keys.length)
@@ -656,6 +673,7 @@ Window {
         width: 460
         onAccepted: {
             const keys = SettingsIo.resetAll()
+            Updates.restoreDefaults()
             root.ioStatus = qsTr("%1 Einstellungen zurückgesetzt.").arg(keys.length)
         }
         contentItem: Text {

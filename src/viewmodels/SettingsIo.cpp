@@ -5,6 +5,8 @@
 #include "ConnectionProfile.h"
 #include "HotkeyRegistry.h"
 
+#include "update/UpdateSettings.hpp"
+
 #include <QCoreApplication>
 #include <QFile>
 #include <QFileInfo>
@@ -86,7 +88,8 @@ SettingsIo::SettingsIo(QObject *parent) : QObject(parent) {}
 
 // --- Schlüsselmodell --------------------------------------------------------
 QStringList SettingsIo::categories() {
-    return { QStringLiteral("allgemein"),   QStringLiteral("erscheinungsbild"),
+    return { QStringLiteral("allgemein"),   QStringLiteral("updates"),
+             QStringLiteral("erscheinungsbild"),
              QStringLiteral("terminal"),    QStringLiteral("eingabe"),
              QStringLiteral("agenten"),     QStringLiteral("hotkeys"),
              QStringLiteral("verbindungen"),QStringLiteral("vault"),
@@ -100,34 +103,24 @@ QStringList SettingsIo::patternsFor(const QString &category) {
                  QStringLiteral("window/confirmQuit"),
                  QStringLiteral("window/restoreSessionMode"),
                  QStringLiteral("window/quakeMode"),
-                 QStringLiteral("window/preventSleep"),
-                 // Online-Update (QTMUX-125). `update/lastCheck` ist bewusst NICHT
-                 // dabei: das ist Laufzeitzustand (wann zuletzt geprüft wurde), keine
-                 // Einstellung — exportiert und woanders importiert würde er die
-                 // Tagesdrosselung einer fremden Maschine erben.
-                 // Bis 1.9.3 hieß der Schalter `update/autoCheck` — alte
-                 // Exportdateien übersetzt readFile(), s. dort.
-                 QStringLiteral("update/auto_check"),
-                 QStringLiteral("update/skippedVersion"),
-                 QStringLiteral("update/baseUrl"),
-                 // Proxy (QTMUX-129). Die Felder decken sich mit
-                 // `appupdate::ProxyConfig` — Modus, Typ, Host, Port.
-                 QStringLiteral("update/proxyMode"),
-                 QStringLiteral("update/proxyType"),
-                 QStringLiteral("update/proxyHost"),
-                 QStringLiteral("update/proxyPort") };
-                 // 🔑 `update/proxyUser` steht BEWUSST NICHT hier. Er wird zwar
-                 // in QSettings gehalten (Komfort: `DOMÄNE\name` nicht bei jedem
-                 // Start neu tippen), gehört aber nicht in eine Exportdatei —
-                 // die ist zum Weitergeben gedacht, und ein Domänen-Benutzername
-                 // ist Personenbezug. Ein PASSWORT existiert als Schlüssel gar
-                 // nicht: es lebt nur im Sitzungsspeicher (ProxyCredentials.h).
-                 // 🔑 Ebenso BEWUSST NICHT: `update/last_serial/<produkt>`
-                 // (Vertrag V1, Replay-Schutz). Das ist Sicherheitszustand dieser
-                 // Installation, keine Einstellung — ein Import könnte ihn
-                 // zurückdrehen (Replay würde angenommen) oder hochdrehen (jedes
-                 // echte Update würde abgelehnt), und „Alles zurücksetzen“ löscht
-                 // nur, was hier steht. Begründung in UpdateViewModel.h.
+                 QStringLiteral("window/preventSleep") };
+    if (category == QLatin1String("updates"))
+        // Online-Update, Vertrag V2 §5 (K2): die Familien-Schlüssel des Hub-Ablaufs,
+        // als Konstanten aus dem Hub — QTmux führt keinen eigenen `update/`-Schlüssel.
+        // Die alten QTmux-Schreibweisen übernimmt der Ablauf beim Start, eine alte
+        // Exportdatei übersetzt readFile().
+        // 🔑 BEWUSST NICHT hier, weil sie nicht in eine Datei zum Weitergeben gehören
+        // (UpdateSettings::isExportable): `proxy_user` (Personenbezug, A19),
+        // `last_serial/<produkt>` (Replay-Schutz dieser Installation: ein Import
+        // könnte ihn zurück- oder hochdrehen), die Installationsmarke und
+        // `last_check` (Chronik, keine Einstellung). Ein Passwort gibt es als
+        // Schlüssel gar nicht, es lebt nur im Arbeitsspeicher des Ablaufs.
+        return { QLatin1String(appupdate::settingskey::kAutoCheck),
+                 QLatin1String(appupdate::settingskey::kSkippedVersion),
+                 QLatin1String(appupdate::settingskey::kProxyMode),
+                 QLatin1String(appupdate::settingskey::kProxyType),
+                 QLatin1String(appupdate::settingskey::kProxyHost),
+                 QLatin1String(appupdate::settingskey::kProxyPort) };
     if (category == QLatin1String("erscheinungsbild"))
         return { QStringLiteral("colorSchemes/") };
     if (category == QLatin1String("terminal"))
@@ -272,16 +265,14 @@ QVariantMap SettingsIo::readFile(const QUrl &url) {
     QVariantMap out;
     for (auto it = keys.constBegin(); it != keys.constEnd(); ++it)
         out.insert(it.key(), fromJson(it.value()));
-    // Exportdateien bis 1.9.3 tragen den Update-Schalter unter der alten
-    // Schreibweise. Ohne Übersetzung fiele er als „fremder Schlüssel" durch die
-    // Allowlist — ein exportiertes AUS käme nie an (Gegenstück zur Migration in
-    // UpdateViewModel::migrateSettings). Steht der neue Key schon drin, gewinnt er.
-    const QString legacyAutoCheck = QStringLiteral("update/autoCheck");
-    if (out.contains(legacyAutoCheck)) {
-        const QString autoCheck = QStringLiteral("update/auto_check");
-        if (!out.contains(autoCheck)) out.insert(autoCheck, out.value(legacyAutoCheck));
-        out.remove(legacyAutoCheck);
-    }
+    // Alte Exportdateien tragen die Update-Einstellungen in QTmux' früheren
+    // Schreibweisen (`update/autoCheck` bis 1.9.3, `update/skippedVersion`,
+    // `update/proxyMode` als Zahl …, dazu die nicht mehr einstellbare Quelle
+    // `update/baseUrl`). Ohne Übersetzung fielen sie als „fremde Schlüssel“ durch die
+    // Allowlist — ein exportiertes AUS käme nie an. Übersetzt wird mit DERSELBEN
+    // Regel, mit der der Ablauf die laufenden Einstellungen übernimmt (Vertrag V2 §5);
+    // steht der Familien-Schlüssel schon drin, gewinnt er.
+    appupdate::UpdateSettings::migrateLegacyKeys(out);
     setError(QString());
     return out;
 }

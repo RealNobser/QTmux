@@ -197,13 +197,6 @@ qt_add_executable(test_safefileread tst_safefileread.cpp)
 target_link_libraries(test_safefileread PRIVATE qtmux_core Qt6::Test)
 add_test(NAME test_safefileread COMMAND test_safefileread)
 
-# QTMUX-129: Sitzungsspeicher für Proxy-Anmeldedaten. Wächter über die
-# Ein-Versuch-Regel — `appupdate` erzwingt keine Obergrenze, also muss sie hier
-# sitzen, sonst sperrt ein falsches Passwort das Domänen-Konto.
-qt_add_executable(test_proxycredentials tst_proxycredentials.cpp)
-target_link_libraries(test_proxycredentials PRIVATE qtmux_core Qt6::Test)
-add_test(NAME test_proxycredentials COMMAND test_proxycredentials)
-
 # QTMUX-130: Wiederhergestellter Verlauf darf erst bei der ERSTEN echten Terminalgroesse
 # eingespielt werden (sonst friert der Umbruch bei 80 Spalten ein). Laeuft gegen eine
 # Backend-Attrappe — geprueft wird die Reihenfolge, die an einem echten PTY vom Zufall
@@ -344,7 +337,7 @@ qt_add_executable(test_settingsio tst_settingsio.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/SettingsIo.cpp)
 target_include_directories(test_settingsio PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels)
-target_link_libraries(test_settingsio PRIVATE qtmux_core Qt6::Test)
+target_link_libraries(test_settingsio PRIVATE qtmux_core qtmux_updater Qt6::Test)
 add_test(NAME test_settingsio COMMAND test_settingsio)
 
 # QTMUX-125: der vendierte Update-Kern (third_party/updater, Target qtmux_updater).
@@ -363,44 +356,37 @@ qt_add_executable(test_updatercatalogs tst_updatercatalogs.cpp)
 target_link_libraries(test_updatercatalogs PRIVATE qtmux_updater Qt6::Test)
 add_test(NAME test_updatercatalogs COMMAND test_updatercatalogs)
 
-# QTMUX-125: die APP-Seite (UpdateViewModel) gegen committete, mit dem
-# PRODUKTIONSSCHLUESSEL signierte Fixtures. Das ViewModel liegt wie SettingsIo im
-# QML-Modul -> .cpp direkt mitkompilieren; der generierte qtmux_version.h kommt
-# aus dem Binaerverzeichnis der Haupt-CMakeLists.
-# 🔑 Der Fixture-Baum ist absichtlich echt signiert: das ViewModel baut seinen
-# Checker OHNE Schluessel-Parameter, prueft also mit den eingebauten Bytes aus
-# UpdateKeys.hpp. Ein Schluesselwechsel macht diesen Test rot — genau der
-# gewuenschte Alarm (Begruendung in tests/fixtures/update/README.md).
-qt_add_executable(test_updateviewmodel tst_updateviewmodel.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/UpdateViewModel.cpp
-    # QTMUX-129: Der Sitzungsspeicher gehört zum ViewModel. Er wird hier
-    # MITKOMPILIERT statt qtmux_core zu verlinken — der Test kommt bewusst ohne
-    # den ganzen Kern aus (er braucht nur Core+Network, nicht SerialPort).
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core/ProxyCredentials.cpp)
-target_include_directories(test_updateviewmodel PRIVATE
+# K2 (Vertrag V2): QTmux' Verdrahtung des gemeinsamen Ablaufs (UpdateBridge) —
+# Einstellungen der Seite „Updates“, die einmalige Übernahme der alten
+# QTmux-Schlüssel, UpgradeCode gegen installer/QTmux.wxs, Aktionen als Zahl. Den
+# Ablauf selbst belegt der Hub mit eigenen Suiten; hier steht nur, was QTmux gibt.
+qt_add_executable(test_updatebridge tst_updatebridge.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/UpdateBridge.cpp)
+target_include_directories(test_updatebridge PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
     ${CMAKE_BINARY_DIR}/generated)
-target_compile_definitions(test_updateviewmodel PRIVATE
-    QTMUX_UPDATE_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update"
-    # QTMUX-146: der Wächter liest die Kataloge (kein Rechtsklick-Rat, alles übersetzt).
-    QTMUX_I18N_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../i18n")
-target_link_libraries(test_updateviewmodel PRIVATE qtmux_updater Qt6::Test Qt6::Network)
-add_test(NAME test_updateviewmodel COMMAND test_updateviewmodel)
+target_compile_definitions(test_updatebridge PRIVATE
+    QTMUX_WXS_FILE="${CMAKE_CURRENT_SOURCE_DIR}/../installer/QTmux.wxs"
+    QTMUX_ICON_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../resources/icons")
+add_dependencies(test_updatebridge qtmux_buildid)
+target_link_libraries(test_updatebridge PRIVATE qtmux_core qtmux_updater Qt6::Test)
+add_test(NAME test_updatebridge COMMAND test_updatebridge)
 
-# Update-Haertung, Vertrag V1 (2026-11-16): Verdrahtung von Produktbindung,
-# Seriennummer-Speicher (update/last_serial/qtmux) und Groessengrenze im
-# ViewModel. Signiert zur LAUFZEIT mit einem Wegwerf-Schluessel (Monocypher aus
-# qtmux_updater), braucht also den Produktionsschluessel nicht.
-qt_add_executable(test_updatehardening tst_updatehardening.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/UpdateViewModel.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core/ProxyCredentials.cpp)
-target_include_directories(test_updatehardening PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
-    ${CMAKE_BINARY_DIR}/generated)
-target_link_libraries(test_updatehardening PRIVATE qtmux_updater Qt6::Test Qt6::Network)
-add_test(NAME test_updatehardening COMMAND test_updatehardening)
+# K2 (Vertrag V2 §4.3, §8): „Beenden und aktualisieren“ am ECHTEN Programm. Der Test
+# startet qtmux als Kindprozess im Selbsttest (`--selftest-update`, eigenes Profil,
+# Quelle = committetes Fixture, jede Installation ein Trockenlauf) und prüft, dass
+# es sich über Main.qml `onClosing` beendet — trotz eingeschalteter Beenden-Rückfrage
+# und laufender Sitzung — und die Installation erst in aboutToQuit anstößt.
+qt_add_executable(test_updatequit tst_updatequit.cpp)
+add_dependencies(test_updatequit qtmux)
+target_compile_definitions(test_updatequit PRIVATE
+    QTMUX_APP_BINARY="$<TARGET_FILE:qtmux>"
+    QTMUX_UPDATE_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update")
+target_link_libraries(test_updatequit PRIVATE Qt6::Test Qt6::Network)
+add_test(NAME test_updatequit COMMAND test_updatequit)
+# Ein Profil („update-selftest“) für alle Läufe: nie zwei gleichzeitig.
+set_tests_properties(test_updatequit PROPERTIES TIMEOUT 180 RESOURCE_LOCK qtmux_update_selftest)
 
 # 🔑 Diese Tests auf Windows als KONSOLEN-Programme bauen.
 # `qt_add_executable` macht dort standardmaessig GUI-Programme — die schreiben
@@ -410,7 +396,7 @@ add_test(NAME test_updatehardening COMMAND test_updatehardening)
 # WIN32_EXECUTABLE (Konsolen-Vererbung an Kindshells) gilt hier nicht — keiner
 # dieser Tests startet eine Kindshell.
 if(WIN32)
-    set_target_properties(test_updater test_updatercatalogs test_updateviewmodel test_updatehardening test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox
+    set_target_properties(test_updater test_updatercatalogs test_updatebridge test_updatequit test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox
                           PROPERTIES WIN32_EXECUTABLE FALSE)
 endif()
 
@@ -476,3 +462,19 @@ add_test(NAME test_doc_duplicates
     COMMAND ${CMAKE_COMMAND}
         "-DDOC_FILES=${CMAKE_SOURCE_DIR}/CLAUDE.md;${CMAKE_SOURCE_DIR}/README.md;${CMAKE_SOURCE_DIR}/docs/MCP.md;${CMAKE_SOURCE_DIR}/docs/feature-referenz.md;${CMAKE_SOURCE_DIR}/docs/e2e-fallen.md"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckDocDuplicates.cmake")
+
+# --- Konsumenten-Wächter des Update-Ablaufs (Vertrag V2 §8, K2) --------------
+# Im App-Code (src/, qml/) steht kein Aufruf von UpdateChecker, kein eigener
+# update/-Schlüssel, kein Versionsvergleich und kein QML, das am Zustand des
+# Ablaufs entscheidet. Reines CMake-Skript, läuft auf allen drei Plattformen.
+add_test(NAME test_update_consumer_guard
+    COMMAND ${CMAKE_COMMAND}
+        "-DSRC_DIRS=src;qml" "-DROOT=${CMAKE_SOURCE_DIR}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckUpdateConsumer.cmake")
+# Gegenprobe des Wächters: Über tests/fixtures/update-consumer-bad (nie gebaut) muss
+# jede seiner Regeln anschlagen, sonst wird dieser Test rot.
+add_test(NAME test_update_consumer_guard_bites
+    COMMAND ${CMAKE_COMMAND}
+        "-DSRC_DIRS=src;qml" "-DROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update-consumer-bad"
+        -DMIN_FILES=2 -DEXPECT_ALL_RULES=ON
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckUpdateConsumer.cmake")

@@ -3,261 +3,511 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QTmux
 
-// QTMUX-125: Online-Update. Ein Dialog für den ganzen Ablauf — Prüfen,
-// Anmerkungen, Herunterladen, Installieren — weil der Anwender ihn als EINEN
-// Vorgang erlebt; welche Knöpfe erscheinen, entscheidet `Updates.state`.
+// Online-Update, Vertrag V2 (K2): die QML-Oberfläche des gemeinsamen Ablaufs.
 //
-// 🔑 Kein `standardButtons`: die Beschriftungen hängen am Zustand („Herunterladen"
-// ist etwas anderes als „Installieren …"), und „Überspringen" hat in Qts
-// Standardsatz kein Gegenstück.
-// 🔑 Unter den Knöpfen steht, was „Installieren …“ auf diesem System tut
-// (QTMUX-146). Bis 1.9.8 stand dort fest ein Gatekeeper-Rat — gemessen trägt der
-// Update-Download aber gar keine Quarantäne; Begründung in UpdateViewModel.h.
-AppDialog {
+// 🔑 Dieser Dialog ENTSCHEIDET NICHTS. Überschrift, Sätze, Kästen, Fortschritt,
+// Fußnote, welche Knöpfe in welcher Reihenfolge, welcher der Hauptknopf ist und was
+// Enter und Esc tun — alles kommt fertig aus `Updates.flow.view` (Hub,
+// appupdate::UpdateFlow). Ein Knopf meldet nur seine Aktion als Zahl zurück
+// (`Updates.perform`). Der Wächter test_update_consumer_guard schlägt an, wenn hier
+// am Zustand entschieden wird.
+//
+// Form nach dem Entwurf (§4, Rahmen QTmux): Fläche über dem Hauptfenster mit
+// Abdunkelung, Radius 10, Titelstreifen 40 px mit dem Fenstertitel und ×, Inhalt 24 px
+// Innenabstand, Breite 540. Das × verhält sich wie Esc. Im Zustand „Download läuft“
+// heißt Schließen nur Ausblenden: Der Download läuft weiter, der Hinweis zeigt den
+// Stand (der Ablauf hängt nicht am Dialog).
+Popup {
     id: dlg
-    width: 540
+    // Gelesen wird mit der Textrevision, damit ein Sprachwechsel neu auswertet.
+    readonly property var v: (Updates.textRevision, Updates.flow.view)
+    // Knöpfe und Hinweise nur tauschen, wenn sich ihr INHALT ändert: Der Ablauf meldet
+    // `view` bei jedem Download-Schritt neu (~10× je Sekunde). Ein neues Modell
+    // erzeugte jedes Mal alle Knöpfe neu, und ein Klick, der in den Neuaufbau fällt,
+    // ginge verloren; Fokus und Überfahren flackerten.
+    property var buttons: []
+    property var noteBlocks: []
+    property string buttonsKey: ""
+    property string notesKey: ""
+    onVChanged: dlg.syncModels()
+    Component.onCompleted: dlg.syncModels()
+    function syncModels() {
+        const b = dlg.v.buttons || []
+        const bk = JSON.stringify(b)
+        if (bk !== dlg.buttonsKey) {
+            dlg.buttonsKey = bk
+            dlg.buttons = b
+            // Neue Knöpfe: Der Hauptknopf bekommt den Fokus (Entwurf §4), auch nach
+            // einem Zustandswechsel bei offenem Dialog.
+            if (dlg.opened) Qt.callLater(dlg.focusPrimary)
+        }
+        const n = Updates.flow.notes || []
+        const nk = JSON.stringify(n)
+        if (nk !== dlg.notesKey) { dlg.notesKey = nk; dlg.noteBlocks = n }
+    }
+    property bool detailsOpen: false
+    property bool copied: false
+
+    parent: Overlay.overlay
+    anchors.centerIn: parent
+    // Höchstens 540 breit und nie größer als das Fenster; der Inhalt rollt (Entwurf §4).
+    width: Math.min(540, parent.width - 32)
+    height: Math.min(implicitHeight, parent.height - 32)
+    padding: 0
     modal: true
+    focus: true
+    // Esc und × gehen über die escapeAction des Zustands, nicht über Qts Schließen.
+    closePolicy: Popup.NoAutoClose
 
-    // Zustände aus UpdateViewModel::State — QML kennt das C++-Enum über die
-    // Context-Property nicht namentlich, darum hier gespiegelt und benannt.
-    readonly property int stIdle: 0
-    readonly property int stChecking: 1
-    readonly property int stUpToDate: 2
-    readonly property int stAvailable: 3
-    readonly property int stDownloading: 4
-    readonly property int stReady: 5
-    readonly property int stFailed: 6
+    onOpened: { Updates.setDialogVisible(true); dlg.detailsOpen = false; dlg.focusPrimary() }
+    onClosed: Updates.setDialogVisible(false)
 
-    // Die Anmerkungen folgen der Oberflächensprache (Manifest trägt de und en).
-    Binding { target: Updates; property: "language"; value: App.language }
+    Connections {
+        target: Updates.flow
+        // Eine offene Proxy-Anmeldung hat Vorrang; der Dialog käme sonst darüber zu
+        // liegen und nähme in diesem Zustand keine Aktion an.
+        function onDialogRequested() {
+            if (!dlg.opened && Updates.flow.proxyAuth.pending !== true) dlg.open()
+        }
+        function onCloseDialogRequested() { dlg.close() }
+        // „Beenden und aktualisieren“: sofort loslassen, ohne eine Aktion auszulösen.
+        function onQuitStarting() { dlg.close() }
+    }
 
-    title: {
-        switch (Updates.state) {
-        case dlg.stChecking:    return qsTr("Nach Updates suchen …")
-        case dlg.stUpToDate:    return qsTr("Kein Update verfügbar")
-        case dlg.stDownloading: return qsTr("Update wird geladen")
-        case dlg.stReady:       return qsTr("Update bereit zur Installation")
-        // Ein abgelehntes Manifest (Vertrag V1) hat eine eigene Überschrift
-        // aus dem ViewModel; alles andere bleibt „fehlgeschlagen“.
-        case dlg.stFailed:      return Updates.failureTitle !== ""
-                                       ? Updates.failureTitle
-                                       : qsTr("Update fehlgeschlagen")
-        default:                return qsTr("Update verfügbar")
+    function act(action) { if (action > 0) Updates.perform(action) }
+    // Beim Öffnen hat der Hauptknopf den Fokus, sonst der einzige Knopf (Entwurf §4).
+    function focusPrimary() {
+        let last = null
+        for (let i = 0; i < btnRow.children.length; ++i) {
+            const c = btnRow.children[i]
+            if (c.role === undefined) continue
+            if (c.role === "Primary") { c.forceActiveFocus(); return }
+            last = c
+        }
+        if (last) last.forceActiveFocus()
+    }
+    function roleColor(r) {
+        switch (r) {
+        case "accent":  return Theme.accent
+        case "success": return Theme.ok
+        case "warn":    return Theme.warn
+        case "danger":  return Theme.danger
+        default:        return Theme.textDim
         }
     }
 
-    // Menschliche Größenangabe — „98,4 MB" statt 103181234. Unter 1 kB wird die
-    // Byte-Zahl gezeigt statt eines gerundeten „0 kB" (fällt nur bei Test-Fixtures
-    // an, sah dort aber wie eine fehlende Angabe aus).
-    function prettySize(bytes) {
-        if (bytes <= 0) return ""
-        if (bytes >= 1024 * 1024) return qsTr("%1 MB").arg((bytes / (1024 * 1024)).toFixed(1))
-        if (bytes >= 1024) return qsTr("%1 kB").arg((bytes / 1024).toFixed(0))
-        return qsTr("%1 Bytes").arg(bytes)
+    Shortcut {
+        sequences: ["Escape"]
+        enabled: dlg.opened
+        onActivated: dlg.act(dlg.v.escapeAction)
+    }
+    Shortcut {
+        sequences: ["Return", "Enter"]
+        enabled: dlg.opened && dlg.v.enterAction > 0
+        onActivated: dlg.act(dlg.v.enterAction)
     }
 
-    ColumnLayout {
-        width: 500
-        spacing: 12
+    // Abdunkelung in beiden Designs (im hellen wäre terminalBg ein heller Schleier).
+    Overlay.modal: Rectangle { color: Qt.alpha(Theme.dark ? Theme.terminalBg : Theme.textBright, 0.45) }
+    background: Rectangle {
+        color: Theme.bgElevated
+        radius: 10
+        border.width: 1
+        border.color: Theme.border
+    }
 
-        // --- Versionszeile ---------------------------------------------------
-        Label {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            color: Theme.textBright
-            font.pixelSize: 14
-            text: {
-                if (Updates.state === dlg.stChecking)
-                    return qsTr("QTmux fragt den Update-Server …")
-                if (Updates.state === dlg.stUpToDate)
-                    return qsTr("QTmux %1 ist aktuell.").arg(Updates.currentVersion)
-                if (Updates.remoteVersion === "")
-                    return qsTr("QTmux %1").arg(Updates.currentVersion)
-                return qsTr("QTmux %1 ist verfügbar — installiert ist %2.")
-                       .arg(Updates.remoteVersion).arg(Updates.currentVersion)
-            }
-        }
+    contentItem: ColumnLayout {
+        spacing: 0
 
-        Label {
+        // --- Titelstreifen 40 px --------------------------------------------
+        Item {
             Layout.fillWidth: true
-            visible: Updates.published !== "" && Updates.remoteVersion !== ""
-            color: Theme.textDim
-            font.pixelSize: 11
-            // Die Paketgröße gehört nur dorthin, wo sie eine Entscheidung stützt:
-            // vor dem Herunterladen. Im Zustand „aktuell" beschreibt sie ein Paket,
-            // das niemand holen wird — am Live-Bild als Rauschen aufgefallen.
-            text: (Updates.downloadSize > 0 && Updates.state !== dlg.stUpToDate)
-                  ? qsTr("Veröffentlicht am %1 · %2")
-                    .arg(Updates.published).arg(dlg.prettySize(Updates.downloadSize))
-                  : qsTr("Veröffentlicht am %1").arg(Updates.published)
-        }
-
-        // --- Downgrade-Warnung ------------------------------------------------
-        // Owner-Entscheidung: Rückstufung ist erlaubt, aber nie beiläufig.
-        Rectangle {
-            Layout.fillWidth: true
-            visible: Updates.isDowngrade
-            color: Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.14)
-            border.color: Theme.danger
-            border.width: 1
-            radius: 6
-            implicitHeight: downgradeText.implicitHeight + 16
-            Label {
-                id: downgradeText
-                anchors.fill: parent
-                anchors.margins: 8
-                wrapMode: Text.WordWrap
-                color: Theme.textBright   // Signal tragen Rand + Tönung (QTMUX-142)
-                font.pixelSize: 12
-                text: qsTr("Achtung: Das ist eine ÄLTERE Version als die installierte. "
-                         + "Eine Rückstufung kann Einstellungen und gespeicherte Sitzungen "
-                         + "betreffen, die eine neuere Fassung geschrieben hat.")
-            }
-        }
-
-        // --- Kein Paket für dieses System ------------------------------------
-        Label {
-            Layout.fillWidth: true
-            visible: Updates.remoteVersion !== "" && !Updates.hasPackageForThisSystem
-            wrapMode: Text.WordWrap
-            color: Theme.textDim
-            font.pixelSize: 12
-            text: qsTr("Für dieses Betriebssystem liegt in dieser Veröffentlichung "
-                     + "kein Paket bereit.")
-        }
-
-        // --- Anmerkungen zur Version ------------------------------------------
-        SectionLabel {
-            text: qsTr("Was ist neu")
-            visible: Updates.notes !== ""
-        }
-        ScrollView {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(200, notesText.implicitHeight + 8)
-            visible: Updates.notes !== ""
-            clip: true
-            TextArea {
-                id: notesText
-                readOnly: true
-                wrapMode: Text.WordWrap
-                text: Updates.notes
-                color: Theme.textBright
-                font.pixelSize: 12
-                background: null
-            }
-        }
-
-        // --- Fortschritt -------------------------------------------------------
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 4
-            visible: Updates.state === dlg.stDownloading || Updates.state === dlg.stReady
-            ProgressBar {
-                Layout.fillWidth: true
-                from: 0; to: 1
-                value: Updates.downloadProgress
-            }
-            Label {
+            implicitHeight: 40
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 24
+                anchors.verticalCenter: parent.verticalCenter
+                text: dlg.v.windowTitle || ""
                 color: Theme.textDim
-                font.pixelSize: 11
-                text: Updates.state === dlg.stReady
-                      ? qsTr("Heruntergeladen und geprüft: %1").arg(Updates.downloadedPath)
-                      : qsTr("%1 %").arg(Math.round(Updates.downloadProgress * 100))
-                elide: Text.ElideMiddle
-                Layout.maximumWidth: 500
+                font.pixelSize: 12
+                font.weight: Font.Medium
+            }
+            ToolButton {
+                id: closeX
+                anchors.right: parent.right
+                anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                implicitWidth: 28
+                implicitHeight: 28
+                icon.source: "qrc:/icons/x.svg"
+                icon.width: 14
+                icon.height: 14
+                icon.color: Theme.textDim
+                background: Rectangle {
+                    radius: 6
+                    color: closeX.hovered ? Theme.sidebarHover : "transparent"
+                }
+                onClicked: dlg.act(dlg.v.escapeAction)
+            }
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width; height: 1
+                color: Theme.border
             }
         }
 
-        // Kein Start-Plan: der Download ist gültig, QTmux kann ihn nur nicht selbst
-        // starten. Das muss dastehen, sonst wirkt der fehlende Knopf wie ein Fehler.
-        Label {
+        // --- Inhalt -----------------------------------------------------------
+        ScrollView {
+            id: bodyScroll
             Layout.fillWidth: true
-            visible: Updates.state === dlg.stReady && !Updates.canLaunchInstaller()
-            wrapMode: Text.WordWrap
-            color: Theme.textDim
-            font.pixelSize: 12
-            text: qsTr("QTmux läuft nicht aus einem AppImage und kann sich deshalb nicht "
-                     + "selbst ersetzen. Die Datei oben ist geprüft und kann von Hand "
-                     + "installiert werden.")
-        }
+            Layout.fillHeight: true
+            Layout.preferredHeight: body.implicitHeight + 48
+            Layout.minimumHeight: 0
+            contentWidth: availableWidth
+            contentHeight: body.implicitHeight + 48
+            clip: true
+        ColumnLayout {
+            id: body
+            x: 24
+            y: 24
+            width: bodyScroll.availableWidth - 48
+            spacing: 0
 
-        // --- Fehler --------------------------------------------------------------
-        Label {
-            Layout.fillWidth: true
-            visible: Updates.lastError !== ""
-            wrapMode: Text.WordWrap
-            color: Theme.danger
-            font.pixelSize: 12
-            text: Updates.lastError
-        }
-
-        // --- Was „Installieren …“ tut (QTMUX-146) --------------------------------
-        // Der Text kommt aus dem ViewModel (`updatehint`): je Plattform, was der
-        // Knopf tut, und „Dennoch öffnen“ NUR, wenn die geladene Datei die
-        // macOS-Quarantäne gemessen trägt. Ein Rechtsklick-Rat steht hier nie
-        // wieder — Begründung und Messung in UpdateViewModel.h.
-        Label {
-            objectName: "updateInstallHint"
-            Layout.fillWidth: true
-            visible: (Updates.state === dlg.stAvailable || Updates.state === dlg.stReady)
-                     && Updates.installHint !== ""
-            wrapMode: Text.WordWrap
-            color: Theme.textDim
-            font.pixelSize: 11
-            text: Updates.installHint
-        }
-
-        // --- Knöpfe ---------------------------------------------------------------
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.topMargin: 4
-            spacing: 8
-
-            Button {
-                text: qsTr("Herunterladen")
-                visible: Updates.state === dlg.stAvailable && Updates.hasPackageForThisSystem
-                palette.buttonText: Theme.textBright
-                onClicked: Updates.download()
-            }
-            Button {
-                text: qsTr("Installieren …")
-                // Ohne Start-Plan gibt es nichts zu klicken (Linux ohne $APPIMAGE) —
-                // dann steht stattdessen der Hinweis mit dem Dateipfad da.
-                visible: Updates.state === dlg.stReady && Updates.canLaunchInstaller()
-                palette.buttonText: Theme.textBright
-                onClicked: {
-                    // Geführte Installation: QTmux übergibt an den Installer und
-                    // bleibt selbst stehen. Der Anwender beendet die App, wenn der
-                    // Installer danach fragt — QTmux beendet sich NICHT von selbst,
-                    // das würde laufende Sessions ungefragt abreißen.
-                    if (Updates.launchInstaller()) dlg.close()
+            RowLayout {
+                spacing: 10
+                UpdateIcon {
+                    name: dlg.v.iconName || ""
+                    color: dlg.roleColor(dlg.v.iconRole)
+                    size: 20
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: dlg.v.title || ""
+                    color: Theme.textBright
+                    font.pixelSize: 17
+                    font.weight: Font.DemiBold
+                    wrapMode: Text.WordWrap
                 }
             }
-            Button {
-                text: qsTr("Erneut versuchen")
-                visible: Updates.state === dlg.stFailed
-                palette.buttonText: Theme.textBright
-                onClicked: Updates.checkNow()
+            Text {
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+                visible: text.length > 0
+                text: dlg.v.lead || ""
+                color: Theme.textBright
+                font.pixelSize: 14
+                lineHeight: 20
+                lineHeightMode: Text.FixedHeight
+                wrapMode: Text.WordWrap
             }
-            Item { Layout.fillWidth: true }
-            Button {
-                text: qsTr("Abbrechen")
-                visible: Updates.busy
-                palette.buttonText: Theme.textBright
-                onClicked: Updates.abort()
+            Repeater {
+                model: dlg.v.extra || []
+                Text {
+                    required property string modelData
+                    Layout.fillWidth: true
+                    Layout.topMargin: 8
+                    text: modelData
+                    color: Theme.textDim
+                    font.pixelSize: 13
+                    lineHeight: 20
+                    lineHeightMode: Text.FixedHeight
+                    wrapMode: Text.WordWrap
+                }
             }
-            Button {
-                text: qsTr("Version überspringen")
-                visible: Updates.state === dlg.stAvailable && !Updates.isDowngrade
-                palette.buttonText: Theme.textDim
-                onClicked: { Updates.skipVersion(); dlg.close() }
+            // Knöpfe „im Text“ (Zustand 13: „Von Hand installieren“ unter dem Satz).
+            Flow {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                Layout.leftMargin: -8
+                visible: inTextRep.count > 0
+                Repeater {
+                    id: inTextRep
+                    model: dlg.buttons.filter(b => b.role === "InText")
+                    UpdateButton {
+                        required property var modelData
+                        role: modelData.role
+                        flowAction: modelData.action
+                        text: modelData.label
+                        enabled: modelData.enabled
+                        onClicked: dlg.act(flowAction)
+                    }
+                }
             }
-            Button {
-                text: Updates.state === dlg.stAvailable || Updates.state === dlg.stReady
-                      ? qsTr("Später") : qsTr("Schließen")
-                visible: !Updates.busy
-                palette.buttonText: Theme.textBright
-                onClicked: dlg.close()
+
+            // Warn-, Info- und Begründungskasten.
+            Repeater {
+                model: [
+                    { text: dlg.v.warning || "",   glyph: "warning",              role: "warn" },
+                    { text: dlg.v.notice || "",    glyph: "info",                 role: "accent" },
+                    { text: dlg.v.reasonBox || "", glyph: dlg.v.reasonIcon || "", role: dlg.v.reasonRole || "muted" }
+                ]
+                Rectangle {
+                    id: box
+                    required property var modelData
+                    visible: modelData.text.length > 0
+                    Layout.fillWidth: true
+                    Layout.topMargin: 16
+                    radius: 8
+                    color: modelData.role === "warn" ? Qt.alpha(Theme.warn, 0.14) : Theme.bgSidebar
+                    implicitHeight: boxRow.implicitHeight + 24
+                    RowLayout {
+                        id: boxRow
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        spacing: 10
+                        UpdateIcon {
+                            Layout.alignment: Qt.AlignTop
+                            name: box.modelData.glyph
+                            color: dlg.roleColor(box.modelData.role)
+                            size: 18
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: box.modelData.text
+                            color: Theme.textBright
+                            font.pixelSize: 13
+                            lineHeight: 20
+                            lineHeightMode: Text.FixedHeight
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+            }
+
+            // Schritte (14).
+            Repeater {
+                model: dlg.v.steps || []
+                RowLayout {
+                    id: step
+                    required property string modelData
+                    required property int index
+                    Layout.fillWidth: true
+                    Layout.topMargin: index === 0 ? 16 : 8
+                    spacing: 10
+                    Rectangle {
+                        Layout.alignment: Qt.AlignTop
+                        width: 20; height: 20; radius: 10
+                        color: Qt.alpha(Theme.accent, 0.16)
+                        Text {
+                            anchors.centerIn: parent
+                            text: step.index + 1
+                            color: Theme.accent
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: step.modelData
+                        color: Theme.textBright
+                        font.pixelSize: 13
+                        lineHeight: 20
+                        lineHeightMode: Text.FixedHeight
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
+            UpdateNotes {
+                visible: dlg.v.showNotes === true
+                Layout.fillWidth: true
+                Layout.topMargin: 16
+                head: dlg.v.notesHead || ""
+                meta: dlg.v.notesMeta || ""
+                emptyText: dlg.v.notesEmpty || ""
+                highlight: Updates.notesHighlight
+                blocks: dlg.noteBlocks
+            }
+
+            // Fortschritt (1, 4).
+            ColumnLayout {
+                visible: dlg.v.showProgress === true
+                Layout.fillWidth: true
+                Layout.topMargin: 16
+                spacing: 8
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        Layout.fillWidth: true
+                        text: dlg.v.progressLeft || ""
+                        color: Theme.textBright
+                        font.pixelSize: 13
+                        font.features: { "tnum": 1 }
+                    }
+                    Text {
+                        text: dlg.v.progressRight || ""
+                        color: Theme.textBright
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        font.features: { "tnum": 1 }
+                    }
+                }
+                Rectangle {
+                    id: track
+                    Layout.fillWidth: true
+                    implicitHeight: 6
+                    radius: 3
+                    color: Theme.border
+                    clip: true
+                    Rectangle {
+                        height: parent.height
+                        radius: 3
+                        color: Theme.accent
+                        width: dlg.v.progressIndeterminate ? track.width * 0.3
+                                                          : track.width * (dlg.v.progressPermille || 0) / 1000
+                        // Unbestimmt (1, „Wird geprüft …“): ein Teilstück von 30 % wandert hin
+                        // und her. Ohne Bewegung steht es still; nichts hängt davon ab. Die
+                        // Animation schreibt `slide`, nicht `x`: Sonst bliebe der bestimmte
+                        // Balken danach am letzten Animationswert versetzt stehen.
+                        property real slide: 0
+                        x: dlg.v.progressIndeterminate === true ? slide : 0
+                        SequentialAnimation on slide {
+                            running: dlg.opened && dlg.v.progressIndeterminate === true && !App.reduceMotion
+                            loops: Animation.Infinite
+                            NumberAnimation { from: 0; to: track.width * 0.7; duration: 900; easing.type: Easing.InOutQuad }
+                            NumberAnimation { from: track.width * 0.7; to: 0; duration: 900; easing.type: Easing.InOutQuad }
+                        }
+                    }
+                }
+                Text {
+                    visible: text.length > 0
+                    Layout.fillWidth: true
+                    text: dlg.v.progressNote || ""
+                    color: Theme.textDim
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            // Details (10–14): eingeklappt, Mono, markierbar, mit „Kopieren“.
+            ColumnLayout {
+                visible: (dlg.v.details || "").length > 0
+                Layout.fillWidth: true
+                Layout.topMargin: 12
+                spacing: 6
+                UpdateButton {
+                    Layout.leftMargin: -8
+                    role: "Quiet"
+                    text: (Updates.textRevision, Updates.text("details"))
+                    glyph: dlg.detailsOpen ? "caret-down" : "caret-right"
+                    implicitHeight: 28
+                    onClicked: dlg.detailsOpen = !dlg.detailsOpen
+                }
+                RowLayout {
+                    visible: dlg.detailsOpen
+                    Layout.fillWidth: true
+                    spacing: 8
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.min(108, detailsText.implicitHeight + 20)
+                        TextArea {
+                            id: detailsText
+                            readOnly: true
+                            selectByMouse: true
+                            wrapMode: TextEdit.WrapAnywhere
+                            text: dlg.v.details || ""
+                            color: Theme.textBright
+                            font.family: App.monospaceFonts().length > 0 ? App.monospaceFonts()[0] : ""
+                            font.pixelSize: 12
+                            background: Rectangle { radius: 6; color: Theme.bgSidebar }
+                        }
+                    }
+                    UpdateButton {
+                        Layout.alignment: Qt.AlignTop
+                        implicitHeight: 28
+                        text: (Updates.textRevision, dlg.copied ? Updates.text("details.copied")
+                                                                : Updates.text("details.copy"))
+                        onClicked: {
+                            App.copyToClipboard(dlg.v.details || "")
+                            dlg.copied = true
+                            copiedTimer.restart()
+                        }
+                        Timer { id: copiedTimer; interval: 1500; onTriggered: dlg.copied = false }
+                    }
+                }
+            }
+        }
+        }
+
+        // --- Fußzeile -------------------------------------------------------
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 1
+            color: Theme.border
+        }
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 24
+            Layout.rightMargin: 24
+            Layout.topMargin: 16
+            Layout.bottomMargin: 16
+            spacing: 12
+
+            // Fußnote: im Kasten „Was endet“ (5, 13) oder schlicht (4).
+            Rectangle {
+                visible: (dlg.v.footnote || []).length > 0
+                Layout.fillWidth: true
+                radius: 6
+                color: dlg.v.footnoteBoxed ? Theme.bgSidebar : "transparent"
+                implicitHeight: Math.max(dlg.v.footnoteBoxed ? 38 : 0,
+                                         footRow.implicitHeight + (dlg.v.footnoteBoxed ? 20 : 0))
+                RowLayout {
+                    id: footRow
+                    anchors.fill: parent
+                    anchors.margins: dlg.v.footnoteBoxed ? 10 : 0
+                    anchors.leftMargin: dlg.v.footnoteBoxed ? 12 : 0
+                    anchors.rightMargin: dlg.v.footnoteBoxed ? 12 : 0
+                    spacing: 10
+                    UpdateIcon {
+                        Layout.alignment: Qt.AlignTop
+                        name: dlg.v.footnoteIcon || ""
+                        color: Theme.textDim
+                        size: 16
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: (dlg.v.footnote || []).join("\n")
+                        color: dlg.v.footnoteBoxed ? Theme.textBright : Theme.textDim
+                        font.pixelSize: dlg.v.footnoteBoxed ? 13 : 12
+                        lineHeight: dlg.v.footnoteBoxed ? 19 : 17
+                        lineHeightMode: Text.FixedHeight
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
+            // Knopfzeile: feste Reihenfolge auf allen Systemen, leise Knöpfe links,
+            // Hauptknopf ganz rechts (Entwurf §2). Kein QDialogButtonBox-Verhalten.
+            RowLayout {
+                id: btnRow
+                Layout.fillWidth: true
+                spacing: 8
+                Repeater {
+                    model: dlg.buttons.filter(b => b.role === "Quiet")
+                    UpdateButton {
+                        required property var modelData
+                        Layout.leftMargin: -8
+                        role: modelData.role
+                        flowAction: modelData.action
+                        text: modelData.label
+                        enabled: modelData.enabled
+                        onClicked: dlg.act(flowAction)
+                    }
+                }
+                Item { Layout.fillWidth: true }
+                Repeater {
+                    model: dlg.buttons.filter(b => b.role !== "Quiet" && b.role !== "InText")
+                    UpdateButton {
+                        required property var modelData
+                        role: modelData.role
+                        flowAction: modelData.action
+                        text: modelData.label
+                        enabled: modelData.enabled
+                        onClicked: dlg.act(flowAction)
+                    }
+                }
             }
         }
     }

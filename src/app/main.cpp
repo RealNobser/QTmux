@@ -5,6 +5,7 @@
 #include <QTranslator>
 #include <QQmlContext>
 #include <QQuickWindow>
+#include <QSettings>
 #include <QTimer>
 #include <QImage>
 #include <QDir>
@@ -38,7 +39,9 @@
 #include "PluginHost.h"
 #include "SecretsVault.h"
 #include "SettingsIo.h"
-#include "UpdateViewModel.h"
+#include "UpdateBridge.h"
+#include "UpdateQuit.h"
+#include "UpdateSelfTest.h"
 #include "GlobalHotkey.h"
 
 namespace {
@@ -200,6 +203,7 @@ int main(int argc, char *argv[])
     }
 
     QString shotPath;          // --screenshot <png>: stiller Selbst-Screenshot (s. u.)
+    QString updateSelfTestDir; // --selftest-update <ordner>: Update-Weg am echten Programm
     int shotSettleMs = 700;    // --settle <ms>: Wartezeit, damit das Layout sich setzt
     for (int i = 1; i + 1 < argc; ++i) {
         const QByteArray a(argv[i]);
@@ -211,7 +215,14 @@ int main(int argc, char *argv[])
             shotPath = QString::fromLocal8Bit(argv[i + 1]);
         else if (a == "--settle")
             shotSettleMs = qMax(50, QByteArray(argv[i + 1]).toInt());
+        else if (a == "--selftest-update")
+            updateSelfTestDir = QString::fromLocal8Bit(argv[i + 1]);
     }
+    // Der Update-Selbsttest läuft nie im Profil des Anwenders: Er schreibt
+    // Update-Einstellungen und beendet sich über den Update-Weg.
+    // Auch ein leer gesetztes QTMUX_PROFILE (oder `--profile ""`) zählt als „kein Profil“.
+    if (!updateSelfTestDir.isEmpty() && qEnvironmentVariable("QTMUX_PROFILE").trimmed().isEmpty())
+        qputenv("QTMUX_PROFILE", "update-selftest");
     // Stiller Selbst-Screenshot (Vorbild: RAFTNG --screenshot): die App rendert sich
     // OFFSCREEN und schreibt die Root-Fenster-Szene per grabWindow() in ein PNG — ohne
     // OS-Compositor und ohne Bildschirmaufnahme-Berechtigung (TCC). Erzwingt zusätzlich den
@@ -326,12 +337,6 @@ int main(int argc, char *argv[])
     static qtmux::SettingsIo settingsIo;
     engine.rootContext()->setContextProperty(QStringLiteral("SettingsIo"), &settingsIo);
 
-    // Online-Update (QTMUX-125): ViewModel über dem vendierten Kern. Gleiche
-    // Context-Property-Brücke wie oben — bewusst KEIN qmlRegisterSingletonInstance
-    // in die URI „QTmux". Der Start-Check hängt weiter unten am Timer.
-    static qtmux::UpdateViewModel updates;
-    engine.rootContext()->setContextProperty(QStringLiteral("Updates"), &updates);
-
     // Globaler Quake-Hotkey (Ctrl+`) als Context-Property; QML schaltet ihn je nach
     // Einstellung und reagiert auf `activated` (Fenster ein-/ausblenden).
     qtmux::GlobalHotkey quakeHotkey;
@@ -361,6 +366,22 @@ int main(int argc, char *argv[])
     if (appc)
         applyLanguage(app, engine, active, activeQt, appc->language());
 
+    // Online-Update, Vertrag V2 (K2): der gemeinsame Ablauf des Hubs mit QTmux'
+    // Verdrahtung (UpdateBridge). Gleiche Context-Property-Brücke wie oben — bewusst
+    // KEIN qmlRegisterSingletonInstance in die URI „QTmux". Angelegt NACH der
+    // Sprache (der Ablauf bekommt sie beim Bau) und VOR dem QML (das bindet daran).
+    qtmux::UpdateBridge::Wiring updateWiring;
+    updateWiring.language = appc ? appc->language() : QStringLiteral("en");
+    updateWiring.requestQuit = [&engine]() { return qtmux::quitForUpdate(engine); };
+    updateWiring.selfTest = !updateSelfTestDir.isEmpty();
+    updateWiring.selfTestDir = updateSelfTestDir;
+    static qtmux::UpdateBridge updates(std::move(updateWiring));
+    // Im Selbsttest ist die Beenden-Rückfrage immer an: Der Test belegt, dass sie auf
+    // dem Update-Weg trotzdem nicht kommt (UpdateQuit.cpp). Das Profil ist eigens.
+    if (!updateSelfTestDir.isEmpty())
+        QSettings().setValue(QStringLiteral("window/confirmQuit"), true);
+    engine.rootContext()->setContextProperty(QStringLiteral("Updates"), &updates);
+
     // Screenshot-Modus für QML sichtbar machen: dann darf aboutToQuit NICHT persistieren
     // (der stille Screenshot startet mit frischem Zustand und würde sonst beim exit() das
     // Window-Layout des Profils überschreiben, QTMUX-83 Stufe 3).
@@ -387,22 +408,38 @@ int main(int argc, char *argv[])
         });
     }
 
-    // Stiller Start-Check auf Updates (QTMUX-125). Die Drosselung (höchstens
-    // 1×/Tag) und der Ein/Aus-Schalter stecken in `checkOnStartup()` — hier steht
-    // nur der Auslöser.
-    // 🔑 Verzögert um 3 s: Beim Start baut QML das Layout auf, stellt Sessions
-    // wieder her und startet Shells. Eine Netzanfrage in derselben Sekunde träfe
-    // genau das Zeitfenster, in dem der Anwender auf sein Terminal wartet.
+    // Ablauf starten, sobald das Hauptfenster steht: Übernahme alter Schlüssel,
+    // Auswertung einer begonnenen Installation, stille Prüfung (der Ablauf wartet
+    // selbst einige Sekunden, damit sie nicht in den Aufbau der Sitzungen fällt,
+    // und prüft danach alle 6 h — Vertrag V2 §4.2, E1).
     // 🔑 Im Screenshot-Modus NIE — der Lauf soll ein Bild machen und sich beenden,
-    // nicht ins Netz gehen (und ein aufpoppender Update-Dialog stünde im Bild).
+    // nicht ins Netz gehen.
     if (shotPath.isEmpty()) {
-        QTimer::singleShot(3000, &updates, []() { updates.checkOnStartup(); });
+        const bool selfTest = !updateSelfTestDir.isEmpty();
+        QTimer::singleShot(0, &updates, [&app, selfTest]() {
+            updates.start(app.arguments());
+            if (updates.flow().sourceOverridden())
+                qInfo("QTmux: Update-Quelle umgestellt (Selbsttest), jede Installation ist ein Trockenlauf.");
+            else if (selfTest) {
+                // `--selftest-update` ohne umgestellte Quelle hiesse: echte Prüfung,
+                // echter Download, echte Installation. Das ist nie gemeint.
+                qCritical("QTmux: --selftest-update braucht --update-base-url oder "
+                          "--update-channel; Abbruch ohne Pruefung.");
+                QCoreApplication::exit(2);
+            }
+        });
+        if (!updateSelfTestDir.isEmpty())
+            qtmux::driveUpdateSelfTest(updates);
     }
 
     // Laufzeitwechsel über das Sprachmenü neu laden.
     if (appc) {
         QObject::connect(appc, &qtmux::AppController::languageChanged, &app,
                          [&app, &engine](const QString &lang) {
+                             // Erst den Hub-Katalog tauschen, dann neu übersetzen:
+                             // retranslate() wertet die Bindungen mit dem dann
+                             // geladenen Katalog aus.
+                             updates.setLanguage(lang);
                              applyLanguage(app, engine, active, activeQt, lang);
                          });
     }

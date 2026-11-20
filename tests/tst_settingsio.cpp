@@ -38,6 +38,7 @@ private slots:
     void importRejectsForeignFile();
     void importIgnoresUnknownKeysButShowsThem();
     void importTranslatesLegacyAutoCheckKey();
+    void importTranslatesOldQtmuxUpdateKeys();
     void lastSerialIsNeitherExportedNorResetNorImported();
 
 private:
@@ -76,7 +77,7 @@ void tst_settingsio::seedSettings() {
     s.setValue(QStringLiteral("window/resumeAgentMode"), 3);
     s.setValue(QStringLiteral("mcp/port"), 7346);
     s.setValue(QStringLiteral("update/auto_check"), false);
-    s.setValue(QStringLiteral("update/skippedVersion"), QStringLiteral("9.9.9"));
+    s.setValue(QStringLiteral("update/skipped_version"), QStringLiteral("9.9.9"));
     s.setValue(QStringLiteral("colorSchemes/dark"), QStringLiteral("Nord"));
     s.setValue(QStringLiteral("hotkeys/toggleSidebar"), QStringLiteral("Ctrl+Shift+L"));
     // Zustand — Fenster-/Pane-Layout, Session-Liste, Geometrie, Ansichtszustand
@@ -109,8 +110,10 @@ void tst_settingsio::allowlistCoversSettingsAndExcludesState() {
         QStringLiteral("window/pasteWarnMultiline"),
         QStringLiteral("window/restoreAgents"), QStringLiteral("window/resumeAgentMode"),
         QStringLiteral("mcp/port"),
-        QStringLiteral("update/auto_check"), QStringLiteral("update/skippedVersion"),
-        QStringLiteral("update/baseUrl"),
+        // Online-Update, Vertrag V2 §5: die Familien-Schlüssel (Seite „Updates“).
+        QStringLiteral("update/auto_check"), QStringLiteral("update/skipped_version"),
+        QStringLiteral("update/proxy_mode"), QStringLiteral("update/proxy_type"),
+        QStringLiteral("update/proxy_host"), QStringLiteral("update/proxy_port"),
         QStringLiteral("colorSchemes/dark"), QStringLiteral("colorSchemes/light"),
         QStringLiteral("colorSchemes/imported"),
         QStringLiteral("hotkeys/actFind"), QStringLiteral("profiles/size"),
@@ -139,6 +142,14 @@ void tst_settingsio::allowlistCoversSettingsAndExcludesState() {
         // Die Schreibweise bis 1.9.3 ist KEINE Einstellung mehr: Beim Start
         // übernimmt die Migration sie, beim Import übersetzt sie readFile().
         QStringLiteral("update/autoCheck"),
+        // Ebenso QTmux' übrige Schreibweisen bis 1.9.15 (Vertrag V2 §5: der Ablauf
+        // übernimmt sie beim Start) und die nicht mehr einstellbare Quelle (E2).
+        QStringLiteral("update/skippedVersion"), QStringLiteral("update/proxyMode"),
+        QStringLiteral("update/proxyHost"), QStringLiteral("update/baseUrl"),
+        QStringLiteral("update/base_url"),
+        // Familien-Schlüssel, die nie in eine Datei zum Weitergeben gehören.
+        QStringLiteral("update/proxy_user"), QStringLiteral("update/last_check"),
+        QStringLiteral("update/pending_install"),
         // Der Vault liegt als Datei außerhalb von QSettings; selbst ein Schlüssel
         // unter vault/ dürfte nie exportiert werden.
         QStringLiteral("vault/hint")
@@ -206,16 +217,16 @@ void tst_settingsio::exportNeverContainsSecrets() {
 
 // QTMUX-129: Die Proxy-Einstellung ist geteilt — Verbindungsdaten dürfen in eine
 // Exportdatei, die Identität nicht. Ein Passwort taucht als Schlüssel gar nicht
-// auf (Sitzungsspeicher, s. ProxyCredentials.h); dass hier trotzdem eines
+// auf (nur im Arbeitsspeicher des Hub-Ablaufs); dass hier trotzdem eines
 // geschrieben wird, ist Absicht: Der Test soll auch dann greifen, wenn jemand
 // später einen solchen Schlüssel einführt.
 void tst_settingsio::exportCarriesProxyConfigButNotIdentity() {
     QSettings s;
-    s.setValue(QStringLiteral("update/proxyMode"), QStringLiteral("manual"));
-    s.setValue(QStringLiteral("update/proxyType"), QStringLiteral("http"));
-    s.setValue(QStringLiteral("update/proxyHost"), QStringLiteral("proxy.firma.local"));
-    s.setValue(QStringLiteral("update/proxyPort"), 3128);
-    s.setValue(QStringLiteral("update/proxyUser"), QStringLiteral("DOMAENE\\nutzer"));
+    s.setValue(QStringLiteral("update/proxy_mode"), QStringLiteral("manual"));
+    s.setValue(QStringLiteral("update/proxy_type"), QStringLiteral("http"));
+    s.setValue(QStringLiteral("update/proxy_host"), QStringLiteral("proxy.firma.local"));
+    s.setValue(QStringLiteral("update/proxy_port"), 3128);
+    s.setValue(QStringLiteral("update/proxy_user"), QStringLiteral("DOMAENE\\nutzer"));
     s.setValue(QStringLiteral("update/proxyPassword"), QStringLiteral("darf-nie-raus"));
     s.sync();
 
@@ -223,19 +234,19 @@ void tst_settingsio::exportCarriesProxyConfigButNotIdentity() {
     const QByteArray json = io.exportJson();
 
     // Verbindungsdaten: ja. Ohne sie müsste jeder Kollege den Proxy neu suchen.
-    QVERIFY(json.contains("update/proxyMode"));
+    QVERIFY(json.contains("update/proxy_mode"));
     QVERIFY(json.contains("proxy.firma.local"));
     QVERIFY(json.contains("3128"));
 
     // Identität und Geheimnis: nie. Die Exportdatei ist zum WEITERGEBEN gedacht.
-    QVERIFY(!json.contains("update/proxyUser"));
+    QVERIFY(!json.contains("update/proxy_user"));
     QVERIFY(!json.contains("DOMAENE"));
     QVERIFY(!json.contains("update/proxyPassword"));
     QVERIFY(!json.contains("darf-nie-raus"));
 
     // Und der Benutzername darf durch den Export auch nicht VERLOREN gehen —
     // er steht weiterhin in den Einstellungen, nur eben nicht in der Datei.
-    QCOMPARE(s.value(QStringLiteral("update/proxyUser")).toString(),
+    QCOMPARE(s.value(QStringLiteral("update/proxy_user")).toString(),
              QStringLiteral("DOMAENE\\nutzer"));
 }
 
@@ -376,6 +387,36 @@ void tst_settingsio::importTranslatesLegacyAutoCheckKey() {
     QVERIFY(s.contains(QStringLiteral("update/auto_check")));
     QCOMPARE(s.value(QStringLiteral("update/auto_check")).toBool(), false);
     QVERIFY(!s.contains(QStringLiteral("update/autoCheck")));
+}
+
+// Vertrag V2 §5 (K2): Eine Exportdatei bis 1.9.15 trägt QTmux' alte Schreibweisen
+// (Proxy-Modus als Zahl, `skippedVersion`, die Quelle `baseUrl`). Beim Import kommt
+// alles unter den Familien-Schlüsseln an, die Quelle gar nicht.
+void tst_settingsio::importTranslatesOldQtmuxUpdateKeys() {
+    SettingsIo io;
+    const QString path = m_dir.filePath(QStringLiteral("alt-1.9.15.json"));
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write("{ \"format\": \"qtmux-settings\", \"formatVersion\": 1, \"keys\": {"
+            " \"update/proxyMode\": 2, \"update/proxyType\": 1,"
+            " \"update/proxyHost\": \"proxy.firma.local\", \"update/proxyPort\": 3128,"
+            " \"update/skippedVersion\": \"1.9.20\","
+            " \"update/baseUrl\": \"file:///anderswo\" } }");
+    f.close();
+
+    QStringList changed = io.importFile(QUrl::fromLocalFile(path));
+    changed.sort();
+    QCOMPARE(changed, (QStringList{ QStringLiteral("update/proxy_host"),
+                                    QStringLiteral("update/proxy_mode"),
+                                    QStringLiteral("update/proxy_port"),
+                                    QStringLiteral("update/proxy_type"),
+                                    QStringLiteral("update/skipped_version") }));
+    QSettings s;
+    QCOMPARE(s.value(QStringLiteral("update/proxy_mode")).toString(), QStringLiteral("manual"));
+    QCOMPARE(s.value(QStringLiteral("update/proxy_type")).toString(), QStringLiteral("socks5"));
+    QVERIFY(!s.contains(QStringLiteral("update/baseUrl")));
+    QVERIFY(!s.contains(QStringLiteral("update/base_url")));
+    QVERIFY(!s.contains(QStringLiteral("update/proxyMode")));
 }
 
 // Vertrag V1 (Update-Härtung 2026-11-16): `update/last_serial/<produkt>` ist der

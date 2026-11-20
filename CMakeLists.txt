@@ -93,8 +93,6 @@ add_library(qtmux_core STATIC
     src/core/PromptQueue.cpp
     src/core/StallDetector.h
     src/core/StallDetector.cpp
-    src/core/ProxyCredentials.h
-    src/core/ProxyCredentials.cpp
     src/core/SafeFileRead.h
     src/core/SafeFileRead.cpp
     src/core/SecretsVault.h
@@ -279,6 +277,10 @@ endif()
 
 qt_add_executable(qtmux
     src/app/main.cpp
+    src/app/UpdateQuit.h
+    src/app/UpdateQuit.cpp
+    src/app/UpdateSelfTest.h
+    src/app/UpdateSelfTest.cpp
     ${qtmux_platform_icon}
 )
 
@@ -305,6 +307,10 @@ qt_add_qml_module(qtmux
         qml/dialogs/UpdateDialog.qml
         qml/dialogs/ProxyAuthDialog.qml
         qml/dialogs/ExecOpenDialog.qml
+        qml/dialogs/UpdateNotes.qml
+        qml/Ui/UpdateIcon.qml
+        qml/Ui/UpdateHint.qml
+        qml/Ui/UpdateButton.qml
         qml/Ui/IconToolButton.qml
         qml/Ui/ShortcutMenuItem.qml
         qml/Ui/AppMenuItem.qml
@@ -321,6 +327,7 @@ qt_add_qml_module(qtmux
         qml/prefs/CatPage.qml
         qml/prefs/PrefAnchor.qml
         qml/prefs/CatAllgemein.qml
+        qml/prefs/CatUpdates.qml
         qml/prefs/CatErscheinungsbild.qml
         qml/prefs/CatTerminal.qml
         qml/prefs/CatEingabe.qml
@@ -348,8 +355,8 @@ qt_add_qml_module(qtmux
         src/viewmodels/AppController.cpp
         src/viewmodels/SettingsIo.h
         src/viewmodels/SettingsIo.cpp
-        src/viewmodels/UpdateViewModel.h
-        src/viewmodels/UpdateViewModel.cpp
+        src/viewmodels/UpdateBridge.h
+        src/viewmodels/UpdateBridge.cpp
         src/server/McpServer.h
         src/server/McpServer.cpp
         src/server/McpAccess.h
@@ -382,6 +389,22 @@ qt_add_shaders(qtmux "terminal_shaders"
 # einbettet und gegen alle Icon-Verweise im QML/C++ prüft — eine zweite Liste dort
 # würde genau die Drift verdecken, die der Test finden soll (QTMUX-141).
 set(QTMUX_ICON_FILES
+        # Online-Update, Vertrag V2 (K2): die Icons, die der Hub-Ablauf nennt
+        # (UpdateFlow::iconNames(), dazu lock-key und caret-right der Oberfläche),
+        # Phosphor „regular“ aus derselben Quelle wie der Rest (s. NOTICE).
+        resources/icons/arrow-circle-up.svg
+        resources/icons/check-circle.svg
+        resources/icons/circle-notch.svg
+        resources/icons/download-simple.svg
+        resources/icons/folder-open.svg
+        resources/icons/package.svg
+        resources/icons/power.svg
+        resources/icons/shield-check.svg
+        resources/icons/warning.svg
+        resources/icons/warning-circle.svg
+        resources/icons/wifi-slash.svg
+        resources/icons/lock-key.svg
+        resources/icons/caret-right.svg
         resources/icons/plus.svg
         resources/icons/x.svg
         resources/icons/terminal-window.svg

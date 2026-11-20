@@ -509,8 +509,8 @@ ApplicationWindow {
     // per DECSET 1007 verlangt (Vorgabe), 1 = immer. Regeln in src/core/AltScroll.h.
     property int altScrollMode: 0
     // Der Netzwerk-Proxy (QTMUX-129) steht bewusst NICHT hier: Seine Schlüssel
-    // liegen unter `update/*` und gehören damit ins UpdateViewModel — dieselbe
-    // Stelle wie `autoCheck` und `baseUrl`. QML greift über `Updates.proxy*` zu.
+    // gehören dem gemeinsamen Update-Ablauf des Hubs (Vertrag V2 §5). QML greift
+    // über `Updates.proxy*` zu (src/viewmodels/UpdateBridge.h).
 
     // Einklappbare Seitenleiste (Design 2a): Breite frei ziehbar in [180, 420];
     // rastet beim Ziehen unter 140 px in den eingeklappten Zustand (52 px) ein.
@@ -2168,15 +2168,15 @@ ApplicationWindow {
         enabled: !prefs.capturing
         onTriggered: mcp.listening ? mcp.stop() : mcp.start()
     }
-    // Online-Update (QTMUX-125). Der Menüpunkt prüft IMMER — ohne Tagesdrosselung
-    // und ohne Rücksicht auf eine übersprungene Version: wer von Hand nachsieht,
-    // will das Ergebnis sehen. Der Dialog geht sofort auf und zeigt den Fortschritt,
-    // sonst wirkt der Klick wie ein Klick ins Leere.
+    // Online-Update, Vertrag V2: „Nach Updates suchen …“ ist der Weg von Hand. Der
+    // Ablauf entscheidet, ob er einen schon bekannten Stand zeigt (Fund der stillen
+    // Prüfung, laufender oder gescheiterter Download) oder neu prüft, und öffnet den
+    // Dialog in beiden Fällen sofort (Signal dialogRequested).
     Action {
         id: actCheckUpdates
         text: qsTr("Nach Updates suchen …")
         enabled: !prefs.capturing
-        onTriggered: { updateDialog.open(); Updates.checkNow() }
+        onTriggered: Updates.openByHand()
     }
     Action {
         id: actAbout
@@ -2463,10 +2463,20 @@ ApplicationWindow {
                 color: Theme.border
             }
         }
+        // Die Leiste endet vor dem Update-Hinweis und schneidet bei schmalem Fenster
+        // ab; der Hinweis selbst ist rechts verankert und bleibt immer sichtbar
+        // (Entwurf §8: „der Hinweis bleibt“).
+        Item {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.right: updateHint.visible ? updateHint.left : parent.right
+            anchors.rightMargin: updateHint.visible ? 6 : 0
+            clip: true
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 8
-            anchors.rightMargin: 8
+            anchors.rightMargin: updateHint.visible ? 0 : 8
             spacing: 3
 
             IconToolButton {
@@ -2988,6 +2998,18 @@ ApplicationWindow {
                 tip: qsTr("Über QTmux")
                 onClicked: aboutDialog.open()
             }
+        }
+        }
+        // Hinweis des Update-Ablaufs (Entwurf §8). Der Entwurf setzt ihn ans rechte
+        // Ende einer Tab-Leiste über dem Terminal; QTmux hat keine — seine
+        // Sitzungen stehen in der senkrechten Seitenleiste. Die waagerechte Leiste
+        // über dem Terminal ist diese Kopfleiste: immer sichtbar (anders als die
+        // abschaltbare Statusleiste), nie über dem Terminal, schiebt nichts weg.
+        UpdateHint {
+            id: updateHint
+            anchors.right: parent.right
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
         }
     }
 
@@ -4508,29 +4530,25 @@ ApplicationWindow {
         }
     }
 
-    // --- Online-Update (QTMUX-125) ------------------------------------------
-    // Der stille Start-Check (main.cpp, 3 s nach dem Start) meldet sich über
-    // `updateFound` — nur DANN geht der Dialog von selbst auf. Ist nichts zu
-    // holen oder der Server unerreichbar, bleibt es beim Schweigen.
+    // --- Online-Update, Vertrag V2 (K2) ---------------------------------------
+    // Beide Flächen öffnen und schließen sich auf Signale des Ablaufs
+    // (dialogRequested, closeDialogRequested, proxyAuth.pending). Ein Fund der stillen
+    // Prüfung öffnet KEIN Fenster, nur den Hinweis in der Kopfleiste (Owner-Entscheid
+    // „Fund beim Start: kein Fenster, nur Hinweis“); einmalig von selbst geht der
+    // Dialog nur nach einer gescheiterten Installation auf (Entwurf, Zustand 13).
     UpdateDialog { id: updateDialog }
-
-    // QTMUX-129: Proxy-Anmeldung. Der Dialog beantwortet das Signal NICHT direkt
-    // (Qts proxyAuthenticationRequired ist synchron) — er legt die Anmeldedaten
-    // in den Sitzungsspeicher und lässt den Vorgang wiederholen.
     ProxyAuthDialog { id: proxyAuthDialog }
+    // „Was endet“ im Zustand „Bereit“: die Zahl der Sitzungen (Daten; den Satz
+    // liefert der Hub-Katalog).
+    Binding { target: Updates; property: "runningSessions"; value: sessions.count }
     Connections {
-        target: Updates
-        function onProxyAuthenticationNeeded(host, port, retry) {
-            proxyAuthDialog.ask(host, port, retry)
-        }
+        target: Updates.flow
+        // Zustand 10, „Proxy-Einstellungen“: Einstellungen › Updates.
+        function onProxySettingsRequested() { prefs.open("updates") }
     }
     // Einstiegspunkt für das Einstellungsfenster (eigenes Window, sieht die IDs aus
     // Main.qml nicht — es kommt über `host.app` hierher, s. PrefsWindow-Brücke).
     function checkForUpdates() { actCheckUpdates.trigger() }
-    Connections {
-        target: Updates
-        function onUpdateFound() { updateDialog.open() }
-    }
 
     // --- Farbschema importieren (iTerm .itermcolors / Xresources / Ghostty) -
     FileDialog {

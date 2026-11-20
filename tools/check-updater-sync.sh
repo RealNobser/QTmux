@@ -63,7 +63,7 @@
 #
 # ⚠️ Einbahnstrasse: Vendierte Baeume werden NIE lokal editiert. Aenderungen
 # gehoeren in den Hub und kommen von dort per --update zurueck;
-# QTmux-spezifisches liegt in src/viewmodels/UpdateViewModel.* und im QML
+# QTmux-spezifisches liegt in src/viewmodels/UpdateBridge.* und im QML
 # bzw. beim CAN-Plugin in plugins/macpcan/{MacPcanPlugin.cpp,CanText.h}.
 
 set -u
