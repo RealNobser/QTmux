@@ -9,9 +9,27 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `2b560a896d52111595442283735a9e0a5035ccd5` |
-| Datum | 2026-11-16 |
-| Betreff | `MAC-108: OTA-v4 EOF_ACK-Grund 7 WrongImageType, Spec-Spiegel aus AstroCAN 6e1e4d0` |
+| Commit | `e46372535aff775b8d5f2bc7e73b989f40113eb0` |
+| Datum | 2026-11-20 |
+| Betreff | `jira_sync BACKLOG: MAC-124 (Windows-Bau, Testprogramme warten auf windeployqt) [skip ci]` |
+
+Abgleich 2026-11-20 (K2, Vertrag V2 „Online-Update vereinheitlichen“): Zwischenstand gegen
+Hub-`main`. Ein zweiter Nachzug auf den Release-Stand des Hubs folgt (Naht, Selbst-Ersetzen
+Stufe 2, `UpdateFlow::setLanguage`). `git log 2b560a8..e463725 -- src/update/` nennt
+**32** Commits; der letzte, der `src/update/` berührt, ist `c4c1c8a`. Neu sind 22 Dateien:
+der gemeinsame Ablauf (`UpdateFlow`, `UpdateSettings`, `UpdateTexts`, `ReleaseNotes`,
+`ErrorText.hpp`), die Naht zur Installation (`InstallBackend`), das Selbst-Ersetzen
+(`SelfInstall*`), die Kataloge (`i18n/appupdate_{de,sv}.ts`, `UpdaterCatalogs.cmake`) und die
+Quellen der zwei Hilfsprogramme (`swaptool/update_swap.c`, `winhelper/`). Geändert sind
+`UpdateChecker.{hpp,cpp}` und `UpdateManifest.cpp`. Dazu kommt Kontrakt 4,
+`installer/macos/sign-bundle.sh`: Hub-Commit `5423e5f` vergibt dem Tauschprogramm
+`Contents/Helpers/update-swap` den festen Identifier `<Bundle-ID>.update-swap`. Gemessen
+gegen einen `git archive` von `e463725` (`src`, `platform`): vorher Exit 1, nach `--update`
+Exit 0 mit 42/8/5/1 verglichenen Dateien.
+CMake: Die Lib nimmt zusätzlich `winhelper/UpdateHelperCore.{hpp,cpp}` (nur diese zwei;
+`UpdateHelperMain.cpp` und `swaptool/` sind eigene Programme), linkt unter macOS Security und
+CoreFoundation und bettet die Kataloge per `appupdate_add_catalogs(qtmux_updater)` ein.
+Wächter dafür ist `test_updatercatalogs`.
 
 Abgleich 2026-11-16 (QTMUX-159, Update-Härtung Vertrag V1): `git log 4a645a4..2b560a8 --
 src/update/` nennt genau **einen** Commit, `b5ca76c` (MAC-108, Update-Härtung V1). Er bringt

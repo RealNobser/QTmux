@@ -69,6 +69,14 @@ class QNetworkReply;
 
 namespace appupdate {
 
+// A download that receives NO data for this long ends with ErrorKind::Network
+// (stall deadline, 2026-11-19). Measured reason: a server that accepts and
+// goes quiet — before the headers or in the middle of the body — kept a
+// download open for good; Qt sets no transfer timeout of its own here. The
+// clock restarts with every chunk that arrives, so a slow but steady download
+// is never cut, and it rests while the proxy asks for credentials.
+inline constexpr int kDownloadStallTimeoutMs = 60'000;
+
 class UpdateChecker : public QObject {
     Q_OBJECT
 
@@ -106,6 +114,15 @@ public:
     void downloadArtifact(const UpdateArtifact& artifact,
                           const QString& destDir, DownloadCallback callback);
 
+    // The stall deadline above; for tests (default kDownloadStallTimeoutMs).
+    // Applies to downloads started afterwards. 0 or less switches it off.
+    void setDownloadStallTimeoutForTests(int ms) { m_downloadStallTimeoutMs = ms; }
+    [[nodiscard]] int downloadStallTimeout() const { return m_downloadStallTimeoutMs; }
+    // Bytes of the last download that reached the file, counted here (not
+    // taken from the throttled progress signal) - also when it failed. For
+    // "the connection dropped at X of Y".
+    [[nodiscard]] qint64 lastDownloadReceived() const { return m_lastDownloadReceived; }
+
     // ---- Proxy support (MAC-36) -------------------------------------------
     // Applies to BOTH network paths — manifest fetch and artifact download.
     // Set per instance, never through QNetworkProxyFactory's process-wide
@@ -114,6 +131,10 @@ public:
     // QTmux's own network paths too.
     void setProxyConfig(const ProxyConfig& cfg);
     [[nodiscard]] ProxyConfig proxyConfig() const { return m_proxy; }
+    // True when the last request went (or the running one goes) through a
+    // proxy — Manual, or System resolved to one. For the flow's "this can take
+    // longer through a proxy" line (design state 1); no effect on requests.
+    [[nodiscard]] bool proxyInUse() const;
 
     // Asked when the proxy demands authentication. Return true after
     // filling user/password, false to give up (which ends the request with
@@ -159,6 +180,9 @@ public:
         ProxyAuthenticationFailed,    // credentials supplied and rejected
         ProxyUnreachable,             // proxy itself did not answer
         ProxyResolutionFailed,        // system proxy could not be resolved
+        // Manual proxy without host or port: no connection is tried at all
+        // (going direct instead would bypass the proxy the user asked for).
+        ProxyIncomplete,
     };
     [[nodiscard]] ErrorKind lastErrorKind() const { return m_lastErrorKind; }
 
@@ -179,6 +203,7 @@ private:
     // resolution on a worker thread with a timeout (see ProxyConfig.hpp)
     // and caches the outcome for the lifetime of this checker, so the
     // 64-second worst case can be paid at most once.
+    bool manualProxyIncomplete(const QUrl& target) const;
     void ensureProxyApplied(const QUrl& target);
     void onProxyAuthRequired(const QNetworkProxy& proxy, QAuthenticator* auth);
 
@@ -190,6 +215,8 @@ private:
     QString m_channel;
     SerialStore m_serialStore;
     bool m_warnedNoSerialStore = false;
+    int m_downloadStallTimeoutMs = kDownloadStallTimeoutMs;
+    qint64 m_lastDownloadReceived = 0;
 
     ProxyConfig m_proxy;
     ProxyCredentialProvider m_credentialProvider;

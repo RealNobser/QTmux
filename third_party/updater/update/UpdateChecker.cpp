@@ -1,6 +1,10 @@
 #include "update/UpdateChecker.hpp"
 
+#include <QPointer>
+#include <QTimer>
+
 #include "update/Ed25519Verify.hpp"
+#include "update/ErrorText.hpp"
 #include "update/UpdateKeys.hpp"
 #include "update/UpdatePolicy.hpp"
 
@@ -9,6 +13,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QMetaEnum>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRandomGenerator>
@@ -106,7 +111,7 @@ public:
             m_file.setFileName(finalPath + QLatin1Char('.') + tag
                                + QStringLiteral(".part"));
             if (m_file.open(QIODevice::WriteOnly | QIODevice::NewOnly)) break;
-            m_lastError = m_file.errorString();
+            m_lastError = fileErrorName(m_file.error());
         }
 #if !defined(Q_OS_WIN)
         if (m_file.isOpen()) {
@@ -317,6 +322,21 @@ namespace {
 // 2026-08-06 on RAFTNG, same checker, same three call sites).
 struct FailureInfo { UpdateChecker::ErrorKind kind; QString text; };
 
+// "<step>: <NetworkError name>[ (HTTP <status>)]" - the same in every
+// language, without the URL (it may carry user info) and without a path.
+// QNetworkReply::errorString() is translated by Qt's catalogue (ErrorText.hpp).
+QString networkErrorText(QNetworkReply* reply, const QString& what)
+{
+    const QNetworkReply::NetworkError e = reply->error();
+    QString name = QString::fromLatin1(
+        QMetaEnum::fromType<QNetworkReply::NetworkError>().valueToKey(static_cast<int>(e)));
+    if (name.isEmpty()) name = QStringLiteral("NetworkError(%1)").arg(static_cast<int>(e));
+    QString text = what + QStringLiteral(": ") + name;
+    const int http = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (http > 0) text += QStringLiteral(" (HTTP %1)").arg(http);
+    return text;
+}
+
 FailureInfo classifyFailure(QNetworkReply* reply, const QString& what)
 {
     using EK = UpdateChecker::ErrorKind;
@@ -338,7 +358,7 @@ FailureInfo classifyFailure(QNetworkReply* reply, const QString& what)
     case QNetworkReply::AuthenticationRequiredError:
         return {EK::Http, QStringLiteral("%1: access denied").arg(what)};
     default:
-        return {EK::Network, QStringLiteral("%1: %2").arg(what, reply->errorString())};
+        return {EK::Network, networkErrorText(reply, what)};
     }
 }
 }  // namespace
@@ -349,6 +369,12 @@ void UpdateChecker::setProxyConfig(const ProxyConfig& cfg)
     m_proxy = cfg;
     m_proxyResolved = false;   // re-resolve on the next request
     m_authAttempts  = 0;
+}
+
+bool UpdateChecker::proxyInUse() const
+{
+    const QNetworkProxy::ProxyType t = m_nam.proxy().type();
+    return t != QNetworkProxy::NoProxy && t != QNetworkProxy::DefaultProxy;
 }
 
 void UpdateChecker::setProxyCredentialProvider(ProxyCredentialProvider provider)
@@ -363,6 +389,14 @@ void UpdateChecker::setProxyCredentialProvider(ProxyCredentialProvider provider)
                 this, &UpdateChecker::onProxyAuthRequired);
         setProperty(kTag, true);
     }
+}
+
+bool UpdateChecker::manualProxyIncomplete(const QUrl& target) const
+{
+    // Only the network uses a proxy; a file:// tree is read either way.
+    const QString scheme = target.scheme().toLower();
+    if (scheme != QLatin1String("http") && scheme != QLatin1String("https")) return false;
+    return m_proxy.mode == ProxyConfig::Mode::Manual && !isUsable(m_proxy);
 }
 
 void UpdateChecker::ensureProxyApplied(const QUrl& target)
@@ -423,9 +457,19 @@ void UpdateChecker::onProxyAuthRequired(const QNetworkProxy& proxy,
 
     QString user = m_proxy.user;
     QString password;
-    if (!m_credentialProvider(proxy.hostName(), proxy.port(),
-                              /*previousAttemptFailed*/ m_authAttempts > 1,
-                              &user, &password)) {
+    // The stall deadline of a running download rests while the provider
+    // runs — an app may ask the user here (with a nested event loop, even).
+    // Guarded: in that nested loop the reply may be aborted and deleted, and
+    // the timer, its child, with it.
+    QPointer<QTimer> stall = m_activeReply
+        ? m_activeReply->findChild<QTimer*>(QStringLiteral("appupdateStallTimer")) : nullptr;
+    const bool stallWasActive = stall && stall->isActive();
+    if (stall) stall->stop();
+    const bool answered = m_credentialProvider(proxy.hostName(), proxy.port(),
+                                               /*previousAttemptFailed*/ m_authAttempts > 1,
+                                               &user, &password);
+    if (stall && stallWasActive) stall->start();
+    if (!answered) {
         m_lastErrorKind = ErrorKind::ProxyAuthenticationRequired;
         return;
     }
@@ -469,6 +513,11 @@ void UpdateChecker::checkForUpdate(CheckCallback callback)
     // ever SET on transport failures, so a signature or parse failure kept
     // whatever the previous request had left behind.
     m_lastErrorKind = ErrorKind::None;
+    if (manualProxyIncomplete(productUrl(QStringLiteral("manifest.json.sig")))) {
+        m_lastErrorKind = ErrorKind::ProxyIncomplete;
+        callback(std::nullopt, QStringLiteral("manual proxy incomplete: host or port missing"));
+        return;
+    }
     if (!hasSerialStore() && !m_warnedNoSerialStore) {
         m_warnedNoSerialStore = true;
         qWarning("update: %s is checked without a serial store — no replay "
@@ -606,6 +655,11 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
         callback(QString(), QStringLiteral("artifact url carries no file name"));
         return;
     }
+    if (manualProxyIncomplete(url)) {
+        m_lastErrorKind = ErrorKind::ProxyIncomplete;
+        callback(QString(), QStringLiteral("manual proxy incomplete: host or port missing"));
+        return;
+    }
     const QString localPath = destDir + QLatin1Char('/') + fileName;
 
     // Replace, never overwrite (docs/SHARED.md „Downloader: ersetzen, nie
@@ -622,7 +676,7 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
     if (!part->isOpen()) {
         m_lastErrorKind = ErrorKind::File;
         callback(QString(), QStringLiteral("cannot write %1.XXXXXX.part: %2")
-                                .arg(localPath, part->lastError()));
+                                .arg(QFileInfo(localPath).fileName(), part->lastError()));
         return;
     }
 
@@ -636,12 +690,29 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
         qint64 limit = 0;
         qint64 received = 0;
         bool exceeded = false;
+        bool stalled = false;
     };
     auto budget = std::make_shared<Budget>();
     budget->limit = artifact.size;
+    m_lastDownloadReceived = 0;
     QNetworkReply* reply = get(url);
-    const auto drain = [reply, part, budget]() {
-        if (budget->exceeded) {
+    // Stall deadline: a child of the reply, so it lives exactly as long as
+    // this download. Restarted by every chunk (drain), paused around the
+    // proxy credential callback (onProxyAuthRequired).
+    QTimer* stall = nullptr;
+    if (m_downloadStallTimeoutMs > 0) {
+        stall = new QTimer(reply);
+        stall->setObjectName(QStringLiteral("appupdateStallTimer"));
+        stall->setSingleShot(true);
+        stall->setInterval(m_downloadStallTimeoutMs);
+        connect(stall, &QTimer::timeout, reply, [reply, budget]() {
+            budget->stalled = true;
+            reply->abort();
+        });
+        stall->start();
+    }
+    const auto drain = [reply, part, budget, stall]() {
+        if (budget->exceeded || budget->stalled) {
             reply->readAll();  // discard; abort is already under way
             return;
         }
@@ -654,6 +725,7 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
         }
         budget->received += chunk.size();
         part->file().write(chunk);
+        if (stall && !chunk.isEmpty()) stall->start();  // data came: the clock restarts
     };
     connect(reply, &QNetworkReply::downloadProgress, this,
             &UpdateChecker::downloadProgress);
@@ -667,13 +739,26 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
         QFile& file = part->file();
         drain();
         const bool written = file.flush() && file.error() == QFile::NoError;
-        const QString writeError = file.errorString();
+        const QString writeError = fileErrorName(file.error());
         const QString partPath = part->path();
         file.close();  // really closed: Windows renames no open file
 
         // Before the transport error: the abort above IS a transport error
         // (OperationCanceled), and reporting it as "download failed" would
         // hide that the server overstepped the manifest.
+        if (QTimer* t = reply->findChild<QTimer*>(QStringLiteral("appupdateStallTimer"))) t->stop();
+        m_lastDownloadReceived = budget->received;
+        if (budget->stalled && !budget->exceeded) {
+            // Before the transport error for the same reason as the size
+            // bound: the abort above reads as OperationCanceled otherwise.
+            part->discard();
+            m_lastErrorKind = ErrorKind::Network;
+            callback(QString(),
+                     QStringLiteral("download stalled: no data for %1 ms after %2 bytes — "
+                                    "aborted, file deleted")
+                         .arg(m_downloadStallTimeoutMs).arg(budget->received));
+            return;
+        }
         if (budget->exceeded) {
             part->discard();
             m_lastErrorKind = ErrorKind::Size;
@@ -691,14 +776,15 @@ void UpdateChecker::downloadArtifact(const UpdateArtifact& artifact,
                 m_lastErrorKind = ErrorKind::Http;  // a listed artifact is missing
             }
             callback(QString(), QStringLiteral("download failed: %1")
-                                    .arg(reply->errorString()));
+                                    .arg(networkErrorText(reply, QStringLiteral("download"))));
             return;
         }
         if (!written) {
             part->discard();
             m_lastErrorKind = ErrorKind::File;
+            // The file name only - a local path stays out of "Details".
             callback(QString(), QStringLiteral("cannot write %1: %2")
-                                    .arg(partPath, writeError));
+                                    .arg(QFileInfo(partPath).fileName(), writeError));
             return;
         }
         if (budget->received < budget->limit) {

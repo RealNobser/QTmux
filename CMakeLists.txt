@@ -222,15 +222,22 @@ file(GLOB qtmux_updater_sources CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/ed25519/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/ed25519/*.c"
+    # Vertrag V2: Die Logik des Windows-Helfers gehört auf JEDEM System zur Lib
+    # (so testet der Hub sie überall). Nur diese zwei Dateien, nicht das ganze
+    # Verzeichnis: UpdateHelperMain.cpp ist das eigene Programm update-helper.exe
+    # und hat ein eigenes main(). swaptool/ ist ebenfalls ein eigenes Programm.
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/winhelper/UpdateHelperCore.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/winhelper/UpdateHelperCore.cpp"
 )
 # Ein leerer oder halber Glob darf NICHT in einem unverständlichen Linkfehler
 # enden: fehlt der vendierte Baum (unvollständiger Checkout), sagt es das hier.
 foreach(qtmux_updater_required
-        UpdateManifest.cpp UpdateChecker.cpp InstallerLauncher.cpp Ed25519Verify.cpp)
+        UpdateManifest.cpp UpdateChecker.cpp InstallerLauncher.cpp Ed25519Verify.cpp
+        UpdateFlow.cpp UpdateSettings.cpp UpdateTexts.cpp SelfInstall.cpp
+        winhelper/UpdateHelperCore.cpp UpdaterCatalogs.cmake)
     set(qtmux_updater_probe
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/${qtmux_updater_required}")
-    list(FIND qtmux_updater_sources "${qtmux_updater_probe}" qtmux_updater_found)
-    if(qtmux_updater_found EQUAL -1)
+    if(NOT EXISTS "${qtmux_updater_probe}")
         message(FATAL_ERROR
             "qtmux_updater: ${qtmux_updater_required} fehlt in third_party/updater/update/. "
             "Vendierter Update-Kern unvollständig — tools/check-updater-sync.sh --update ausführen.")
@@ -239,6 +246,18 @@ endforeach()
 add_library(qtmux_updater STATIC ${qtmux_updater_sources})
 target_include_directories(qtmux_updater PUBLIC third_party/updater)
 target_link_libraries(qtmux_updater PUBLIC Qt6::Core Qt6::Network)
+if(APPLE)
+    # SelfInstallMac.cpp prüft die Signatur des neuen Bundles gegen die
+    # Designated Requirement der laufenden App (Vertrag V2 §6).
+    target_link_libraries(qtmux_updater PUBLIC
+        "-framework Security" "-framework CoreFoundation")
+endif()
+# Die Update-Texte bringt der Hub als eigene Kataloge mit (Vertrag V2 §4.5).
+# Dieselbe Funktion ruft der Hub auf seiner Lib auf. Hier läuft nur lrelease, nie
+# lupdate: Die vendierten .ts müssen byte-gleich bleiben. qtmux_updater steht
+# deshalb auch NICHT in SOURCE_TARGETS von qt_add_translations (unten).
+include("${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/UpdaterCatalogs.cmake")
+appupdate_add_catalogs(qtmux_updater)
 
 # Anwendungs-Target ----------------------------------------------------------
 # App-Icon je Plattform: macOS bekommt das .icns ins Bundle (s. set_source_files_

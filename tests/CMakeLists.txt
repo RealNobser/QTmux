@@ -356,6 +356,13 @@ qt_add_executable(test_updater tst_updater.cpp)
 target_link_libraries(test_updater PRIVATE qtmux_updater Qt6::Test)
 add_test(NAME test_updater COMMAND test_updater)
 
+# K2 (Vertrag V2 §4.5): Die Update-Texte kommen als Hub-Katalog in der Ressource von
+# qtmux_updater. Ohne appupdate_add_catalogs() bliebe alles still englisch — kein
+# Baufehler. Der Test belegt die Einbettung an der Vendoring-Bauart.
+qt_add_executable(test_updatercatalogs tst_updatercatalogs.cpp)
+target_link_libraries(test_updatercatalogs PRIVATE qtmux_updater Qt6::Test)
+add_test(NAME test_updatercatalogs COMMAND test_updatercatalogs)
+
 # QTMUX-125: die APP-Seite (UpdateViewModel) gegen committete, mit dem
 # PRODUKTIONSSCHLUESSEL signierte Fixtures. Das ViewModel liegt wie SettingsIo im
 # QML-Modul -> .cpp direkt mitkompilieren; der generierte qtmux_version.h kommt
@@ -395,15 +402,15 @@ target_include_directories(test_updatehardening PRIVATE
 target_link_libraries(test_updatehardening PRIVATE qtmux_updater Qt6::Test Qt6::Network)
 add_test(NAME test_updatehardening COMMAND test_updatehardening)
 
-# 🔑 Diese beiden Tests auf Windows als KONSOLEN-Programme bauen.
+# 🔑 Diese Tests auf Windows als KONSOLEN-Programme bauen.
 # `qt_add_executable` macht dort standardmaessig GUI-Programme — die schreiben
 # nichts auf die Konsole, und `ctest --output-on-failure` zeigt dann NUR
 # „***Failed", nicht WELCHER Fall fiel. Genau das ist im CI-Windows-Job passiert:
 # ein sporadischer Fehlschlag ohne jede Diagnose. Die ConPTY-Begruendung fuer
-# WIN32_EXECUTABLE (Konsolen-Vererbung an Kindshells) gilt hier nicht — beide
-# Tests starten keine Prozesse.
+# WIN32_EXECUTABLE (Konsolen-Vererbung an Kindshells) gilt hier nicht — keiner
+# dieser Tests startet eine Kindshell.
 if(WIN32)
-    set_target_properties(test_updater test_updateviewmodel test_updatehardening test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox
+    set_target_properties(test_updater test_updatercatalogs test_updateviewmodel test_updatehardening test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox
                           PROPERTIES WIN32_EXECUTABLE FALSE)
 endif()
 

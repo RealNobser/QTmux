@@ -81,6 +81,8 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "$APP" && -d "$APP" ]] || { echo "FEHLER: Bundle fehlt: '${APP}'" >&2; exit 2; }
 APP="$(cd "$APP" && pwd)"
+APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist" 2>/dev/null || true)"
+[[ -n "$APP_ID" ]] || { echo "FEHLER: CFBundleIdentifier fehlt in $APP/Contents/Info.plist" >&2; exit 2; }
 for f in ${ENT_FILES[@]+"${ENT_FILES[@]}"} ${APP_ENT:+"$APP_ENT"}; do
     [[ -f "$f" ]] || { echo "FEHLER: Entitlements-Datei fehlt: $f" >&2; exit 2; }
 done
@@ -213,6 +215,12 @@ sign_one() {
     local path="$1" ent="$2" rc
     local args=(--force --sign "$SIGN_ID" --timestamp=none)
     [[ ${#KC_ARGS[@]} -gt 0 ]] && args+=("${KC_ARGS[@]}")
+    # Das Tauschprogramm der Selbst-Installation bekommt einen FESTEN
+    # Identifier: Die App prüft seine Kopie gegen ihre eigene Identität plus
+    # "<Bundle-ID>.update-swap" (docs/SHARED.md). Ohne --identifier vergibt
+    # codesign "<Dateiname>-<Hash>" und verwirft dabei auch einen vorher
+    # gesetzten Identifier (gemessen 2026-11-20).
+    [[ "$path" = "$APP/Contents/Helpers/update-swap" ]] && args+=(--identifier "$APP_ID.update-swap")
     [[ -n "$ent" ]] && args+=(--entitlements "$ent")
     set +e
     t 120 codesign "${args[@]}" "$path" 2>"$WORK/cs.err"; rc=$?

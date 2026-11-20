@@ -1,5 +1,7 @@
 #include "update/UpdateManifest.hpp"
 
+#include "update/ErrorText.hpp"
+
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -34,7 +36,7 @@ std::optional<UpdateManifest> UpdateManifest::fromJson(const QByteArray& bytes,
     const QJsonDocument doc = QJsonDocument::fromJson(bytes, &parseError);
     if (doc.isNull() || !doc.isObject()) {
         return fail(QStringLiteral("manifest is not a JSON object: %1")
-                        .arg(parseError.errorString()));
+                        .arg(jsonErrorText(parseError)));
     }
     const QJsonObject root = doc.object();
 
