@@ -94,7 +94,8 @@ QString selfTestSettingsFile(const QTemporaryDir &work, const QString &profile)
 
 // `beforeStart(profil)` läuft, bevor der Kindprozess startet (Einstellungen vorbelegen).
 Run runSelfTest(const QTemporaryDir &work, const QStringList &extraArgs, int timeoutMs,
-                const std::function<void(const QString &profile)> &beforeStart = {})
+                const std::function<void(const QString &profile)> &beforeStart = {},
+                bool withSelfTestArgument = true)
 {
     static int counter = 0;
     const QString profile = QStringLiteral("update-selftest-%1-%2")
@@ -130,7 +131,9 @@ Run runSelfTest(const QTemporaryDir &work, const QStringList &extraArgs, int tim
     child.setProcessEnvironment(env);
     child.setProcessChannelMode(QProcess::MergedChannels);
     child.start(QStringLiteral(QTMUX_APP_BINARY),
-                QStringList{QStringLiteral("--selftest-update"), work.path()} + extraArgs);
+                (withSelfTestArgument
+                     ? QStringList{QStringLiteral("--selftest-update"), work.path()}
+                     : QStringList{}) + extraArgs);
     Run r;
     if (!child.waitForStarted(20000)) {
         r.out = child.errorString();
@@ -314,6 +317,45 @@ private slots:
         QVERIFY2(!r.out.contains(QLatin1String("QTmux selftest-update: state 1")), qPrintable(r.out));
         QVERIFY2(QDir(work.filePath(QStringLiteral("downloads")))
                      .isEmpty(QDir::Files | QDir::NoDotAndDotDot),
+                 qPrintable(r.out));
+    }
+
+    void theInstallerSwitchIsRefusedOutsideTheSelfTest_data()
+    {
+        QTest::addColumn<bool>("withSelfTest");
+        QTest::addColumn<QStringList>("args");
+        QTest::newRow("allein") << false
+                                << QStringList{QStringLiteral("--selftest-system-installer")};
+        QTest::newRow("Selbsttest ohne Quelle")
+            << true << QStringList{QStringLiteral("--selftest-system-installer"),
+                                   QStringLiteral("--no-update-check")};
+        QTest::newRow("Quelle ohne Selbsttest")
+            << false << QStringList{QStringLiteral("--selftest-system-installer"),
+                                    QStringLiteral("--update-base-url"),
+                                    QStringLiteral("file:///nirgends")};
+    }
+
+    void theInstallerSwitchIsRefusedOutsideTheSelfTest()
+    {
+        // Der Schalter für Stufe 1 gilt nur zusammen mit dem Selbsttest UND einer
+        // umgestellten Quelle (dann ist jede Installation ein Trockenlauf). Sonst
+        // endet QTmux sofort mit Exit 6, bevor ein Fenster, eine Einstellung oder
+        // ein Download entsteht. Ohne die Abweisung liefe hier die App los und der
+        // Lauf endete erst an der Frist.
+        QFETCH(bool, withSelfTest);
+        QFETCH(QStringList, args);
+        QTemporaryDir work;
+        QVERIFY(work.isValid());
+        const Run r = runSelfTest(work, args, 20000, {}, withSelfTest);
+        QVERIFY2(r.finished, qPrintable(r.out));
+        QVERIFY2(r.status == QProcess::NormalExit, qPrintable(r.out));
+        QCOMPARE(r.code, 6);
+#if !defined(Q_OS_WIN)
+        QVERIFY2(r.out.contains(QLatin1String("--selftest-system-installer gilt nur zusammen")),
+                 qPrintable(r.out));
+#endif
+        QVERIFY2(!r.out.contains(QLatin1String("main window loaded")), qPrintable(r.out));
+        QVERIFY2(QDir(work.path()).isEmpty(QDir::AllEntries | QDir::NoDotAndDotDot),
                  qPrintable(r.out));
     }
 };

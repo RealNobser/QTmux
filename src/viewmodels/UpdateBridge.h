@@ -85,13 +85,6 @@ public:
         /// Nur im Selbsttest: Ordner für Download und Ergebnisdatei, damit kein
         /// Testlauf den geschützten Ordner „Downloads“ berührt (TCC).
         QString selfTestDir;
-        /// Nur im Selbsttest (`--selftest-system-installer`): der Installationsweg
-        /// von Stufe 1 statt der Wahl des Hubs. Ein ad hoc signierter Entwicklerbau
-        /// (macOS) bzw. ein nicht per MSI installierter Bau (Windows) bekäme vom
-        /// Selbst-Ersetzen nur „von Hand“, und „Beenden und aktualisieren“ käme nie;
-        /// der Test des Beenden-Wegs braucht diesen Knopf. Gelaufen wird ohnehin nur
-        /// ein Trockenlauf.
-        bool selfTestSystemInstaller = false;
         /// Nur das Bildziel qtmux-bilder: ein Ablauf, der einem anderen gehört (dem
         /// Szenen-Baustein des Hubs). Die Bridge legt dann keinen eigenen an, setzt
         /// keinen Installationsweg und lässt Einstellungen und Ordner dieses Ablaufs

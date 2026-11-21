@@ -2,6 +2,8 @@
 
 #include "UpdateBridge.h"
 
+#include "update/InstallBackend.hpp"
+
 #include <QCoreApplication>
 #include <QStringList>
 #include <QTimer>
@@ -10,7 +12,7 @@
 
 namespace qtmux {
 
-void driveUpdateSelfTest(UpdateBridge &bridge)
+void driveUpdateSelfTest(UpdateBridge &bridge, bool systemInstaller)
 {
     using Flow = appupdate::UpdateFlow;
     Flow &flow = bridge.flow();
@@ -39,9 +41,16 @@ void driveUpdateSelfTest(UpdateBridge &bridge)
             QCoreApplication::exit(3);
         }
     });
-    // Wie der Menüpunkt „Nach Updates suchen …“, kurz nach dem Aufbau.
-    QTimer::singleShot(500, &bridge, [&bridge] {
-        if (bridge.flow().sourceOverridden()) bridge.openByHand();
+    // Wie der Menüpunkt „Nach Updates suchen …“, kurz nach dem Aufbau. Erst hier steht
+    // fest, ob die Quelle umgestellt ist (start() hat die Startoptionen gelesen).
+    QTimer::singleShot(500, &bridge, [&bridge, systemInstaller] {
+        Flow &f = bridge.flow();
+        if (!f.sourceOverridden()) return;
+        if (systemInstaller) {
+            f.setInstallBackend(appupdate::makeSystemInstallerBackend());
+            qInfo("QTmux selftest-update: install way of stage 1 (system installer), dry run");
+        }
+        bridge.openByHand();
     });
 }
 

@@ -28,6 +28,8 @@
 
 #include <QTextStream>
 
+#include <cstdio>
+
 #include "qtmux_version.h"   // generiert aus cmake/Version.h.in (PROJECT_VERSION)
 
 #include "AppController.h"
@@ -249,12 +251,28 @@ int main(int argc, char *argv[])
             pictureLanguage = QString::fromLocal8Bit(argv[i + 1]);
 #endif
     }
-    // --selftest-system-installer (nur mit --selftest-update): Installationsweg von
-    // Stufe 1 statt der Wahl des Hubs, für den Test des Beenden-Wegs (UpdateBridge.h).
+    // --selftest-system-installer: Installationsweg von Stufe 1 für den Test des
+    // Beenden-Wegs (UpdateSelfTest.h). Kein Schalter für Anwender (QTmux hat keine
+    // Hilfe-Ausgabe, er steht nur in der Entwicklerdoku). Er gilt AUSSCHLIESSLICH
+    // zusammen mit --selftest-update und umgestellter Quelle (dann ist jede
+    // Installation ein Trockenlauf); sonst endet QTmux sofort mit Exit 6, bevor
+    // irgendetwas entsteht.
     bool updateSelfTestSystemInstaller = false;
-    for (int i = 1; i < argc; ++i)
-        if (QByteArray(argv[i]) == "--selftest-system-installer")
+    bool updateSourceArgument = false;
+    for (int i = 1; i < argc; ++i) {
+        const QByteArray a(argv[i]);
+        if (a == "--selftest-system-installer")
             updateSelfTestSystemInstaller = true;
+        else if (a == "--update-base-url" || a == "--update-channel"
+                 || a.startsWith("--update-base-url=") || a.startsWith("--update-channel="))
+            updateSourceArgument = true;
+    }
+    if (updateSelfTestSystemInstaller && (updateSelfTestDir.isEmpty() || !updateSourceArgument)) {
+        fprintf(stderr, "QTmux: --selftest-system-installer gilt nur zusammen mit "
+                        "--selftest-update und --update-base-url/--update-channel (Exit 6).\n");
+        std::fflush(stderr);
+        return 6;
+    }
 #if defined(QTMUX_UPDATE_PICTURES)
     if (updatePicture.isEmpty()) {
         qCritical("qtmux-bilder: --update-picture <szene> fehlt (das Bildziel macht nur Bilder).");
@@ -443,7 +461,6 @@ int main(int argc, char *argv[])
     updateWiring.requestQuit = [&engine]() { return qtmux::quitForUpdate(engine); };
     updateWiring.selfTest = !updateSelfTestDir.isEmpty();
     updateWiring.selfTestDir = updateSelfTestDir;
-    updateWiring.selfTestSystemInstaller = updateSelfTestSystemInstaller;
 #if defined(QTMUX_UPDATE_PICTURES)
     // Bildziel: Die Szene des Hubs legt ihren Ablauf an, die Bridge zeigt ihn. Das
     // Bild entsteht, sobald der Ablauf dort steht (unten nach dem QML-Laden).
@@ -526,7 +543,7 @@ int main(int argc, char *argv[])
             }
         });
         if (!updateSelfTestDir.isEmpty())
-            qtmux::driveUpdateSelfTest(updates);
+            qtmux::driveUpdateSelfTest(updates, updateSelfTestSystemInstaller);
     }
 
 #if defined(QTMUX_UPDATE_PICTURES)

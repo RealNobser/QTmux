@@ -22,6 +22,14 @@ namespace qtmux {
 class UpdateBridge;
 
 /// Hängt den Treiber an `bridge` und stößt die Prüfung an. Nur im Selbsttest.
-void driveUpdateSelfTest(UpdateBridge &bridge);
+///
+/// `systemInstaller` (Schalter `--selftest-system-installer`): Der Treiber setzt dem
+/// Ablauf den Installationsweg von Stufe 1, und zwar NUR, wenn die Quelle umgestellt
+/// ist (dann ist jede Installation ein Trockenlauf). Grund: Ein ad hoc signierter
+/// Entwicklerbau (macOS) bzw. ein Bau außerhalb des installierten Pakets (Windows)
+/// bekommt vom Selbst-Ersetzen nur „von Hand“, und der Test des Beenden-Wegs sähe
+/// „Beenden und aktualisieren“ nie. Im normalen Start setzt allein die Bridge den
+/// Weg, und zwar immer die Wahl des Hubs (Wächter test_update_consumer_guard).
+void driveUpdateSelfTest(UpdateBridge &bridge, bool systemInstaller);
 
 } // namespace qtmux

@@ -9,7 +9,13 @@
 #      dem Hub: appupdate::settingskey), auch als QML `Settings { category: "update" }`,
 #   3. einem Versionsvergleich (`QVersionNumber`),
 #   4. QML, das am Zustand des Ablaufs entscheidet (`flow.state`), statt an `view`
-#      und `hint` zu binden.
+#      und `hint` zu binden,
+#   5. einer eigenen Wahl des Installationswegs: Jedes `setInstallBackend(…)` bzw.
+#      `make…Backend()` muss `setInstallBackend(appupdate::makeInstallBackendForThisSystem())`
+#      sein, und davon steht in src/viewmodels/UpdateBridge.cpp genau EINS (der normale
+#      Start). Ausnahmen, je an genau einer Datei: der Selbsttest-Treiber
+#      src/app/UpdateSelfTest.cpp (Stufe 1 nur bei umgestellter Quelle, also
+#      Trockenlauf) und das Bildziel src/app/UpdatePicture.cpp (nie in der App).
 # Kommentare zählen nicht (eine Zeile, die das Verbot ERKLÄRT, ist kein Verstoß).
 #
 # Aufruf: cmake -DSRC_DIRS="src;qml" -DROOT=<repo> -P CheckUpdateConsumer.cmake
@@ -28,6 +34,8 @@ set(_hit_checker 0)
 set(_hit_key 0)
 set(_hit_version 0)
 set(_hit_state 0)
+set(_hit_backend 0)
+set(_bridge_hub_calls 0)
 if(NOT DEFINED MIN_FILES)
     set(MIN_FILES 20)
 endif()
@@ -75,6 +83,21 @@ foreach(_dir IN LISTS SRC_DIRS)
                 list(APPEND _problems "${_rel}:${_n}: QML entscheidet am Zustand (flow.state) statt an view/hint")
                 math(EXPR _hit_state "${_hit_state} + 1")
             endif()
+            if(_code MATCHES "setInstallBackend|make[A-Za-z]*Backend\\(")
+                if(_code MATCHES "setInstallBackend\\(appupdate::makeInstallBackendForThisSystem\\(\\)\\)")
+                    if(_rel STREQUAL "src/viewmodels/UpdateBridge.cpp")
+                        math(EXPR _bridge_hub_calls "${_bridge_hub_calls} + 1")
+                    endif()
+                elseif(_rel STREQUAL "src/app/UpdateSelfTest.cpp"
+                       AND _code MATCHES "setInstallBackend\\(appupdate::makeSystemInstallerBackend\\(\\)\\)")
+                    # Selbsttest, nur bei umgestellter Quelle (Trockenlauf).
+                elseif(_rel STREQUAL "src/app/UpdatePicture.cpp")
+                    # Bildziel, nie Teil der App (test_release_has_no_showcase).
+                else()
+                    list(APPEND _problems "${_rel}:${_n}: eigene Wahl des Installationswegs (gehoert dem Hub)")
+                    math(EXPR _hit_backend "${_hit_backend} + 1")
+                endif()
+            endif()
         endforeach()
     endforeach()
 endforeach()
@@ -86,15 +109,21 @@ endif()
 
 if(EXPECT_ALL_RULES)
     if(_hit_checker GREATER 0 AND _hit_key GREATER 1 AND _hit_version GREATER 0
-       AND _hit_state GREATER 0)
+       AND _hit_state GREATER 0 AND _hit_backend GREATER 0)
         message(STATUS "CheckUpdateConsumer (Gegenprobe): jede Regel schlug an "
                        "(Kern ${_hit_checker}, Schluessel ${_hit_key}, Version ${_hit_version}, "
-                       "Zustand ${_hit_state}).")
+                       "Zustand ${_hit_state}, Installationsweg ${_hit_backend}).")
         return()
     endif()
     message(FATAL_ERROR "CheckUpdateConsumer (Gegenprobe): nicht jede Regel schlug an "
                         "(Kern ${_hit_checker}, Schluessel ${_hit_key} von 2, Version ${_hit_version}, "
-                        "Zustand ${_hit_state}).")
+                        "Zustand ${_hit_state}, Installationsweg ${_hit_backend}).")
+endif()
+
+# Regel 5, Positivteil: Der normale Start setzt genau einmal die Wahl des Hubs.
+if(NOT _bridge_hub_calls EQUAL 1)
+    list(APPEND _problems "src/viewmodels/UpdateBridge.cpp: ${_bridge_hub_calls}-mal "
+                          "setInstallBackend(appupdate::makeInstallBackendForThisSystem()), erwartet genau 1")
 endif()
 
 if(_problems)

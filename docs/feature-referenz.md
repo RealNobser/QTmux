@@ -1216,7 +1216,8 @@ bleiben still englisch — Wächter `test_updatercatalogs`.
   (`UpdateFlow::iconNames()`, Wächter `test_updatebridge` + `tst_icons`).
 - Der **Konsumenten-Wächter** `test_update_consumer_guard` schlägt an, sobald App-Code doch
   entscheidet: `UpdateChecker` an der Brücke vorbei, ein eigener `update/`-Schlüssel (auch als
-  QML-`Settings`-Kategorie), ein eigener Versionsvergleich, QML an `flow.state`. Seine
+  QML-`Settings`-Kategorie), ein eigener Versionsvergleich, QML an `flow.state`, eine eigene
+  Wahl des Installationswegs (Ausnahmen nur Selbsttest-Treiber und Bildziel). Seine
   Gegenprobe `test_update_consumer_guard_bites` belegt jede Regel an absichtlich falschen
   Dateien.
 
@@ -1296,7 +1297,13 @@ Hubs. Ein ad hoc signierter Entwicklerbau bekommt unter macOS dann „von Hand�
 familien-signiert), ein Bau aus dem Bauordner unter Windows ebenso (kein installiertes Paket);
 der Treiber endet dort mit Exit 3. `test_updatequit::theRealInstallWayFindsItsHelperInTheBuiltApp`
 fordert, dass der Ablauf dabei keinen fehlenden Helfer nennt. Den Beenden-Weg fährt
-`--selftest-system-installer` (Stufe 1, nur zusammen mit `--selftest-update`).
+`--selftest-system-installer` (Stufe 1). Der Schalter ist kein Anwender-Schalter und gilt nur
+zusammen mit `--selftest-update` UND `--update-base-url`/`--update-channel`; allein oder ohne
+umgestellte Quelle endet QTmux sofort mit Exit 6
+(`test_updatequit::theInstallerSwitchIsRefusedOutsideTheSelfTest`). Den Weg setzt dann der
+Selbsttest-Treiber, und nur bei umgestellter Quelle; im normalen Start setzt ihn allein die
+Bridge mit genau einem `setInstallBackend(appupdate::makeInstallBackendForThisSystem())`
+(Regel 5 von `test_update_consumer_guard`).
 
 **Bilder der Update-Oberfläche: `qtmux-bilder`** ([`UpdatePicture.h`](../src/app/UpdatePicture.h),
 CMake-Schalter `QTMUX_UPDATE_PICTURES`, Vorgabe an). Ein eigenes Programm mit dem

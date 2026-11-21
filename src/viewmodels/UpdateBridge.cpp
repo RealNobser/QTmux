@@ -4,7 +4,6 @@
 #include "qtmux_buildid.h"
 #include "qtmux_version.h"
 
-#include "update/InstallBackend.hpp"
 #include "update/SelfInstall.hpp"
 #include "update/UpdateTexts.hpp"
 
@@ -66,10 +65,8 @@ UpdateBridge::UpdateBridge(Wiring wiring, QObject *parent)
         // Start-Bestätigung: die Vorgabe des Hubs (erster Lauf der Ereignisschleife
         // nach start()). Hauptfenster, Sitzungen und PTYs entstehen synchron in
         // engine.loadFromModule(), und start() läuft erst danach (src/app/main.cpp).
-        if (wiring.selfTest && wiring.selfTestSystemInstaller)
-            m_flow->setInstallBackend(appupdate::makeSystemInstallerBackend());
-        else
-            m_flow->setInstallBackend(appupdate::makeInstallBackendForThisSystem());
+        // Genau dieser eine Aufruf, ohne Bedingung: Wächter test_update_consumer_guard.
+        m_flow->setInstallBackend(appupdate::makeInstallBackendForThisSystem());
     }
 
     if (!wiring.externalFlow && wiring.selfTest && !wiring.selfTestDir.isEmpty()) {
