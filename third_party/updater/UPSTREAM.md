@@ -8,7 +8,7 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 
 | | |
 |---|---|
-| Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
+| Repository | `MacPCAN` (privat; abgeglichen gegen einen Checkout neben QTmux bzw. `MACPCAN_DIR`) |
 | Commit | `9533474314c802aa0c4bdc522f63de84ccd8da3c` (MacPCAN 0.8.0) |
 | Datum | 2026-11-21 |
 | Betreff | `Version 0.8.0 (Update-Vertrag V2, Selbst-Ersetzen, Einstellungen wirken sofort)` |
@@ -239,8 +239,11 @@ Skript mit Exit 0 und einer Meldung (Build-Maschinen und CI haben ihn nicht — 
 Test, der dort rot würde, meldete ein Umgebungsproblem als Regression).
 
 QTmux-spezifisches liegt **außerhalb** dieses Verzeichnisses:
-[`src/viewmodels/UpdateViewModel.{h,cpp}`](../../src/viewmodels/UpdateViewModel.h)
-(QSettings-Persistenz, Q_PROPERTYs) und [`qml/dialogs/UpdateDialog.qml`](../../qml/dialogs/UpdateDialog.qml).
+[`src/viewmodels/UpdateBridge.{h,cpp}`](../../src/viewmodels/UpdateBridge.h) (Verdrahtung
+des Ablaufs, Werte der Seite „Updates“), die QML-Oberfläche unter `qml/dialogs/Update*.qml`,
+`qml/dialogs/ProxyAuthDialog.qml`, `qml/Ui/Update*.qml` und `qml/prefs/CatUpdates.qml`.
+Bis 1.9.15 war es `src/viewmodels/UpdateViewModel.{h,cpp}` (gelöscht; die Abgleich-Absätze
+oben nennen es als damaligen Stand).
 
 ## Warum ein `update/`-Unterverzeichnis
 
