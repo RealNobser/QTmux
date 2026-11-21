@@ -60,8 +60,12 @@ public:
         return true;
     }
     Q_INVOKABLE void setDialogVisible(bool) {}
+    Q_INVOKABLE void provideProxyCredentials(const QString &, const QString &, bool) { ++signIns; }
+    Q_INVOKABLE void cancelProxyAuth() { ++cancels; }
 
     QList<int> performed;
+    int signIns = 0;
+    int cancels = 0;
 
 private:
     appupdate::UpdateFlow *m_flow;
@@ -162,6 +166,87 @@ private slots:
         // der Fokus in ihm (gemessen: nach forceActiveFocus() auf das Fenster traf Enter
         // weiter den zuletzt fokussierten Knopf). Die Enter-Aktion des Zustands wirkt
         // darum über den Hauptknopf, der beim Öffnen den Fokus bekommt (focusPrimary).
+    }
+
+    void escapeCancelsTheProxySignIn_data()
+    {
+        QTest::addColumn<bool>("updateDialogOpen");
+        QTest::addColumn<bool>("proxyDialogOpen");
+        QTest::newRow("nur Anmeldung") << false << true;
+        QTest::newRow("über dem Update-Dialog") << true << true;
+        // Gegenprobe: Der Esc-Kurzbefehl des Update-Dialogs wirkt in diesem Aufbau,
+        // sonst bewiese „tut nichts“ oben nichts.
+        QTest::newRow("nur Update-Dialog") << true << false;
+    }
+
+    void escapeCancelsTheProxySignIn()
+    {
+        // Kommt die Proxy-Anmeldung, während der Update-Dialog offen ist (Prüfung oder
+        // Download läuft), liegen zwei Dialoge mit Esc-Kurzbefehl im selben Fenster.
+        // Esc gehört dann der obersten, der Anmeldung: Sie bricht ab, der Update-Dialog
+        // darunter tut nichts.
+        QFETCH(bool, updateDialogOpen);
+        QFETCH(bool, proxyDialogOpen);
+        appupdate::UpdateShowcase::Options o;
+        o.productSlug = QStringLiteral("qtmux");
+        o.productName = QStringLiteral("QTmux");
+        o.installed = QStringLiteral("1.9.15");
+        o.language = QStringLiteral("en");
+        appupdate::UpdateShowcase showcase(o);
+        bool reached = false, ok = false;
+        QVERIFY(showcase.enter(QStringLiteral("15"), [&](bool r) { reached = true; ok = r; }));
+        QTRY_VERIFY_WITH_TIMEOUT(reached, 30000);
+        QVERIFY2(ok, "Szene 15 nicht erreicht");
+
+        FakeUpdates fake(showcase.flow());
+        QQmlApplicationEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("Updates"), &fake);
+        engine.loadData(R"qml(
+            import QtQuick
+            import QtQuick.Controls.Basic
+            import QTmux
+            ApplicationWindow {
+                width: 1100; height: 720; visible: true
+                property alias updateDialog: u
+                property alias proxyDialog: p
+                UpdateDialog { id: u }
+                ProxyAuthDialog { id: p }
+            })qml");
+        QCOMPARE(engine.rootObjects().size(), 1);
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        QVERIFY(window);
+        window->requestActivate();
+        QVERIFY(QTest::qWaitForWindowActive(window));
+        QObject *update = window->property("updateDialog").value<QObject *>();
+        QObject *proxy = window->property("proxyDialog").value<QObject *>();
+        QVERIFY(update && proxy);
+        if (updateDialogOpen) {
+            QMetaObject::invokeMethod(update, "open");
+            QTRY_VERIFY(update->property("opened").toBool());
+        }
+        if (proxyDialogOpen) {
+            if (!proxy->property("opened").toBool()) QMetaObject::invokeMethod(proxy, "open");
+            QTRY_VERIFY(proxy->property("opened").toBool());
+        } else {
+            QMetaObject::invokeMethod(proxy, "close");
+            QTRY_VERIFY(!proxy->property("opened").toBool());
+        }
+
+        fake.performed.clear();
+        fake.cancels = 0;
+        QTest::keyClick(window, Qt::Key_Escape);
+        QTest::qWait(50);
+        if (proxyDialogOpen) {
+            QCOMPARE(fake.cancels, 1);
+            QVERIFY2(fake.performed.isEmpty(),
+                     qPrintable(QStringLiteral("Esc löste im Update-Dialog %1 aus")
+                                    .arg(fake.performed.isEmpty() ? 0 : fake.performed.first())));
+        } else {
+            const int esc = showcase.flow()->viewMap().value(QStringLiteral("escapeAction")).toInt();
+            QVERIFY(esc > 0);
+            QCOMPARE(fake.cancels, 0);
+            QCOMPARE(fake.performed, QList<int>{esc});
+        }
     }
 };
 
