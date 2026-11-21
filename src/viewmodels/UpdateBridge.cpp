@@ -33,7 +33,24 @@ UpdateBridge::UpdateBridge(Wiring wiring, QObject *parent)
     cfg.version = QStringLiteral(QTMUX_VERSION_STRING);
     cfg.buildId = QStringLiteral(QTMUX_BUILD_ID);
     cfg.language = wiring.language;
-    cfg.requestQuit = std::move(wiring.requestQuit);
+    // Zugestimmt hat der Anwender zu der Zahl Sitzungen, die „Beenden und aktualisieren“
+    // in dem Moment nannte. Kommen bis zum Beenden welche dazu (ein Agent legt über MCP
+    // eine an, während das Update vorbereitet wird), endet nichts ohne neue Zustimmung:
+    // QTmux lehnt das Beenden ab; der Ablauf kehrt dann selbst nach „Bereit“ zurück und
+    // öffnet den Dialog neu (dialogRequested), der die aktuelle Zahl nennt. Weniger
+    // Sitzungen gehen normal weiter.
+    // Wächter: tst_updatebridge aSessionAddedAfterConsentStopsTheQuit.
+    cfg.requestQuit = [this, quit = std::move(wiring.requestQuit)]() {
+        if (m_sessionsAtConsent >= 0 && m_runningSessions > m_sessionsAtConsent) {
+            qInfo("QTmux: Beenden fuer das Update abgelehnt: %d Sitzung(en) statt %d bei der "
+                  "Zustimmung.",
+                  m_runningSessions, m_sessionsAtConsent);
+            m_sessionsAtConsent = -1;
+            return false;
+        }
+        m_sessionsAtConsent = -1;
+        return quit ? quit() : false;
+    };
     // Was beim Beenden endet: die laufenden Sitzungen (Daten, der Satz kommt aus
     // dem Hub-Katalog, Schlüssel s5.qtmux.n / s5.qtmux.1).
     cfg.quitImpact = [this] {
@@ -268,7 +285,11 @@ QString UpdateBridge::iconSource(const QString &name) const
 
 bool UpdateBridge::perform(int action)
 {
-    const bool ok = m_flow->perform(static_cast<Flow::Action>(action));
+    // Die Zustimmung zum Beenden gilt der Zahl Sitzungen, die der Dialog jetzt nennt.
+    const auto a = static_cast<Flow::Action>(action);
+    if (a == Flow::Action::QuitAndInstall || a == Flow::Action::RetryInstall)
+        m_sessionsAtConsent = m_runningSessions;
+    const bool ok = m_flow->perform(a);
     // „Version überspringen“ und „Später“ ändern sichtbare Einstellungen.
     emit settingsChanged();
     return ok;

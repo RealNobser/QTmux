@@ -28,9 +28,58 @@
 #include <QUrl>
 
 #include "UpdateBridge.h"
+#include "update/InstallBackend.hpp"
 #include "update/UpdateSettings.hpp"
 
 using Flow = appupdate::UpdateFlow;
+
+namespace {
+
+// Installationsweg, der die Vorbereitung festhält: Der Test entscheidet, wann sie fertig
+// ist, und kann dazwischen eine Sitzung anlegen (zwischen Klick und Scharfschalten).
+class HeldBackend : public appupdate::InstallBackend {
+public:
+    PrepareDone held;
+    appupdate::InstallOrder order;
+    int launches = 0;
+    int discards = 0;
+
+    appupdate::InstallCapability capability(const appupdate::InstallContext &) const override
+    {
+        appupdate::InstallCapability c;
+        c.method = appupdate::InstallMethod::SystemInstaller;
+        c.reason = appupdate::ManualReason::None;
+        return c;
+    }
+    void prepare(const appupdate::InstallOrder &o, PrepareDone done) override
+    {
+        order = o;
+        held = std::move(done);
+    }
+    void cancelPrepare() override { held = nullptr; }
+    appupdate::LaunchResult launch(const appupdate::PreparedInstall &) override
+    {
+        ++launches;
+        return {true, {}};
+    }
+    void discard(const appupdate::PreparedInstall &) override { ++discards; }
+
+    void finishPrepare()
+    {
+        appupdate::PreparedInstall p;
+        p.order = order;
+        p.method = appupdate::InstallMethod::SystemInstaller;
+        p.stagedFile = order.verifiedFile;
+        p.description = QStringLiteral("test");
+        appupdate::PrepareResult r;
+        r.prepared = p;
+        auto done = std::move(held);
+        held = nullptr;
+        if (done) done(std::move(r));
+    }
+};
+
+} // namespace
 
 class TestUpdateBridge : public QObject {
     Q_OBJECT
@@ -189,6 +238,78 @@ private slots:
         QVERIFY(bridge.textRevision() > before);
         bridge.setRunningSessions(3);
         QCOMPARE(texts.count(), 1);
+    }
+
+    void aSessionAddedAfterConsentStopsTheQuit_data()
+    {
+        QTest::addColumn<int>("sessionsAfterClick");
+        QTest::addColumn<bool>("quits");
+        QTest::newRow("eine Sitzung mehr") << 3 << false;
+        QTest::newRow("eine Sitzung weniger") << 1 << true;
+        QTest::newRow("gleich viele") << 2 << true;
+    }
+
+    void aSessionAddedAfterConsentStopsTheQuit()
+    {
+        // Zugestimmt hat der Anwender zu der Zahl, die „Beenden und aktualisieren“ beim
+        // Klick nannte. Kommt bis zum Scharfschalten eine Sitzung dazu, beendet QTmux
+        // nicht: keine Installation, kein Beenden, „Bereit“, Dialog neu mit neuer Zahl.
+        QFETCH(int, sessionsAfterClick);
+        QFETCH(bool, quits);
+        QTemporaryDir work;
+        QVERIFY(work.isValid());
+        int quitCalls = 0;
+        qtmux::UpdateBridge::Wiring w = wiring();
+        w.selfTest = true;
+        w.selfTestDir = work.path();
+        w.requestQuit = [&quitCalls] {
+            ++quitCalls;
+            return true;
+        };
+        qtmux::UpdateBridge bridge(std::move(w));
+        auto backend = std::make_unique<HeldBackend>();
+        HeldBackend *held = backend.get();
+        bridge.flow().setInstallBackend(std::move(backend));
+        bridge.setRunningSessions(2);
+        const QString fixture =
+            QUrl::fromLocalFile(QStringLiteral(QTMUX_UPDATE_FIXTURE_DIR "/good")).toString();
+        bridge.start({QStringLiteral("qtmux"), QStringLiteral("--no-update-check"),
+                      QStringLiteral("--update-base-url"), fixture});
+        QVERIFY(bridge.flow().sourceOverridden());
+        QVERIFY(bridge.openByHand());
+        QTRY_COMPARE_WITH_TIMEOUT(bridge.flow().state(), Flow::State::Available, 20000);
+        QVERIFY(bridge.perform(static_cast<int>(Flow::Action::Download)));
+        QTRY_COMPARE_WITH_TIMEOUT(bridge.flow().state(), Flow::State::Ready, 20000);
+
+        QVERIFY(bridge.perform(static_cast<int>(Flow::Action::QuitAndInstall)));
+        QCOMPARE(bridge.flow().state(), Flow::State::Installing);
+        QVERIFY(held->held);
+        bridge.setRunningSessions(sessionsAfterClick);
+        QSignalSpy dialog(&bridge.flow(), &Flow::dialogRequested);
+        held->finishPrepare();
+
+        QCOMPARE(held->launches, 0);   // ausgelöst würde sie erst bei aboutToQuit
+        if (quits) {
+            QCOMPARE(quitCalls, 1);
+            QCOMPARE(bridge.flow().state(), Flow::State::Installing);
+            QCOMPARE(dialog.count(), 0);
+            return;
+        }
+        QCOMPARE(quitCalls, 0);
+        QCOMPARE(bridge.flow().state(), Flow::State::Ready);
+        QCOMPARE(held->discards, 1);
+        {
+            QSettings raw;
+            QVERIFY(!appupdate::UpdateSettings(raw).pendingInstall().isValid());
+        }
+        QCOMPARE(dialog.count(), 1);
+        const QStringList foot = bridge.flow().view().footnote;
+        QVERIFY2(foot.join(QLatin1Char(' ')).contains(QLatin1String("3 sessions are running")),
+                 qPrintable(foot.join(QLatin1String(" | "))));
+        // Ein zweiter Klick nimmt die neue Zahl als Zustimmung.
+        QVERIFY(bridge.perform(static_cast<int>(Flow::Action::QuitAndInstall)));
+        held->finishPrepare();
+        QCOMPARE(quitCalls, 1);
     }
 
     void aLanguageSwitchReachesFlowAndSettingsPage()

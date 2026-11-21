@@ -368,7 +368,8 @@ target_include_directories(test_updatebridge PRIVATE
     ${CMAKE_BINARY_DIR}/generated)
 target_compile_definitions(test_updatebridge PRIVATE
     QTMUX_WXS_FILE="${CMAKE_CURRENT_SOURCE_DIR}/../installer/QTmux.wxs"
-    QTMUX_ICON_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../resources/icons")
+    QTMUX_ICON_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../resources/icons"
+    QTMUX_UPDATE_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update")
 add_dependencies(test_updatebridge qtmux_buildid)
 target_link_libraries(test_updatebridge PRIVATE qtmux_core qtmux_updater Qt6::Test)
 add_test(NAME test_updatebridge COMMAND test_updatebridge)

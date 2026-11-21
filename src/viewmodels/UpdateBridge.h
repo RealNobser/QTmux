@@ -176,6 +176,7 @@ private:
     std::unique_ptr<appupdate::UpdateFlow> m_ownFlow;  // leer, wenn externalFlow gilt
     appupdate::UpdateFlow *m_flow = nullptr;            // der gezeigte Ablauf
     int m_runningSessions = 0;
+    int m_sessionsAtConsent = -1;   // Zahl beim Klick auf „Beenden und aktualisieren“
     int m_textRevision = 0;
     bool m_selfTest = false;
 };
