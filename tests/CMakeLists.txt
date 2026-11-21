@@ -418,10 +418,19 @@ set_tests_properties(test_release_has_no_showcase_bites PROPERTIES
 if(TARGET qtmux-bilder)
     qt_add_executable(test_updatepictures tst_updatepictures.cpp)
     add_dependencies(test_updatepictures qtmux-bilder qtmux)
+    set(qtmux_picture_logs "${CMAKE_CURRENT_BINARY_DIR}/test_updatepictures_logs")
     target_compile_definitions(test_updatepictures PRIVATE
-        QTMUX_PICTURE_BINARY="$<TARGET_FILE:qtmux-bilder>")
+        QTMUX_PICTURE_BINARY="$<TARGET_FILE:qtmux-bilder>"
+        QTMUX_PICTURE_LOG_DIR="${qtmux_picture_logs}")
     target_link_libraries(test_updatepictures PRIVATE Qt6::Test Qt6::Network)
-    add_test(NAME test_updatepictures COMMAND test_updatepictures)
+    # Über RunAndReport.cmake: bei Rot Exit-Code bzw. Ausnahmekennung, die QTest-Datei
+    # und die Logs der Kindprozesse (ein CI-Lauf endete unter Windows rot ohne Ausgabe).
+    add_test(NAME test_updatepictures
+        COMMAND ${CMAKE_COMMAND}
+            "-DTEST=$<TARGET_FILE:test_updatepictures>"
+            "-DQTEST_FILE=${CMAKE_CURRENT_BINARY_DIR}/test_updatepictures.qtest.txt"
+            "-DLOGDIR=${qtmux_picture_logs}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/RunAndReport.cmake")
     set_tests_properties(test_updatepictures PROPERTIES TIMEOUT 300)
     if(WIN32)
         set_target_properties(test_updatepictures PROPERTIES WIN32_EXECUTABLE FALSE)

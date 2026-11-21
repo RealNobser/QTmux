@@ -10,10 +10,21 @@
 // Das Programm entsteht nur mit QTMUX_UPDATE_PICTURES; ohne den Schalter gibt es
 // diesen Test nicht (tests/CMakeLists.txt). Dass die App selbst den Baustein nicht
 // enthält, misst test_release_has_no_showcase.
+//
+// Diagnose (ein CI-Lauf endete unter Windows rot ohne jede Ausgabe): Die Ausgabe ist
+// ungepuffert, je Kindprozess steht eine Zeile „SZENE <name> exit=… status=… dauer=…“
+// auf stderr, und sein Log (appupdate.*.debug) liegt als Datei unter
+// QTMUX_PICTURE_LOG_DIR. ctest ruft den Test über tests/RunAndReport.cmake auf, das bei
+// Rot Exit-Code bzw. Ausnahmekennung, die QTest-Datei und diese Logs druckt. Am Anfang
+// steht, wohin „localhost“ auflöst (Szene 15 setzt den Proxy unter diesem Namen).
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
+#include <QFile>
 #include <QFileInfo>
+#include <QHostAddress>
+#include <QHostInfo>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
@@ -21,15 +32,30 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <cstdio>
+
 namespace {
+
+// Vor main(): Geht der Prozess ab, steht alles bis dahin Geschriebene schon in der Pipe.
+struct UnbufferedOutput {
+    UnbufferedOutput()
+    {
+        std::setvbuf(stdout, nullptr, _IONBF, 0);
+        std::setvbuf(stderr, nullptr, _IONBF, 0);
+    }
+} const s_unbuffered;
 
 struct Run {
     bool finished = false;
     int code = -1;
+    QProcess::ExitStatus status = QProcess::NormalExit;
+    qint64 ms = 0;
+    QString log;
     QString out;
 };
 
-Run runPicture(const QTemporaryDir &work, const QStringList &args, int timeoutMs = 60000)
+Run runPicture(const QTemporaryDir &work, const QString &label, const QStringList &args,
+               int timeoutMs = 60000)
 {
     static int counter = 0;
     QTcpServer probe;
@@ -45,7 +71,7 @@ Run runPicture(const QTemporaryDir &work, const QStringList &args, int timeoutMs
                QStringLiteral("update-pictures-%1-%2")
                    .arg(QCoreApplication::applicationPid())
                    .arg(++counter));
-    env.insert(QStringLiteral("QT_LOGGING_RULES"), QStringLiteral("appupdate.*.info=true"));
+    env.insert(QStringLiteral("QT_LOGGING_RULES"), QStringLiteral("appupdate.*.debug=true"));
     // Unter Windows schreibt Qt ohne diese beiden nur an den Debugger, nicht in die Pipe.
     env.insert(QStringLiteral("QT_ASSUME_STDERR_HAS_CONSOLE"), QStringLiteral("1"));
     env.insert(QStringLiteral("QT_FORCE_STDERR_LOGGING"), QStringLiteral("1"));
@@ -55,20 +81,38 @@ Run runPicture(const QTemporaryDir &work, const QStringList &args, int timeoutMs
     child.setProcessChannelMode(QProcess::MergedChannels);
     const QString dir = work.filePath(QStringLiteral("run-%1").arg(counter));
     QDir().mkpath(dir);
+    Run r;
+    QElapsedTimer clock;
+    clock.start();
     child.start(QStringLiteral(QTMUX_PICTURE_BINARY),
                 QStringList{QStringLiteral("--selftest-update"), dir} + args);
-    Run r;
     if (!child.waitForStarted(20000)) {
-        r.out = child.errorString();
-        return r;
+        r.out = QStringLiteral("Start gescheitert: ") + child.errorString();
+    } else {
+        r.finished = child.waitForFinished(timeoutMs);
+        if (!r.finished) {
+            child.kill();
+            child.waitForFinished(5000);
+        }
+        r.code = child.exitCode();
+        r.status = child.exitStatus();
+        r.out = QString::fromLocal8Bit(child.readAll());
     }
-    r.finished = child.waitForFinished(timeoutMs);
-    if (!r.finished) {
-        child.kill();
-        child.waitForFinished(5000);
-    }
-    r.code = child.exitCode();
-    r.out = QString::fromLocal8Bit(child.readAll());
+    r.ms = clock.elapsed();
+
+    QString safe = label;
+    safe.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_-]")), QStringLiteral("_"));
+    r.log = QStringLiteral(QTMUX_PICTURE_LOG_DIR "/%1-%2.log").arg(counter).arg(safe);
+    QFile f(r.log);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(r.out.toLocal8Bit());
+
+    // Unter Windows trägt ein abgestürzter Kindprozess die Ausnahmekennung (NTSTATUS,
+    // z. B. 0xC0000005) als Exit-Code; darum auch hexadezimal.
+    std::fprintf(stderr, "SZENE %s exit=%d (0x%08X) status=%s beendet=%s dauer=%lld ms log=%s\n",
+                 qPrintable(label), r.code, static_cast<unsigned>(r.code),
+                 r.status == QProcess::CrashExit ? "absturz" : "normal",
+                 r.finished ? "ja" : "nein-frist", static_cast<long long>(r.ms),
+                 qPrintable(r.log));
     return r;
 }
 
@@ -78,6 +122,30 @@ class TestUpdatePictures : public QObject {
     Q_OBJECT
 
 private slots:
+    void initTestCase()
+    {
+        // Logs des letzten Laufs entfernen: nur einzelne *.log-Dateien im eigenen Ordner,
+        // nie den Ordner rekursiv (ein leerer Pfad hieße sonst Arbeitsverzeichnis).
+        const QString logDir = QStringLiteral(QTMUX_PICTURE_LOG_DIR);
+        QVERIFY(logDir.endsWith(QLatin1String("test_updatepictures_logs")));
+        QVERIFY(QDir().mkpath(logDir));
+        const QDir logs(logDir);
+        for (const QString &old : logs.entryList({QStringLiteral("*.log")}, QDir::Files))
+            QFile::remove(logs.filePath(old));
+        // Wohin löst „localhost“ hier auf? (Der Szenen-Server lauscht auf 127.0.0.1.)
+        const QHostInfo info = QHostInfo::fromName(QStringLiteral("localhost"));
+        QStringList addrs;
+        for (const QHostAddress &a : info.addresses()) addrs << a.toString();
+        std::fprintf(stderr, "DIAGNOSE localhost -> [%s] fehler=%s\n",
+                     qPrintable(addrs.join(QStringLiteral(", "))),
+                     qPrintable(info.errorString()));
+        // Proxy-Variablen der Umgebung: nur ob gesetzt, nie ihr Wert.
+        for (const char *v : {"http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY",
+                              "all_proxy", "ALL_PROXY", "no_proxy", "NO_PROXY"})
+            std::fprintf(stderr, "DIAGNOSE %s=%s\n", v,
+                         qEnvironmentVariableIsSet(v) ? "gesetzt" : "-");
+    }
+
     void eachSurfaceBecomesAPicture_data()
     {
         QTest::addColumn<QString>("scene");
@@ -104,12 +172,13 @@ private slots:
         QTemporaryDir work;
         QVERIFY(work.isValid());
         const QString png = work.filePath(QStringLiteral("scene.png"));
-        const Run r = runPicture(work, {QStringLiteral("--update-picture"), scene,
-                                        QStringLiteral("--screenshot"), png,
-                                        QStringLiteral("--picture-theme"), theme,
-                                        QStringLiteral("--picture-language"), language});
+        const Run r = runPicture(work, QString::fromLatin1(QTest::currentDataTag()),
+                                 {QStringLiteral("--update-picture"), scene,
+                                  QStringLiteral("--screenshot"), png,
+                                  QStringLiteral("--picture-theme"), theme,
+                                  QStringLiteral("--picture-language"), language});
         QVERIFY2(r.finished, qPrintable(r.out));
-        QVERIFY2(r.code == 0, qPrintable(r.out));
+        QVERIFY2(r.status == QProcess::NormalExit && r.code == 0, qPrintable(r.out));
         static const QRegularExpression qmlError(QStringLiteral(
             "failed to load component|Type \\w+ unavailable|Cannot override FINAL|"
             "ReferenceError|TypeError|is not defined|qrc:/qt/qml/QTmux/\\S+: (?!QML )"));
@@ -126,16 +195,17 @@ private slots:
         QTemporaryDir work;
         QVERIFY(work.isValid());
         const QString none = work.filePath(QStringLiteral("none.png"));
-        const Run bad = runPicture(work, {QStringLiteral("--update-picture"),
-                                          QStringLiteral("no-such"),
-                                          QStringLiteral("--screenshot"), none});
+        const Run bad = runPicture(work, QStringLiteral("unbekannte-szene"),
+                                   {QStringLiteral("--update-picture"), QStringLiteral("no-such"),
+                                    QStringLiteral("--screenshot"), none});
         QVERIFY2(bad.finished, qPrintable(bad.out));
         QCOMPARE(bad.code, 2);
         QVERIFY2(bad.out.contains(QLatin1String("unbekannte Szene")), qPrintable(bad.out));
         QVERIFY(!QFileInfo::exists(none));
 
         // Ohne Szene ist das Programm nichts: kein Fenster, keine App.
-        const Run noScene = runPicture(work, {QStringLiteral("--screenshot"), none});
+        const Run noScene = runPicture(work, QStringLiteral("ohne-szene"),
+                                       {QStringLiteral("--screenshot"), none});
         QVERIFY2(noScene.finished, qPrintable(noScene.out));
         QCOMPARE(noScene.code, 2);
         QVERIFY(!QFileInfo::exists(none));
