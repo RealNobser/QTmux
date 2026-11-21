@@ -392,6 +392,17 @@ add_test(NAME test_updatequit COMMAND test_updatequit)
 # Kindprozesse, darum mehr Zeit als ein einzelner Lauf braucht.
 set_tests_properties(test_updatequit PROPERTIES TIMEOUT 300 RESOURCE_LOCK qtmux_update_selftest)
 
+# Lehnt das Hauptfenster das Beenden für das Update ab, ist die Beenden-Rückfrage
+# danach wieder scharf (Rücksetz-Zweig in src/app/UpdateQuit.cpp).
+qt_add_executable(test_updatequitreset tst_updatequitreset.cpp)
+target_link_libraries(test_updatequitreset PRIVATE qtmux_app Qt6::Test Qt6::Quick)
+add_test(NAME test_updatequitreset COMMAND test_updatequitreset)
+set_tests_properties(test_updatequitreset PROPERTIES TIMEOUT 60
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+if(WIN32)
+    set_target_properties(test_updatequitreset PROPERTIES WIN32_EXECUTABLE FALSE)
+endif()
+
 # Die App enthält den Szenen-Baustein nicht (tests/CheckNoShowcase.cmake): 0 Treffer
 # für „UpdateShowcase“ und „--update-picture“ im gebauten qtmux, Positivkontrolle
 # „--selftest-update“ darin; Gegenprobe an einer festen Prüfdatei und, wenn gebaut,
