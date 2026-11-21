@@ -5,6 +5,74 @@
 > nachgeführt. Die Absätze sind wörtlich übernommen. Wo eine Zeile fehlt, steht sie als Lehre an
 > anderer Stelle; der Hinweis steht dann in Klammern dabei.
 
+## Release v1.10.0 (2026-11-21)
+
+**Inhalt:** gemeinsamer Update-Ablauf (Vertrag V2) mit QML-Oberfläche, Selbst-Ersetzen ab dem
+Update nach 1.10.0, „wirkt sofort“ auf der Seite „Updates“ (QTMUX-160; Folgeticket QTMUX-161).
+
+**Commits:** Tag `v1.10.0` (annotiert) auf `4959c8a` („Release 1.10.0“). Danach `287dc22`: Fix
+in `installer/build-msi.ps1`, COM-Aufruf `OpenDatabase` mit `[string]$msi`. Ohne die Umwandlung
+scheiterte er mit `DISP_E_TYPEMISMATCH`, und die eigene Paketprüfung löschte beim ersten
+Windows-Lauf das MSI. Die App-Quellen sind gleich. DMG und AppImage tragen `1.10.0+4959c8a`,
+MSI und ZIP `1.10.0+287dc22` (Entscheid: den gepushten Tag nicht verlegen).
+
+| Artefakt | Bytes | SHA256 | Build-ID |
+|---|---|---|---|
+| `QTmux-1.10.0-macos.dmg` | 48 766 464 | `9bda8791af3ab4f3d4d517e795d1f78f3c22ba47ef5205c1443c8b5a2208c9f8` | `1.10.0+4959c8a` |
+| `QTmux-1.10.0-win64.msi` | 32 271 579 | `05ccd930b7f968ada0265c7b258bf65bbe7e18a179fd674cff3630be2ced04c8` | `1.10.0+287dc22` |
+| `QTmux-1.10.0-win64-portable.zip` | 39 684 572 | `dab3c9283cca0dbaf18203f9c11aa741af5c440f0a7ca657ea3938b125887a39` | `1.10.0+287dc22` |
+| `QTmux-1.10.0-x86_64.AppImage` | 45 255 160 | `149568b712d1a64caaa985b26771f443a32671a1fa19130b94884c2de752c2f8` | `1.10.0+4959c8a` |
+
+**CI:**
+- Messläufe 44880347502 (`4959c8a`) und 44882879935 (`287dc22`);
+- main-Läufe 44881268948 und 44883838609;
+- Tag-Lauf 44882170471 (Matrix 3/3, `linux-release`).
+- Je Job: Linux 68/68, Windows 67/67, macOS 69 mit zwei Skips (Szene 15, siehe unten).
+
+**Wege:**
+- DMG am Mac aus einem frischen Worktree auf dem Tag, `FAMILY_CODESIGN=require`.
+- MSI und ZIP auf dem Windows-Bau-Rechner als `claude` aus einem frischen Klon auf `287dc22`,
+  mit einer Kopie des Wrappers, deren `cd` geändert ist.
+- AppImage aus dem Tag-Lauf (Draft-Asset).
+- 🔑 Der dokumentierte Klon des Wrappers wurde zuletzt am 2026-11-03 für 1.9.10 benutzt (Reflog,
+  letztes MSI dort 1.9.10). Woher die MSIs 1.9.11 bis 1.9.15 kamen, steht in dieser Datei nicht.
+  Darum baut 1.10.0 aus einem frischen Klon. Die Wrapper-Stelle in der `CLAUDE.md` ist damit ein
+  veralteter Anker; die Korrektur kommt auf Owner-Wort.
+
+**Abnahme:**
+- DMG: DR byte-gleich zu 1.9.15; `update-swap` mit `com.qtmux.app.update-swap`; 169/169 Mach-O
+  familien-signiert; `CFBundleVersion` 1.10.0.
+- MSI: Paketprüfung grün; `SetARPINSTALLLOCATION` nach `CostFinalize`; CRT zehn DLLs gleich 1.9.15;
+  `update-helper.exe` mit MZ.
+- AppImage: nur `libqxcb`, glibc höchstens 2.38, Start unter xcb mit xvfb.
+- Größen über Dateilisten erklärt: DMG −11 468 645 B trotz +828 985 B Inhalt (`diskutil image`
+  statt `hdiutil`), MSI +246 320, AppImage +266 240, ZIP +301 755.
+
+**Gemessen, nicht geändert:** App und `update-swap` sind **nur arm64**, `minos 27.2`,
+`LSMinimumSystemVersion` leer. 1.9.15 ist genauso; ein universales QTmux-DMG gab es nie, obwohl
+der Manifest-Schlüssel `macos-universal` heißt (Owner-Frage).
+
+**Szene 15 auf dem GitHub-macOS-Runner:**
+- Belegt ist, dass die Verbindung auf `localhost` in 15 s nicht beim Server auf 127.0.0.1
+  ankommt; die Auflösung ist `[::1, 127.0.0.1]`.
+- In Lauf 44876744240 galt dort ein `connect` auf einen geschlossenen Port als verbunden. In
+  44880347502 meldete der Client am geschlossenen Port und bei `localhost` „verbunden: nein“.
+  Der Runner verhält sich von Lauf zu Lauf verschieden. Die frühere Lesung „der Runner nimmt
+  Verbindungen zu geschlossenen Ports an“ gilt nicht allgemein.
+- Die Probe zählt die Ankunft am eigenen Server und trägt beide Fälle.
+- Rücknahme beim nächsten Vendoring (QTMUX-161); der Wächter `test_scene15_skip_retired`
+  erzwingt sie.
+
+**Live:**
+- serial `1795249486`, Publish 2026-11-21 09:25.
+- Signatur gegen die Client-Bytes gültig, Gegenprobe ungültig; drei Artefakte per Cache-Bust
+  `cmp`-gleich; Index 12 Produkte, geändert nur qtmux.
+- Neuer Client: 1.9.15 → verfügbar, 1.10.0 → aktuell, Replay und falsches Produkt abgelehnt.
+- Pflichtprobe aus dem Updater von 1.9.15: vor dem Publish rc 20 (Positivkontrolle Replay
+  rc 11), danach rc 0 mit dem macOS-Paket (48 766 464 B, `cmp`-gleich).
+- Der 1.9.15-Client zeigt die Notes einmal roh (`TextArea` ohne `textFormat`).
+- GitHub-Release `v1.10.0` mit vier Assets, je zurückgeladen und `cmp`-gleich, Latest.
+
 ## 2026-11-19 — CLAUDE.md-Diät
 
 Die `CLAUDE.md` hatte 117 195 Zeichen und lag zusammen mit der Workspace-Datei über der Grenze,
