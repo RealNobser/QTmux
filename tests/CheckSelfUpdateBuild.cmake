@@ -2,6 +2,9 @@
 # braucht (Vertrag V2 §6, K2). Dass die Hilfsprogramme im gebauten Programm liegen,
 # prüft test_update_helper_embedded (Byte-Vergleich, appupdate_embed_install_helpers);
 # hier steht nur, was das MSI-Skript dafür tun muss (Punkt 4).
+# ⚠️ Kein Paketbeleg: Punkt 4 liest den TEXT von build-msi.ps1. Ob ein gebautes MSI
+# update-helper.exe trägt, prüft nur das Skript selbst beim MSI-Bau auf der
+# Windows-Maschine (File-Tabelle); CI und ctest sehen kein MSI.
 #
 #   1. installer/QTmux.wxs legt den Installationsort in „Apps und Features“ ab:
 #      <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]"

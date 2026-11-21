@@ -17,6 +17,10 @@
 #      src/app/UpdateSelfTest.cpp (Stufe 1 nur bei umgestellter Quelle, also
 #      Trockenlauf) und das Bildziel src/app/UpdatePicture.cpp (nie in der App).
 # Kommentare zählen nicht (eine Zeile, die das Verbot ERKLÄRT, ist kein Verstoß).
+# ⚠️ Eine Quelltext-Suche, kein Verhaltensbeleg: Regel 2 sieht nur das Literal
+# „"update/“ bzw. `category: "update"`, ein zusammengesetzter Schlüssel ginge durch;
+# Regel 5 sieht keine Bedingung als Klammerblock (dafür prüft tst_updatequit den
+# Installationsweg am echten Programm).
 #
 # Aufruf: cmake -DSRC_DIRS="src;qml" -DROOT=<repo> -P CheckUpdateConsumer.cmake
 # Plattformneutral (kein grep), damit er auch unter Windows in der CI läuft.
