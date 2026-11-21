@@ -445,7 +445,7 @@ if(TARGET qtmux-bilder)
     target_compile_definitions(test_updatepictures PRIVATE
         QTMUX_PICTURE_BINARY="$<TARGET_FILE:qtmux-bilder>"
         QTMUX_PICTURE_LOG_DIR="${qtmux_picture_logs}")
-    target_link_libraries(test_updatepictures PRIVATE Qt6::Test Qt6::Network)
+    target_link_libraries(test_updatepictures PRIVATE Qt6::Test Qt6::Network Qt6::Gui)
     # Über RunAndReport.cmake: bei Rot Exit-Code bzw. Ausnahmekennung, die QTest-Datei
     # und die Logs der Kindprozesse (ein CI-Lauf endete unter Windows rot ohne Ausgabe).
     add_test(NAME test_updatepictures

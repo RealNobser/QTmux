@@ -4,7 +4,8 @@
 // Gefahren wird eine Auswahl, je Fläche mindestens eine Szene: Dialog (3, 5, 14),
 // Proxy-Anmeldung (15), Hinweis in der Kopfleiste bei 720 px (hint-avail-narrow),
 // Einstellungsfenster (settings-manual) und die beiden QTmux-Szenen. Gefordert je
-// Szene: Exit 0, ein Bild mit Inhalt, kein QML-Fehler im Log. Dazu: Eine unbekannte
+// Szene: Exit 0, ein Bild mit Inhalt (lesbar, Mindestmaße, nicht einfarbig, mindestens
+// acht Farben; die Dateigröße steht nur in der Meldung), kein QML-Fehler im Log. Dazu: Eine unbekannte
 // Szene und ein Aufruf ohne --update-picture enden mit Exit 2 und ohne Bild.
 //
 // Das Programm entsteht nur mit QTMUX_UPDATE_PICTURES; ohne den Schalter gibt es
@@ -25,9 +26,11 @@
 #include <QFileInfo>
 #include <QHostAddress>
 #include <QHostInfo>
+#include <QImage>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
+#include <QSet>
 #include <QTcpServer>
 #include <QTemporaryDir>
 #include <QTest>
@@ -116,6 +119,34 @@ Run runPicture(const QTemporaryDir &work, const QString &label, const QStringLis
     return r;
 }
 
+// Ist das Bild eines mit Inhalt? Leer = ja, sonst der Grund (mit Dateigröße).
+// Die Dateigröße allein taugt nicht: Ohne Schriften (Windows-Runner, offscreen) fiel eine
+// flächige, aber richtige Szene unter 10 000 Byte.
+QString pictureProblem(const QString &png)
+{
+    constexpr int kMinWidth = 300;
+    constexpr int kMinHeight = 200;
+    constexpr int kMinColors = 8;
+    const qint64 bytes = QFileInfo(png).size();
+    QImage img;
+    if (!img.load(png))
+        return QStringLiteral("kein lesbares Bild (%1 Byte)").arg(bytes);
+    if (img.width() < kMinWidth || img.height() < kMinHeight)
+        return QStringLiteral("zu klein: %1x%2 (%3 Byte)")
+            .arg(img.width()).arg(img.height()).arg(bytes);
+    QSet<QRgb> colors;
+    for (int y = 0; y < img.height() && colors.size() < kMinColors; ++y)
+        for (int x = 0; x < img.width() && colors.size() < kMinColors; ++x)
+            colors.insert(img.pixel(x, y));
+    if (colors.size() == 1)
+        return QStringLiteral("einfarbig (%1x%2, %3 Byte)")
+            .arg(img.width()).arg(img.height()).arg(bytes);
+    if (colors.size() < kMinColors)
+        return QStringLiteral("nur %1 Farben (%2x%3, %4 Byte)")
+            .arg(colors.size()).arg(img.width()).arg(img.height()).arg(bytes);
+    return {};
+}
+
 } // namespace
 
 class TestUpdatePictures : public QObject {
@@ -187,7 +218,49 @@ private slots:
                                                  .arg(hit.captured(0), r.out)));
         QVERIFY2(r.out.contains(QStringLiteral("qtmux-bilder: %1 rc=0").arg(png)), qPrintable(r.out));
         if (!logMust.isEmpty()) QVERIFY2(r.out.contains(logMust), qPrintable(r.out));
-        QVERIFY2(QFileInfo(png).size() > 10000, qPrintable(r.out));
+        const QString problem = pictureProblem(png);
+        QVERIFY2(problem.isEmpty(), qPrintable(problem + QLatin1Char('\n') + r.out));
+    }
+
+    void aBlankPictureIsRefused()
+    {
+        // Gegenprobe der Bildprüfung: leere Datei, einfarbig, zu klein, zu wenige Farben.
+        QTemporaryDir work;
+        QVERIFY(work.isValid());
+        const QString empty = work.filePath(QStringLiteral("empty.png"));
+        QFile f(empty);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.close();
+        QVERIFY(pictureProblem(empty).startsWith(QLatin1String("kein lesbares Bild")));
+
+        QImage plain(720, 720, QImage::Format_RGB32);
+        plain.fill(QColor(250, 250, 250));
+        const QString plainPng = work.filePath(QStringLiteral("plain.png"));
+        QVERIFY(plain.save(plainPng));
+        QVERIFY2(pictureProblem(plainPng).startsWith(QLatin1String("einfarbig")),
+                 qPrintable(pictureProblem(plainPng)));
+
+        QImage tiny(40, 40, QImage::Format_RGB32);
+        for (int y = 0; y < 40; ++y)
+            for (int x = 0; x < 40; ++x) tiny.setPixel(x, y, qRgb(x * 6, y * 6, 128));
+        const QString tinyPng = work.filePath(QStringLiteral("tiny.png"));
+        QVERIFY(tiny.save(tinyPng));
+        QVERIFY(pictureProblem(tinyPng).startsWith(QLatin1String("zu klein")));
+
+        QImage two(720, 720, QImage::Format_RGB32);
+        two.fill(QColor(250, 250, 250));
+        for (int y = 0; y < 360; ++y)
+            for (int x = 0; x < 720; ++x) two.setPixel(x, y, qRgb(30, 30, 30));
+        const QString twoPng = work.filePath(QStringLiteral("two.png"));
+        QVERIFY(two.save(twoPng));
+        QVERIFY(pictureProblem(twoPng).startsWith(QLatin1String("nur 2 Farben")));
+
+        QImage rich(720, 720, QImage::Format_RGB32);
+        for (int y = 0; y < 720; ++y)
+            for (int x = 0; x < 720; ++x) rich.setPixel(x, y, qRgb(x % 256, y % 256, 90));
+        const QString richPng = work.filePath(QStringLiteral("rich.png"));
+        QVERIFY(rich.save(richPng));
+        QCOMPARE(pictureProblem(richPng), QString());
     }
 
     void anUnknownSceneOrNoSceneWritesNothing()
