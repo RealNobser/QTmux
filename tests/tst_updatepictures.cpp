@@ -46,6 +46,9 @@ Run runPicture(const QTemporaryDir &work, const QStringList &args, int timeoutMs
                    .arg(QCoreApplication::applicationPid())
                    .arg(++counter));
     env.insert(QStringLiteral("QT_LOGGING_RULES"), QStringLiteral("appupdate.*.info=true"));
+    // Unter Windows schreibt Qt ohne diese beiden nur an den Debugger, nicht in die Pipe.
+    env.insert(QStringLiteral("QT_ASSUME_STDERR_HAS_CONSOLE"), QStringLiteral("1"));
+    env.insert(QStringLiteral("QT_FORCE_STDERR_LOGGING"), QStringLiteral("1"));
 
     QProcess child;
     child.setProcessEnvironment(env);

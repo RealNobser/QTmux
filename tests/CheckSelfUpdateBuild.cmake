@@ -93,6 +93,23 @@ if(DEFINED MSI_SCRIPT)
     # zählen. Am Stück gelesen, nicht als CMake-Liste: PowerShell-Zeilen tragen
     # eckige Klammern, und eine Liste verschmilzt dann Zeilen still miteinander.
     file(READ "${MSI_SCRIPT}" _msi)
+    # Erst die Blockkommentare <# … #> (PowerShell), dann die Zeilen ab „#“.
+    while(TRUE)
+        string(FIND "${_msi}" "<#" _b)
+        if(_b EQUAL -1)
+            break()
+        endif()
+        string(SUBSTRING "${_msi}" ${_b} -1 _rest)
+        string(FIND "${_rest}" "#>" _e)
+        string(SUBSTRING "${_msi}" 0 ${_b} _head)
+        if(_e EQUAL -1)
+            set(_msi "${_head}")   # offener Block: der Rest ist Kommentar
+            break()
+        endif()
+        math(EXPR _after "${_b} + ${_e} + 2")
+        string(SUBSTRING "${_msi}" ${_after} -1 _tail)
+        set(_msi "${_head}${_tail}")
+    endwhile()
     string(REGEX REPLACE "(^|\n)[ \t]*#[^\n]*" "\\1" _msi "${_msi}")
     if(NOT _msi MATCHES "Join-Path \\$build \"update-helper\\.exe\"")
         list(APPEND _problems "build-msi.ps1: holt update-helper.exe nicht aus dem Bauordner")

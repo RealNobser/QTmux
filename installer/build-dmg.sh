@@ -133,6 +133,8 @@ if [[ ! -f "$DMG_MP/QTmux.app/Contents/Info.plist" || ! -L "$DMG_MP/Applications
     echo "FEHLER: Im DMG liegt keine QTmux.app mit Link auf /Applications in der Wurzel." >&2
     ls -A "$DMG_MP" >&2
     "$REPO/installer/macos/dmg-image.sh" eject "$DMG_MP" && rmdir "$DMG_MP"
+    # Ein rotes DMG bleibt nicht in dist/ liegen, wo ein späterer Publish es fände.
+    rm -f "$DMG"
     exit 1
 fi
 echo "    QTmux.app und Link auf /Applications liegen in der Wurzel."
@@ -151,7 +153,8 @@ fi
 "$REPO/installer/macos/dmg-image.sh" eject "$DMG_MP"
 rmdir "$DMG_MP"
 if [[ -n "$DMG_FAIL" ]]; then
-    echo "FEHLER: $DMG_FAIL" >&2
+    rm -f "$DMG"
+    echo "FEHLER: $DMG_FAIL DMG gelöscht." >&2
     exit 1
 fi
 echo "    Tauschhelfer im Bundle, kein Szenen-Baustein in der App."

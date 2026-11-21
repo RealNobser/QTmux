@@ -4,4 +4,11 @@
 #   throw "update-helper.exe fehlt neben qtmux.exe"
 #   Copy-Item $helper $stage
 #   foreach ($need in @("qtmux.exe", "update-helper.exe")) { }
+<#
+Dieselben vier Zeilen im Blockkommentar zaehlen ebenso wenig:
+$helper = Join-Path $build "update-helper.exe"
+throw "update-helper.exe fehlt neben qtmux.exe"
+Copy-Item $helper $stage
+foreach ($need in @("qtmux.exe", "update-helper.exe")) { }
+#>
 Copy-Item (Join-Path $build "qtmux.exe") $stage

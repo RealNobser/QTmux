@@ -178,7 +178,15 @@ if ($LASTEXITCODE -ne 0) {
 # Windows-Installer-Schnittstelle; FileName steht dort als "KURZ|lang" oder nur
 # "lang". Rot loescht das MSI.
 Write-Host "==> Paketinhalt pruefen (update-helper.exe)" -ForegroundColor Cyan
+# Die Datenbank wird danach ausdruecklich freigegeben: Solange dieser Prozess sie
+# offen haelt, liesse sich das MSI auf dem roten Weg nicht loeschen.
+function Remove-BadMsi([string]$why) {
+    Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $msi) { throw "$why -- MSI NICHT geloescht, liegt noch: $msi" }
+    throw "$why -- MSI geloescht"
+}
 $names = @()
+$wi = $null; $db = $null; $view = $null; $readError = $null
 try {
     $wi = New-Object -ComObject WindowsInstaller.Installer
     $db = $wi.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $wi, @($msi, 0))
@@ -189,21 +197,25 @@ try {
         if ($null -eq $rec) { break }
         $fn = $rec.GetType().InvokeMember("StringData", "GetProperty", $null, $rec, @(1))
         $names += ($fn -split '\|')[-1]
+        $null = [System.Runtime.InteropServices.Marshal]::ReleaseComObject($rec)
     }
     $null = $view.GetType().InvokeMember("Close", "InvokeMethod", $null, $view, $null)
 } catch {
-    Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue
-    throw "File-Tabelle von $msi nicht lesbar: $($_.Exception.Message) -- MSI geloescht"
+    $readError = $_.Exception.Message
+} finally {
+    foreach ($o in @($view, $db, $wi)) {
+        if ($null -ne $o) { $null = [System.Runtime.InteropServices.Marshal]::ReleaseComObject($o) }
+    }
+    $view = $null; $db = $null; $wi = $null
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
 }
+if ($null -ne $readError) { Remove-BadMsi "File-Tabelle von $msi nicht lesbar: $readError" }
 if ($names.Count -lt 2) {
-    Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue
-    throw "File-Tabelle von $msi liefert $($names.Count) Eintraege -- Messung unbrauchbar, MSI geloescht"
+    Remove-BadMsi "File-Tabelle von $msi liefert $($names.Count) Eintraege -- Messung unbrauchbar"
 }
 foreach ($need in @("qtmux.exe", "update-helper.exe")) {
-    if (-not ($names -contains $need)) {
-        Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue
-        throw "$need fehlt in der File-Tabelle von $msi -- MSI geloescht"
-    }
+    if (-not ($names -contains $need)) { Remove-BadMsi "$need fehlt in der File-Tabelle von $msi" }
 }
 Write-Host "  File-Tabelle: $($names.Count) Dateien, qtmux.exe und update-helper.exe vorhanden"
 

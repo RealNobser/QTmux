@@ -192,7 +192,11 @@ int main(int argc, char *argv[])
     // (Hinweis: Der VS-Code-Debugger braucht zusätzlich console=externalTerminal in
     // launch.json, sonst stört die Handle-Umleitung von "internalConsole" die
     // ConPTY-Datenflüsse — siehe dortigen Kommentar.)
+    // Das Bildziel qtmux-bilder ist ein Konsolenprogramm ohne Sitzungen: Es behält
+    // seine Konsole, damit seine Meldungen über stderr ankommen.
+#  if !defined(QTMUX_UPDATE_PICTURES)
     if (GetConsoleWindow()) FreeConsole();
+#  endif
 #endif
 
     // macOS blendet Icons in (nativen) Menüs sonst aus -> explizit erlauben,
@@ -345,7 +349,10 @@ int main(int argc, char *argv[])
     // Sprachwechsel erfordert für DIESE Items einen Neustart. (Ein eingespeistes
     // -AppleLanguages-argv wirkt NICHT: NSUserDefaults liest das echte
     // OS-Prozess-argv, nicht Qts argv.)
-    {
+    // Nicht im Selbsttest und nicht im Bildziel: Beide laufen offscreen ohne native
+    // Menüleiste, und der Wert landete sonst in der echten App-Domain des Benutzers
+    // (bzw. als qtmux-bilder.plist), gemessen 2026-11-21.
+    if (updateSelfTestDir.isEmpty()) {
         QSettings s;   // Default-Ctor: gleiche Domain wie der AppController
         const QString sys = QLocale::system().name().left(2);
         const QString fallback = (sys == QLatin1String("de")) ? QStringLiteral("de")
