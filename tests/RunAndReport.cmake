@@ -4,6 +4,7 @@
 #   TEST        das Testprogramm
 #   QTEST_FILE  Datei, in die QTest zusätzlich schreibt (-o <datei>,txt)
 #   LOGDIR      Ordner mit den Logs der Kindprozesse (*.log), bei Rot gedruckt
+#   ARGS        optional: Argumente vor den -o-Schaltern (z. B. ein Testfunktionsname)
 #
 # Der Exit-Code kommt von execute_process: eine Zahl, oder bei einem abgestürzten
 # Prozess ein Text wie „Exit code 0xc0000005“ (Windows) bzw. „Segmentation fault“.
@@ -19,7 +20,7 @@ endforeach()
 
 file(REMOVE "${QTEST_FILE}")
 execute_process(
-    COMMAND "${TEST}" -o "${QTEST_FILE},txt" -o "-,txt"
+    COMMAND "${TEST}" ${ARGS} -o "${QTEST_FILE},txt" -o "-,txt"
     RESULT_VARIABLE _rc
     OUTPUT_VARIABLE _out
     ERROR_VARIABLE _err)

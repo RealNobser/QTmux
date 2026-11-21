@@ -37,6 +37,8 @@
 
 #include <cstdio>
 
+#include "Scene15Probe.h"
+
 namespace {
 
 // Vor main(): Geht der Prozess ab, steht alles bis dahin Geschriebene schon in der Pipe.
@@ -56,6 +58,13 @@ struct Run {
     QString log;
     QString out;
 };
+
+// Log-Ordner: aus der Umgebung (der Szene-15-Test hat einen eigenen), sonst der gebaute.
+QString pictureLogDir()
+{
+    const QString env = qEnvironmentVariable("QTMUX_PICTURE_LOG_DIR");
+    return env.isEmpty() ? QStringLiteral(QTMUX_PICTURE_LOG_DIR) : env;
+}
 
 Run runPicture(const QTemporaryDir &work, const QString &label, const QStringList &args,
                int timeoutMs = 60000)
@@ -105,7 +114,7 @@ Run runPicture(const QTemporaryDir &work, const QString &label, const QStringLis
 
     QString safe = label;
     safe.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_-]")), QStringLiteral("_"));
-    r.log = QStringLiteral(QTMUX_PICTURE_LOG_DIR "/%1-%2.log").arg(counter).arg(safe);
+    r.log = pictureLogDir() + QStringLiteral("/%1-%2.log").arg(counter).arg(safe);
     QFile f(r.log);
     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(r.out.toLocal8Bit());
 
@@ -157,8 +166,10 @@ private slots:
     {
         // Logs des letzten Laufs entfernen: nur einzelne *.log-Dateien im eigenen Ordner,
         // nie den Ordner rekursiv (ein leerer Pfad hieße sonst Arbeitsverzeichnis).
-        const QString logDir = QStringLiteral(QTMUX_PICTURE_LOG_DIR);
-        QVERIFY(logDir.endsWith(QLatin1String("test_updatepictures_logs")));
+        const QString logDir = pictureLogDir();
+        QVERIFY2(logDir.endsWith(QLatin1String("test_updatepictures_logs"))
+                     || logDir.endsWith(QLatin1String("test_updatepictures_logs_szene15")),
+                 qPrintable(logDir));
         QVERIFY(QDir().mkpath(logDir));
         const QDir logs(logDir);
         for (const QString &old : logs.entryList({QStringLiteral("*.log")}, QDir::Files))
@@ -186,7 +197,6 @@ private slots:
         QTest::newRow("3 hell de") << "3" << "light" << "de" << "";
         QTest::newRow("5 dunkel en") << "5" << "dark" << "en" << "";
         QTest::newRow("14 hell en") << "14" << "light" << "en" << "install: manual";
-        QTest::newRow("15 dunkel de") << "15" << "dark" << "de" << "";
         QTest::newRow("hint-avail-narrow") << "hint-avail-narrow" << "light" << "de" << "";
         QTest::newRow("settings-manual") << "settings-manual" << "dark" << "de" << "";
         QTest::newRow("qtmux-other-instance") << "qtmux-other-instance" << "light" << "de"
@@ -200,10 +210,56 @@ private slots:
         QFETCH(QString, theme);
         QFETCH(QString, language);
         QFETCH(QString, logMust);
+        checkScene(QString::fromLatin1(QTest::currentDataTag()), scene, theme, language, logMust);
+    }
+
+    // Szene 15 als eigene Funktion und eigener ctest-Test (test_updatepictures_szene15):
+    // nur der trägt den Skip-Ausdruck (tests/Scene15Probe.h).
+    void proxySignInBecomesAPicture()
+    {
+        if (scene15::runsInItsOwnTest()) QSKIP("laeuft als eigener ctest-Test test_updatepictures_szene15");
+        const QString &why = scene15::skipReasonHere();
+        if (!why.isEmpty()) QSKIP(qPrintable(why));
+        checkScene(QStringLiteral("15 dunkel de"), QStringLiteral("15"), QStringLiteral("dark"),
+                   QStringLiteral("de"), QStringLiteral("asks for sign-in"));
+    }
+
+    void theScene15ProbeDecidesTheSkip()
+    {
+        // Erreichbar: kein Aussetzen.
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost, 0));
+        const scene15::Probe ok =
+            scene15::connectWithin(QStringLiteral("127.0.0.1"), server.serverPort(), 5000);
+        QVERIFY(ok.reached);
+        QCOMPARE(scene15::reasonFor(ok, {QStringLiteral("127.0.0.1")}), QString());
+        // Unerreichbar (Port ohne Server): Aussetzen mit genau dieser Meldung.
+        const quint16 closed = server.serverPort();
+        server.close();
+        const scene15::Probe no = scene15::connectWithin(QStringLiteral("127.0.0.1"), closed, 2000);
+        QVERIFY(!no.reached);
+        const QString why = scene15::reasonFor(
+            no, {QStringLiteral("::1"), QStringLiteral("127.0.0.1")});
+        QVERIFY2(why.startsWith(QLatin1String(scene15::kMarker)), qPrintable(why));
+        QVERIFY2(why.contains(QStringLiteral("in %1 ms").arg(no.ms)), qPrintable(why));
+        QVERIFY2(why.contains(QLatin1String("localhost -> [::1, 127.0.0.1]")), qPrintable(why));
+        QVERIFY2(why.contains(QLatin1String("behoben im naechsten Stand des Update-Kerns")),
+                 qPrintable(why));
+        // Was dieser Rechner misst, steht im Log (auch wenn nicht ausgesetzt wird).
+        std::fprintf(stderr, "DIAGNOSE szene15-probe: %s\n",
+                     scene15::skipReasonHere().isEmpty()
+                         ? "localhost erreicht 127.0.0.1, Szene 15 laeuft"
+                         : qPrintable(scene15::skipReasonHere()));
+    }
+
+private:
+    void checkScene(const QString &label, const QString &scene, const QString &theme,
+                    const QString &language, const QString &logMust)
+    {
         QTemporaryDir work;
         QVERIFY(work.isValid());
         const QString png = work.filePath(QStringLiteral("scene.png"));
-        const Run r = runPicture(work, QString::fromLatin1(QTest::currentDataTag()),
+        const Run r = runPicture(work, label,
                                  {QStringLiteral("--update-picture"), scene,
                                   QStringLiteral("--screenshot"), png,
                                   QStringLiteral("--picture-theme"), theme,
@@ -221,6 +277,8 @@ private slots:
         const QString problem = pictureProblem(png);
         QVERIFY2(problem.isEmpty(), qPrintable(problem + QLatin1Char('\n') + r.out));
     }
+
+private slots:
 
     void aBlankPictureIsRefused()
     {
