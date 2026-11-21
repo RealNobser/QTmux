@@ -280,9 +280,26 @@ private slots:
         // Bedingung, die den Selbsttest ausnimmt, fiele der Ablauf auf die Vorgabe des
         // Kerns zurück, und hier stünde „system-installer“.
         QVERIFY2(v.captured(1) != QLatin1String("system-installer"), qPrintable(r.out));
+#else
+        // Linux: Der Hub wählt Stufe 1 (kLinuxSelfInstallMeasured ist aus). Das AppImage
+        // wird an seinem Ort ersetzt; dafür muss nur sein Ordner beschreibbar sein, die
+        // Datei selbst nicht existieren (InstallBackend.cpp, Zweig „appimage“).
+        QCOMPARE(v.captured(1), QStringLiteral("system-installer"));
+        QVERIFY2(r.out.contains(QLatin1String("replaces the AppImage, runs on the next start")),
+                 qPrintable(r.out));
 #endif
         QVERIFY2(!r.out.contains(QLatin1String("carries no swap program")), qPrintable(r.out));
         QVERIFY2(!r.out.contains(QLatin1String("update-helper.exe is missing")), qPrintable(r.out));
+        // Die beiden Negativprüfungen hängen am Wortlaut des Hubs. Steht er dort nicht
+        // mehr, wären sie still zahnlos: darum hier gegen den vendierten Quelltext.
+        QFile src(QStringLiteral(QTMUX_UPDATER_SOURCE_DIR "/SelfInstall.cpp"));
+        QVERIFY(src.open(QIODevice::ReadOnly));
+        const QByteArray code = src.readAll();
+        QVERIFY(code.contains("carries no swap program (Contents/Helpers/update-swap)"));
+        QVERIFY(code.contains("%1 is missing next to %2 or is not a plain file"));
+        QFile hdr(QStringLiteral(QTMUX_UPDATER_SOURCE_DIR "/SelfInstall.hpp"));
+        QVERIFY(hdr.open(QIODevice::ReadOnly));
+        QVERIFY(hdr.readAll().contains("kWindowsHelperFileName[] = \"update-helper.exe\""));
     }
 
     void theNewVersionConfirmsItsStartAfterTheMainWindow()

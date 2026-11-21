@@ -383,7 +383,8 @@ add_dependencies(test_updatequit qtmux)
 target_compile_definitions(test_updatequit PRIVATE
     QTMUX_APP_BINARY="$<TARGET_FILE:qtmux>"
     QTMUX_UPDATE_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update"
-    QTMUX_VERSION_STRING="${PROJECT_VERSION}")
+    QTMUX_VERSION_STRING="${PROJECT_VERSION}"
+    QTMUX_UPDATER_SOURCE_DIR="${CMAKE_SOURCE_DIR}/third_party/updater/update")
 # qtmux_updater nur für den Merker und das Format der Start-Bestätigung
 # (theNewVersionConfirmsItsStartAfterTheMainWindow).
 target_link_libraries(test_updatequit PRIVATE Qt6::Test Qt6::Network qtmux_updater)
