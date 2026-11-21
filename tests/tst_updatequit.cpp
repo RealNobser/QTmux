@@ -240,6 +240,10 @@ private slots:
                  qPrintable(QStringLiteral("Keine Installation in aboutToQuit:\n%1").arg(out)));
         QVERIFY2(!out.contains(QLatin1String("app did not quit within")),
                  qPrintable(QStringLiteral("Frist des Ablaufs gegriffen:\n%1").arg(out)));
+        // Der Ablauf wird abgebaut, solange die App noch lebt (Vorgabe des Hubs), nicht
+        // erst in der statischen Zerstörung nach main.
+        QVERIFY2(out.contains(QLatin1String("update bridge destroyed (app alive: 1)")),
+                 qPrintable(QStringLiteral("Bridge nicht bei lebender App abgebaut:\n%1").arg(out)));
         // Download liegt im Ordner des Tests, nicht in „Downloads“.
         QVERIFY2(!QDir(work.filePath(QStringLiteral("downloads")))
                       .isEmpty(QDir::Files | QDir::NoDotAndDotDot),

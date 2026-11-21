@@ -7,6 +7,7 @@
 #include "update/SelfInstall.hpp"
 #include "update/UpdateTexts.hpp"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QLoggingCategory>
 
@@ -92,7 +93,15 @@ UpdateBridge::UpdateBridge(Wiring wiring, QObject *parent)
     connect(m_flow, &Flow::proxyAuthChanged, this, &UpdateBridge::sessionPasswordChanged);
 }
 
-UpdateBridge::~UpdateBridge() = default;
+UpdateBridge::~UpdateBridge()
+{
+    // Messpunkt für tst_updatequit: Der Ablauf (mit Backend, Timern, Einstellungen) muss
+    // abgebaut werden, solange die App noch lebt (Vorgabe des Hubs; main.cpp hält die
+    // Bridge darum zwischen app und engine).
+    if (m_selfTest)
+        qInfo("QTmux selftest-update: update bridge destroyed (app alive: %d)",
+              QCoreApplication::instance() ? 1 : 0);
+}
 
 QString UpdateBridge::currentVersion() const { return QStringLiteral(QTMUX_VERSION_STRING); }
 QString UpdateBridge::buildId() const { return m_flow->installedBuildId(); }

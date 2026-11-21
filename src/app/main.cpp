@@ -29,6 +29,7 @@
 #include <QTextStream>
 
 #include <cstdio>
+#include <memory>
 
 #include "qtmux_version.h"   // generiert aus cmake/Version.h.in (PROJECT_VERSION)
 
@@ -396,6 +397,18 @@ int main(int argc, char *argv[])
 
     QGuiApplication app(argc, argv);
 
+    // Lebensdauer des Update-Ablaufs: so lange wie die App (Vorgabe des Hubs), nicht
+    // länger. Die Halter stehen ZWISCHEN app und engine: Beim Verlassen von main baut
+    // C++ zuerst die engine ab (das QML bindet an „Updates“), dann die Bridge samt
+    // Ablauf, Backend, Timern und Einstellungen, dann den Szenen-Baustein des
+    // Bildziels (die Bridge zeigt seinen Ablauf), zuletzt app. Vorher war die Bridge
+    // ein statisches Objekt und wurde erst nach dem Ende der App abgebaut.
+    // Wächter: tst_updatequit (Selbsttest meldet den Abbau bei lebender App).
+#if defined(QTMUX_UPDATE_PICTURES)
+    std::unique_ptr<qtmux::UpdatePicture> pictureHolder;
+#endif
+    std::unique_ptr<qtmux::UpdateBridge> updatesHolder;
+
     QQuickStyle::setStyle("Basic");
 
     QQmlApplicationEngine engine;
@@ -472,16 +485,17 @@ int main(int argc, char *argv[])
 #if defined(QTMUX_UPDATE_PICTURES)
     // Bildziel: Die Szene des Hubs legt ihren Ablauf an, die Bridge zeigt ihn. Das
     // Bild entsteht, sobald der Ablauf dort steht (unten nach dem QML-Laden).
-    static std::unique_ptr<qtmux::UpdatePicture> picture;
+    static qtmux::UpdatePicture *picture = nullptr;  // gehört pictureHolder (oben)
     static bool pictureReached = false;
     static bool pictureOk = false;
     static std::function<void(bool)> pictureShoot;  // gesetzt, sobald das QML steht
     {
         const QString build = QStringLiteral(QTMUX_BUILD_ID);
         const qsizetype plus = build.indexOf(QLatin1Char('+'));
-        picture = std::make_unique<qtmux::UpdatePicture>(
+        pictureHolder = std::make_unique<qtmux::UpdatePicture>(
             updatePicture, updateWiring.language, QStringLiteral(QTMUX_VERSION_STRING),
             plus >= 0 ? build.mid(plus) : QString());
+        picture = pictureHolder.get();
         const bool begun = picture->begin([](bool ok) {
             pictureReached = true;
             pictureOk = ok;
@@ -491,7 +505,10 @@ int main(int argc, char *argv[])
         updateWiring.externalFlow = picture->flow();
     }
 #endif
-    static qtmux::UpdateBridge updates(std::move(updateWiring));
+    updatesHolder = std::make_unique<qtmux::UpdateBridge>(std::move(updateWiring));
+    // Der Name bleibt für die Lambdas unten erreichbar (statisch gebunden, einmal je
+    // Prozess); besitzen tut ihn updatesHolder.
+    static qtmux::UpdateBridge &updates = *updatesHolder;
     // Im Selbsttest ist die Beenden-Rückfrage immer an: Der Test belegt, dass sie auf
     // dem Update-Weg trotzdem nicht kommt (UpdateQuit.cpp). Das Profil ist eigens.
     if (!updateSelfTestDir.isEmpty())
