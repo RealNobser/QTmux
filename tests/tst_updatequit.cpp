@@ -38,6 +38,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QMap>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
@@ -55,6 +56,9 @@
 #include <functional>
 
 namespace {
+
+// Von einzelnen Testfällen gesetzt, von runSelfTest auf die Umgebung des Kindes gelegt.
+QMap<QString, QString> g_envOverride;
 
 struct Run {
     bool finished = false;
@@ -140,6 +144,11 @@ Run runSelfTest(const QTemporaryDir &work, const QStringList &extraArgs, int tim
     env.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
     env.insert(QStringLiteral("QTMUX_NO_GPU"), QStringLiteral("1"));
     env.insert(QStringLiteral("QTMUX_MCP_PORT"), QString::number(port));
+    // Testfälle, die den Port selbst steuern: leerer Wert = Variable entfernen.
+    for (auto it = g_envOverride.constBegin(); it != g_envOverride.constEnd(); ++it) {
+        if (it.value().isEmpty()) env.remove(it.key());
+        else env.insert(it.key(), it.value());
+    }
     env.insert(QStringLiteral("QTMUX_PROFILE"), profile);
     env.insert(QStringLiteral("QT_LOGGING_RULES"), QStringLiteral("appupdate.*.info=true"));
     // Unter Windows ist qtmux.exe ein GUI-Programm ohne Konsole; Qt schriebe die
@@ -469,6 +478,37 @@ private slots:
                                 .arg(QDir(work.path())
                                          .entryList(QDir::AllEntries | QDir::NoDotAndDotDot)
                                          .join(", "))));
+    }
+
+    void theSelfTestNeverListensOnTheDefaultMcpPort_data()
+    {
+        QTest::addColumn<QString>("port");
+        QTest::newRow("ohne QTMUX_MCP_PORT") << QString();
+        QTest::newRow("QTMUX_MCP_PORT=7345") << QStringLiteral("7345");
+    }
+
+    void theSelfTestNeverListensOnTheDefaultMcpPort()
+    {
+        // Ein Selbsttest (auch das Bildziel) lauscht nie auf 7345, dem Port der Instanz
+        // des Anwenders; ohne Vorgabe oder mit 7345 nimmt er einen freien Port.
+        QFETCH(QString, port);
+        g_envOverride.insert(QStringLiteral("QTMUX_MCP_PORT"), port);
+        QTemporaryDir work;
+        QVERIFY(work.isValid());
+        const QString fixture =
+            QUrl::fromLocalFile(QStringLiteral(QTMUX_UPDATE_FIXTURE_DIR "/good")).toString();
+        const Run r = runSelfTest(work,
+                                  {QStringLiteral("--update-base-url"), fixture,
+                                   QStringLiteral("--selftest-system-installer")},
+                                  120000);
+        g_envOverride.clear();
+        QVERIFY2(r.finished && r.code == 0, qPrintable(r.out));
+        static const QRegularExpression used(QStringLiteral("selftest-update: MCP port (\\d+)"));
+        const auto m = used.match(r.out);
+        QVERIFY2(m.hasMatch(), qPrintable(r.out));
+        const int chosen = m.captured(1).toInt();
+        QVERIFY2(chosen > 0 && chosen != 7345, qPrintable(r.out));
+        QVERIFY2(!r.out.contains(QLatin1String("Port 7345")), qPrintable(r.out));
     }
 
     void theInstallerSwitchIsRefusedOutsideTheSelfTest_data()

@@ -245,6 +245,17 @@ des Ablaufs, Werte der Seite „Updates“), die QML-Oberfläche unter `qml/dial
 Bis 1.9.15 war es `src/viewmodels/UpdateViewModel.{h,cpp}` (gelöscht; die Abgleich-Absätze
 oben nennen es als damaligen Stand).
 
+## Bewusste Abweichung: Selbsttest per Startschalter
+
+Der Hub schreibt zu `Config::allowSourceOverrideForSelfTest`: „set it in the app's CODE for
+the self-test run only – never from settings, the environment or an argument“. QTmux leitet
+die Erlaubnis aus dem Startschalter `--selftest-update <ordner>` ab, weil der Test des
+Beenden-Wegs das ausgelieferte Programm selbst fahren muss. Begrenzt ist das durch den Hub
+(mit umgestellter Quelle ist jede Installation ein Trockenlauf; der Signaturschlüssel ist
+nicht umstellbar) und durch QTmux (ohne umgestellte Quelle Exit 2; Einstellungen und Verlauf
+im Selbsttest-Ordner; MCP nie auf 7345; `--selftest-system-installer` nur mit beidem, sonst
+Exit 6). Stelle: `src/viewmodels/UpdateBridge.cpp`.
+
 ## Warum ein `update/`-Unterverzeichnis
 
 Der Kern inkludiert sich selbst mit dem Präfix `update/`

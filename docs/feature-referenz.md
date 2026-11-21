@@ -1304,6 +1304,13 @@ umgestellte Quelle endet QTmux sofort mit Exit 6
 Selbsttest-Treiber, und nur bei umgestellter Quelle; im normalen Start setzt ihn allein die
 Bridge mit genau einem `setInstallBackend(appupdate::makeInstallBackendForThisSystem())`
 (Regel 5 von `test_update_consumer_guard`).
+⚠️ **Bewusste Abweichung vom Hub:** Der Hub will die Erlaubnis zum Umstellen der Quelle nie
+aus einem Startschalter; QTmux leitet sie aus `--selftest-update` ab, damit der Beenden-Test
+das ausgelieferte Programm fährt. Begrenzt durch den Hub (jede Installation ein Trockenlauf,
+Schlüssel fest) und durch QTmux: ohne umgestellte Quelle Exit 2, ein Schalter ohne Wert
+(oder mit „--…“ als Wert) Exit 2, Einstellungen und Verlauf im Selbsttest-Ordner, der
+MCP-Server nie auf 7345 (ohne `QTMUX_MCP_PORT` oder mit 7345 ein freier Port;
+`test_updatequit::theSelfTestNeverListensOnTheDefaultMcpPort`).
 
 **Bilder der Update-Oberfläche: `qtmux-bilder`** ([`UpdatePicture.h`](../src/app/UpdatePicture.h),
 CMake-Schalter `QTMUX_UPDATE_PICTURES`, Vorgabe an). Ein eigenes Programm mit dem

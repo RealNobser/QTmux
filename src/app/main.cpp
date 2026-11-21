@@ -27,6 +27,8 @@
 #endif
 
 #include <QTextStream>
+#include <QHostAddress>
+#include <QTcpServer>
 
 #include <cstdio>
 #include <memory>
@@ -423,6 +425,25 @@ int main(int argc, char *argv[])
 #endif
 
     QGuiApplication app(argc, argv);
+
+    // Selbsttest und Bildziel: Der MCP-Server (startet mit dem QML von selbst) lauscht
+    // NIE auf dem Standard-Port 7345, auf dem die Instanz des Anwenders erwartet wird.
+    // Ohne QTMUX_MCP_PORT, oder mit 7345, nimmt er einen freien Port auf 127.0.0.1.
+    // Wächter: tst_updatequit theSelfTestNeverListensOnTheDefaultMcpPort.
+    if (!updateSelfTestDir.isEmpty()) {
+        bool ok = false;
+        const int asked = qEnvironmentVariableIntValue("QTMUX_MCP_PORT", &ok);
+        if (!ok || asked <= 0 || asked == 7345) {
+            QTcpServer probe;
+            if (probe.listen(QHostAddress::LocalHost, 0)) {
+                qputenv("QTMUX_MCP_PORT", QByteArray::number(probe.serverPort()));
+                probe.close();
+            } else {
+                qputenv("QTMUX_MCP_PORT", "7346");
+            }
+        }
+        qInfo("QTmux selftest-update: MCP port %s", qgetenv("QTMUX_MCP_PORT").constData());
+    }
 
     // Lebensdauer des Update-Ablaufs: so lange wie die App (Vorgabe des Hubs), nicht
     // länger. Die Halter stehen ZWISCHEN app und engine: Beim Verlassen von main baut

@@ -44,6 +44,16 @@ UpdateBridge::UpdateBridge(Wiring wiring, QObject *parent)
 #if defined(Q_OS_WIN)
     cfg.windowsUpgradeCode = windowsUpgradeCode();
 #endif
+    // ⚠️ Bewusste Abweichung vom Satz des Hubs („set it … never from settings, the
+    // environment or an argument“): Die Erlaubnis kommt hier aus dem Startschalter
+    // --selftest-update (main.cpp). Grund: Der Test des Beenden-Wegs muss das
+    // ausgelieferte Programm selbst fahren, nicht ein Testprogramm. Begrenzt ist es
+    // durch den Hub selbst: Mit umgestellter Quelle ist JEDE Installation ein
+    // Trockenlauf, und der Signaturschlüssel ist nicht umstellbar (ein Manifest muss
+    // mit dem Produktionsschlüssel signiert sein). Dazu in QTmux: Ohne umgestellte
+    // Quelle bricht der Selbsttest mit Exit 2 ab; Einstellungen und Verlauf liegen im
+    // Selbsttest-Ordner; der MCP-Server lauscht nie auf 7345. Ebenso in
+    // third_party/updater/UPSTREAM.md und der Feature-Referenz „Online-Update“.
     cfg.allowSourceOverrideForSelfTest = wiring.selfTest;
 
     // Der Hub-Katalog muss VOR dem ersten Text installiert sein; danach fragt der
