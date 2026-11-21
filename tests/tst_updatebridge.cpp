@@ -191,6 +191,28 @@ private slots:
         QCOMPARE(texts.count(), 1);
     }
 
+    void aLanguageSwitchReachesFlowAndSettingsPage()
+    {
+        // Der Sprachwechsel geht durch den Ablauf (er tauscht Katalog und Texte und
+        // meldet viewChanged); die Seite „Updates“ liest ihre Sätze einzeln und
+        // folgt dem Revisionszähler. Beides muss nach dem Wechsel die neue Sprache
+        // tragen, ohne Neustart.
+        qtmux::UpdateBridge bridge(wiring());
+        bridge.start(noNetwork());
+        const QString en = QStringLiteral("Check for updates automatically at startup");
+        QCOMPARE(bridge.text(QStringLiteral("set.auto")), en);
+        QSignalSpy view(&bridge.flow(), &Flow::viewChanged);
+        QSignalSpy texts(&bridge, &qtmux::UpdateBridge::textsChanged);
+        bridge.setLanguage(QStringLiteral("de"));
+        QCOMPARE(bridge.text(QStringLiteral("set.auto")),
+                 QStringLiteral("Beim Start automatisch nach Updates suchen"));
+        QCOMPARE(bridge.flow().texts().language(), QStringLiteral("de"));
+        QVERIFY(view.count() >= 1);
+        QCOMPARE(texts.count(), 1);
+        bridge.setLanguage(QStringLiteral("en"));
+        QCOMPARE(bridge.text(QStringLiteral("set.auto")), en);
+    }
+
     void aRememberedProxyPasswordNeverReachesTheSettingsFile()
     {
         // QTMUX-129 (bisher tst_updateviewmodel): Ein Passwort, das die Proxy-Anmeldung

@@ -18,6 +18,7 @@
 #include <QProcess>
 #include <QRandomGenerator>
 #include <QRegularExpression>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QThread>
 
@@ -25,7 +26,9 @@
 #include <Security/Security.h>
 
 #include <atomic>
+#include <chrono>
 #include <memory>
+#include <mutex>
 
 #include <libproc.h>
 #include <sys/mount.h>
@@ -33,6 +36,7 @@
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <cerrno>
 #include <unistd.h>
@@ -375,6 +379,7 @@ struct Staging {
     QString privateDir;  // our own folder with the private copy of the image
     QString mountPoint;  // our own empty folder, removed after detach
     QString staged;      // the copied bundle next to the target
+    QString copyDir;     // our 0700 folder next to the target that ditto writes into
     QString swapDir;     // our 0700 folder with the checked copy of update-swap
 };
 
@@ -608,9 +613,20 @@ PrepareResult prepareWork(const InstallOrder& order, const SelfInstallFacts& fac
         res.error = QStringLiteral("staging name collision");
         return res;
     }
-    staging->staged = staged;
+    // ditto writes by path. It writes into a fresh folder of our own (0700,
+    // mkdtemp) on the same volume, never straight under the staging name in
+    // the app's folder: nobody else can set a link into the copy while it
+    // is written. Only the finished copy is renamed to the staging name.
+    QTemporaryDir copyDir(stagingDir + QStringLiteral("/.") + bundleName + QStringLiteral(".update-copy-XXXXXX"));
+    copyDir.setAutoRemove(false);
+    if (!copyDir.isValid()) {
+        res.error = QStringLiteral("cannot create a private folder next to the app");
+        return res;
+    }
+    staging->copyDir = QDir::cleanPath(copyDir.path());
+    const QString copied = staging->copyDir + QLatin1Char('/') + bundleName;
     const ToolResult copy = runTool(QStringLiteral("/usr/bin/ditto"),
-                                    {staging->mountPoint + QLatin1Char('/') + bundleName, staged},
+                                    {staging->mountPoint + QLatin1Char('/') + bundleName, copied},
                                     300000, &cancel);
     detachAndRemove(staging->mountPoint);
     detachImageFile(image);  // and nothing of it stays attached without a mount point
@@ -619,6 +635,13 @@ PrepareResult prepareWork(const InstallOrder& order, const SelfInstallFacts& fac
         res.error = QStringLiteral("cannot copy the new bundle: %1").arg(copy.output.simplified());
         return res;
     }
+    if (::rename(QFile::encodeName(copied).constData(), QFile::encodeName(staged).constData()) != 0) {
+        res.error = QStringLiteral("cannot move the copy to its staging name: %1").arg(QString::fromLocal8Bit(std::strerror(errno)));
+        return res;
+    }
+    staging->staged = staged;
+    QDir().rmdir(staging->copyDir);  // empty now
+    staging->copyDir.clear();
 
     // 5. Judge the COPY (the disk image may have changed since it was read).
     const QString escaping = firstEscapingSymlink(staged);
@@ -669,17 +692,175 @@ PrepareResult prepareWork(const InstallOrder& order, const SelfInstallFacts& fac
     return res;
 }
 
-// Older than this, a private copy of the swap program is a leftover: the
-// helper needs it at most helperWaitExitMs + startConfirmTimeoutMs (3 min by
-// default) and removes it itself.
-constexpr qint64 kSwapToolLeftoverAgeSecs = 10 * 60;
+// Older than this, a temp leftover of ours (the private copy of an image, its
+// mount point, the private copy of the swap program) belongs to no running
+// attempt: prepare() ends within kPrepareDeadlineMs and removes its image
+// itself; a helper needs its swap program at most helperWaitExitMs +
+// startConfirmTimeoutMs (3 min by default) and removes it itself. A younger
+// one may belong to another copy of the app that prepares right now - same
+// product, same temp folder.
+constexpr qint64 kTempLeftoverAgeSecs = 10 * 60;
+
+// What prepare() and cleanupAfterStart() share across their worker threads.
+// Owned through a shared_ptr by the backend AND every worker, so a worker
+// never touches a destroyed backend.
+struct MacBackendShared {
+    // The work of a prepare() and a cleanup never run at the same time.
+    std::timed_mutex work;
+    // Staged bundles and swap folders of installs this backend has prepared
+    // and not discarded: a cleanup leaves them alone.
+    std::mutex heldMutex;
+    QSet<QString> held;
+    std::atomic<int> prepareCalls{0};
+    // Set when the backend goes away: a running cleanup stops between two
+    // items (a leftover it leaves is removed at the next start).
+    std::atomic<bool> stopCleanup{false};
+
+    static QStringList pathsOf(const PreparedInstall& p)
+    {
+        QStringList out{QDir::cleanPath(p.stagedFile)};
+        const QList<QByteArray> state = p.backendState.split('\n');
+        if (state.size() == 2) out << QDir::cleanPath(QFileInfo(QString::fromUtf8(state[1])).absolutePath());
+        return out;
+    }
+    void hold(const PreparedInstall& p)
+    {
+        const std::lock_guard<std::mutex> l(heldMutex);
+        for (const QString& s : pathsOf(p)) held.insert(s);
+    }
+    void release(const PreparedInstall& p)
+    {
+        const std::lock_guard<std::mutex> l(heldMutex);
+        for (const QString& s : pathsOf(p)) held.remove(s);
+    }
+    bool isHeld(const QString& path)
+    {
+        const std::lock_guard<std::mutex> l(heldMutex);
+        return held.contains(QDir::cleanPath(path));
+    }
+};
 
 // Undo one prepared install: the staged bundle and the private swap program.
-void discardPrepared(const PreparedInstall& p)
+// Removed first, released second: a cleanup never sees them free while they
+// are still being removed here.
+void discardPrepared(const PreparedInstall& p, MacBackendShared* shared = nullptr)
 {
     removeStaging(p.stagedFile, p.order.context.appLocation, p.order.context.tuning);
     const QList<QByteArray> state = p.backendState.split('\n');
     if (state.size() == 2) removeSwapDir(QString::fromUtf8(state[1]), p.order.productSlug);
+    if (shared) shared->release(p);
+}
+
+// The whole of cleanupAfterStart(), on a worker thread (hdiutil and codesign
+// may take seconds each; the GUI thread must not wait for them).
+void cleanupWork(const InstallContext& requested, MacBackendShared& shared)
+{
+    if (requested.appLocation.isEmpty()) return;
+    const InstallContext context = resolvedContext(requested);
+    const MacSwapPaths p = macSwapPaths(context.appLocation);
+    const QString slug = helperNamePart(context.productSlug);
+    const QString temp = posixhelper::userTempDir();
+    const QDateTime limit = QDateTime::currentDateTimeUtc().addSecs(-kTempLeftoverAgeSecs);
+    const auto isOld = [&limit](const QFileInfo& fi) { return fi.lastModified(QTimeZone::UTC) <= limit; };
+    // Our own temp leftovers of an attempt that ended half way (a crash
+    // during prepare), and only OLD ones: a young one may be another copy's
+    // running prepare.
+    if (!temp.isEmpty()) {
+        const QString dmgPrefix = slug + QStringLiteral("-update-dmg-");
+        // The private copy of an image: detach it first (it may still be
+        // attached), then the folder.
+        for (const QFileInfo& fi : QDir(temp).entryInfoList({dmgPrefix + QLatin1Char('*')},
+                                                            QDir::Dirs | QDir::NoDotAndDotDot)) {
+            if (shared.stopCleanup.load()) return;
+            if (fi.isSymLink() || !isOld(fi)) continue;
+            const QFileInfo image(fi.absoluteFilePath() + QStringLiteral("/update.dmg"));
+            if (image.exists() && !isOld(image)) continue;  // still being written
+            detachImageFile(image.absoluteFilePath());
+            posixhelper::removeTreeNoFollow(QDir::cleanPath(fi.absoluteFilePath()));
+        }
+        // Mount points: what is mounted there decides. Only an old private
+        // copy of OURS is detached; a folder with nothing mounted goes by its
+        // own age, and only by rmdir - never a recursive delete of something
+        // that may still be a mount point.
+        const QFileInfoList mountPoints = QDir(temp).entryInfoList({slug + QStringLiteral("-update-mnt-*")},
+                                                                   QDir::Dirs | QDir::NoDotAndDotDot);
+        const QList<AttachedImage> attached = mountPoints.isEmpty() ? QList<AttachedImage>() : attachedImages();
+        for (const QFileInfo& fi : mountPoints) {
+            if (shared.stopCleanup.load()) return;
+            if (fi.isSymLink()) continue;
+            const QString mp = QDir::cleanPath(fi.absoluteFilePath());
+            const AttachedImage* at = nullptr;
+            for (const AttachedImage& a : attached)
+                if (a.mountPoints.contains(mp)) at = &a;
+            if (at) {
+                const QFileInfo image(at->imagePath);
+                const QFileInfo folder(image.absolutePath());
+                const bool ours = image.fileName() == QLatin1String("update.dmg") &&
+                                  folder.fileName().startsWith(dmgPrefix) &&
+                                  QDir::cleanPath(folder.absolutePath()) == temp;
+                if (!ours || !isOld(image)) continue;
+                runTool(QStringLiteral("/usr/bin/hdiutil"),
+                        {QStringLiteral("detach"), mp, QStringLiteral("-force"), QStringLiteral("-quiet")}, 60000,
+                        nullptr);
+            } else if (!isOld(fi)) {
+                continue;
+            }
+            QDir().rmdir(mp);
+        }
+        // Private copies of the swap program: only old ones and none this
+        // backend still holds. A helper that is still waiting for the
+        // confirmation may need its copy for the way back; it removes it
+        // itself when it ends.
+        for (const QFileInfo& fi : QDir(temp).entryInfoList({slug + QStringLiteral("-update-swap-*")},
+                                                            QDir::Dirs | QDir::NoDotAndDotDot)) {
+            const QString dir = QDir::cleanPath(fi.absoluteFilePath());
+            if (fi.isSymLink() || !isOld(fi) || shared.isHeld(dir)) continue;
+            posixhelper::removeTreeNoFollow(dir);
+        }
+    }
+    // Copy folders next to the target that a prepare() left half way (a
+    // crash during ditto): only old ones, never a link.
+    {
+        const QString copyDirs = context.tuning.stagingDirForTests.isEmpty()
+                                     ? QFileInfo(p.target).absolutePath()
+                                     : QDir::cleanPath(context.tuning.stagingDirForTests);
+        for (const QFileInfo& fi :
+             QDir(copyDirs).entryInfoList({QStringLiteral(".") + QFileInfo(p.target).fileName() +
+                                           QStringLiteral(".update-copy-*")},
+                                          QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot)) {
+            if (shared.stopCleanup.load()) return;
+            if (fi.isSymLink() || !isOld(fi)) continue;
+            posixhelper::removeTreeNoFollow(QDir::cleanPath(fi.absoluteFilePath()));
+        }
+    }
+    // After a swap the OLD bundle sits under a staging name until the new
+    // one confirmed; staging names go only when what stands at the target
+    // passes the check (signature + the running requirement) - a helper
+    // that died in between leaves the way back intact. Asked once. A staged
+    // bundle of an install this backend has prepared stays. The (expensive)
+    // check of the target runs only when there is something to remove.
+    const QString dir = context.tuning.stagingDirForTests.isEmpty()
+                            ? QFileInfo(p.target).absolutePath()
+                            : QDir::cleanPath(context.tuning.stagingDirForTests);
+    const QString pattern = QStringLiteral(".") + QFileInfo(p.target).fileName() + QStringLiteral(".update-staged-*");
+    QStringList candidates;
+    for (const QFileInfo& fi : QDir(dir).entryInfoList({pattern}, QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot)) {
+        const QString staged = QDir::cleanPath(fi.absoluteFilePath());
+        if (!shared.isHeld(staged)) candidates << staged;
+    }
+    if (candidates.isEmpty() || shared.stopCleanup.load()) return;
+    const QString dr = runningRequirement(context);
+    const QFileInfo target(p.target);
+    const bool targetGenuine = target.isDir() && !target.isSymLink() && isCertificateAnchoredRequirement(dr) &&
+                               satisfiesRequirement(p.target, dr, nullptr);
+    if (!targetGenuine) return;
+    // Only a bundle of THIS app goes under its staging name: same bundle
+    // identifier as the target. A folder planted under the name stays.
+    const QString id = readBundleKeys(p.target).identifier;
+    if (id.isEmpty()) return;
+    for (const QString& staged : candidates)
+        if (!shared.isHeld(staged) && readBundleKeys(staged).identifier == id)
+            removeStaging(staged, p.target, context.tuning);
 }
 
 class MacBundleSwapBackend final : public InstallBackend {
@@ -687,10 +868,12 @@ public:
     explicit MacBundleSwapBackend(SelfInstallHooks hooks) : hooks_(std::move(hooks)) {}
 
     // A quit during prepare() must not leave a disk image mounted: wait for
-    // the worker, which detaches and removes what it owns.
+    // every worker (prepare and cleanup), which detaches and removes what it
+    // owns.
     ~MacBundleSwapBackend() override
     {
         cancelPrepare();
+        shared_->stopCleanup.store(true);
         for (const QPointer<QThread>& w : workers_)
             if (w && w->isRunning()) w->wait(120000);
     }
@@ -711,7 +894,16 @@ public:
         cancel_ = cancel;
         const SelfInstallFacts f = facts(order.context);  // on the owner thread
         QPointer<QObject> ctx(&ctx_);
-        QThread* worker = QThread::create([order, f, cancel, ctx, gen, this, done]() {
+        auto shared = shared_;
+        auto started = hooks_.prepareWorkStartedForTests;  // a copy: the worker never reads the backend
+        QThread* worker = QThread::create([order, f, cancel, ctx, gen, this, done, shared, started]() {
+            // One piece of disk work at a time (an earlier prepare that is
+            // still winding down, a cleanup). A prepare cancelled while it
+            // waits gives up without queueing.
+            std::unique_lock<std::timed_mutex> lock(shared->work, std::defer_lock);
+            while (!lock.try_lock_for(std::chrono::milliseconds(50)))
+                if (cancel->load()) return;
+            if (started) started(++shared->prepareCalls);
             Staging staging;
             PrepareResult res = prepareWork(order, f, *cancel, &staging);
             // Whatever is still owned here failed or was cancelled: remove it.
@@ -721,23 +913,27 @@ public:
             if (!staging.staged.isEmpty())
                 removeStaging(staging.staged, order.context.appLocation, order.context.tuning);
             if (!staging.swapDir.isEmpty()) posixhelper::removeTreeNoFollow(staging.swapDir);
+            if (!staging.copyDir.isEmpty()) posixhelper::removeTreeNoFollow(staging.copyDir);
             if (cancel->load() && res.prepared) {
                 discardPrepared(*res.prepared);
                 res.prepared.reset();
             }
+            // Held from here, while the lock is still ours: a cleanup that
+            // starts next never sees the prepared install as a leftover.
+            if (res.prepared) shared->hold(*res.prepared);
+            lock.unlock();
             // Delivered on the owner (GUI) thread; whether the backend still
             // exists is asked THERE, where it would be destroyed.
-            QMetaObject::invokeMethod(QCoreApplication::instance(), [this, ctx, gen, cancel, res, done]() {
+            QMetaObject::invokeMethod(QCoreApplication::instance(), [this, ctx, gen, cancel, res, done, shared]() {
                 if (!ctx || cancel->load() || gen != generation_.load()) {
-                    if (res.prepared) discardPrepared(*res.prepared);
+                    if (res.prepared) discardPrepared(*res.prepared, shared.get());
                     return;
                 }
                 done(res);
             }, Qt::QueuedConnection);
         });
         QObject::connect(worker, &QThread::finished, worker, &QObject::deleteLater);
-        workers_.removeIf([](const QPointer<QThread>& w) { return w.isNull(); });
-        workers_ << QPointer<QThread>(worker);  // every one is waited for, not only the last
+        addWorker(worker);
         worker->start();
     }
 
@@ -782,63 +978,25 @@ public:
     void discard(const PreparedInstall& prepared) override
     {
         if (launched_) return;  // the helper owns staging and swap program now
-        discardPrepared(prepared);
+        discardPrepared(prepared, shared_.get());
     }
 
+    // Asynchronous: hdiutil and codesign may take seconds each. The worker
+    // is waited for like a prepare() when the backend goes away.
     void cleanupAfterStart(const InstallContext& requested) override
     {
-        if (requested.appLocation.isEmpty()) return;
-        const InstallContext context = resolvedContext(requested);
-        const MacSwapPaths p = macSwapPaths(context.appLocation);
-        const QString slug = helperNamePart(context.productSlug);
-        const QString temp = posixhelper::userTempDir();
-        // Our own temp leftovers of an attempt that ended half way (a crash
-        // during prepare): the private copy (detach first, it may still be
-        // attached) and empty mount-point folders (rmdir only — never a
-        // recursive delete of something that may still be a mount point).
-        if (!temp.isEmpty()) {
-            for (const QFileInfo& fi : QDir(temp).entryInfoList({slug + QStringLiteral("-update-dmg-*")},
-                                                                QDir::Dirs | QDir::NoDotAndDotDot)) {
-                if (fi.isSymLink()) continue;
-                detachImageFile(fi.absoluteFilePath() + QStringLiteral("/update.dmg"));
-                posixhelper::removeTreeNoFollow(QDir::cleanPath(fi.absoluteFilePath()));
+        auto shared = shared_;
+        auto finished = hooks_.cleanupFinishedForTests;
+        QThread* worker = QThread::create([requested, shared, finished]() {
+            {
+                const std::lock_guard<std::timed_mutex> lock(shared->work);
+                cleanupWork(requested, *shared);
             }
-            for (const QFileInfo& fi : QDir(temp).entryInfoList({slug + QStringLiteral("-update-mnt-*")},
-                                                                QDir::Dirs | QDir::NoDotAndDotDot)) {
-                if (fi.isSymLink()) continue;
-                runTool(QStringLiteral("/usr/bin/hdiutil"),
-                        {QStringLiteral("detach"), fi.absoluteFilePath(), QStringLiteral("-force"),
-                         QStringLiteral("-quiet")},
-                        60000, nullptr);
-                QDir().rmdir(fi.absoluteFilePath());
-            }
-            // Private copies of the swap program: only old ones. A helper that
-            // is still waiting for the confirmation may need its copy for the
-            // way back; it removes it itself when it ends.
-            const QDateTime limit = QDateTime::currentDateTimeUtc().addSecs(-kSwapToolLeftoverAgeSecs);
-            for (const QFileInfo& fi : QDir(temp).entryInfoList({slug + QStringLiteral("-update-swap-*")},
-                                                                QDir::Dirs | QDir::NoDotAndDotDot)) {
-                if (fi.isSymLink() || fi.lastModified(QTimeZone::UTC) > limit) continue;
-                posixhelper::removeTreeNoFollow(QDir::cleanPath(fi.absoluteFilePath()));
-            }
-        }
-        // After a swap the OLD bundle sits under a staging name until the new
-        // one confirmed; staging names go only when what stands at the target
-        // passes the check (signature + the running requirement) — a helper
-        // that died in between leaves the way back intact. Asked once.
-        const QString dr = runningRequirement(context);
-        const QFileInfo target(p.target);
-        const bool targetGenuine = target.isDir() && !target.isSymLink() && isCertificateAnchoredRequirement(dr) &&
-                                   satisfiesRequirement(p.target, dr, nullptr);
-        if (!targetGenuine) return;
-        const QString dir = context.tuning.stagingDirForTests.isEmpty()
-                                ? QFileInfo(p.target).absolutePath()
-                                : QDir::cleanPath(context.tuning.stagingDirForTests);
-        const QString pattern = QStringLiteral(".") + QFileInfo(p.target).fileName() +
-                                QStringLiteral(".update-staged-*");
-        for (const QFileInfo& fi : QDir(dir).entryInfoList({pattern}, QDir::Dirs | QDir::Hidden |
-                                                                          QDir::NoDotAndDotDot))
-            removeStaging(QDir::cleanPath(fi.absoluteFilePath()), p.target, context.tuning);
+            if (finished) finished();
+        });
+        QObject::connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+        addWorker(worker);
+        worker->start();
     }
 
 private:
@@ -847,11 +1005,18 @@ private:
         return hooks_.facts ? hooks_.facts(c) : measureFacts(c);
     }
 
+    void addWorker(QThread* worker)
+    {
+        workers_.removeIf([](const QPointer<QThread>& w) { return w.isNull(); });
+        workers_ << QPointer<QThread>(worker);  // every one is waited for, not only the last
+    }
+
     SelfInstallHooks hooks_;
     QObject ctx_;
     std::atomic<int> generation_{0};
     std::weak_ptr<std::atomic<bool>> cancel_;
     QList<QPointer<QThread>> workers_;
+    std::shared_ptr<MacBackendShared> shared_ = std::make_shared<MacBackendShared>();
     bool launched_ = false;
 };
 

@@ -272,6 +272,38 @@ set -e
 [[ "$rc" = 142 ]] && timeout_abort "codesign --verify"
 [[ "$rc" = 0 ]] || { echo "FEHLER: codesign --verify --deep --strict:" >&2; cat "$WORK/verify.err" >&2; exit 1; }
 
+# Riegel: Das Tauschprogramm trägt am Ende wirklich den Identifier, gegen den
+# die App seine Kopie prüft (sonst lehnt sie es bei JEDEM Update ab und bietet
+# nur „von Hand“ an). --verify prüft das nicht: Ein falscher Identifier ist
+# eine gültige Signatur. Gelesen wird am fertigen Bundle, nicht am Aufruf.
+SWAP="$APP/Contents/Helpers/update-swap"
+if [[ -e "$SWAP" ]]; then
+    set +e
+    t 60 codesign -d -v "$SWAP" >/dev/null 2>"$WORK/swap.info"; rc=$?
+    set -e
+    [[ "$rc" = 142 ]] && timeout_abort "codesign -d Contents/Helpers/update-swap"
+    [[ "$rc" = 0 ]] || { echo "FEHLER: codesign -d Contents/Helpers/update-swap (Exit $rc):" >&2; cat "$WORK/swap.info" >&2; exit 1; }
+    swap_id="$(sed -n 's/^Identifier=//p' "$WORK/swap.info")"
+    [[ "$swap_id" = "$APP_ID.update-swap" ]] || {
+        echo "FEHLER: Contents/Helpers/update-swap trägt den Identifier '$swap_id', erwartet '$APP_ID.update-swap'." >&2
+        exit 1
+    }
+    if [[ "$SIGN_ID" != "-" ]]; then
+        set +e
+        t 60 codesign -d -r- "$SWAP" >"$WORK/swap.dr" 2>&1; rc=$?
+        set -e
+        [[ "$rc" = 142 ]] && timeout_abort "codesign -d -r- Contents/Helpers/update-swap"
+        [[ "$rc" = 0 ]] || { echo "FEHLER: codesign -d -r- Contents/Helpers/update-swap (Exit $rc):" >&2; cat "$WORK/swap.dr" >&2; exit 1; }
+        swap_dr="$(sed -n 's/^#* *designated => //p' "$WORK/swap.dr")"
+        sha_swap="$(printf '%s' "$SIGN_ID" | tr 'A-F' 'a-f')"
+        [[ "$swap_dr" == *"certificate "*"H\"$sha_swap\""* ]] \
+            || { echo "FEHLER: update-swap ist nicht mit dem Zertifikat $SIGN_ID signiert." >&2; exit 1; }
+    fi
+    echo "    update-swap: Identifier $swap_id"
+else
+    echo "    WARNUNG: kein Contents/Helpers/update-swap im Bundle — die App kann sich nicht selbst ersetzen." >&2
+fi
+
 # Ad-hoc druckt die (implizite) Requirement als Kommentar: „# designated => cdhash …".
 DR="$(codesign -d -r- "$APP" 2>&1 | sed -n 's/^#* *designated => //p')"
 echo "    Designated Requirement: $DR"

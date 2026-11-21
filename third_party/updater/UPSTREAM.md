@@ -9,9 +9,25 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `e46372535aff775b8d5f2bc7e73b989f40113eb0` |
-| Datum | 2026-11-20 |
-| Betreff | `jira_sync BACKLOG: MAC-124 (Windows-Bau, Testprogramme warten auf windeployqt) [skip ci]` |
+| Commit | `d63de9a8f67bef5d11dbe06e1fe0bd3b0964d80b` |
+| Datum | 2026-11-21 |
+| Betreff | `update-v2 H2c S3: Selbst-Ersetzen unter Windows eingeschaltet (kWindowsSelfInstallMeasured)` |
+
+Abgleich 2026-11-21 (K2, Nachzug auf den Code-Stand von MacPCAN 0.8.0): `git log
+e463725..d63de9a -- src/update/` nennt **17** Commits; `d63de9a` ist zugleich der letzte, der
+`src/update/` berührt. Neu sind vier Dateien: `SelfInstallWin.cpp` (Helfer um `msiexec`),
+`UpdateShowcase.{hpp,cpp}` (Szenen-Baustein für Bildläufe) und `selfinstall-helpers.cmake`
+(`update-swap`, `update-helper.exe`, `appupdate_embed_install_helpers()`). Geändert sind
+`InstallBackend.*` (Naht Revision 3: Versuchskennung, Start-Bestätigung mit PID),
+`SelfInstall*`, `UpdateFlow.*` (`setLanguage`, `confirmStartExplicitly`/`confirmStarted`,
+Installation erst nach der Beenden-Zusage), `UpdateSettings.*`, `swaptool/update_swap.c` und
+`winhelper/*`; dazu Kontrakt 4 (`sign-bundle.sh` prüft den Identifier von `update-swap` am
+Bundle). Gemessen gegen einen eigenen Worktree auf `d63de9a`: vorher Exit 1, nach `--update`
+Exit 0 mit 46/8/5/1/1 verglichenen Dateien; `git ls-tree -r d63de9a src/update/` gegen
+`git hash-object` der vendierten Dateien blob-gleich (46/46). CMake: `UpdateShowcase.*` bleibt
+aus `qtmux_updater` heraus (eigene Lib nur für das Bildziel), unter Windows linkt die Lib
+`msi`. ⚠️ Vorläufig: Der endgültige Pin ist der Versions-Commit von MacPCAN 0.8.0 (code-gleich
+bis auf die Versionsnummer); dann diese Tabelle und den Abgleich einmal nachziehen.
 
 Abgleich 2026-11-20 (K2, Vertrag V2 „Online-Update vereinheitlichen“): Zwischenstand gegen
 Hub-`main`. Ein zweiter Nachzug auf den Release-Stand des Hubs folgt (Naht, Selbst-Ersetzen

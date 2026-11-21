@@ -111,6 +111,50 @@ InstallCapability automatic(QString detail)
     return c;
 }
 
+// Every unmet precondition, in the order of the checks. The FIRST one is the
+// reason (that order is the contract and decides the sentence the user
+// reads); the others only go into the detail, so a support question sees all
+// of them at once: "<first>; also: <second>; <third>". A gate (wrong kind,
+// the app not found, no UpgradeCode, no AppImage) ends the collection: the
+// facts after it were never measured.
+class Unmet {
+public:
+    void add(ManualReason reason, QString detail)
+    {
+        if (details_.isEmpty()) first_ = reason;
+        details_ << std::move(detail);
+    }
+    [[nodiscard]] bool any() const { return !details_.isEmpty(); }
+    [[nodiscard]] InstallCapability result() const
+    {
+        QString d = details_.value(0);
+        if (details_.size() > 1)
+            d += QStringLiteral("; also: ") + details_.mid(1).join(QStringLiteral("; "));
+        return manual(first_, d);
+    }
+    [[nodiscard]] InstallCapability gate(ManualReason reason, QString detail)
+    {
+        add(reason, std::move(detail));
+        return result();
+    }
+
+private:
+    ManualReason first_ = ManualReason::None;
+    QStringList details_;
+};
+
+// The file name of the app (bundle, exe or AppImage), never the full path:
+// the detail lands in the log, in the Details of the dialog, in pictures and
+// in bug reports, and a path carries the user's name.
+QString appName(const QString& location)
+{
+    QString l = location;
+    l.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    while (l.endsWith(QLatin1Char('/'))) l.chop(1);
+    const QString name = l.mid(l.lastIndexOf(QLatin1Char('/')) + 1);
+    return name.isEmpty() ? QStringLiteral("the app") : name;
+}
+
 }  // namespace
 
 InstallCapability selfInstallDecision(SelfInstallPlatform platform,
@@ -118,101 +162,111 @@ InstallCapability selfInstallDecision(SelfInstallPlatform platform,
                                       const SelfInstallFacts& facts)
 {
     const QString kind = context.kind.toLower();
+    const QString app = appName(context.appLocation);
+    Unmet unmet;
     switch (platform) {
-    case SelfInstallPlatform::MacOS:
+    case SelfInstallPlatform::MacOS: {
         if (kind != QLatin1String("dmg"))
             return manual(ManualReason::UnsupportedKind,
                           QStringLiteral("kind '%1' is not a disk image").arg(context.kind));
         if (context.previousFailureCode == QLatin1String(kCodeAppManagementDenied))
-            return manual(ManualReason::AppManagementDenied,
-                          QStringLiteral("the last attempt was refused by App Management"));
+            unmet.add(ManualReason::AppManagementDenied,
+                      QStringLiteral("the last attempt was refused by App Management"));
         if (context.previousFailureCode == QLatin1String(kCodeFileSystemUnsupported))
-            return manual(ManualReason::FileSystemUnsupported,
-                          QStringLiteral("the file system at %1 cannot swap atomically").arg(context.appLocation));
+            unmet.add(ManualReason::FileSystemUnsupported,
+                      QStringLiteral("the file system of the folder of %1 cannot swap atomically").arg(app));
         if (!facts.locationExists)
-            return manual(ManualReason::Other,
-                          QStringLiteral("the running bundle %1 was not found").arg(context.appLocation));
+            return unmet.gate(ManualReason::Other, QStringLiteral("the running bundle %1 was not found").arg(app));
         if (facts.translocated)
-            return manual(ManualReason::AppTranslocated,
-                          QStringLiteral("the app runs translocated from %1").arg(context.appLocation));
+            unmet.add(ManualReason::AppTranslocated, QStringLiteral("the app runs translocated"));
         if (facts.onDiskImage)
-            return manual(ManualReason::RunningFromDiskImage,
-                          QStringLiteral("the app runs from a mounted disk image"));
+            unmet.add(ManualReason::RunningFromDiskImage, QStringLiteral("the app runs from a mounted disk image"));
         if (!isCertificateAnchoredRequirement(facts.runningRequirement))
-            return manual(ManualReason::NotFamilySigned,
-                          facts.runningRequirement.isEmpty()
-                              ? QStringLiteral("the designated requirement of the running app is unreadable")
-                              : QStringLiteral("the running app is not signed with an identity (%1)")
-                                    .arg(facts.runningRequirement));
-        if (facts.onReadOnlyVolume || !facts.locationWritable)
-            return manual(ManualReason::LocationNotWritable,
-                          QStringLiteral("the folder of %1 does not accept a rename").arg(context.appLocation));
-        if (facts.onNetworkVolume)
-            return manual(ManualReason::FileSystemUnsupported,
+            unmet.add(ManualReason::NotFamilySigned,
+                      facts.runningRequirement.isEmpty()
+                          ? QStringLiteral("the designated requirement of the running app is unreadable")
+                          : QStringLiteral("the running app is not signed with an identity (%1)")
+                                .arg(facts.runningRequirement));
+        // Translocated or on a disk image, the folder facts describe a place
+        // the app is not installed in: asking them would only add noise.
+        if (!facts.translocated && !facts.onDiskImage) {
+            if (facts.onReadOnlyVolume || !facts.locationWritable)
+                unmet.add(ManualReason::LocationNotWritable,
+                          QStringLiteral("the folder of %1 does not accept a rename").arg(app));
+            if (facts.onNetworkVolume)
+                unmet.add(ManualReason::FileSystemUnsupported,
                           QStringLiteral("%1 lies on a network volume; who writes there is decided by the server")
-                              .arg(context.appLocation));
-        if (facts.locationShared)
-            return manual(ManualReason::LocationShared,
+                              .arg(app));
+            if (facts.locationShared)
+                unmet.add(ManualReason::LocationShared,
                           QStringLiteral("others may write in the folder of %1 (rule: %2)")
-                              .arg(context.appLocation, facts.locationSharedRule));
+                              .arg(app, facts.locationSharedRule));
+        }
         if (facts.quarantine != QuarantineState::Absent)
-            return manual(ManualReason::Quarantined,
-                          QStringLiteral("the downloaded file's quarantine mark is %1")
-                              .arg(quarantineStateName(facts.quarantine)));
+            unmet.add(ManualReason::Quarantined, QStringLiteral("the downloaded file's quarantine mark is %1")
+                                                     .arg(quarantineStateName(facts.quarantine)));
         if (facts.otherInstanceRunning)
-            return manual(ManualReason::OtherInstanceRunning,
-                          QStringLiteral("another process runs from %1").arg(context.appLocation));
+            unmet.add(ManualReason::OtherInstanceRunning, QStringLiteral("another process runs from %1").arg(app));
         if (!facts.helperAvailable)
-            return manual(ManualReason::HelperUnavailable,
-                          QStringLiteral("/bin/sh, codesign, ditto or hdiutil is missing"));
+            unmet.add(ManualReason::HelperUnavailable,
+                      QStringLiteral("/bin/sh, codesign, ditto or hdiutil is missing"));
         if (!facts.swapToolPresent)
-            return manual(ManualReason::HelperUnavailable,
-                          QStringLiteral("the bundle carries no swap program (Contents/Helpers/update-swap)"));
-        return automatic(QStringLiteral("replace %1 and restart").arg(context.appLocation));
+            unmet.add(ManualReason::HelperUnavailable,
+                      QStringLiteral("%1 carries no swap program (Contents/Helpers/update-swap)").arg(app));
+        if (unmet.any()) return unmet.result();
+        return automatic(QStringLiteral("replace %1 and restart").arg(app));
+    }
 
     case SelfInstallPlatform::Linux:
         if (kind != QLatin1String("appimage"))
             return manual(ManualReason::UnsupportedKind,
                           QStringLiteral("kind '%1' is not an AppImage").arg(context.kind));
         if (context.appLocation.isEmpty())
-            return manual(ManualReason::NotAnAppImage,
-                          QStringLiteral("the app is not running from an AppImage"));
+            return manual(ManualReason::NotAnAppImage, QStringLiteral("the app is not running from an AppImage"));
         if (!facts.locationExists)
-            return manual(ManualReason::Other,
-                          QStringLiteral("the running AppImage %1 was not found").arg(context.appLocation));
+            return manual(ManualReason::Other, QStringLiteral("the running AppImage %1 was not found").arg(app));
         if (context.previousFailureCode == QLatin1String(kCodeFileSystemUnsupported))
-            return manual(ManualReason::FileSystemUnsupported,
-                          QStringLiteral("no hard link is possible at %1").arg(context.appLocation));
+            unmet.add(ManualReason::FileSystemUnsupported,
+                      QStringLiteral("no hard link is possible next to %1").arg(app));
         if (!facts.platformMeasured)
-            return manual(ManualReason::NotMeasuredOnThisPlatform,
-                          QStringLiteral("replacing an AppImage is not yet measured on a Linux desktop"));
+            unmet.add(ManualReason::NotMeasuredOnThisPlatform,
+                      QStringLiteral("replacing an AppImage is not yet measured on a Linux desktop"));
         if (!facts.locationWritable)
-            return manual(ManualReason::LocationNotWritable,
-                          QStringLiteral("the folder of %1 does not accept a rename").arg(context.appLocation));
+            unmet.add(ManualReason::LocationNotWritable,
+                      QStringLiteral("the folder of %1 does not accept a rename").arg(app));
         if (facts.locationShared)
-            return manual(ManualReason::LocationShared,
-                          QStringLiteral("others may write in the folder of %1 (rule: %2)")
-                              .arg(context.appLocation, facts.locationSharedRule));
+            unmet.add(ManualReason::LocationShared, QStringLiteral("others may write in the folder of %1 (rule: %2)")
+                                                        .arg(app, facts.locationSharedRule));
         if (facts.otherInstanceRunning)
-            return manual(ManualReason::OtherInstanceRunning,
-                          QStringLiteral("another process runs from %1").arg(context.appLocation));
+            unmet.add(ManualReason::OtherInstanceRunning, QStringLiteral("another process runs from %1").arg(app));
         if (!facts.helperAvailable)
-            return manual(ManualReason::HelperUnavailable, QStringLiteral("/bin/sh is missing"));
-        return automatic(QStringLiteral("replace %1 and restart").arg(context.appLocation));
+            unmet.add(ManualReason::HelperUnavailable, QStringLiteral("/bin/sh is missing"));
+        if (unmet.any()) return unmet.result();
+        return automatic(QStringLiteral("replace %1 and restart").arg(app));
 
     case SelfInstallPlatform::Windows:
         if (kind != QLatin1String("msi"))
             return manual(ManualReason::UnsupportedKind,
                           QStringLiteral("kind '%1' is not an MSI").arg(context.kind));
-        if (!facts.installedPackage)
+        if (context.windowsUpgradeCode.isEmpty())
             return manual(ManualReason::NotInstalledPackage,
-                          QStringLiteral("%1 is not the MSI-installed product").arg(context.appLocation));
+                          QStringLiteral("the app names no UpgradeCode, so its installation cannot be found"));
+        if (!facts.locationExists)
+            return manual(ManualReason::Other, QStringLiteral("the running exe %1 was not found").arg(app));
+        if (!facts.installedPackage)
+            unmet.add(ManualReason::NotInstalledPackage,
+                      QStringLiteral("%1 is not the MSI-installed product (%2)").arg(app, facts.installedPackageWhy));
+        if (!facts.platformMeasured)
+            unmet.add(ManualReason::NotMeasuredOnThisPlatform,
+                      QStringLiteral("the update helper is not yet measured on a Windows desktop"));
         if (facts.otherInstanceRunning)
-            return manual(ManualReason::OtherInstanceRunning,
-                          QStringLiteral("another process runs from the install folder"));
+            unmet.add(ManualReason::OtherInstanceRunning,
+                      QStringLiteral("another process runs from the install folder"));
         if (!facts.helperAvailable)
-            return manual(ManualReason::HelperUnavailable,
-                          QStringLiteral("the update helper cannot be started here"));
+            unmet.add(ManualReason::HelperUnavailable,
+                      QStringLiteral("%1 is missing next to %2 or is not a plain file")
+                          .arg(QLatin1String(kWindowsHelperFileName), app));
+        if (unmet.any()) return unmet.result();
         return automatic(QStringLiteral("run msiexec and restart"));
     }
     return manual(ManualReason::Other, QStringLiteral("unknown platform"));
@@ -317,8 +371,11 @@ QString macHelperScript()
 PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH
 LC_ALL=C; export LC_ALL
 umask 077
-[ "$#" -eq 11 ] || exit 64
+[ "$#" -eq 12 ] || exit 64
 target=$1 staged=$2 dr=$3 ver=$4 result=$5 confirm=$6 pid=$7 waitticks=$8 confirmticks=$9 tool=${10} toolreq=${11}
+attempt=${12}
+case "$attempt" in *[!0-9a-f]*|'') exit 64 ;; esac
+[ "${#attempt}" -eq 32 ] || exit 64
 for p in "$target" "$staged" "$result" "$confirm" "$tool"; do
     case "$p" in /*) ;; *) exit 64 ;; esac
 done
@@ -332,14 +389,35 @@ one() { printf '%s' "$1" | tr '\r\n' '  '; }
 out() {
     [ -L "$result" ] && rm -f "$result"
     t=$(mktemp "$result.XXXXXX") || return 1
-    { printf 'result=%s\nstep=%s\nreason=%s\nversion=%s\ncode=%s\n' "$(one "$1")" "$(one "$2")" "$(one "$3")" \
-        "$(one "$4")" "$(one "${5:-}")"
+    { printf 'result=%s\nstep=%s\nreason=%s\nversion=%s\ncode=%s\nattempt=%s\n' "$(one "$1")" "$(one "$2")" \
+        "$(one "$3")" "$(one "$4")" "$(one "${5:-}")" "$attempt"
       [ -z "$restart" ] || printf 'restart=%s\n' "$restart"; } >"$t" &&
         mv -f "$t" "$result"
 }
 # The private copy of the swap program goes with the helper.
 finish() { rm -rfx "$toolDir" 2>/dev/null; exit "$1"; }
 ver_of() { /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$1/Contents/Info.plist" 2>/dev/null; }
+id_of() { /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$1/Contents/Info.plist" 2>/dev/null; }
+devino() { stat -f %d:%i "$1" 2>/dev/null; }
+# Removes what stands under the staging name only when it is still the very
+# bundle that was put there (device and inode recorded before the swap):
+# never something planted under that name since.
+# Moved to a name of its own FIRST, then checked there: nothing can be set
+# under the staging name between the check and the removal.
+drop_staged() {  # <expected device:inode>
+    d="$staged.drop-$$"
+    if [ -z "$1" ] || [ -L "$staged" ] || [ ! -d "$staged" ] || [ -e "$d" ] || [ -L "$d" ] ||
+        ! mv "$staged" "$d" 2>/dev/null; then
+        echo "kept $staged: it is not the bundle that was swapped there" >&2
+        return 0
+    fi
+    if [ ! -L "$d" ] && [ "$(devino "$d")" = "$1" ]; then
+        rm -rfx "$d"
+    else
+        mv "$d" "$staged" 2>/dev/null
+        echo "kept $staged: it is not the bundle that was swapped there" >&2
+    fi
+}
 running_from() { ps -axo comm= | grep -qF "$1/Contents/MacOS/"; }
 genuine() {
     [ ! -L "$1" ] && [ -d "$1" ] && codesign --verify --deep --strict -R "=$dr" "$1" 2>/dev/null &&
@@ -353,9 +431,34 @@ tool_ok() {
     [ ! -L "$tool" ] && [ -f "$tool" ] && [ -x "$tool" ] && [ -n "$toolreq" ] &&
         codesign --verify --strict -R "=$toolreq" "$tool" 2>/dev/null
 }
+# The confirmation counts only when it names this version and this attempt,
+# each key once, and its pid is the new version itself: asked of the checked
+# swap program, which reads path, start time and code of that pid from the
+# kernel (never from the process). `checked` keeps the program's FIRST
+# refusal (a later one may only say that the process has ended since).
+checked= refused=
+confirmed() {
+    [ ! -L "$confirm" ] && [ -f "$confirm" ] || return 1
+    for k in version attempt pid; do
+        [ "$(grep -c "^$k=" "$confirm" 2>/dev/null)" = 1 ] || return 1
+    done
+    [ "$(sed -n 's/^version=//p' "$confirm")" = "$ver" ] || return 1
+    [ "$(sed -n 's/^attempt=//p' "$confirm")" = "$attempt" ] || return 1
+    cpid=$(sed -n 's/^pid=//p' "$confirm")
+    case "$cpid" in ''|*[!0-9]*) return 1 ;; esac
+    # The same refused confirmation (same pid, same file) is not checked again.
+    key="$cpid:$(stat -f %i:%m "$confirm" 2>/dev/null)"
+    [ "$key" = "$refused" ] && return 1
+    tool_ok || { [ -n "$checked" ] || checked=swap-tool-unverified; refused=$key; return 1; }
+    "$tool" --check-running "$cpid" "$target" "$dr" "$notbefore" 2>/dev/null; crc=$?
+    [ "$crc" -eq 0 ] && return 0
+    [ -n "$checked" ] || checked=$crc
+    refused=$key
+    return 1
+}
 restore() {  # the old bundle sits under the staging name: swap back; succeeds only if it IS back
     if tool_ok && "$tool" "$target" "$staged" && genuine "$target" "$oldver"; then
-        rm -rfx "$staged"
+        drop_staged "$newid"
         return 0
     fi
     return 1
@@ -403,7 +506,11 @@ if [ -L "$tool" ] || [ ! -f "$tool" ] || [ ! -x "$tool" ]; then
     end_unchanged failed replace "the checked copy of the swap program is gone" swap-tool-missing 1
 fi
 if ! genuine "$staged" "$ver"; then
-    rm -rfx "$staged"
+    # Ours only if it carries the identifier of the app (a folder planted
+    # under the name stays; cleanupAfterStart does the same check).
+    if [ ! -L "$staged" ] && [ -n "$(id_of "$target")" ] && [ "$(id_of "$staged")" = "$(id_of "$target")" ]; then
+        rm -rfx "$staged"
+    fi
     end_unchanged failed verify "the new bundle fails its signature, designated requirement or version check" "" 1
 fi
 if [ "$(stat -f %d "$staged")" != "$(stat -f %d "$target")" ]; then
@@ -416,6 +523,9 @@ if ! tool_ok; then
     end_unchanged failed replace "the copy of the swap program fails its check right before the start" \
         swap-tool-unverified 1
 fi
+# What stands where, before the swap: after it, the OLD bundle carries
+# oldid under the staging name, and after a way back the NEW one newid.
+oldid=$(devino "$target") newid=$(devino "$staged")
 # One atomic swap: the name of the app is never free. Whatever the program
 # answers, what stands at the target decides.
 err=$("$tool" "$target" "$staged" 2>&1); rc=$?
@@ -443,21 +553,52 @@ else
     finish 1
 fi
 rm -f "$confirm"
+why="the new version did not start"
+notbefore=$(date +%s)
 if open -n "$target" 2>/dev/null; then
-    i=0
-    while [ "$i" -lt "$confirmticks" ]; do
-        if [ ! -L "$confirm" ] && grep -qxF "version=$ver" "$confirm" 2>/dev/null; then
-            rm -rfx "$staged"
+    # The deadline is clock time (a check may take longer than a tick).
+    # Waiting ends early when the new version is gone before it confirmed:
+    # looked at every 5th tick; gone means seen running and then twice not,
+    # or never seen within the first 30 s (LaunchServices may be slow to
+    # start it, and a process list that misses it must not cut a slow but
+    # healthy start short by much).
+    limit=$((notbefore + (confirmticks + 9) / 10)) i=0 seen=0 gone=0
+    while [ "$(date +%s)" -lt "$limit" ]; do
+        if confirmed; then
+            drop_staged "$oldid"
             out ok launch "" "$ver"; finish 0
         fi
-        i=$((i + 1)); sleep 0.1
+        i=$((i + 1))
+        if [ $((i % 5)) -eq 0 ]; then
+            if running_from "$target"; then
+                seen=1 gone=0
+            else
+                gone=$((gone + 1))
+                if [ "$seen" -eq 1 ] && [ "$gone" -ge 2 ]; then
+                    why="the new version ended before it confirmed its start"; break
+                fi
+                if [ "$seen" -eq 0 ] && [ "$(date +%s)" -ge $((notbefore + 30)) ]; then break; fi
+            fi
+        fi
+        sleep 0.1
     done
+    # A confirmation that came in the last tick still counts.
+    if confirmed; then
+        drop_staged "$oldid"
+        out ok launch "" "$ver"; finish 0
+    fi
+    if [ -n "$checked" ]; then
+        why="a start confirmation came, but its process is not the checked new version ($checked)"
+    fi
     if running_from "$target"; then
+        if [ -n "$checked" ]; then
+            out failed launch "$why" "$ver" start-unverified; finish 1
+        fi
         out failed launch "the new version runs but did not confirm its start" "$ver" start-unconfirmed; finish 1
     fi
 fi
 if restore; then
-    end_unchanged rolled-back launch "the new version did not start" start-failed 3
+    end_unchanged rolled-back launch "$why" start-failed 3
 fi
 out failed launch "the new version did not start and the old one could not be restored" "" rollback-failed
 finish 1
@@ -470,8 +611,10 @@ QString linuxHelperScript()
 PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH
 LC_ALL=C; export LC_ALL
 umask 077
-[ "$#" -eq 9 ] || exit 64
-target=$1 staged=$2 sha=$3 ver=$4 result=$5 confirm=$6 pid=$7 waitticks=$8 confirmticks=$9
+[ "$#" -eq 10 ] || exit 64
+target=$1 staged=$2 sha=$3 ver=$4 result=$5 confirm=$6 pid=$7 waitticks=$8 confirmticks=$9 attempt=${10}
+case "$attempt" in *[!0-9a-f]*|'') exit 64 ;; esac
+[ "${#attempt}" -eq 32 ] || exit 64
 for p in "$target" "$staged" "$result" "$confirm"; do
     case "$p" in /*) ;; *) exit 64 ;; esac
 done
@@ -486,8 +629,8 @@ one() { printf '%s' "$1" | tr '\r\n' '  '; }
 out() {
     [ -L "$result" ] && rm -f "$result"
     t=$(mktemp "$result.XXXXXX") || return 1
-    { printf 'result=%s\nstep=%s\nreason=%s\nversion=%s\ncode=%s\n' "$(one "$1")" "$(one "$2")" "$(one "$3")" \
-        "$(one "$4")" "$(one "${5:-}")"
+    { printf 'result=%s\nstep=%s\nreason=%s\nversion=%s\ncode=%s\nattempt=%s\n' "$(one "$1")" "$(one "$2")" \
+        "$(one "$3")" "$(one "$4")" "$(one "${5:-}")" "$attempt"
       [ -z "$restart" ] || printf 'restart=%s\n' "$restart"; } >"$t" &&
         mv -f "$t" "$result"
 }
@@ -593,7 +736,9 @@ rm -f "$confirm"
 start "$target"
 i=0
 while [ "$i" -lt "$confirmticks" ]; do
-    if [ ! -L "$confirm" ] && grep -qxF "version=$ver" "$confirm" 2>/dev/null; then
+    if [ ! -L "$confirm" ] && [ "$(grep -c '^version=' "$confirm" 2>/dev/null)" = 1 ] &&
+        [ "$(grep -c '^attempt=' "$confirm" 2>/dev/null)" = 1 ] &&
+        grep -qxF "version=$ver" "$confirm" && grep -qxF "attempt=$attempt" "$confirm"; then
         rm -f "$old"; out ok launch "" "$ver"; exit 0
     fi
     i=$((i + 1)); sleep 0.1
@@ -630,7 +775,7 @@ HelperPlan macHelperPlan(const PreparedInstall& prepared, const QString& require
                       target, prepared.stagedFile, requirement, o.toVersion,
                       o.resultFilePath, o.startConfirmFilePath, QString::number(o.appPid),
                       ticks(t.helperWaitExitMs), ticks(t.startConfirmTimeoutMs), swapTool,
-                      swapToolRequirement(requirement)};
+                      swapToolRequirement(requirement), o.attemptId};
     plan.description = QStringLiteral("helper: wait for pid %1, verify %2 against \"%3\", "
                                       "swap into %4 with the checked copy of update-swap, start %5, "
                                       "confirm within %6 ms")
@@ -650,7 +795,7 @@ HelperPlan linuxHelperPlan(const PreparedInstall& prepared)
                       o.context.appLocation, prepared.stagedFile, o.expectedSha256.toLower(),
                       o.toVersion, o.resultFilePath, o.startConfirmFilePath,
                       QString::number(o.appPid), ticks(t.helperWaitExitMs),
-                      ticks(t.startConfirmTimeoutMs)};
+                      ticks(t.startConfirmTimeoutMs), o.attemptId};
     plan.description = QStringLiteral("helper: wait for pid %1, check sha256 of %2, swap into %3, "
                                       "start, confirm within %4 ms")
                            .arg(o.appPid).arg(prepared.stagedFile, o.context.appLocation)
@@ -685,6 +830,105 @@ InstallOutcome::Result msiexecExitToResult(int exitCode, QString* codeOut)
     return InstallOutcome::Result::Failed;
 }
 
+namespace {
+
+QString windowsFolderKey(const QString& folder)
+{
+    QString f = folder;
+    f.replace(QLatin1Char('/'), QLatin1Char('\\'));
+    while (f.endsWith(QLatin1Char('\\')) && f.size() > 3) f.chop(1);
+    return f.toCaseFolded();
+}
+
+QString windowsParentFolder(const QString& exePath)
+{
+    QString p = exePath;
+    p.replace(QLatin1Char('/'), QLatin1Char('\\'));
+    const int cut = p.lastIndexOf(QLatin1Char('\\'));
+    if (cut <= 0) return {};
+    return cut == 2 ? p.left(3) : p.left(cut);  // "C:\x.exe" -> "C:\"
+}
+
+}  // namespace
+
+bool sameWindowsFolder(const QString& a, const QString& b)
+{
+    return !a.isEmpty() && !b.isEmpty() && windowsFolderKey(a) == windowsFolderKey(b);
+}
+
+bool windowsRunsFromInstalledPackage(const QString& exePath, const WindowsInstallRecord& record,
+                                     const QString& programFiles, const QString& slug, QString* why)
+{
+    const auto fail = [why](const QString& w) {
+        if (why) *why = w;
+        return false;
+    };
+    if (why) why->clear();
+    const QString folder = windowsParentFolder(exePath);
+    if (folder.isEmpty()) return fail(QStringLiteral("the path of the exe names no folder"));
+    if (record.relatedProducts == 0) return fail(QStringLiteral("no product is registered under the UpgradeCode"));
+    if (record.relatedProducts > 1)
+        return fail(QStringLiteral("%1 products are registered under the UpgradeCode").arg(record.relatedProducts));
+    if (!record.installLocation.isEmpty()) {
+        if (sameWindowsFolder(folder, record.installLocation)) return true;
+        return fail(QStringLiteral("the product is installed in another folder"));
+    }
+    // No stored location (installed before ARPINSTALLLOCATION): only the default folder counts.
+    if (programFiles.isEmpty() || helperNamePart(slug) != slug)
+        return fail(QStringLiteral("no stored install location and no default folder to compare with"));
+    const QString standard = windowsFolderKey(programFiles) + QLatin1Char('\\') + slug.toCaseFolded();
+    if (windowsFolderKey(folder) == standard) return true;
+    return fail(QStringLiteral("no stored install location, and the folder of the exe is not the default folder"));
+}
+
+std::optional<QStringList> windowsHelperArguments(const PreparedInstall& prepared, const QString& logFile,
+                                                  quint64 appHandle, QString* why)
+{
+    const InstallOrder& o = prepared.order;
+    const auto native = [](const QString& p) {
+        QString n = p;
+        n.replace(QLatin1Char('/'), QLatin1Char('\\'));
+        return n;
+    };
+    const QString exe = native(o.context.appLocation);
+    QStringList a{QStringLiteral("--msi"),            native(prepared.stagedFile),
+                  QStringLiteral("--sha256"),         o.expectedSha256,
+                  QStringLiteral("--size"),           QString::number(o.expectedSize),
+                  QStringLiteral("--install-folder"), windowsParentFolder(exe),
+                  QStringLiteral("--exe"),            exe,
+                  QStringLiteral("--version"),        o.toVersion,
+                  QStringLiteral("--result"),         native(o.resultFilePath),
+                  QStringLiteral("--log"),            native(logFile),
+                  QStringLiteral("--attempt"),        o.attemptId,
+                  QStringLiteral("--app-handle"),     QString::number(appHandle),
+                  QStringLiteral("--wait-ms"),        QString::number(o.context.tuning.helperWaitExitMs)};
+    // The helper's own parser is the judge: what it would refuse is not started.
+    std::vector<std::wstring> w;
+    w.reserve(size_t(a.size()));
+    for (const QString& s : a) w.push_back(s.toStdWString());
+    std::wstring reason;
+    if (!winhelper::parseArgs(w, &reason)) {
+        if (why) *why = QStringLiteral("the helper would refuse its arguments: %1").arg(QString::fromStdWString(reason));
+        return std::nullopt;
+    }
+    if (why) why->clear();
+    return a;
+}
+
+std::optional<QString> windowsCommandLine(const QString& program, const QStringList& arguments)
+{
+    QStringList items{program};
+    items += arguments;
+    QStringList quoted;
+    for (const QString& s : items) {
+        if (s.isEmpty() || s.endsWith(QLatin1Char('\\'))) return std::nullopt;
+        for (const QChar c : s)
+            if (c == QLatin1Char('"') || c.unicode() < 0x20 || c.unicode() == 0x7F) return std::nullopt;
+        quoted << QLatin1Char('"') + s + QLatin1Char('"');
+    }
+    return quoted.join(QLatin1Char(' '));
+}
+
 // ============================================================================
 // What may go to a helper
 // ============================================================================
@@ -702,6 +946,9 @@ bool validatePreparedForHelper(const PreparedInstall& prepared, QString* why)
             p.contains(QLatin1Char('\n')) || p.contains(QLatin1Char('\r')))
             return fail(QStringLiteral("not a clean absolute path: '%1'").arg(p));
     }
+    static const QRegularExpression attempt(QStringLiteral("\\A[0-9a-f]{32}\\z"));  // \z: no final newline
+    if (!attempt.match(o.attemptId).hasMatch())
+        return fail(QStringLiteral("no valid mark for this attempt: '%1'").arg(o.attemptId));
     static const QRegularExpression version(QStringLiteral("^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$"));
     if (!version.match(o.toVersion).hasMatch())
         return fail(QStringLiteral("unusable version '%1'").arg(o.toVersion));
@@ -1274,16 +1521,40 @@ std::unique_ptr<InstallBackend> makeAppImageSwapBackend(SelfInstallHooks hooks)
 // Factory
 // ============================================================================
 
+#if defined(Q_OS_WIN)
+std::unique_ptr<InstallBackend> makeWindowsMsiHelperBackend(SelfInstallHooks hooks);  // SelfInstallWin.cpp
+#endif
+
 std::unique_ptr<InstallBackend> makeSelfInstallBackend(SelfInstallHooks hooks)
 {
 #if defined(Q_OS_MACOS)
     return makeMacBundleSwapBackend(std::move(hooks));
 #elif defined(Q_OS_UNIX)
     return makeAppImageSwapBackend(std::move(hooks));
+#elif defined(Q_OS_WIN)
+    return makeWindowsMsiHelperBackend(std::move(hooks));
 #else
     Q_UNUSED(hooks);
     return nullptr;
 #endif
+}
+
+bool selfInstallIsTheWayOn(SelfInstallPlatform platform)
+{
+    switch (platform) {
+    case SelfInstallPlatform::MacOS:   return true;
+    case SelfInstallPlatform::Windows: return kWindowsSelfInstallMeasured;
+    case SelfInstallPlatform::Linux:   return kLinuxSelfInstallMeasured;
+    }
+    return false;
+}
+
+std::unique_ptr<InstallBackend> makeInstallBackendForThisSystem()
+{
+    if (selfInstallIsTheWayOn(currentSelfInstallPlatform())) {
+        if (auto b = makeSelfInstallBackend()) return b;
+    }
+    return makeSystemInstallerBackend();
 }
 
 }  // namespace appupdate

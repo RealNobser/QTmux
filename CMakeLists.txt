@@ -227,11 +227,17 @@ file(GLOB qtmux_updater_sources CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/winhelper/UpdateHelperCore.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/winhelper/UpdateHelperCore.cpp"
 )
+# Der Szenen-Baustein (UpdateShowcase: ein Ablauf mit Wegwerf-Schlüssel und
+# Server auf 127.0.0.1, nur für Bildläufe) gehört NICHT in den Kern, den die
+# ausgelieferte App linkt. Er bekommt eine eigene Lib, die nur das Bildziel
+# nimmt; der Hub baut ihn genauso getrennt.
+list(FILTER qtmux_updater_sources EXCLUDE REGEX "/UpdateShowcase\\.(hpp|cpp)$")
 # Ein leerer oder halber Glob darf NICHT in einem unverständlichen Linkfehler
 # enden: fehlt der vendierte Baum (unvollständiger Checkout), sagt es das hier.
 foreach(qtmux_updater_required
         UpdateManifest.cpp UpdateChecker.cpp InstallerLauncher.cpp Ed25519Verify.cpp
         UpdateFlow.cpp UpdateSettings.cpp UpdateTexts.cpp SelfInstall.cpp
+        SelfInstallWin.cpp UpdateShowcase.cpp selfinstall-helpers.cmake
         winhelper/UpdateHelperCore.cpp UpdaterCatalogs.cmake)
     set(qtmux_updater_probe
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/${qtmux_updater_required}")
@@ -249,6 +255,11 @@ if(APPLE)
     # Designated Requirement der laufenden App (Vertrag V2 §6).
     target_link_libraries(qtmux_updater PUBLIC
         "-framework Security" "-framework CoreFoundation")
+endif()
+if(WIN32)
+    # SelfInstallWin.cpp fragt Windows Installer nach dem installierten Produkt
+    # (MsiEnumRelatedProducts, MsiGetProductInfo).
+    target_link_libraries(qtmux_updater PUBLIC msi)
 endif()
 # Die Update-Texte bringt der Hub als eigene Kataloge mit (Vertrag V2 §4.5).
 # Dieselbe Funktion ruft der Hub auf seiner Lib auf. Hier läuft nur lrelease, nie

@@ -45,19 +45,35 @@
 //                            bundle as .<Name>.app.update-staged-<hex> next
 //                            to the target, plus private temp folders; the
 //                            Linux image swap keeps <target>.update-old (and
-//                            may leave .update-new). The old copy goes only
+//                            may leave .update-new); the Windows helper
+//                            starter keeps copies of the helper under
+//                            <app local data>/update-helper/<slug>-<16 hex>/.
+//                            The old copy goes only
 //                            when what stands at the target is the genuine
 //                            new one — until then it is the way back. Called
 //                            kCleanupDelayMs after start, because a helper
 //                            may still be finishing (it deletes the old copy
 //                            itself after the confirmation). Must tolerate
-//                            files that are already gone.
+//                            files that are already gone, and must leave
+//                            alone what a prepare() of its own or of another
+//                            copy of the app is using right now. Called on
+//                            the owner's thread like everything else; a
+//                            backend may do the work on a thread of its own
+//                            (the macOS bundle swap does).
 //
-// After the restart the flow writes `version=<own version>` into
-// order.startConfirmFilePath — that is how the helper learns the new
-// version really runs — and reads the helper's result file
-// (order.resultFilePath) with readInstallOutcome() below. The FORMAT of both
-// files is part of this seam.
+// After the restart the flow writes the start confirmation (version, attempt,
+// pid; writeStartConfirmation() below) into order.startConfirmFilePath — that
+// is how the helper learns the new version really runs — and reads the
+// helper's result file (order.resultFilePath) with readInstallOutcome()
+// below. The FORMAT of both files is part of this seam.
+//
+// Revision 3 (2026-11-20): every quitAndInstall() is one ATTEMPT with its own
+// mark (InstallOrder::attemptId). The confirmation names it, the helper
+// writes it into its result, and the flow takes a result of an Automatic
+// install only when the marks are equal: a result without a mark, or with
+// another one, is "outcome unknown", never "failed". The confirmation also
+// carries the pid of the new version, so a helper can check the RUNNING
+// process instead of trusting it to check itself.
 //
 // Threading: all calls on the thread that owns the UpdateFlow (the GUI
 // thread); a backend that works in the background delivers `done` back there.
@@ -78,11 +94,14 @@ namespace appupdate {
 // The helper waits this long for the app to be really gone (EOF on the
 // lifeline, then the pid).
 inline constexpr int kHelperWaitExitMs = 120'000;
-// The helper waits this long for the start confirmation of the new version,
-// counted from the moment it started that version. Without a confirmation it
-// rolls back only when the new version no longer runs; if it still runs, the
-// helper ends without a way back and reports start-unconfirmed (the flow of
-// the running new version counts that as an update).
+// The helper waits at most this long for the start confirmation of the new
+// version, counted from the moment it started that version. It stops earlier
+// when the new version is gone without having confirmed (seen running and
+// then no longer, or never seen within a grace period of its own). Without a
+// confirmation it rolls back only when the new version no longer runs; if it
+// still runs, the helper ends without a way back and reports
+// start-unconfirmed (the flow of the running new version counts that as an
+// update).
 inline constexpr int kStartConfirmTimeoutMs = 60'000;
 // The flow gives prepare() this long; then cancelPrepare() and InstallFailed.
 inline constexpr int kPrepareDeadlineMs = 120'000;
@@ -221,10 +240,15 @@ struct InstallOrder {
     // Chosen by the flow under the app's data location; the backend never
     // invents a path.
     QString resultFilePath;
-    // where the NEW version writes `version=<its version>` at its start
+    // where the NEW version writes its start confirmation
     // (writeStartConfirmation()). The helper waits for it
     // (startConfirmTimeoutMs) before it deletes the old app.
     QString startConfirmFilePath;
+    // The mark of this attempt (newInstallAttemptId(), set by the flow for
+    // every quitAndInstall(), also for a retry). The helper accepts only a
+    // confirmation with this mark and writes it into its result as
+    // `attempt=`.
+    QString attemptId;
 };
 
 struct PreparedInstall {
@@ -296,12 +320,38 @@ public:
 // the event loop.
 [[nodiscard]] std::unique_ptr<InstallBackend> makeSystemInstallerBackend();
 
+// ---- Attempt mark -----------------------------------------------------------
+//
+// 32 lower-case hex characters from QRandomGenerator::system().
+inline constexpr int kInstallAttemptIdChars = 32;
+[[nodiscard]] QString newInstallAttemptId();
+
 // ---- Start confirmation ----------------------------------------------
 //
-// Written by the flow of the NEW version at its start, read by the helper:
-// one line `version=<version>` (LF), written via <path>.tmp + rename.
-bool writeStartConfirmation(const QString& path, const QString& version,
+// Written by the flow of the NEW version at its start, read by the helper.
+// Same rules as the result file below: UTF-8, one `key=value` per line, LF,
+// written via <path>.tmp + rename; a reader must not rely on the order of the
+// lines, and a key that occurs twice makes the file unreadable.
+//
+//   version=<the version that runs>       mandatory
+//   attempt=<InstallOrder::attemptId>     empty in a marker of an older stand
+//   pid=<QCoreApplication::applicationPid() of the new version>
+//                                         mandatory for the macOS helper: without
+//                                         it no start counts as confirmed
+struct StartConfirmation {
+    QString version;
+    QString attempt;
+    qint64 pid = 0;
+};
+
+bool writeStartConfirmation(const QString& path, const StartConfirmation& confirmation,
                             QString* errorOut = nullptr);
+
+// For helpers written in C++ and for tests. nullopt (with errorOut) when
+// `version` is missing, a key occurs twice, or `pid` is not a positive
+// number; unknown keys are ignored.
+[[nodiscard]] std::optional<StartConfirmation> parseStartConfirmation(
+    const QByteArray& bytes, QString* errorOut = nullptr);
 
 // ---- Result file (written by the helper, read on the next start) ----------
 //
@@ -315,6 +365,7 @@ bool writeStartConfirmation(const QString& path, const QString& version,
 //   reason=<one line of English for "Details">
 //   version=<the version the helper installed or restored>
 //   code=<optional machine word for the flow, app-management-denied …>
+//   attempt=<InstallOrder::attemptId of the attempt this result belongs to>
 //
 // `result` is mandatory; a file without a valid one is unreadable (nullopt
 // with errorOut), never "ok". So is a file in which ANY key occurs twice: two
@@ -334,6 +385,7 @@ struct InstallOutcome {
     QString reason;
     QString version;
     QString code;
+    QString attempt;  // empty = the file carries no mark
 };
 
 inline constexpr qint64 kInstallOutcomeMaxBytes = 4096;

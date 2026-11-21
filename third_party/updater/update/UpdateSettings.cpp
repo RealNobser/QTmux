@@ -245,6 +245,7 @@ PendingInstall UpdateSettings::pendingInstall() const
     p.kind        = o.value(QLatin1String("kind")).toString();
     p.resultFile  = o.value(QLatin1String("result_file")).toString();
     p.confirmFile = o.value(QLatin1String("confirm_file")).toString();
+    p.attempt     = o.value(QLatin1String("attempt")).toString();
     p.launchError = o.value(QLatin1String("launch_error")).toString();
     p.notes       = o.value(QLatin1String("notes")).toString();
     p.published   = o.value(QLatin1String("published")).toString();
@@ -265,6 +266,7 @@ void UpdateSettings::setPendingInstall(const PendingInstall& p)
     o.insert(QLatin1String("kind"), p.kind);
     o.insert(QLatin1String("result_file"), p.resultFile);
     o.insert(QLatin1String("confirm_file"), p.confirmFile);
+    if (!p.attempt.isEmpty()) o.insert(QLatin1String("attempt"), p.attempt);
     if (!p.launchError.isEmpty()) o.insert(QLatin1String("launch_error"), p.launchError);
     o.insert(QLatin1String("notes"), p.notes.left(kNotesMarkerMaxChars));
     o.insert(QLatin1String("published"), p.published);

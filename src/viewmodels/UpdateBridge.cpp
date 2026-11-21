@@ -250,19 +250,14 @@ void UpdateBridge::cancelProxyAuth() { m_flow->cancelProxyAuth(); }
 
 void UpdateBridge::setLanguage(const QString &language)
 {
-    // K2-NACHZUG: Mit dem Hub-Nachzug ruft QTmux hier nur noch
-    // m_flow->setLanguage(language) — der Ablauf tauscht dann Katalog UND Locale und
-    // meldet viewChanged/hintChanged. Bis dahin tauscht QTmux nur den Katalog, und
-    // die Oberfläche liest `view` und die Sätze der Seite „Updates“ neu. In der
-    // Startsprache bleiben bis zum nächsten Zustandswechsel: der Hinweis in der
-    // Kopfleiste (der Ablauf hält seinen Satz fertig), Datum und Größen sowie die
-    // Sprache der Änderungshinweise (bekannte Abweichung, im K2-Bericht).
-    if (!appupdate::installUpdateTranslator(language))
-        qWarning("QTmux: Update-Texte fuer \"%s\" fehlen im Bau (Hub-Katalog).",
-                 qPrintable(language));
+    // Der Ablauf tauscht Katalog und Texte selbst und meldet viewChanged (darüber
+    // auch notesChanged), hintChanged und proxyAuthChanged. Die Seite „Updates“
+    // liest ihre Sätze nicht aus dem Ablauf, sondern einzeln aus dem Katalog: Sie
+    // folgt dem Revisionszähler. Bekannte Grenze des Hubs: Ein schon vorbereitetes
+    // Selbst-Update behält die Änderungshinweise in der Sprache der Vorbereitung.
+    m_flow->setLanguage(language);
     ++m_textRevision;
     emit textsChanged();
-    emit notesChanged();
 }
 
 } // namespace qtmux

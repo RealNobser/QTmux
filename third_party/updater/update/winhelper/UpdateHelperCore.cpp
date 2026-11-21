@@ -14,6 +14,14 @@ bool isHex64(const std::wstring& s)
     return true;
 }
 
+bool isHex32(const std::wstring& s)
+{
+    if (s.size() != 32) return false;
+    for (wchar_t c : s)
+        if (!((c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'f'))) return false;
+    return true;
+}
+
 bool parseNumber(const std::wstring& s, unsigned long long* out)
 {
     if (s.empty() || s.size() > 19) return false;
@@ -115,7 +123,8 @@ std::optional<Args> parseArgs(const std::vector<std::wstring>& args, std::wstrin
     if (why) why->clear();
     std::map<std::wstring, std::wstring> v;
     static const wchar_t* const kKnown[] = {L"--msi", L"--sha256", L"--size", L"--install-folder", L"--exe",
-                                            L"--version", L"--result", L"--log", L"--app-handle", L"--wait-ms"};
+                                            L"--version", L"--result", L"--log", L"--attempt", L"--app-handle",
+                                            L"--wait-ms"};
     for (size_t i = 0; i < args.size(); i += 2) {
         const std::wstring& k = args[i];
         bool known = false;
@@ -134,6 +143,7 @@ std::optional<Args> parseArgs(const std::vector<std::wstring>& args, std::wstrin
     a.installFolder = v[L"--install-folder"];
     a.exe = v[L"--exe"];
     a.version = v[L"--version"];
+    a.attempt = v[L"--attempt"];
     a.result = v[L"--result"];
     a.log = v[L"--log"];
     for (const std::wstring* p : {&a.msi, &a.installFolder, &a.exe, &a.result, &a.log})
@@ -141,6 +151,7 @@ std::optional<Args> parseArgs(const std::vector<std::wstring>& args, std::wstrin
     if (!isHex64(a.sha256)) return fail(L"sha256 must be 64 lowercase hex digits");
     if (!parseNumber(v[L"--size"], &a.size) || a.size == 0) return fail(L"bad size");
     if (!isCleanVersion(a.version)) return fail(L"bad version");
+    if (!isHex32(a.attempt)) return fail(L"attempt must be 32 lowercase hex digits");
     if (a.installFolder.size() <= 3) return fail(L"a drive root is no install folder");
     if (!isInsideFolder(a.exe, a.installFolder)) return fail(L"the app is not inside the install folder");
     if (!parseNumber(v[L"--app-handle"], &a.appHandle) || a.appHandle == 0) return fail(L"bad app handle");
@@ -192,6 +203,7 @@ std::string serializeOutcome(const Outcome& o)
     std::string text = "result=" + oneLine(o.result) + "\nstep=" + oneLine(o.step) + "\nreason=" +
                        oneLine(o.reason) + "\nversion=" + oneLine(o.version) + "\ncode=" + oneLine(o.code) + "\n";
     if (!o.restart.empty()) text += "restart=" + oneLine(o.restart) + "\n";
+    if (!o.attempt.empty()) text += "attempt=" + oneLine(o.attempt) + "\n";
     return text;
 }
 

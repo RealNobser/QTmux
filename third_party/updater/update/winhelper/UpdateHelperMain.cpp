@@ -37,8 +37,13 @@ std::wstring systemDirectory()
 // a link or junction), checked at the handle to be a plain file with one name
 // only, then renamed over the result (a rename replaces a link, it does not
 // write through it).
-bool writeResult(const std::wstring& path, const Outcome& o)
+// The mark of this attempt, set once from the parsed call; every result
+// carries it (the flow takes a result only with its own mark).
+std::string gAttempt;
+
+bool writeResult(const std::wstring& path, Outcome o)
 {
+    if (o.attempt.empty()) o.attempt = gAttempt;
     const std::string text = serializeOutcome(o);
     unsigned char rnd[8] = {};
     if (BCryptGenRandom(nullptr, rnd, sizeof rnd, BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0) return false;
@@ -189,6 +194,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
     const auto parsed = parseArgs(args, &why);
     if (!parsed) return 64;  // no trustworthy result path to write to
     const Args& a = *parsed;
+    gAttempt = toUtf8(a.attempt);
     const std::string version = toUtf8(a.version);
 
     // 1. Wait until the app is really gone (its own process handle — no pid

@@ -34,6 +34,7 @@ struct Args {
     std::wstring version;        // the version being installed
     std::wstring result;         // result file (InstallBackend.hpp format)
     std::wstring log;            // msiexec log
+    std::wstring attempt;        // the mark of this attempt (32 lowercase hex); goes into every result
     unsigned long long appHandle = 0;  // inherited handle to the app's process
     unsigned long waitMs = 120000;     // how long to wait for the app to end
 };
@@ -41,7 +42,7 @@ struct Args {
 // Command line, all options required except --wait-ms:
 //   --msi <path> --sha256 <hex> --size <n> --install-folder <path>
 //   --exe <path> --version <v> --result <path> --log <path>
-//   --app-handle <n> [--wait-ms <n>]
+//   --attempt <32 hex> --app-handle <n> [--wait-ms <n>]
 // Every value is checked; anything unexpected (unknown option, missing
 // value, a second occurrence, an unclean path) refuses the whole call.
 // argv[0] (the program) is not part of `args`.
@@ -78,6 +79,8 @@ struct Outcome {
     // skipped-elevated; empty = not attempted (key left out of the file).
     // Its own key, so `code` stays one word the flow can compare.
     std::string restart;
+    // The mark of the attempt (Args::attempt); written as `attempt=` when set.
+    std::string attempt;
 };
 
 // msiexec exit code → outcome. 0/3010/1641 ok (3010: restart-required);

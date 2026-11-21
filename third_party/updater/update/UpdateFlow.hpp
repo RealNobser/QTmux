@@ -151,6 +151,15 @@ public:
         // app's CODE for the self-test run only - never from settings, the
         // environment or an argument.
         bool allowSourceOverrideForSelfTest = false;
+        // After a self-update the helper waits for the start confirmation of
+        // the new version and takes the way back without it. By default the
+        // flow writes it on the first pass of the event loop after start().
+        // An app whose start is only really done later (it connects, opens a
+        // project, runs a check in the background) sets this and calls
+        // confirmStarted() itself at that point. Until then the marker of
+        // the install stays, so the old version, started again by the
+        // helper, still judges the attempt.
+        bool confirmStartExplicitly = false;
     };
 
     struct Button {
@@ -234,11 +243,29 @@ public:
     // written on the first pass of the event loop, not inside start().
     void start();
 
+    // With Config::confirmStartExplicitly: the app says its start is done.
+    // Writes the start confirmation the helper waits for (once) and drops the
+    // marker. Called before start(), it takes effect on the first pass of the
+    // event loop after start(). Without a pending self-update, or a second
+    // time, it does nothing. Without confirmStartExplicitly it does nothing
+    // either (the flow confirms by itself).
+    void confirmStarted();
+
     // Start options: --no-update-check (always), --update-base-url <url> and
     // --update-channel <name> (only with Config::allowSourceOverrideForSelfTest,
     // otherwise ignored with one log line). Unknown arguments are ignored.
     // Call before start().
     void applyStartOptions(const QStringList& arguments);
+
+    // The app switched its UI language while running ("de" | "en" | "sv").
+    // Swaps the hub translator (installUpdateTranslator) and the texts, then
+    // emits viewChanged() and proxyAuthChanged(), and hintChanged() when a
+    // hint is shown, so every surface reads its sentences again. State,
+    // deadlines and a running download stay as they are. The same language
+    // again does nothing; a language without catalogue falls back to English.
+    // Known edge: a self-update that is already prepared keeps the release
+    // notes in the language it was prepared in (they are stored with it).
+    void setLanguage(const QString& language);
 
     // ---- State ---------------------------------------------------------------
     [[nodiscard]] State state() const { return m_state; }
@@ -465,6 +492,11 @@ private:
     qint64 m_failedAt = 0;                  // 12: where the connection dropped
     bool m_serialUnreadable = false;
     PendingInstall m_lastPending;           // evaluated at start (6, 13)
+    // Start confirmation (Config::confirmStartExplicitly): requested by the
+    // app, and the one evaluatePendingInstall() keeps waiting for the app.
+    bool m_confirmRequested = false;
+    bool m_confirmWaiting = false;
+    void writeConfirmationNow();
 
     // Silent checks
     QTimer m_silentTimer;

@@ -93,6 +93,7 @@ struct SelfInstallFacts {
     QuarantineState quarantine = QuarantineState::Unreadable;
     // Windows
     bool installedPackage = false;   // running from the MSI-installed product
+    QString installedPackageWhy;     // when not: which check failed, for the detail text
 };
 
 // The capability for `platform`. Order of the checks is part of the contract:
@@ -232,6 +233,63 @@ struct HelperPlan {
 [[nodiscard]] InstallOutcome::Result msiexecExitToResult(int exitCode,
                                                          QString* codeOut = nullptr);
 
+// Windows: on since the Windows tests of the helper around msiexec passed in
+// CI on the commit that set it (the owner's decision: switch on when they are
+// green, then accept it on a real desktop). Not measured by CI: the elevation
+// prompt, a real upgrade, the restart without elevation; that is the owner's
+// acceptance after the release. While false, capability() says
+// NotMeasuredOnThisPlatform and apps keep the system installer of stage 1
+// (selfInstallIsTheWayOn). A switch in the code, never a setting — the same
+// rule as kLinuxSelfInstallMeasured.
+inline constexpr bool kWindowsSelfInstallMeasured = true;
+
+// The file name of the helper program next to the app's exe; every product
+// installs it with its MSI.
+inline constexpr char kWindowsHelperFileName[] = "update-helper.exe";
+
+// What Windows Installer knows about the product registered under the app's
+// UpgradeCode (MsiEnumRelatedProducts, MsiGetProductInfo).
+struct WindowsInstallRecord {
+    int relatedProducts = 0;   // products registered under the UpgradeCode
+    QString installLocation;   // INSTALLLOCATION of the one product; empty = not stored
+};
+
+// Two Windows folders are the same: separators either way, letters compared
+// without case, no trailing separator. Purely textual (no 8.3 names, no links).
+[[nodiscard]] bool sameWindowsFolder(const QString& a, const QString& b);
+
+// True when the running exe belongs to the MSI-installed product. Exactly one
+// product is registered under the UpgradeCode, and the folder of the exe is
+// its stored install location. Installations from before the packages stored
+// it (ARPINSTALLLOCATION) have none; then the folder of the exe must be the
+// default `<programFiles>\<slug>` (compared without case,
+// so "macpcan" names "MacPCAN"). Anything else — the portable ZIP, a copied
+// folder, two registered products — is not the installed package. `why` names
+// the failed check.
+[[nodiscard]] bool windowsRunsFromInstalledPackage(const QString& exePath,
+                                                   const WindowsInstallRecord& record,
+                                                   const QString& programFiles,
+                                                   const QString& slug,
+                                                   QString* why = nullptr);
+
+// The arguments for update-helper.exe (see winhelper::parseArgs): the staged
+// MSI, its size and SHA-256 from the signed manifest, the folder and the exe
+// the app runs from, the version, the result file, the msiexec log and the
+// inherited handle to the app's process. Native separators. nullopt (with
+// `why`) when the helper's own parser would refuse the values — the backend
+// never starts a helper that would only exit with 64.
+[[nodiscard]] std::optional<QStringList> windowsHelperArguments(const PreparedInstall& prepared,
+                                                                const QString& logFile,
+                                                                quint64 appHandle,
+                                                                QString* why = nullptr);
+
+// A CreateProcessW command line: the program and every argument in double
+// quotes. nullopt when an item contains '"' or a control character, or ends
+// in '\' (it would escape the closing quote) — such values are refused, not
+// escaped.
+[[nodiscard]] std::optional<QString> windowsCommandLine(const QString& program,
+                                                        const QStringList& arguments);
+
 // ---- The backend -----------------------------------------------------------
 
 // Seams for tests only; production passes nothing.
@@ -242,15 +300,39 @@ struct SelfInstallHooks {
     // process ends (that IS the signal). A test receives it here and closes
     // it to play "the app has quit".
     std::function<void(int writeFd)> takeLifeline;
-    // Tests of the AppImage swap run it although kLinuxSelfInstallMeasured
-    // is false. Production never sets this.
+    // Tests of the AppImage swap and of the Windows helper run them although
+    // kLinuxSelfInstallMeasured / kWindowsSelfInstallMeasured is false.
+    // Production never sets this.
     bool assumePlatformMeasuredForTests = false;
+    // Windows: launch() hands the helper a handle to THIS process. A test
+    // returns the handle (HANDLE as void*) of a child that plays the app; the
+    // backend duplicates it and leaves the original to the test.
+    std::function<void*()> appProcessForTests;
+    // macOS: called on the worker thread when the work of a prepare() starts,
+    // with the number of that call (1, 2, ...). A test blocks it to keep one
+    // worker busy while the flow asks again or the backend goes away.
+    std::function<void(int call)> prepareWorkStartedForTests;
+    // macOS: cleanupAfterStart() runs on a worker thread; this is called
+    // there when it has finished (tests wait for it).
+    std::function<void()> cleanupFinishedForTests;
 };
 
-// macOS → the bundle swap; Linux → the AppImage swap; Windows → nullptr
-// until the helper program exists (the caller keeps the system-installer
-// backend there — an explicit decision, not a silent fallback per case).
+// macOS → the bundle swap; Linux → the AppImage swap; Windows → the helper
+// around msiexec (SelfInstallWin.cpp).
 [[nodiscard]] std::unique_ptr<InstallBackend> makeSelfInstallBackend(
     SelfInstallHooks hooks = {});
+
+// Whether the self-installation is the way on `platform`: on macOS always;
+// on Windows and Linux only once it is measured on a real desktop
+// (kWindowsSelfInstallMeasured, kLinuxSelfInstallMeasured). Until then the
+// system installer of stage 1 stays the way there (Windows: msiexec with its
+// own dialog; Linux: the AppImage replaced in place, run on the next start),
+// not "install by hand".
+[[nodiscard]] bool selfInstallIsTheWayOn(SelfInstallPlatform platform);
+
+// What an app passes to UpdateFlow::setInstallBackend(): makeSelfInstallBackend()
+// where selfInstallIsTheWayOn(this system), makeSystemInstallerBackend()
+// elsewhere. The choice is made here, once for every app, never in app code.
+[[nodiscard]] std::unique_ptr<InstallBackend> makeInstallBackendForThisSystem();
 
 }  // namespace appupdate

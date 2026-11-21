@@ -68,6 +68,7 @@ struct PendingInstall {
     QString kind;           // "dmg" | "msi" | "appimage"
     QString resultFile;     // where an Automatic helper reports
     QString confirmFile;    // where the new version confirms its start
+    QString attempt;        // InstallOrder::attemptId; empty in a marker of an older stand
     QString launchError;    // set when launch() itself failed in aboutToQuit
     QString notes;          // release notes of toVersion (state 6 after restart)
     QString published;      // its release date, ISO

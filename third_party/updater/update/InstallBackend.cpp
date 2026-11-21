@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QRandomGenerator>
 #include <QSet>
 #include <QTimer>
 
@@ -59,9 +60,27 @@ QString installMethodName(InstallMethod m)
     return QStringLiteral("manual");
 }
 
+// ---- Attempt mark -----------------------------------------------------------
+
+QString newInstallAttemptId()
+{
+    QByteArray raw(kInstallAttemptIdChars / 2, Qt::Uninitialized);
+    QRandomGenerator::system()->generate(raw.begin(), raw.end());
+    return QString::fromLatin1(raw.toHex());
+}
+
 // ---- Start confirmation ---------------------------------------------------
 
-bool writeStartConfirmation(const QString& path, const QString& version,
+namespace {
+QString oneLineValue(QString s)
+{
+    s.replace(QLatin1Char('\r'), QLatin1Char(' '));
+    s.replace(QLatin1Char('\n'), QLatin1Char(' '));
+    return s;
+}
+}  // namespace
+
+bool writeStartConfirmation(const QString& path, const StartConfirmation& c,
                             QString* errorOut)
 {
     const auto fail = [errorOut](const QString& why) {
@@ -69,16 +88,18 @@ bool writeStartConfirmation(const QString& path, const QString& version,
         return false;
     };
     if (path.isEmpty()) return fail(QStringLiteral("no confirmation path"));
+    if (c.version.trimmed().isEmpty()) return fail(QStringLiteral("no version to confirm"));
     const QString tmp = path + QStringLiteral(".tmp");
     QFile::remove(tmp);
     QFile f(tmp);
     if (!f.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
         return fail(QStringLiteral("cannot create the confirmation file: %1").arg(fileErrorName(f.error())));
     }
-    QString v = version;
-    v.replace(QLatin1Char('\n'), QLatin1Char(' ')).replace(QLatin1Char('\r'), QLatin1Char(' '));
-    const QByteArray line = QStringLiteral("version=%1\n").arg(v).toUtf8();
-    if (f.write(line) != line.size() || !f.flush()) {
+    QString text = QStringLiteral("version=%1\n").arg(oneLineValue(c.version));
+    if (!c.attempt.isEmpty()) text += QStringLiteral("attempt=%1\n").arg(oneLineValue(c.attempt));
+    if (c.pid > 0) text += QStringLiteral("pid=%1\n").arg(c.pid);
+    const QByteArray bytes = text.toUtf8();
+    if (f.write(bytes) != bytes.size() || !f.flush()) {
         f.close();
         QFile::remove(tmp);
         return fail(QStringLiteral("cannot write %1").arg(tmp));
@@ -91,6 +112,45 @@ bool writeStartConfirmation(const QString& path, const QString& version,
     }
     if (errorOut) errorOut->clear();
     return true;
+}
+
+std::optional<StartConfirmation> parseStartConfirmation(const QByteArray& bytes,
+                                                        QString* errorOut)
+{
+    const auto fail = [errorOut](const QString& why) -> std::optional<StartConfirmation> {
+        if (errorOut) *errorOut = why;
+        return std::nullopt;
+    };
+    if (bytes.size() > kInstallOutcomeMaxBytes) {
+        return fail(QStringLiteral("confirmation larger than %1 bytes").arg(kInstallOutcomeMaxBytes));
+    }
+    StartConfirmation out;
+    QSet<QString> seen;
+    const QStringList lines = QString::fromUtf8(bytes).split(QLatin1Char('\n'));
+    for (QString line : lines) {
+        if (line.endsWith(QLatin1Char('\r'))) line.chop(1);
+        const qsizetype eq = line.indexOf(QLatin1Char('='));
+        if (eq <= 0) continue;
+        const QString key = line.left(eq).trimmed();
+        const QString value = line.mid(eq + 1).trimmed();
+        if (seen.contains(key)) {
+            return fail(QStringLiteral("key '%1' occurs more than once").arg(key.left(40)));
+        }
+        seen.insert(key);
+        if (key == QLatin1String("version")) {
+            out.version = value;
+        } else if (key == QLatin1String("attempt")) {
+            out.attempt = value;
+        } else if (key == QLatin1String("pid")) {
+            bool ok = false;
+            const qint64 pid = value.toLongLong(&ok);
+            if (!ok || pid <= 0) return fail(QStringLiteral("pid '%1' is no positive number").arg(value.left(40)));
+            out.pid = pid;
+        }
+    }
+    if (out.version.isEmpty()) return fail(QStringLiteral("confirmation has no 'version' line"));
+    if (errorOut) errorOut->clear();
+    return out;
 }
 
 // ---- Result file ----------------------------------------------------------
@@ -138,6 +198,8 @@ std::optional<InstallOutcome> parseInstallOutcome(const QByteArray& bytes,
             out.version = value.trimmed();
         } else if (key == QLatin1String("code")) {
             out.code = value.trimmed();
+        } else if (key == QLatin1String("attempt")) {
+            out.attempt = value.trimmed();
         }
     }
     if (!haveResult) {
@@ -191,6 +253,7 @@ QByteArray serializeInstallOutcome(const InstallOutcome& outcome)
     if (!outcome.reason.isEmpty())  text += QStringLiteral("reason=") + oneLine(outcome.reason) + QLatin1Char('\n');
     if (!outcome.version.isEmpty()) text += QStringLiteral("version=") + oneLine(outcome.version) + QLatin1Char('\n');
     if (!outcome.code.isEmpty())    text += QStringLiteral("code=") + oneLine(outcome.code) + QLatin1Char('\n');
+    if (!outcome.attempt.isEmpty()) text += QStringLiteral("attempt=") + oneLine(outcome.attempt) + QLatin1Char('\n');
     return text.toUtf8();
 }
 

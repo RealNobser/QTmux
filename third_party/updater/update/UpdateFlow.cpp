@@ -149,6 +149,24 @@ UpdateFlow::~UpdateFlow()
     if (m_checker) m_checker->abort();
 }
 
+void UpdateFlow::setLanguage(const QString& language)
+{
+    const QString lang = language.left(2).toLower();
+    if (lang == m_texts.language()) return;
+    if (!installUpdateTranslator(lang)) {
+        // The old translator is gone either way: the sentences fall back to
+        // English, so dates and sizes follow English too.
+        qCWarning(lcFlow).noquote() << "update catalogue for" << lang
+                                    << "missing, update texts stay English";
+        m_texts = UpdateTexts(m_cfg.productName, QStringLiteral("en"));
+    } else {
+        m_texts = UpdateTexts(m_cfg.productName, lang);
+    }
+    updateHint();  // the hint is stored, not drawn on demand; emits hintChanged()
+    emitView();
+    emit proxyAuthChanged();
+}
+
 void UpdateFlow::applyStartOptions(const QStringList& arguments)
 {
     QStringList refused;
@@ -643,9 +661,14 @@ void UpdateFlow::onDownloadResult(int generation, const QString& path, const QSt
                                                         : quarantineError);
     }
     m_capability = m_backend->capability(installContext(m_artifact ? m_artifact->kind : QString()));
-    qCInfo(lcFlow).noquote() << "downloaded and verified" << path
-                             << "install:" << installMethodName(m_capability.method)
-                             << manualReasonName(m_capability.reason);
+    if (m_capability.detail.isEmpty())
+        qCInfo(lcFlow).noquote() << "downloaded and verified" << path
+                                 << "install:" << installMethodName(m_capability.method)
+                                 << manualReasonName(m_capability.reason);
+    else  // every unmet precondition, not only the first (SelfInstall.cpp)
+        qCInfo(lcFlow).noquote() << "downloaded and verified" << path
+                                 << "install:" << installMethodName(m_capability.method)
+                                 << manualReasonName(m_capability.reason) << "detail:" << m_capability.detail;
     setState(m_capability.method == InstallMethod::Manual ? State::ManualInstall : State::Ready);
 }
 
@@ -868,6 +891,9 @@ bool UpdateFlow::quitAndInstall()
     const QString base = resultDir() + QLatin1Char('/') + m_cfg.productSlug;
     order.resultFilePath = base + QStringLiteral("-install-result.txt");
     order.startConfirmFilePath = base + QStringLiteral("-start-confirm.txt");
+    // A new mark for every attempt, a retry included: a result file of an
+    // earlier attempt must never judge this one.
+    order.attemptId = newInstallAttemptId();
     // Stale files must not judge this run.
     QFile::remove(order.resultFilePath);
     QFile::remove(order.startConfirmFilePath);
@@ -922,6 +948,7 @@ void UpdateFlow::onPrepared(int generation, PrepareResult r)
     p.kind = order.context.kind;
     p.resultFile = order.resultFilePath;
     p.confirmFile = order.startConfirmFilePath;
+    p.attempt = order.attemptId;
     p.notes = m_offer ? m_offer->notes(m_texts.language() == QLatin1String("de")
                                            ? QStringLiteral("de") : QStringLiteral("en"))
                       : m_lastPending.notes;
@@ -929,7 +956,6 @@ void UpdateFlow::onPrepared(int generation, PrepareResult r)
     p.startedUtc = now();
     m_settings.setPendingInstall(p);
     m_prepared = std::move(r.prepared);
-    m_installArmed = true;
     emitView();
     qCInfo(lcFlow).noquote() << "install of" << p.toVersion << "over" << p.fromVersion
                              << "prepared:" << m_prepared->description;
@@ -950,8 +976,16 @@ void UpdateFlow::onPrepared(int generation, PrepareResult r)
         emit dialogRequested();  // the surface had let go of it
         return;
     }
+    // Armed only NOW, after the app said "going": an aboutToQuit that comes
+    // while requestQuit() still runs (the app's own question open in an inner
+    // loop, and Windows ending the session with WM_ENDSESSION, which makes Qt
+    // send aboutToQuit at once) must not start the install - the user may
+    // still answer "Cancel". Then the session ends without an install, and
+    // the marker is judged "unknown" at the next start.
     // "true" promises aboutToQuit; an app that keeps running gets it withdrawn.
-    if (m_installArmed) m_quitTimer.start(m_tuning.quitDeadlineMs);
+    if (!m_prepared) return;  // withdrawn while requestQuit() ran
+    m_installArmed = true;
+    m_quitTimer.start(m_tuning.quitDeadlineMs);
 }
 
 void UpdateFlow::disarmInstall()
@@ -1005,6 +1039,31 @@ void UpdateFlow::onAboutToQuit()
 
 void UpdateFlow::simulateAboutToQuitForTests() { onAboutToQuit(); }
 
+void UpdateFlow::confirmStarted()
+{
+    if (!m_cfg.confirmStartExplicitly) return;
+    if (!m_started) {
+        m_confirmRequested = true;  // evaluatePendingInstall() picks it up
+        return;
+    }
+    writeConfirmationNow();
+}
+
+void UpdateFlow::writeConfirmationNow()
+{
+    if (!m_confirmWaiting) return;  // nothing pending, or already written
+    m_confirmWaiting = false;
+    StartConfirmation c;
+    c.version = m_cfg.version;
+    c.attempt = m_lastPending.attempt;
+    c.pid = QCoreApplication::applicationPid();
+    QString err;
+    if (!writeStartConfirmation(m_lastPending.confirmFile, c, &err)) {
+        qCWarning(lcFlow).noquote() << "start confirmation not written:" << err;
+    }
+    m_settings.clearPendingInstall();
+}
+
 void UpdateFlow::evaluatePendingInstall()
 {
     const PendingInstall p = m_settings.pendingInstall();
@@ -1019,19 +1078,19 @@ void UpdateFlow::evaluatePendingInstall()
     // connect) has passed by then. A new version that dies or hangs before
     // that never confirms, and the helper takes the way back. The marker goes
     // in the same pass, so the old version, started again, still judges the
-    // attempt from the result file.
+    // attempt from the result file. With Config::confirmStartExplicitly both
+    // wait for confirmStarted().
+    m_lastPending = p;
     if (isNew && !p.confirmFile.isEmpty()) {
-        QTimer::singleShot(0, this, [this, file = p.confirmFile] {
-            QString err;
-            if (!writeStartConfirmation(file, m_cfg.version, &err)) {
-                qCWarning(lcFlow).noquote() << "start confirmation not written:" << err;
-            }
-            m_settings.clearPendingInstall();
-        });
+        m_confirmWaiting = true;
+        if (!m_cfg.confirmStartExplicitly || m_confirmRequested) {
+            QTimer::singleShot(0, this, [this] { writeConfirmationNow(); });
+        } else {
+            qCInfo(lcFlow) << "start confirmation waits for the app (confirmStartExplicitly)";
+        }
     } else {
         m_settings.clearPendingInstall();  // judged once, in either case
     }
-    m_lastPending = p;
     // Later: a helper may still be finishing.
     QTimer::singleShot(m_cleanupDelayMs, this, [this, kind = p.kind] {
         m_backend->cleanupAfterStart(installContext(kind));
@@ -1071,7 +1130,17 @@ void UpdateFlow::evaluatePendingInstall()
         }
         // The verdict for the old version. A missing or contradicting result
         // is "unknown" - never "failed", never state 13.
-        const auto judge = [this, p](const std::optional<InstallOutcome>& outcome) {
+        const auto judge = [this, p](std::optional<InstallOutcome> outcome) {
+            // Only a result of THIS attempt counts. A marker of an older
+            // stand has no mark; then the result is taken as before.
+            if (outcome && !p.attempt.isEmpty() && outcome->attempt != p.attempt) {
+                qCWarning(lcFlow).noquote()
+                    << "install of" << p.toVersion << "- the result file"
+                    << (outcome->attempt.isEmpty() ? QStringLiteral("carries no attempt mark")
+                                                   : QStringLiteral("belongs to another attempt"))
+                    << "and is not taken";
+                outcome.reset();
+            }
             if (p.launchError.isEmpty()
                 && (!outcome || outcome->result == InstallOutcome::Result::Ok)) {
                 qCWarning(lcFlow).noquote()
