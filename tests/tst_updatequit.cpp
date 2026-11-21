@@ -156,6 +156,7 @@ Run runSelfTest(const QTemporaryDir &work, const QStringList &extraArgs, int tim
     QProcess child;
     child.setProcessEnvironment(env);
     child.setProcessChannelMode(QProcess::MergedChannels);
+    child.setWorkingDirectory(work.path());
     child.start(QStringLiteral(QTMUX_APP_BINARY),
                 (withSelfTestArgument
                      ? QStringList{QStringLiteral("--selftest-update"), work.path()}
@@ -435,6 +436,39 @@ private slots:
         QVERIFY2(QFileInfo(work.filePath(QStringLiteral("data/history"))).isDir(),
                  qPrintable(QStringLiteral("Kein Verlaufsordner unter <ordner>/data/history:\n%1")
                                 .arg(r.out)));
+    }
+
+    void aSwitchWithoutItsValueIsRefused_data()
+    {
+        QTest::addColumn<QStringList>("args");
+        QTest::newRow("Ordner fehlt, nächster Schalter folgt")
+            << QStringList{QStringLiteral("--selftest-update"), QStringLiteral("--update-base-url"),
+                           QStringLiteral("file:///nirgends")};
+        QTest::newRow("Wert fehlt am Ende") << QStringList{QStringLiteral("--selftest-update")};
+        QTest::newRow("Bildpfad ist ein Schalter")
+            << QStringList{QStringLiteral("--screenshot"), QStringLiteral("--settle"),
+                           QStringLiteral("100")};
+    }
+
+    void aSwitchWithoutItsValueIsRefused()
+    {
+        // Ein Schalter mit Wert, dessen Wert fehlt oder selbst wie ein Schalter aussieht,
+        // endet sofort mit Exit 2. Vorher wurde „--update-base-url“ still zum
+        // Selbsttest-Ordner (relativ zum Arbeitsverzeichnis).
+        QFETCH(QStringList, args);
+        QTemporaryDir work;
+        QVERIFY(work.isValid());
+        const Run r = runSelfTest(work, args, 20000, {}, false);
+        QVERIFY2(r.finished, qPrintable(r.out));
+        QCOMPARE(r.code, 2);
+#if !defined(Q_OS_WIN)
+        QVERIFY2(r.out.contains(QLatin1String("braucht einen Wert")), qPrintable(r.out));
+#endif
+        QVERIFY2(QDir(work.path()).isEmpty(QDir::AllEntries | QDir::NoDotAndDotDot),
+                 qPrintable(QStringLiteral("Im Arbeitsverzeichnis entstand: %1")
+                                .arg(QDir(work.path())
+                                         .entryList(QDir::AllEntries | QDir::NoDotAndDotDot)
+                                         .join(", "))));
     }
 
     void theInstallerSwitchIsRefusedOutsideTheSelfTest_data()

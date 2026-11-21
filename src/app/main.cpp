@@ -232,6 +232,31 @@ int main(int argc, char *argv[])
     QString pictureTheme;
     QString pictureLanguage;
     int shotSettleMs = 700;    // --settle <ms>: Wartezeit, damit das Layout sich setzt
+    // Schalter mit Wert: Fehlt der Wert oder sieht er selbst wie ein Schalter aus
+    // („--selftest-update --update-base-url URL“), endet QTmux mit Exit 2, bevor etwas
+    // entsteht. Sonst würde „--update-base-url“ still zum Ordnernamen.
+    {
+        static const char *const kValueOptions[] = {
+            "--profile", "--mcp-port", "--screenshot", "--settle", "--selftest-update",
+            "--update-base-url", "--update-channel",
+#if defined(QTMUX_UPDATE_PICTURES)
+            "--update-picture", "--picture-theme", "--picture-language",
+#endif
+        };
+        for (int i = 1; i < argc; ++i) {
+            const QByteArray a(argv[i]);
+            bool takesValue = false;
+            for (const char *o : kValueOptions) takesValue = takesValue || a == o;
+            if (!takesValue) continue;
+            if (i + 1 >= argc || QByteArray(argv[i + 1]).startsWith("--")) {
+                std::fprintf(stderr, "QTmux: %s braucht einen Wert (bekam: %s).\n", argv[i],
+                             i + 1 < argc ? argv[i + 1] : "nichts");
+                std::fflush(stderr);
+                return 2;
+            }
+            ++i;  // der Wert gehört zu diesem Schalter
+        }
+    }
     for (int i = 1; i + 1 < argc; ++i) {
         const QByteArray a(argv[i]);
         if (a == "--profile" && !qEnvironmentVariableIsSet("QTMUX_PROFILE"))
