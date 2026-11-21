@@ -226,30 +226,40 @@ private slots:
 
     void theScene15ProbeDecidesTheSkip()
     {
-        // Erreichbar: kein Aussetzen.
+        // Was dieser Rechner misst, steht zuerst im Log (auch wenn nicht ausgesetzt wird).
+        std::fprintf(stderr, "DIAGNOSE szene15-probe: %s\n",
+                     scene15::skipReasonHere().isEmpty()
+                         ? "localhost kommt beim Server auf 127.0.0.1 an, Szene 15 laeuft"
+                         : qPrintable(scene15::skipReasonHere()));
+        // Eigener Port: Die Verbindung kommt an, kein Aussetzen.
         QTcpServer server;
         QVERIFY(server.listen(QHostAddress::LocalHost, 0));
-        const scene15::Probe ok =
-            scene15::connectWithin(QStringLiteral("127.0.0.1"), server.serverPort(), 5000);
-        QVERIFY(ok.reached);
+        const scene15::Probe ok = scene15::arrivesWithin(server, QStringLiteral("127.0.0.1"),
+                                                         server.serverPort(), 5000);
+        QVERIFY(ok.arrived);
         QCOMPARE(scene15::reasonFor(ok, {QStringLiteral("127.0.0.1")}), QString());
-        // Unerreichbar (Port ohne Server): Aussetzen mit genau dieser Meldung.
-        const quint16 closed = server.serverPort();
-        server.close();
-        const scene15::Probe no = scene15::connectWithin(QStringLiteral("127.0.0.1"), closed, 2000);
-        QVERIFY(!no.reached);
+        // Fremder Port ohne Server: Kommt nicht beim Server an, gleich ob die Verbindung
+        // abgewiesen oder (wie auf dem macOS-Runner gemessen) angenommen wird.
+        QTcpServer other;
+        QVERIFY(other.listen(QHostAddress::LocalHost, 0));
+        const quint16 closed = other.serverPort();
+        other.close();
+        const scene15::Probe no =
+            scene15::arrivesWithin(server, QStringLiteral("127.0.0.1"), closed, 2000);
+        std::fprintf(stderr, "DIAGNOSE szene15-probe geschlossener Port: Client verbunden: %s\n",
+                     no.clientConnected ? "ja" : "nein");
+        QVERIFY(!no.arrived);
         const QString why = scene15::reasonFor(
             no, {QStringLiteral("::1"), QStringLiteral("127.0.0.1")});
         QVERIFY2(why.startsWith(QLatin1String(scene15::kMarker)), qPrintable(why));
         QVERIFY2(why.contains(QStringLiteral("in %1 ms").arg(no.ms)), qPrintable(why));
+        QVERIFY2(why.contains(QStringLiteral("(Client verbunden: %1)")
+                                  .arg(no.clientConnected ? QStringLiteral("ja")
+                                                          : QStringLiteral("nein"))),
+                 qPrintable(why));
         QVERIFY2(why.contains(QLatin1String("localhost -> [::1, 127.0.0.1]")), qPrintable(why));
         QVERIFY2(why.contains(QLatin1String("behoben im naechsten Stand des Update-Kerns")),
                  qPrintable(why));
-        // Was dieser Rechner misst, steht im Log (auch wenn nicht ausgesetzt wird).
-        std::fprintf(stderr, "DIAGNOSE szene15-probe: %s\n",
-                     scene15::skipReasonHere().isEmpty()
-                         ? "localhost erreicht 127.0.0.1, Szene 15 laeuft"
-                         : qPrintable(scene15::skipReasonHere()));
     }
 
 private:
