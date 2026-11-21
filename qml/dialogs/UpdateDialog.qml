@@ -101,10 +101,24 @@ Popup {
         enabled: dlg.opened
         onActivated: dlg.act(dlg.v.escapeAction)
     }
+    // Enter wie im Widgets-Dialog des Hubs: Steht der Tastaturfokus im Dialog auf einem
+    // Knopf mit einer Aktion des Ablaufs, löst Enter genau DIESEN Knopf aus; auf einem
+    // Knopf ohne Aktion („Details“, „Kopieren“) oder in Text tut Enter nichts. Nur ohne
+    // Fokus im Dialog gilt die Enter-Aktion des Zustands. Nie löst Enter mit dem Fokus
+    // auf „Später“ die Hauptaktion aus. Wächter: tests/tst_updatedialogkeys.cpp.
+    function enterPressed() {
+        const f = btnRow.Window.activeFocusItem
+        let inside = false
+        for (let p = f; p; p = p.parent) {
+            if (p === dlg.contentItem) { inside = true; break }
+        }
+        if (!inside) { dlg.act(dlg.v.enterAction); return }
+        if (f.flowAction !== undefined && f.role !== undefined) dlg.act(f.flowAction)
+    }
     Shortcut {
         sequences: ["Return", "Enter"]
-        enabled: dlg.opened && dlg.v.enterAction > 0
-        onActivated: dlg.act(dlg.v.enterAction)
+        enabled: dlg.opened
+        onActivated: dlg.enterPressed()
     }
 
     // Abdunkelung in beiden Designs (im hellen wäre terminalBg ein heller Schleier).

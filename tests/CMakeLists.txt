@@ -432,6 +432,18 @@ if(TARGET qtmux-bilder)
             "-DLOGDIR=${qtmux_picture_logs}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/RunAndReport.cmake")
     set_tests_properties(test_updatepictures PROPERTIES TIMEOUT 300)
+
+    # Tastatur im Update-Dialog am geladenen QML, über alle Dialog-Szenen des Hubs:
+    # Enter löst nur den Knopf mit dem Fokus aus, nie die Hauptaktion eines anderen.
+    qt_add_executable(test_updatedialogkeys tst_updatedialogkeys.cpp)
+    target_link_libraries(test_updatedialogkeys PRIVATE
+        qtmux_app qtmux_appplugin qtmux_updater_showcase Qt6::Test Qt6::Quick)
+    add_test(NAME test_updatedialogkeys COMMAND test_updatedialogkeys)
+    set_tests_properties(test_updatedialogkeys PROPERTIES TIMEOUT 300
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    if(WIN32)
+        set_target_properties(test_updatedialogkeys PROPERTIES WIN32_EXECUTABLE FALSE)
+    endif()
     if(WIN32)
         set_target_properties(test_updatepictures PROPERTIES WIN32_EXECUTABLE FALSE)
     endif()
