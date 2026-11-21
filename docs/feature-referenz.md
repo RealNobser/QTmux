@@ -1240,8 +1240,8 @@ andere in `onClosing` (Fenster, Layout, Verlauf sichern, Sitzungen beenden) läu
 lehnt das Fenster ab, meldet `requestQuit` false und es passiert nichts. Die Installation
 startet der Ablauf erst in `aboutToQuit`.
 Wächter am **echten** Programm: `test_updatequit` startet `qtmux --selftest-update <ordner>
---update-base-url file://…/tests/fixtures/update/good` als Kindprozess (eigenes Profil je Lauf,
-Rückfrage im Profil eingeschaltet). Gefordert: Main.qml lädt ohne QML-Fehler, „Bereit“ wird
+--update-base-url file://…/tests/fixtures/update/good --selftest-system-installer` als
+Kindprozess (eigenes Profil je Lauf, Rückfrage im Profil eingeschaltet). Gefordert: Main.qml lädt ohne QML-Fehler, „Bereit“ wird
 erreicht, `confirmQuit=1` und mindestens eine Sitzung beim Druck, QTmux endet mit Exit 0, die
 Installation ist die Trockenlauf-Zeile in `aboutToQuit`, die 15-s-Frist greift nicht. Ohne
 umgestellte Quelle bricht `--selftest-update` mit Exit 2 ab (es könnte sonst echt
@@ -1262,18 +1262,59 @@ auf 127.0.0.1. Nach Import oder Zurücksetzen wird ein Sitzungspasswort verworfe
 `update/last_serial/qtmux` (Replay-Schutz) steht in keiner Exportdatei und überlebt
 „Alles zurücksetzen“.
 
-**Sprache:** Der Ablauf bekommt die Sprache beim Bau. Ein Wechsel zur Laufzeit tauscht den
-Hub-Katalog und lässt `view` und die Seite neu lesen; der Hinweis-Satz, Datum und Größen sowie
-die Sprache der Änderungshinweise bleiben bis zum nächsten Zustandswechsel in der
-Startsprache. Bekannte Abweichung von „wirkt sofort“, bis der Hub `setLanguage` liefert.
+**Sprache:** Der Ablauf bekommt die Sprache beim Bau. Ein Wechsel zur Laufzeit geht über
+`UpdateFlow::setLanguage` (Katalog, Texte, Datum und Größen; danach zeichnen Dialog, Hinweis
+und Proxy-Anmeldung neu), die Seite „Updates“ folgt dem Revisionszähler der Bridge. Grenze des
+Hubs: Ein schon vorbereitetes Selbst-Update behält die Änderungshinweise in der Sprache der
+Vorbereitung. Wächter `test_updatebridge::aLanguageSwitchReachesFlowAndSettingsPage`.
+
+**Installationsweg:** Die Bridge übergibt dem Ablauf `makeInstallBackendForThisSystem()`; die
+Wahl trifft der Hub, nicht QTmux. macOS: Die App tauscht ihr Bundle selbst und startet neu
+(Helfer `Contents/Helpers/update-swap`, Familien-Signatur Pflicht, sonst „von Hand“). Windows:
+Der Helfer `update-helper.exe` neben `qtmux.exe` fährt `msiexec` ohne Bedienung, sofern QTmux
+aus dem per MSI installierten Ordner läuft (sonst, etwa aus dem portablen ZIP, „von Hand“).
+Linux: Das AppImage wird an seinem Ort ersetzt und läuft beim nächsten Start. Die Helfer legt
+`appupdate_embed_install_helpers(qtmux)` in jeden Bau; `test_update_helper_embedded` vergleicht
+die eingebettete Kopie Byte für Byte mit dem gebauten Helfer.
+**Start-Bestätigung:** die Vorgabe des Hubs (erster Lauf der Ereignisschleife nach `start()`).
+Hauptfenster, Sitzungen und PTYs entstehen synchron in `engine.loadFromModule()`, `start()`
+läuft danach. Wächter `test_updatequit::theNewVersionConfirmsItsStartAfterTheMainWindow`: ein
+vorbelegter Merker eines Updates auf diese Version, die Bestätigung trägt Version, Versuchs-
+kennung und PID des Kindprozesses und folgt im Log auf „main window loaded“.
 
 **Bau fürs Selbst-Ersetzen:** Das Bundle trägt `CFBundleVersion` und
 `CFBundleShortVersionString` = Projektversion (vorher Kurzversion „1.9“), das MSI legt den
-Installationsort ab (`ARPINSTALLLOCATION = [INSTALLFOLDER]` nach `CostFinalize`). Wächter
-`test_installer_self_update_contract` samt Gegenprobe `_bites` (auch die Vorgabe-Version von
-`installer/build-dmg.sh`). Die Hilfsprogramme `Contents/Helpers/update-swap` und
-`update-helper.exe` kommen mit dem nächsten Hub-Nachzug; bis dahin führt der Ablauf auf jedem
-System von Hand durch die Installation.
+Installationsort ab (`ARPINSTALLLOCATION = [INSTALLFOLDER]` nach `CostFinalize`) und trägt
+`update-helper.exe`: `installer/build-msi.ps1` bricht ab, wenn er fehlt, und liest ihn in der
+File-Tabelle des fertigen MSI nach. Wächter `test_installer_self_update_contract` samt
+Gegenprobe `_bites` (auch die Vorgabe-Version von `installer/build-dmg.sh` und die Helfer-Zeilen
+des MSI-Skripts). `installer/build-dmg.sh` prüft am eingehängten Image, dass
+`Contents/Helpers/update-swap` darin liegt.
+
+**Selbsttest und Installationsweg:** Ohne Schalter nimmt `--selftest-update` die Wahl des
+Hubs. Ein ad hoc signierter Entwicklerbau bekommt unter macOS dann „von Hand“ (nicht
+familien-signiert), ein Bau aus dem Bauordner unter Windows ebenso (kein installiertes Paket);
+der Treiber endet dort mit Exit 3. `test_updatequit::theRealInstallWayFindsItsHelperInTheBuiltApp`
+fordert, dass der Ablauf dabei keinen fehlenden Helfer nennt. Den Beenden-Weg fährt
+`--selftest-system-installer` (Stufe 1, nur zusammen mit `--selftest-update`).
+
+**Bilder der Update-Oberfläche: `qtmux-bilder`** ([`UpdatePicture.h`](../src/app/UpdatePicture.h),
+CMake-Schalter `QTMUX_UPDATE_PICTURES`, Vorgabe an). Ein eigenes Programm mit dem
+Szenen-Baustein des Hubs (`appupdate::UpdateShowcase`: echter Ablauf, zur Laufzeit signierter
+Baum mit Wegwerf-Schlüssel, Server auf 127.0.0.1, ein Installationsweg, der nie etwas
+startet). Szenen: alle des Hubs, jede Hinweis-Szene auch als `…-narrow` (720 px), dazu
+`qtmux-other-instance` und `qtmux-settings-port`. Aufruf:
+`qtmux-bilder --selftest-update <ordner> --update-picture <szene> --screenshot <png>
+[--picture-theme light|dark] [--picture-language de|en]`.
+🔑 Der Baustein gehört nicht in die App: Alles außer `main.cpp` steht in der statischen
+Bibliothek `qtmux_app` (das QML-Modul ist ein statisches Plugin), `qtmux` und `qtmux-bilder`
+linken sie beide, kein Paket nimmt `qtmux-bilder`. Wächter `test_release_has_no_showcase` am
+gebauten `qtmux`: 0 Treffer für „UpdateShowcase“ und „--update-picture“, Positivkontrolle
+„--selftest-update“; Gegenprobe an einer festen Prüfdatei und am Bildziel. `build-dmg.sh`
+fährt dieselbe Prüfung an der App im eingehängten Image. ⚠️ Der Wächter sieht nur, was als
+lesbare Zeichenkette im Binary steht (C++-Literale, moc-Klassennamen). QML-Quellen liegen dort
+nicht lesbar (gemessen: ein Kommentar aus `CatUpdates.qml` 0-mal); für den Baustein reicht das,
+weil er nur über C++ in ein Programm kommt.
 
 **Messfallen, die weiter gelten:**
 1. **`--screenshot` startet den Ablauf absichtlich NIE** (`if (shotPath.isEmpty())` in
@@ -1316,7 +1357,9 @@ Proxy-Passwort (QTMUX-129).
 
 **Tests:** `test_updater` (Kern; Fixtures zur Laufzeit, RFC-8032-Vektor), `test_updatercatalogs`,
 `test_updatebridge`, `test_updatequit`, `test_update_consumer_guard` (+ `_bites`),
-`test_installer_self_update_contract` (+ `_bites`), `tst_settingsio` (Import alter Schlüssel).
+`test_installer_self_update_contract` (+ `_bites`), `test_update_helper_embedded` (macOS,
+Windows), `test_release_has_no_showcase` (+ `_bites`), `test_updatepictures` (nur mit
+`QTMUX_UPDATE_PICTURES`), `tst_settingsio` (Import alter Schlüssel).
 Den Ablauf selbst (Zustände, Fristen, Proxy, Härtung, Selbst-Ersetzen) belegen die Suiten des
 Hubs; gültig sind sie für QTmux, weil der Abgleich den vendierten Stand byte-gleich hält.
 
