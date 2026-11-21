@@ -392,6 +392,8 @@ int main(int argc, char *argv[])
                                  kCFPreferencesCurrentApplication);
         CFRelease(langs);
         CFRelease(cfLang);
+        // Messpunkt (tst_updatequit): Im Selbsttest darf diese Zeile nie erscheinen.
+        qInfo("QTmux: AppleLanguages der Bundle-Domain gesetzt (%s).", qPrintable(lang));
     }
 #endif
 

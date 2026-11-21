@@ -373,15 +373,44 @@ private slots:
             QUrl::fromLocalFile(QStringLiteral(QTMUX_UPDATE_FIXTURE_DIR "/good")).toString();
         QStringList leftovers;
         QStringList checked;
+        // Die Bundle-Domain com.qtmux.app teilt sich jeder qtmux-Bau mit der installierten
+        // App; sie wird hier nur GELESEN (Inhalt und Änderungszeit vor/nach dem Lauf).
+        const QString bundlePlist =
+            QDir::homePath() + QStringLiteral("/Library/Preferences/com.qtmux.app.plist");
+        QByteArray plistBefore;
+        QDateTime plistTimeBefore;
         const Run r = runSelfTest(
             work,
             {QStringLiteral("--update-base-url"), fixture,
              QStringLiteral("--selftest-system-installer")},
-            120000, {}, true, [&](const QString &profile) {
+            120000,
+            [&](const QString &) {
+#if defined(Q_OS_MACOS)
+                QFile f(bundlePlist);
+                if (f.open(QIODevice::ReadOnly)) plistBefore = f.readAll();
+                plistTimeBefore = QFileInfo(bundlePlist).lastModified();
+#endif
+            },
+            true, [&](const QString &profile) {
                 checked = userPlacesOfProfile(profile);
                 for (const QString &p : checked)
                     if (QFileInfo::exists(p)) leftovers << p;
             });
+        // Kein Schreiben in die Bundle-Domain: Die Zeile des Schreibpunkts in main.cpp
+        // fehlt im Log (trägt auch, wenn die Datei schon denselben Wert hat), und die
+        // Datei ist nach dem Lauf unverändert (cfprefsd schreibt verzögert: kurz warten).
+        QVERIFY2(!r.out.contains(QLatin1String("AppleLanguages der Bundle-Domain gesetzt")),
+                 qPrintable(r.out));
+#if defined(Q_OS_MACOS)
+        QTest::qWait(1500);
+        QByteArray plistAfter;
+        {
+            QFile f(bundlePlist);
+            if (f.open(QIODevice::ReadOnly)) plistAfter = f.readAll();
+        }
+        QVERIFY2(plistAfter == plistBefore, "com.qtmux.app.plist hat sich im Selbsttest geändert");
+        QCOMPARE(QFileInfo(bundlePlist).lastModified(), plistTimeBefore);
+#endif
         QVERIFY2(r.finished && r.code == 0, qPrintable(r.out));
         QVERIFY2(!checked.isEmpty(), "keine Orte im Home bestimmt — die Probe misst nichts");
         QVERIFY2(leftovers.isEmpty(),
