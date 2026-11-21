@@ -92,6 +92,15 @@ Write-Host "==> 2/3 Laufzeit deployen (windeployqt + VC-Runtime)" -ForegroundCol
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item (Join-Path $build "qtmux.exe") $stage
+# update-helper.exe (Selbst-Ersetzen, Vertrag V2): legt appupdate_embed_install_helpers()
+# im selben Bau neben qtmux.exe. Pflicht: Ohne ihn faellt QTmux auf den Installer mit
+# Dialog zurueck, und das darf nicht still passieren. Waechter am fertigen MSI:
+# Abschnitt "Paketinhalt pruefen" unten.
+$helper = Join-Path $build "update-helper.exe"
+if (-not (Test-Path $helper -PathType Leaf)) {
+    throw "update-helper.exe fehlt neben qtmux.exe ('$helper'). Ziel update-helper bauen."
+}
+Copy-Item $helper $stage
 & cmd /c "`"$VcVars`" >nul 2>&1 && `"$QtDir\bin\windeployqt.exe`" --release --no-translations --no-system-d3d-compiler --no-opengl-sw --qmldir `"$repo\qml`" `"$stage\qtmux.exe`""
 # Offscreen-Plattform-Plugin mitliefern. windeployqt legt nur qwindows.dll ins Paket;
 # setzt jemand QT_QPA_PLATFORM=offscreen (Skripte, CI, Fernwartung), beendet Qt den Prozess
@@ -163,6 +172,40 @@ if ($LASTEXITCODE -ne 0) {
     Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue
     throw "Verknuepfungs-Symbol-Riegel fehlgeschlagen ($gateExit) fuer $msi -- MSI geloescht"
 }
+
+# Paketinhalt pruefen: update-helper.exe muss in der File-Tabelle DIESES Pakets
+# stehen, nicht nur im Staging (Selbst-Ersetzen, Vertrag V2). Gelesen ueber die
+# Windows-Installer-Schnittstelle; FileName steht dort als "KURZ|lang" oder nur
+# "lang". Rot loescht das MSI.
+Write-Host "==> Paketinhalt pruefen (update-helper.exe)" -ForegroundColor Cyan
+$names = @()
+try {
+    $wi = New-Object -ComObject WindowsInstaller.Installer
+    $db = $wi.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $wi, @($msi, 0))
+    $view = $db.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $db, @("SELECT ``FileName`` FROM ``File``"))
+    $null = $view.GetType().InvokeMember("Execute", "InvokeMethod", $null, $view, $null)
+    while ($true) {
+        $rec = $view.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $view, $null)
+        if ($null -eq $rec) { break }
+        $fn = $rec.GetType().InvokeMember("StringData", "GetProperty", $null, $rec, @(1))
+        $names += ($fn -split '\|')[-1]
+    }
+    $null = $view.GetType().InvokeMember("Close", "InvokeMethod", $null, $view, $null)
+} catch {
+    Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue
+    throw "File-Tabelle von $msi nicht lesbar: $($_.Exception.Message) -- MSI geloescht"
+}
+if ($names.Count -lt 2) {
+    Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue
+    throw "File-Tabelle von $msi liefert $($names.Count) Eintraege -- Messung unbrauchbar, MSI geloescht"
+}
+foreach ($need in @("qtmux.exe", "update-helper.exe")) {
+    if (-not ($names -contains $need)) {
+        Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue
+        throw "$need fehlt in der File-Tabelle von $msi -- MSI geloescht"
+    }
+}
+Write-Host "  File-Tabelle: $($names.Count) Dateien, qtmux.exe und update-helper.exe vorhanden"
 
 # Portable Variante (ZIP) aus demselben Staging — installationsfrei, wie in der
 # LIESMICH.txt beschrieben (entpacken + qtmux.exe starten).

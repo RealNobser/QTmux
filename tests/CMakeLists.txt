@@ -382,11 +382,15 @@ qt_add_executable(test_updatequit tst_updatequit.cpp)
 add_dependencies(test_updatequit qtmux)
 target_compile_definitions(test_updatequit PRIVATE
     QTMUX_APP_BINARY="$<TARGET_FILE:qtmux>"
-    QTMUX_UPDATE_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update")
-target_link_libraries(test_updatequit PRIVATE Qt6::Test Qt6::Network)
+    QTMUX_UPDATE_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/update"
+    QTMUX_VERSION_STRING="${PROJECT_VERSION}")
+# qtmux_updater nur für den Merker und das Format der Start-Bestätigung
+# (theNewVersionConfirmsItsStartAfterTheMainWindow).
+target_link_libraries(test_updatequit PRIVATE Qt6::Test Qt6::Network qtmux_updater)
 add_test(NAME test_updatequit COMMAND test_updatequit)
-# Ein Profil („update-selftest“) für alle Läufe: nie zwei gleichzeitig.
-set_tests_properties(test_updatequit PROPERTIES TIMEOUT 180 RESOURCE_LOCK qtmux_update_selftest)
+# Ein Profil („update-selftest“) für alle Läufe: nie zwei gleichzeitig. Fünf
+# Kindprozesse, darum mehr Zeit als ein einzelner Lauf braucht.
+set_tests_properties(test_updatequit PROPERTIES TIMEOUT 300 RESOURCE_LOCK qtmux_update_selftest)
 
 # 🔑 Diese Tests auf Windows als KONSOLEN-Programme bauen.
 # `qt_add_executable` macht dort standardmaessig GUI-Programme — die schreiben
@@ -480,12 +484,13 @@ add_test(NAME test_update_consumer_guard_bites
         -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckUpdateConsumer.cmake")
 
 # K2 (Vertrag V2 §6): Bau fürs Selbst-Ersetzen — Installationsort im MSI, unter
-# macOS beide Versionsfelder der GEBAUTEN Info.plist, Vorgabe-Version des DMG.
-# Die Hilfsprogramme (update-swap, update-helper.exe) prüft er nicht; sie kommen
-# mit dem Hub-Nachzug.
+# macOS beide Versionsfelder der GEBAUTEN Info.plist, Vorgabe-Version des DMG und
+# der Helfer im MSI-Skript. Den eingebetteten Helfer selbst vergleicht
+# test_update_helper_embedded (CMakeLists.txt oben, macOS und Windows).
 set(qtmux_selfupdate_args
     "-DWXS=${CMAKE_SOURCE_DIR}/installer/QTmux.wxs"
     "-DDMG_SCRIPT=${CMAKE_SOURCE_DIR}/installer/build-dmg.sh"
+    "-DMSI_SCRIPT=${CMAKE_SOURCE_DIR}/installer/build-msi.ps1"
     "-DVERSION=${PROJECT_VERSION}")
 if(APPLE)
     list(APPEND qtmux_selfupdate_args "-DPLIST=$<TARGET_BUNDLE_CONTENT_DIR:qtmux>/Info.plist")
@@ -494,12 +499,13 @@ add_test(NAME test_installer_self_update_contract
     COMMAND ${CMAKE_COMMAND} ${qtmux_selfupdate_args}
         -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckSelfUpdateBuild.cmake")
 # Gegenprobe: Über tests/fixtures/self-update-bad (nie gebaut) muss der Wächter
-# genau seine 7 Befunde liefern (darunter eine nur auskommentierte, richtige Zeile).
+# genau seine 11 Befunde liefern (darunter nur auskommentierte, richtige Zeilen).
 set(qtmux_selfupdate_bad "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/self-update-bad")
 add_test(NAME test_installer_self_update_contract_bites
     COMMAND ${CMAKE_COMMAND}
         "-DWXS=${qtmux_selfupdate_bad}/QTmux.wxs"
         "-DPLIST=${qtmux_selfupdate_bad}/Info.plist"
         "-DDMG_SCRIPT=${qtmux_selfupdate_bad}/build-dmg.sh"
-        "-DVERSION=${PROJECT_VERSION}" -DEXPECT_PROBLEMS=7
+        "-DMSI_SCRIPT=${qtmux_selfupdate_bad}/build-msi.ps1"
+        "-DVERSION=${PROJECT_VERSION}" -DEXPECT_PROBLEMS=11
         -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckSelfUpdateBuild.cmake")

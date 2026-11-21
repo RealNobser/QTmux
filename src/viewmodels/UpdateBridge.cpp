@@ -4,6 +4,8 @@
 #include "qtmux_buildid.h"
 #include "qtmux_version.h"
 
+#include "update/InstallBackend.hpp"
+#include "update/SelfInstall.hpp"
 #include "update/UpdateTexts.hpp"
 
 #include <QDir>
@@ -51,6 +53,17 @@ UpdateBridge::UpdateBridge(Wiring wiring, QObject *parent)
                  qPrintable(wiring.language));
 
     m_flow = std::make_unique<Flow>(std::move(cfg), m_settings, nullptr);
+    // Installationsweg: Die Wahl trifft der Hub, einmal für jede App (macOS: die App
+    // ersetzt sich selbst; Windows: der Helfer um msiexec, sobald der Hub ihn
+    // freigibt; Linux: das AppImage wird an seinem Ort ersetzt). Die Helfer bettet
+    // appupdate_embed_install_helpers(qtmux) ein (CMakeLists.txt).
+    // Start-Bestätigung: die Vorgabe des Hubs (erster Lauf der Ereignisschleife nach
+    // start()). Hauptfenster, Sitzungen und PTYs entstehen synchron in
+    // engine.loadFromModule(), und start() läuft erst danach (src/app/main.cpp).
+    if (wiring.selfTest && wiring.selfTestSystemInstaller)
+        m_flow->setInstallBackend(appupdate::makeSystemInstallerBackend());
+    else
+        m_flow->setInstallBackend(appupdate::makeInstallBackendForThisSystem());
 
     if (wiring.selfTest && !wiring.selfTestDir.isEmpty()) {
         QDir().mkpath(wiring.selfTestDir + QStringLiteral("/downloads"));

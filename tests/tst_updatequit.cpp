@@ -22,13 +22,18 @@
 //   • Die 15-s-Frist des Ablaufs („app did not quit within …“) griff nicht.
 //   • Das Fixture `good` ist mit dem PRODUKTIONSSCHLÜSSEL signiert: Ein
 //     Schlüsselwechsel macht diesen Test rot (gewollter Alarm, wie bisher).
-// Zweiter Fall: Ohne umgestellte Quelle bricht der Selbsttest sofort ab, damit er
-// nie eine echte Installation auslösen kann.
+// Dieser Fall fährt Stufe 1 (`--selftest-system-installer`): Ein Entwicklerbau
+// bekäme vom Selbst-Ersetzen nur „von Hand“. Weitere Fälle: Mit der Wahl des Hubs
+// fehlt der eingebettete Helfer nicht (`theRealInstallWay…`); nach einem Update auf
+// diese Version schreibt QTmux die Start-Bestätigung erst nach dem Hauptfenster
+// (`theNewVersionConfirms…`); der Bildmodus; ohne umgestellte Quelle bricht der
+// Selbsttest sofort ab, damit er nie eine echte Installation auslösen kann.
 //
 // Jeder Lauf hat ein eigenes Profil (QTMUX_PROFILE) und räumt es am Ende ab;
 // Download und Ergebnisdatei liegen im Temp-Ordner des Tests, nie in „Downloads“.
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -41,12 +46,20 @@
 #include <QTest>
 #include <QUrl>
 
+#include "update/InstallBackend.hpp"
+#include "update/UpdateSettings.hpp"
+
+#include <QSettings>
+
+#include <functional>
+
 namespace {
 
 struct Run {
     bool finished = false;
     QProcess::ExitStatus status = QProcess::NormalExit;
     int code = -1;
+    qint64 pid = 0;
     QString out;
 };
 
@@ -71,12 +84,22 @@ void removeProfile(const QString &profile)
     QCoreApplication::setOrganizationName(beforeOrg);
 }
 
-Run runSelfTest(const QTemporaryDir &work, const QStringList &extraArgs, int timeoutMs)
+// Die Einstellungsdatei, die QTmux im Selbsttest liest (main.cpp: INI unter
+// <ordner>/settings, Organisation „QTmux“, Anwendung „QTmux-<profil>“).
+QString selfTestSettingsFile(const QTemporaryDir &work, const QString &profile)
+{
+    return work.filePath(QStringLiteral("settings/QTmux/QTmux-%1.ini").arg(profile));
+}
+
+// `beforeStart(profil)` läuft, bevor der Kindprozess startet (Einstellungen vorbelegen).
+Run runSelfTest(const QTemporaryDir &work, const QStringList &extraArgs, int timeoutMs,
+                const std::function<void(const QString &profile)> &beforeStart = {})
 {
     static int counter = 0;
     const QString profile = QStringLiteral("update-selftest-%1-%2")
                                 .arg(QCoreApplication::applicationPid())
                                 .arg(++counter);
+    if (beforeStart) beforeStart(profile);
 
     // Freier MCP-Port, damit der Kindprozess keiner laufenden Instanz in die
     // Quere kommt (die Vorgabe 7345 kann belegt sein).
@@ -113,6 +136,7 @@ Run runSelfTest(const QTemporaryDir &work, const QStringList &extraArgs, int tim
         removeProfile(profile);
         return r;
     }
+    r.pid = child.processId();
     r.finished = child.waitForFinished(timeoutMs);
     if (!r.finished) {
         child.kill();
@@ -137,7 +161,12 @@ private slots:
         QVERIFY(work.isValid());
         const QString fixture =
             QUrl::fromLocalFile(QStringLiteral(QTMUX_UPDATE_FIXTURE_DIR "/good")).toString();
-        const Run r = runSelfTest(work, {QStringLiteral("--update-base-url"), fixture}, 120000);
+        // Stufe 1 (Systeminstaller): Ein Entwicklerbau bekäme vom Selbst-Ersetzen nur
+        // „von Hand“ und nie den Knopf, um den es hier geht (UpdateBridge.h).
+        const Run r = runSelfTest(work,
+                                  {QStringLiteral("--update-base-url"), fixture,
+                                   QStringLiteral("--selftest-system-installer")},
+                                  120000);
         const QString &out = r.out;
 
         if (!r.finished) {
@@ -184,6 +213,88 @@ private slots:
         QVERIFY2(!QDir(work.filePath(QStringLiteral("downloads")))
                       .isEmpty(QDir::Files | QDir::NoDotAndDotDot),
                  qPrintable(out));
+    }
+
+    void theRealInstallWayFindsItsHelperInTheBuiltApp()
+    {
+        // Ohne Schalter wählt der Hub den Installationsweg (makeInstallBackendForThisSystem):
+        // macOS das Selbst-Ersetzen, Windows den Helfer um msiexec, Linux das AppImage.
+        // Ein Entwicklerbau erfüllt dort nicht jede Vorbedingung (nicht familien-signiert,
+        // nicht per MSI installiert), dann heißt es „von Hand“ (Exit 3), sonst „Bereit“
+        // und Beenden (Exit 0). Der Ablauf nennt dabei ALLE nicht erfüllten
+        // Vorbedingungen. Gefordert: Der Helfer, den appupdate_embed_install_helpers()
+        // ins gebaute Programm legt, fehlt nicht.
+        QTemporaryDir work;
+        QVERIFY(work.isValid());
+        const QString fixture =
+            QUrl::fromLocalFile(QStringLiteral(QTMUX_UPDATE_FIXTURE_DIR "/good")).toString();
+        const Run r = runSelfTest(work, {QStringLiteral("--update-base-url"), fixture}, 120000);
+        QVERIFY2(r.finished && r.status == QProcess::NormalExit, qPrintable(r.out));
+        QVERIFY2(r.code == 0 || r.code == 3, qPrintable(r.out));
+        // Positivprobe: Die Fähigkeit wurde wirklich gemessen und geloggt.
+        static const QRegularExpression verdict(
+            QStringLiteral("downloaded and verified .* install: (\\S+)(.*)"));
+        const auto v = verdict.match(r.out);
+        QVERIFY2(v.hasMatch(), qPrintable(r.out));
+        qInfo("Installationsweg dieses Baus: %s%s", qPrintable(v.captured(1)),
+              qPrintable(v.captured(2)));
+        QCOMPARE(r.code == 3, v.captured(1) == QLatin1String("manual"));
+        QVERIFY2(!r.out.contains(QLatin1String("carries no swap program")), qPrintable(r.out));
+        QVERIFY2(!r.out.contains(QLatin1String("update-helper.exe is missing")), qPrintable(r.out));
+    }
+
+    void theNewVersionConfirmsItsStartAfterTheMainWindow()
+    {
+        // Start-Bestätigung (Naht Revision 3): Nach einem Selbst-Update wartet der
+        // Helfer auf sie; ohne sie nimmt er den Rückweg. QTmux nutzt die Vorgabe des
+        // Hubs: Der Ablauf bestätigt beim ersten Lauf der Ereignisschleife nach
+        // start(), und start() läuft erst, wenn Main.qml mit Fenster und Sitzungen
+        // steht. Vorbelegt wird der Merker eines Updates AUF genau diese Version.
+        QTemporaryDir work;
+        QVERIFY(work.isValid());
+        const QString fixture =
+            QUrl::fromLocalFile(QStringLiteral(QTMUX_UPDATE_FIXTURE_DIR "/good")).toString();
+        const QString confirm = work.filePath(QStringLiteral("start-confirmed"));
+        const QString attempt = QStringLiteral("start-confirmation-probe");
+        QString settingsFile;
+        const Run r = runSelfTest(
+            work,
+            {QStringLiteral("--update-base-url"), fixture,
+             QStringLiteral("--selftest-system-installer")},
+            120000, [&](const QString &profile) {
+                settingsFile = selfTestSettingsFile(work, profile);
+                QSettings s(settingsFile, QSettings::IniFormat);
+                appupdate::PendingInstall p;
+                p.fromVersion = QStringLiteral("1.9.14");
+                p.toVersion = QStringLiteral(QTMUX_VERSION_STRING);
+                p.method = QStringLiteral("automatic");
+                p.kind = QStringLiteral("dmg");
+                p.confirmFile = confirm;
+                p.attempt = attempt;
+                p.startedUtc = QDateTime::currentDateTimeUtc();
+                appupdate::UpdateSettings(s).setPendingInstall(p);
+                s.sync();
+            });
+        QVERIFY2(r.finished && r.code == 0, qPrintable(r.out));
+
+        QFile f(confirm);
+        QVERIFY2(f.open(QIODevice::ReadOnly), qPrintable(r.out));
+        const auto c = appupdate::parseStartConfirmation(f.readAll());
+        QVERIFY2(c.has_value(), qPrintable(r.out));
+        QCOMPARE(c->version, QStringLiteral(QTMUX_VERSION_STRING));
+        QCOMPARE(c->attempt, attempt);
+        QCOMPARE(c->pid, r.pid);
+
+        // Reihenfolge: erst das Hauptfenster, dann die Auswertung des Merkers.
+        const qsizetype window = r.out.indexOf(QLatin1String("QTmux selftest-update: main window loaded"));
+        const qsizetype judged = r.out.indexOf(
+            QStringLiteral("updated from 1.9.14 to %1").arg(QStringLiteral(QTMUX_VERSION_STRING)));
+        QVERIFY2(window >= 0 && judged > window, qPrintable(r.out));
+        QVERIFY2(!r.out.contains(QLatin1String("start confirmation not written")), qPrintable(r.out));
+
+        // Der Merker ist mit der Bestätigung gegangen.
+        QSettings after(settingsFile, QSettings::IniFormat);
+        QVERIFY2(!appupdate::UpdateSettings(after).pendingInstall().isValid(), qPrintable(r.out));
     }
 
     void thePictureModeWritesAnImageOfTheScene()

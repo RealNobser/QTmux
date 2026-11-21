@@ -1,7 +1,7 @@
 # Wächter für den Teil des Baus, den das Selbst-Ersetzen am Installer und am Bundle
-# braucht (Vertrag V2 §6, K2). Die Hilfsprogramme (update-swap im Bundle,
-# update-helper.exe im MSI) kommen erst mit dem nächsten Hub-Nachzug und sind HIER
-# NICHT geprüft.
+# braucht (Vertrag V2 §6, K2). Dass die Hilfsprogramme im gebauten Programm liegen,
+# prüft test_update_helper_embedded (Byte-Vergleich, appupdate_embed_install_helpers);
+# hier steht nur, was das MSI-Skript dafür tun muss (Punkt 4).
 #
 #   1. installer/QTmux.wxs legt den Installationsort in „Apps und Features“ ab:
 #      <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]"
@@ -12,9 +12,13 @@
 #      CFBundleShortVersionString = VERSION (vorher stand als Kurzversion „1.9“).
 #   3. Die Vorgabe-Version von installer/build-dmg.sh ist VERSION: Das DMG trägt
 #      sonst einen anderen Namen als das Bundle seine Version.
+#   4. installer/build-msi.ps1 nimmt update-helper.exe aus dem Bauordner ins
+#      Staging, bricht ab, wenn er fehlt, und prüft ihn danach in der File-Tabelle
+#      des fertigen MSI (Kommentarzeilen zählen nicht).
 #
 # Aufruf: cmake -DWXS=<QTmux.wxs> -DVERSION=<x.y.z> [-DPLIST=<Info.plist>]
-#               [-DDMG_SCRIPT=<build-dmg.sh>] -P CheckSelfUpdateBuild.cmake
+#               [-DDMG_SCRIPT=<build-dmg.sh>] [-DMSI_SCRIPT=<build-msi.ps1>]
+#               -P CheckSelfUpdateBuild.cmake
 # Gegenprobe (-DEXPECT_PROBLEMS=<n>, Test test_installer_self_update_contract_bites):
 # Über absichtlich falschen Dateien muss der Wächter genau n Befunde liefern; dann
 # endet der Lauf grün.
@@ -81,6 +85,29 @@ if(DEFINED DMG_SCRIPT)
     endif()
 endif()
 
+if(DEFINED MSI_SCRIPT)
+    if(NOT EXISTS "${MSI_SCRIPT}")
+        message(FATAL_ERROR "CheckSelfUpdateBuild: MSI-Skript fehlt: ${MSI_SCRIPT}")
+    endif()
+    # Ohne Kommentarzeilen: Eine Zeile, die die Regel nur beschreibt, darf nicht
+    # zählen. Am Stück gelesen, nicht als CMake-Liste: PowerShell-Zeilen tragen
+    # eckige Klammern, und eine Liste verschmilzt dann Zeilen still miteinander.
+    file(READ "${MSI_SCRIPT}" _msi)
+    string(REGEX REPLACE "(^|\n)[ \t]*#[^\n]*" "\\1" _msi "${_msi}")
+    if(NOT _msi MATCHES "Join-Path \\$build \"update-helper\\.exe\"")
+        list(APPEND _problems "build-msi.ps1: holt update-helper.exe nicht aus dem Bauordner")
+    endif()
+    if(NOT _msi MATCHES "throw \"update-helper\\.exe fehlt")
+        list(APPEND _problems "build-msi.ps1: bricht nicht ab, wenn update-helper.exe fehlt")
+    endif()
+    if(NOT _msi MATCHES "Copy-Item \\$helper \\$stage")
+        list(APPEND _problems "build-msi.ps1: legt update-helper.exe nicht ins Staging")
+    endif()
+    if(NOT _msi MATCHES "@\\(\"qtmux\\.exe\", \"update-helper\\.exe\"\\)")
+        list(APPEND _problems "build-msi.ps1: prüft update-helper.exe nicht in der File-Tabelle des MSI")
+    endif()
+endif()
+
 list(LENGTH _problems _count)
 if(DEFINED EXPECT_PROBLEMS)
     if(_count EQUAL EXPECT_PROBLEMS)
@@ -94,5 +121,5 @@ if(_problems)
     list(JOIN _problems "\n  " _msg)
     message(FATAL_ERROR "Bau fürs Selbst-Ersetzen unvollständig:\n  ${_msg}")
 endif()
-message(STATUS "CheckSelfUpdateBuild: Installationsort, Bundle-Versionen und DMG-Vorgabe in Ordnung "
-               "(Hilfsprogramme nicht Teil dieser Prüfung).")
+message(STATUS "CheckSelfUpdateBuild: Installationsort, Bundle-Versionen, DMG-Vorgabe und "
+               "Helfer im MSI-Skript in Ordnung.")

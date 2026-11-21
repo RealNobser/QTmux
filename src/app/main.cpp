@@ -230,6 +230,12 @@ int main(int argc, char *argv[])
         else if (a == "--picture-language")
             pictureLanguage = QString::fromLocal8Bit(argv[i + 1]);
     }
+    // --selftest-system-installer (nur mit --selftest-update): Installationsweg von
+    // Stufe 1 statt der Wahl des Hubs, für den Test des Beenden-Wegs (UpdateBridge.h).
+    bool updateSelfTestSystemInstaller = false;
+    for (int i = 1; i < argc; ++i)
+        if (QByteArray(argv[i]) == "--selftest-system-installer")
+            updateSelfTestSystemInstaller = true;
     if (!updatePicture.isEmpty() && (updateSelfTestDir.isEmpty() || shotPath.isEmpty())) {
         qCritical("QTmux: --update-picture braucht --selftest-update <ordner> und --screenshot <png>.");
         return 2;
@@ -407,6 +413,7 @@ int main(int argc, char *argv[])
     updateWiring.requestQuit = [&engine]() { return qtmux::quitForUpdate(engine); };
     updateWiring.selfTest = !updateSelfTestDir.isEmpty();
     updateWiring.selfTestDir = updateSelfTestDir;
+    updateWiring.selfTestSystemInstaller = updateSelfTestSystemInstaller;
     static qtmux::UpdateBridge updates(std::move(updateWiring));
     // Im Selbsttest ist die Beenden-Rückfrage immer an: Der Test belegt, dass sie auf
     // dem Update-Weg trotzdem nicht kommt (UpdateQuit.cpp). Das Profil ist eigens.
@@ -421,6 +428,12 @@ int main(int argc, char *argv[])
                                              !shotPath.isEmpty());
 
     engine.loadFromModule("QTmux", "Main");
+    // Messpunkt für die Start-Bestätigung (tst_updatequit): Bis hier sind
+    // Hauptfenster, Sitzungen und PTYs synchron entstanden; der Ablauf startet
+    // erst danach und bestätigt einen Lauf später.
+    if (!updateSelfTestDir.isEmpty())
+        qInfo("QTmux selftest-update: main window loaded (%d root object(s))",
+              int(engine.rootObjects().size()));
 
     // Screenshot-Modus: nach kurzer Settle-Zeit die Root-QQuickWindow-Szene grabben,
     // als PNG speichern und mit dem Ergebnis-Code beenden. Der Timer läuft auf dem

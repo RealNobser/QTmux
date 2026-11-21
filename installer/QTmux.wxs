@@ -41,10 +41,11 @@
     </StandardDirectory>
     <!-- Installationsort in "Apps und Features" hinterlegen (InstallLocation, Vertrag
          V2 §6, K2). Das Selbst-Ersetzen des gemeinsamen Update-Kerns (Windows-Teil,
-         kommt mit dem naechsten Nachzug) vergleicht ihn mit dem Ordner der laufenden
+         update-helper.exe um msiexec) vergleicht ihn mit dem Ordner der laufenden
          qtmux.exe, um eine MSI-Installation vom portablen ZIP zu unterscheiden, und
          uebergibt diesen Ordner msiexec als INSTALLFOLDER. Darum muss der Ordner
-         INSTALLFOLDER heissen. Waechter: test_installer_self_update_contract. -->
+         INSTALLFOLDER heissen. Den Helfer nimmt <Files> unten mit, build-msi.ps1
+         prueft ihn in der File-Tabelle. Waechter: test_installer_self_update_contract. -->
     <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" />
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="ShortcutFolder" Name="QTmux" />

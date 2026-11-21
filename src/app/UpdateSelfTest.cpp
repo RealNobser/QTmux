@@ -2,6 +2,7 @@
 
 #include "UpdateBridge.h"
 
+#include <QCoreApplication>
 #include <QStringList>
 #include <QTimer>
 
@@ -29,6 +30,13 @@ void driveUpdateSelfTest(UpdateBridge &bridge)
             qInfo("QTmux selftest-update: quit-and-install with %d running session(s)",
                   bridge.runningSessions());
             bridge.perform(static_cast<int>(Flow::Action::QuitAndInstall));
+        } else if (s == Flow::State::ManualInstall) {
+            // „Von Hand“: Der Installationsweg hat eine Vorbedingung nicht erfüllt
+            // (ein Entwicklerbau ist z. B. nicht familien-signiert). Den Grund nennt
+            // der Ablauf im Log („install: manual … detail: …“). Es gibt keinen
+            // Knopf mehr zu drücken: eigener Exit-Code, kein Hängen bis zur Frist.
+            qInfo("QTmux selftest-update: manual install, ending (exit 3)");
+            QCoreApplication::exit(3);
         }
     });
     // Wie der Menüpunkt „Nach Updates suchen …“, kurz nach dem Aufbau.

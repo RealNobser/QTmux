@@ -620,6 +620,21 @@ if(WIN32)
     endif()
 endif()
 
+# Selbst-Ersetzen (Vertrag V2, Stufe 2) -----------------------------------------
+# Die Helfer kommen aus dem vendierten Kern: unter macOS update-swap nach
+# QTmux.app/Contents/Helpers/, unter Windows update-helper.exe neben qtmux.exe
+# (das MSI muss ihn dort mitnehmen, installer/build-msi.ps1 bricht sonst ab);
+# Linux braucht keinen. Ohne den Helfer bietet QTmux nur „von Hand“ an, und das
+# fiele bei einem Entwicklerbau nicht auf (dort greift zuerst ein anderer Grund).
+# Der Test vergleicht die eingebettete Kopie Byte für Byte mit dem gebauten Helfer.
+include("${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/selfinstall-helpers.cmake")
+if(QTMUX_BUILD_TESTS)
+    enable_testing()
+    appupdate_embed_install_helpers(qtmux CHECK_TEST test_update_helper_embedded)
+else()
+    appupdate_embed_install_helpers(qtmux)
+endif()
+
 # Tests ----------------------------------------------------------------------
 if(QTMUX_BUILD_TESTS)
     enable_testing()
