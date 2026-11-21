@@ -87,6 +87,7 @@ UpdateBridge::UpdateBridge(Wiring wiring, QObject *parent)
     connect(m_flow, &Flow::viewChanged, this, &UpdateBridge::notesChanged);
     // Zurücksetzen über den Ablauf: Die Seite liest ihre Werte neu.
     connect(m_flow, &Flow::settingsRestored, this, &UpdateBridge::settingsChanged);
+    connect(m_flow, &Flow::settingsRestored, this, &UpdateBridge::settingsReplaced);
     connect(m_flow, &Flow::settingsRestored, this, &UpdateBridge::sessionPasswordChanged);
     // Der Ablauf verwirft ein Sitzungspasswort auch selbst (nach einer Ablehnung):
     // Die Anzeige auf der Seite folgt dem Stand der Anmeldung.
@@ -213,6 +214,7 @@ void UpdateBridge::reloadSettings()
 {
     m_flow->forgetSessionPassword();
     emit settingsChanged();
+    emit settingsReplaced();
     emit sessionPasswordChanged();
 }
 

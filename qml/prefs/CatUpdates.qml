@@ -21,14 +21,24 @@ CatPage {
     heading: t("set.section")
     subtitle: ""
 
+    // Nichts geht still verloren (Familienregel): Ändert sich ANDERSWO eine Einstellung
+    // (Schalter, Proxy-Art), bleibt ein Feld, in dem gerade getippt wird, stehen. Nur
+    // Import und „Zurücksetzen“ ersetzen auch dieses Feld. Schließen und Beenden
+    // übernehmen das Feld mit Fokus (CommitOnClose im Einstellungsfenster).
+    // Wächter: tests/tst_updatesettingspage.cpp.
+    function refill(all) {
+        if (all || !hostField.activeFocus) hostField.text = Updates.proxyHost
+        if (all || !portField.activeFocus)
+            portField.text = Updates.proxyPort > 0 ? String(Updates.proxyPort) : ""
+        if (all || !userField.activeFocus) userField.text = Updates.proxyUser
+    }
+    // Ohne Bindung „text: Updates.proxyHost“: Eine Bindung würde bei JEDEM
+    // settingsChanged neu ausgewertet und das Feld überschreiben, in dem getippt wird.
+    Component.onCompleted: refill(true)
     Connections {
         target: Updates
-        // Nach Import/Zurücksetzen: Felder auch dann neu füllen, wenn sie den Fokus haben.
-        function onSettingsChanged() {
-            hostField.text = Updates.proxyHost
-            portField.text = Updates.proxyPort > 0 ? String(Updates.proxyPort) : ""
-            userField.text = Updates.proxyUser
-        }
+        function onSettingsChanged() { page.refill(false) }
+        function onSettingsReplaced() { page.refill(true) }
     }
 
     PrefAnchor {
@@ -112,9 +122,9 @@ CatPage {
                     spacing: 8
                     TextField {
                         id: hostField
+                        objectName: "updatesProxyHost"
                         Layout.preferredWidth: 200
                         color: Theme.textBright
-                        text: Updates.proxyHost
                         onEditingFinished: Updates.proxyHost = text
                     }
                     TextField {
@@ -127,7 +137,6 @@ CatPage {
                         Layout.preferredWidth: 72
                         color: Theme.textBright
                         inputMethodHints: Qt.ImhDigitsOnly
-                        text: Updates.proxyPort > 0 ? String(Updates.proxyPort) : ""
                         // Wie der Basic-Standard des Server-Felds daneben (Höhe, Fläche,
                         // Rand), nur der Rand wird bei ungültigem Wert zur Gefahrfarbe.
                         background: Rectangle {
@@ -152,9 +161,9 @@ CatPage {
                 description: page.t("set.user.desc")
                 TextField {
                     id: userField
+                    objectName: "updatesProxyUser"
                     Layout.preferredWidth: 200
                     color: Theme.textBright
-                    text: Updates.proxyUser
                     onEditingFinished: Updates.proxyUser = text
                 }
             }

@@ -22,6 +22,9 @@ Window {
     title: qsTr("Einstellungen")
     color: Theme.bgMain
 
+    // Schließen und Beenden übernehmen das Feld mit Fokus (nichts geht still verloren).
+    CommitOnClose { window: root }
+
     // Ein separates Window erbt die überschriebene palette des ApplicationWindow NICHT
     // (sonst wären Basic-Controls im Hell-Modus falsch gefärbt) — deshalb hier derselbe
     // palette.*-Block wie in Main.qml. Popups/Menüs brauchen zusätzlich ihre eigene

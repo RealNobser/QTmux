@@ -393,6 +393,16 @@ add_test(NAME test_updatequit COMMAND test_updatequit)
 # Kindprozesse, darum mehr Zeit als ein einzelner Lauf braucht.
 set_tests_properties(test_updatequit PROPERTIES TIMEOUT 300 RESOURCE_LOCK qtmux_update_selftest)
 
+# Seite „Updates“ am geladenen QML: ein Feld mit Fokus geht nicht still verloren.
+qt_add_executable(test_updatesettingspage tst_updatesettingspage.cpp)
+target_link_libraries(test_updatesettingspage PRIVATE qtmux_app qtmux_appplugin Qt6::Test Qt6::Quick)
+add_test(NAME test_updatesettingspage COMMAND test_updatesettingspage)
+set_tests_properties(test_updatesettingspage PROPERTIES TIMEOUT 120
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+if(WIN32)
+    set_target_properties(test_updatesettingspage PROPERTIES WIN32_EXECUTABLE FALSE)
+endif()
+
 # Lehnt das Hauptfenster das Beenden für das Update ab, ist die Beenden-Rückfrage
 # danach wieder scharf (Rücksetz-Zweig in src/app/UpdateQuit.cpp).
 qt_add_executable(test_updatequitreset tst_updatequitreset.cpp)

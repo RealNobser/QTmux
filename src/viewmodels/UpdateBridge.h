@@ -158,6 +158,9 @@ public:
 
 signals:
     void settingsChanged();
+    /// Import oder „Zurücksetzen“: Die Seite ersetzt auch das Feld, in dem gerade
+    /// getippt wird (bewusste Handlung). Bei jeder anderen Änderung bleibt es stehen.
+    void settingsReplaced();
     void runningSessionsChanged();
     void sessionPasswordChanged();
     /// Main.qml öffnet Einstellungen › Updates (das Bildziel nutzt es für die

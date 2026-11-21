@@ -328,6 +328,7 @@ qt_add_qml_module(qtmux_app
         qml/Ui/UpdateIcon.qml
         qml/Ui/UpdateHint.qml
         qml/Ui/UpdateButton.qml
+        qml/Ui/CommitOnClose.qml
         qml/Ui/IconToolButton.qml
         qml/Ui/ShortcutMenuItem.qml
         qml/Ui/AppMenuItem.qml
