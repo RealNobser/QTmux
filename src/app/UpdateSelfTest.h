@@ -17,23 +17,11 @@
 
 #include <QString>
 
-#include <functional>
-
 namespace qtmux {
 
 class UpdateBridge;
 
 /// Hängt den Treiber an `bridge` und stößt die Prüfung an. Nur im Selbsttest.
 void driveUpdateSelfTest(UpdateBridge &bridge);
-
-/// Bildmodus: fährt den Ablauf bis zur Szene `scene` und ruft dann
-/// `ready(prefsWindow)` — true heißt: das Einstellungsfenster fotografieren.
-/// Heute erreichbar über das Fixture (umgestellte Quelle, Trockenlauf):
-///   "3" (Update verfügbar), "5" (bereit), "hint-avail" (Hinweis, Dialog zu),
-///   "hint-avail-narrow" (dasselbe bei 720 px Fensterbreite), "settings".
-/// Die übrigen Zustände kommen mit dem Szenen-Baustein des Hubs. Liefert false
-/// für eine unbekannte Szene (Liste im Log).
-bool driveUpdatePicture(UpdateBridge &bridge, const QString &scene,
-                        std::function<void(bool prefsWindow)> ready);
 
 } // namespace qtmux

@@ -388,9 +388,45 @@ target_compile_definitions(test_updatequit PRIVATE
 # (theNewVersionConfirmsItsStartAfterTheMainWindow).
 target_link_libraries(test_updatequit PRIVATE Qt6::Test Qt6::Network qtmux_updater)
 add_test(NAME test_updatequit COMMAND test_updatequit)
-# Ein Profil („update-selftest“) für alle Läufe: nie zwei gleichzeitig. Fünf
+# Ein Profil („update-selftest“) für alle Läufe: nie zwei gleichzeitig. Vier
 # Kindprozesse, darum mehr Zeit als ein einzelner Lauf braucht.
 set_tests_properties(test_updatequit PROPERTIES TIMEOUT 300 RESOURCE_LOCK qtmux_update_selftest)
+
+# Die App enthält den Szenen-Baustein nicht (tests/CheckNoShowcase.cmake): 0 Treffer
+# für „UpdateShowcase“ und „--update-picture“ im gebauten qtmux, Positivkontrolle
+# „--selftest-update“ darin; Gegenprobe an einer festen Prüfdatei und, wenn gebaut,
+# am Bildziel. Läuft auch mit QTMUX_UPDATE_PICTURES=OFF.
+set(qtmux_noshowcase_args
+    "-DAPP=$<TARGET_FILE:qtmux>"
+    "-DPROBE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/showcase-probe/probe.bin")
+if(TARGET qtmux-bilder)
+    list(APPEND qtmux_noshowcase_args "-DPICTURES=$<TARGET_FILE:qtmux-bilder>")
+endif()
+add_test(NAME test_release_has_no_showcase
+    COMMAND ${CMAKE_COMMAND} ${qtmux_noshowcase_args}
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckNoShowcase.cmake")
+# Gegenprobe des Wächters selbst: Die Prüfdatei als „App“ muss ihn rot machen.
+add_test(NAME test_release_has_no_showcase_bites
+    COMMAND ${CMAKE_COMMAND}
+        "-DAPP=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/showcase-probe/probe.bin"
+        "-DPROBE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/showcase-probe/probe.bin"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckNoShowcase.cmake")
+set_tests_properties(test_release_has_no_showcase_bites PROPERTIES
+    PASS_REGULAR_EXPRESSION "App: \"UpdateShowcase\" steht [0-9]+-mal.*App: \"--update-picture\" steht [0-9]+-mal")
+
+# Das Bildziel (nur mit QTMUX_UPDATE_PICTURES): je Fläche eine Szene als Bild.
+if(TARGET qtmux-bilder)
+    qt_add_executable(test_updatepictures tst_updatepictures.cpp)
+    add_dependencies(test_updatepictures qtmux-bilder qtmux)
+    target_compile_definitions(test_updatepictures PRIVATE
+        QTMUX_PICTURE_BINARY="$<TARGET_FILE:qtmux-bilder>")
+    target_link_libraries(test_updatepictures PRIVATE Qt6::Test Qt6::Network)
+    add_test(NAME test_updatepictures COMMAND test_updatepictures)
+    set_tests_properties(test_updatepictures PROPERTIES TIMEOUT 300)
+    if(WIN32)
+        set_target_properties(test_updatepictures PROPERTIES WIN32_EXECUTABLE FALSE)
+    endif()
+endif()
 
 # 🔑 Diese Tests auf Windows als KONSOLEN-Programme bauen.
 # `qt_add_executable` macht dort standardmaessig GUI-Programme — die schreiben

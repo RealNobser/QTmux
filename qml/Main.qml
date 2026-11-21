@@ -4552,7 +4552,7 @@ ApplicationWindow {
     }
     Connections {
         target: Updates
-        // Nur im Bildmodus (--update-picture settings).
+        // Das Bildziel öffnet so die Seite „Updates“ (src/app/UpdatePicture.h).
         function onSettingsPageRequested() { prefs.open("updates") }
     }
     // Einstiegspunkt für das Einstellungsfenster (eigenes Window, sieht die IDs aus

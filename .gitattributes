@@ -18,3 +18,6 @@ tests/fixtures/update/** -text
 # Batch-Dateien MÜSSEN CRLF haben — bei LF führt cmd.exe Kommentarzeilen aus.
 *.cmd text eol=crlf
 *.bat text eol=crlf
+
+# Feste Prüfdatei des Wächters test_release_has_no_showcase (Binärbytes).
+tests/fixtures/showcase-probe/** binary

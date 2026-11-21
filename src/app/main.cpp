@@ -44,6 +44,19 @@
 #include "UpdateSelfTest.h"
 #include "GlobalHotkey.h"
 
+#include <QtQml/QQmlExtensionPlugin>
+
+#if defined(QTMUX_UPDATE_PICTURES)
+#  include "UpdatePicture.h"
+#  include "qtmux_buildid.h"
+#  include <functional>
+#  include <memory>
+#endif
+
+// Das QML-Modul „QTmux“ liegt in der statischen Bibliothek qtmux_app (CMakeLists.txt):
+// Sein Plugin muss hier hereingeholt werden, sonst findet die Engine das Modul nicht.
+Q_IMPORT_QML_PLUGIN(QTmuxPlugin)
+
 namespace {
 
 // Tauscht EINEN installierten Translator gegen die .qm `<basis>_<lang>` aus :/i18n.
@@ -204,9 +217,9 @@ int main(int argc, char *argv[])
 
     QString shotPath;          // --screenshot <png>: stiller Selbst-Screenshot (s. u.)
     QString updateSelfTestDir; // --selftest-update <ordner>: Update-Weg am echten Programm
-    // --update-picture <szene> (mit --selftest-update und --screenshot): Bild eines
-    // Update-Zustands; --picture-theme light|dark und --picture-language de|en wählen
-    // Design und Sprache im eigenen Profil (UpdateSelfTest.h).
+    // Nur im Bildziel qtmux-bilder (QTMUX_UPDATE_PICTURES, src/app/UpdatePicture.h):
+    // Szene, Design und Sprache eines Bildes der Update-Oberfläche. In der App bleiben
+    // die drei leer, und die Schalter existieren dort nicht.
     QString updatePicture;
     QString pictureTheme;
     QString pictureLanguage;
@@ -223,12 +236,14 @@ int main(int argc, char *argv[])
             shotSettleMs = qMax(50, QByteArray(argv[i + 1]).toInt());
         else if (a == "--selftest-update")
             updateSelfTestDir = QString::fromLocal8Bit(argv[i + 1]);
+#if defined(QTMUX_UPDATE_PICTURES)
         else if (a == "--update-picture")
             updatePicture = QString::fromLocal8Bit(argv[i + 1]);
         else if (a == "--picture-theme")
             pictureTheme = QString::fromLocal8Bit(argv[i + 1]);
         else if (a == "--picture-language")
             pictureLanguage = QString::fromLocal8Bit(argv[i + 1]);
+#endif
     }
     // --selftest-system-installer (nur mit --selftest-update): Installationsweg von
     // Stufe 1 statt der Wahl des Hubs, für den Test des Beenden-Wegs (UpdateBridge.h).
@@ -236,10 +251,16 @@ int main(int argc, char *argv[])
     for (int i = 1; i < argc; ++i)
         if (QByteArray(argv[i]) == "--selftest-system-installer")
             updateSelfTestSystemInstaller = true;
-    if (!updatePicture.isEmpty() && (updateSelfTestDir.isEmpty() || shotPath.isEmpty())) {
-        qCritical("QTmux: --update-picture braucht --selftest-update <ordner> und --screenshot <png>.");
+#if defined(QTMUX_UPDATE_PICTURES)
+    if (updatePicture.isEmpty()) {
+        qCritical("qtmux-bilder: --update-picture <szene> fehlt (das Bildziel macht nur Bilder).");
         return 2;
     }
+    if (updateSelfTestDir.isEmpty() || shotPath.isEmpty()) {
+        qCritical("qtmux-bilder: --update-picture braucht --selftest-update <ordner> und --screenshot <png>.");
+        return 2;
+    }
+#endif
     // Der Update-Selbsttest läuft nie im Profil des Anwenders: Er schreibt
     // Update-Einstellungen und beendet sich über den Update-Weg.
     // Auch ein leer gesetztes QTMUX_PROFILE (oder `--profile ""`) zählt als „kein Profil“.
@@ -300,14 +321,16 @@ int main(int argc, char *argv[])
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
                            updateSelfTestDir + QStringLiteral("/settings"));
     }
-    // Bildmodus: Design und Sprache ins (eigene) Profil, BEVOR Theme und AppController
+#if defined(QTMUX_UPDATE_PICTURES)
+    // Bildziel: Design und Sprache ins (eigene) Profil, BEVOR Theme und AppController
     // sie lesen.
-    if (!updatePicture.isEmpty()) {
+    {
         QSettings s;
         if (pictureTheme == QLatin1String("light")) s.setValue(QStringLiteral("ui/themeMode"), 1);
         if (pictureTheme == QLatin1String("dark")) s.setValue(QStringLiteral("ui/themeMode"), 2);
         if (!pictureLanguage.isEmpty()) s.setValue(QStringLiteral("ui/language"), pictureLanguage);
     }
+#endif
 
 #if defined(Q_OS_MACOS)
     // Die nativen App-Menü-Standarditems (Über/Einstellungen/Dienste/Ausblenden/
@@ -414,6 +437,28 @@ int main(int argc, char *argv[])
     updateWiring.selfTest = !updateSelfTestDir.isEmpty();
     updateWiring.selfTestDir = updateSelfTestDir;
     updateWiring.selfTestSystemInstaller = updateSelfTestSystemInstaller;
+#if defined(QTMUX_UPDATE_PICTURES)
+    // Bildziel: Die Szene des Hubs legt ihren Ablauf an, die Bridge zeigt ihn. Das
+    // Bild entsteht, sobald der Ablauf dort steht (unten nach dem QML-Laden).
+    static std::unique_ptr<qtmux::UpdatePicture> picture;
+    static bool pictureReached = false;
+    static bool pictureOk = false;
+    static std::function<void(bool)> pictureShoot;  // gesetzt, sobald das QML steht
+    {
+        const QString build = QStringLiteral(QTMUX_BUILD_ID);
+        const qsizetype plus = build.indexOf(QLatin1Char('+'));
+        picture = std::make_unique<qtmux::UpdatePicture>(
+            updatePicture, updateWiring.language, QStringLiteral(QTMUX_VERSION_STRING),
+            plus >= 0 ? build.mid(plus) : QString());
+        const bool begun = picture->begin([](bool ok) {
+            pictureReached = true;
+            pictureOk = ok;
+            if (pictureShoot) pictureShoot(ok);
+        });
+        if (!begun) return 2;
+        updateWiring.externalFlow = picture->flow();
+    }
+#endif
     static qtmux::UpdateBridge updates(std::move(updateWiring));
     // Im Selbsttest ist die Beenden-Rückfrage immer an: Der Test belegt, dass sie auf
     // dem Update-Weg trotzdem nicht kommt (UpdateQuit.cpp). Das Profil ist eigens.
@@ -458,8 +503,8 @@ int main(int argc, char *argv[])
     // selbst einige Sekunden, damit sie nicht in den Aufbau der Sitzungen fällt,
     // und prüft danach alle 6 h — Vertrag V2 §4.2, E1).
     // 🔑 Im Screenshot-Modus NIE — der Lauf soll ein Bild machen und sich beenden,
-    // nicht ins Netz gehen.
-    if (shotPath.isEmpty() || !updatePicture.isEmpty()) {
+    // nicht ins Netz gehen. Im Bildziel treibt der Szenen-Baustein seinen Ablauf selbst.
+    if (shotPath.isEmpty()) {
         const bool selfTest = !updateSelfTestDir.isEmpty();
         QTimer::singleShot(0, &updates, [&app, selfTest]() {
             updates.start(app.arguments());
@@ -473,44 +518,69 @@ int main(int argc, char *argv[])
                 QCoreApplication::exit(2);
             }
         });
-        if (!updatePicture.isEmpty()) {
-            // Bild, sobald der Treiber die Szene erreicht hat (plus Settle-Zeit). Die
-            // Szene „settings“ zeigt das Einstellungsfenster, ein eigenes Window.
-            const bool ok = qtmux::driveUpdatePicture(
-                updates, updatePicture,
-                [&engine, shotPath, shotSettleMs, updatePicture](bool prefsWindow) {
-                    const QList<QObject *> roots0 = engine.rootObjects();
-                    auto *main0 = roots0.isEmpty() ? nullptr
-                                                   : qobject_cast<QQuickWindow *>(roots0.first());
-                    // „…-narrow“: schmales Fenster, der Hinweis muss trotzdem stehen.
-                    if (main0 && updatePicture.endsWith(QLatin1String("-narrow")))
-                        main0->setWidth(720);
-                    QTimer::singleShot(shotSettleMs, qApp, [&engine, shotPath, prefsWindow]() {
-                        const QList<QObject *> roots = engine.rootObjects();
-                        auto *main = roots.isEmpty() ? nullptr
-                                                     : qobject_cast<QQuickWindow *>(roots.first());
-                        QQuickWindow *win = main;
-                        if (prefsWindow) {
-                            win = nullptr;
-                            for (QWindow *w : QGuiApplication::topLevelWindows()) {
-                                auto *q = qobject_cast<QQuickWindow *>(w);
-                                if (q && q != main && q->isVisible()) { win = q; break; }
-                            }
-                        }
-                        int rc = 2;
-                        if (win) {
-                            const QImage img = win->grabWindow();
-                            rc = (!img.isNull() && img.save(shotPath, "PNG")) ? 0 : 1;
-                        }
-                        qInfo("QTmux update-picture: %s rc=%d", qPrintable(shotPath), rc);
-                        QCoreApplication::exit(rc);
-                    });
-                });
-            if (!ok) return 2;
-        } else if (!updateSelfTestDir.isEmpty()) {
+        if (!updateSelfTestDir.isEmpty())
             qtmux::driveUpdateSelfTest(updates);
-        }
     }
+
+#if defined(QTMUX_UPDATE_PICTURES)
+    // Bild, sobald die Szene steht: die Fläche öffnen (Dialog über das Signal des
+    // Ablaufs, Seite „Updates“ im Einstellungsfenster; Hinweis und Proxy-Anmeldung
+    // erscheinen von selbst), Settle-Zeit, dann greifen. Exit 0 = Bild geschrieben,
+    // 1 = Greifen/Speichern scheiterte, 2 = kein Fenster, 4 = Szene nicht erreicht,
+    // 5 = Portfeld nicht gefunden.
+    pictureShoot = [&engine, shotPath, shotSettleMs](bool ok) {
+        // Nie im Aufruf selbst: Eine Szene kann schon in begin() fertig sein.
+        QTimer::singleShot(0, qApp, [&engine, shotPath, shotSettleMs, ok]() {
+            if (!ok) {
+                qCritical("qtmux-bilder: Szene nicht erreicht (Frist des Szenen-Bausteins).");
+                QCoreApplication::exit(4);
+                return;
+            }
+            const QList<QObject *> roots = engine.rootObjects();
+            auto *main = roots.isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(roots.first());
+            if (main && picture->windowWidth() > 0) main->setWidth(picture->windowWidth());
+            const QString surface = picture->surface();
+            if (surface == QLatin1String("dialog"))
+                emit picture->flow()->dialogRequested();
+            else if (surface == QLatin1String("settings"))
+                emit updates.settingsPageRequested();
+            QTimer::singleShot(shotSettleMs, qApp, [main, shotPath, shotSettleMs, surface]() {
+                QQuickWindow *win = main;
+                if (surface == QLatin1String("settings")) {
+                    win = nullptr;
+                    for (QWindow *w : QGuiApplication::topLevelWindows()) {
+                        auto *q = qobject_cast<QQuickWindow *>(w);
+                        if (q && q != main && q->isVisible()) { win = q; break; }
+                    }
+                }
+                if (!win) {
+                    qCritical("qtmux-bilder: kein Fenster fuer die Flaeche \"%s\".",
+                              qPrintable(surface));
+                    QCoreApplication::exit(2);
+                    return;
+                }
+                int settle = 0;
+                if (!picture->portText().isEmpty()) {
+                    QObject *port = win->findChild<QObject *>(QStringLiteral("updatesProxyPort"));
+                    if (!port) {
+                        qCritical("qtmux-bilder: Portfeld (updatesProxyPort) nicht gefunden.");
+                        QCoreApplication::exit(5);
+                        return;
+                    }
+                    port->setProperty("text", picture->portText());
+                    settle = shotSettleMs;
+                }
+                QTimer::singleShot(settle, qApp, [win, shotPath]() {
+                    const QImage img = win->grabWindow();
+                    const int rc = (!img.isNull() && img.save(shotPath, "PNG")) ? 0 : 1;
+                    qInfo("qtmux-bilder: %s rc=%d", qPrintable(shotPath), rc);
+                    QCoreApplication::exit(rc);
+                });
+            });
+        });
+    };
+    if (pictureReached) pictureShoot(pictureOk);
+#endif
 
     // Laufzeitwechsel über das Sprachmenü neu laden.
     if (appc) {

@@ -92,13 +92,18 @@ public:
         /// der Test des Beenden-Wegs braucht diesen Knopf. Gelaufen wird ohnehin nur
         /// ein Trockenlauf.
         bool selfTestSystemInstaller = false;
+        /// Nur das Bildziel qtmux-bilder: ein Ablauf, der einem anderen gehört (dem
+        /// Szenen-Baustein des Hubs). Die Bridge legt dann keinen eigenen an, setzt
+        /// keinen Installationsweg und lässt Einstellungen und Ordner dieses Ablaufs
+        /// unberührt. Muss die Bridge überleben.
+        appupdate::UpdateFlow *externalFlow = nullptr;
     };
 
     UpdateBridge(Wiring wiring, QObject *parent = nullptr);
     ~UpdateBridge() override;
 
     [[nodiscard]] appupdate::UpdateFlow &flow() { return *m_flow; }
-    [[nodiscard]] QObject *flowObject() { return m_flow.get(); }
+    [[nodiscard]] QObject *flowObject() { return m_flow; }
     [[nodiscard]] QString currentVersion() const;
     [[nodiscard]] QString buildId() const;
     /// UpgradeCode des MSI (installer/QTmux.wxs); ein Test hält beide gleich.
@@ -162,7 +167,8 @@ signals:
     void settingsChanged();
     void runningSessionsChanged();
     void sessionPasswordChanged();
-    /// Nur Bildmodus: Main.qml öffnet Einstellungen › Updates.
+    /// Main.qml öffnet Einstellungen › Updates (das Bildziel nutzt es für die
+    /// Szenen der Seite).
     void settingsPageRequested();
     void notesChanged();
     void textsChanged();
@@ -171,7 +177,8 @@ private:
     void setProxy(const std::function<void(appupdate::ProxyConfig &)> &change);
 
     QSettings m_settings;
-    std::unique_ptr<appupdate::UpdateFlow> m_flow;
+    std::unique_ptr<appupdate::UpdateFlow> m_ownFlow;  // leer, wenn externalFlow gilt
+    appupdate::UpdateFlow *m_flow = nullptr;            // der gezeigte Ablauf
     int m_runningSessions = 0;
     int m_textRevision = 0;
     bool m_selfTest = false;

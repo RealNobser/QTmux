@@ -26,8 +26,9 @@
 // bekäme vom Selbst-Ersetzen nur „von Hand“. Weitere Fälle: Mit der Wahl des Hubs
 // fehlt der eingebettete Helfer nicht (`theRealInstallWay…`); nach einem Update auf
 // diese Version schreibt QTmux die Start-Bestätigung erst nach dem Hauptfenster
-// (`theNewVersionConfirms…`); der Bildmodus; ohne umgestellte Quelle bricht der
-// Selbsttest sofort ab, damit er nie eine echte Installation auslösen kann.
+// (`theNewVersionConfirms…`); ohne umgestellte Quelle bricht der Selbsttest sofort
+// ab, damit er nie eine echte Installation auslösen kann. Bilder macht nur das
+// Bildziel qtmux-bilder (tst_updatepictures).
 //
 // Jeder Lauf hat ein eigenes Profil (QTMUX_PROFILE) und räumt es am Ende ab;
 // Download und Ergebnisdatei liegen im Temp-Ordner des Tests, nie in „Downloads“.
@@ -295,36 +296,6 @@ private slots:
         // Der Merker ist mit der Bestätigung gegangen.
         QSettings after(settingsFile, QSettings::IniFormat);
         QVERIFY2(!appupdate::UpdateSettings(after).pendingInstall().isValid(), qPrintable(r.out));
-    }
-
-    void thePictureModeWritesAnImageOfTheScene()
-    {
-        // Bildmodus (UpdateSelfTest.h): Der Ablauf erreicht die Szene, dann entsteht
-        // das Bild; eine unbekannte Szene endet mit Exit 2, ohne Bild.
-        QTemporaryDir work;
-        QVERIFY(work.isValid());
-        const QString fixture =
-            QUrl::fromLocalFile(QStringLiteral(QTMUX_UPDATE_FIXTURE_DIR "/good")).toString();
-        const QString png = work.filePath(QStringLiteral("scene-3.png"));
-        const Run r = runSelfTest(work,
-                                  {QStringLiteral("--update-base-url"), fixture,
-                                   QStringLiteral("--update-picture"), QStringLiteral("3"),
-                                   QStringLiteral("--screenshot"), png},
-                                  90000);
-        QVERIFY2(r.finished && r.code == 0, qPrintable(r.out));
-        QVERIFY2(r.out.contains(QLatin1String("QTmux update-picture: state 3")), qPrintable(r.out));
-        QVERIFY2(!r.out.contains(QLatin1String("qrc:/qt/qml/QTmux/")), qPrintable(r.out));
-        QVERIFY2(QFileInfo(png).size() > 10000, qPrintable(r.out));
-
-        const QString none = work.filePath(QStringLiteral("none.png"));
-        const Run bad = runSelfTest(work,
-                                    {QStringLiteral("--update-base-url"), fixture,
-                                     QStringLiteral("--update-picture"), QStringLiteral("no-such"),
-                                     QStringLiteral("--screenshot"), none},
-                                    60000);
-        QVERIFY2(bad.finished, qPrintable(bad.out));
-        QCOMPARE(bad.code, 2);
-        QVERIFY(!QFileInfo::exists(none));
     }
 
     void aSelfTestWithoutAnOverriddenSourceStopsAtOnce()

@@ -135,9 +135,26 @@ if [[ ! -f "$DMG_MP/QTmux.app/Contents/Info.plist" || ! -L "$DMG_MP/Applications
     "$REPO/installer/macos/dmg-image.sh" eject "$DMG_MP" && rmdir "$DMG_MP"
     exit 1
 fi
+echo "    QTmux.app und Link auf /Applications liegen in der Wurzel."
+# Am selben eingehängten Image: Die ausgelieferte App trägt den Tauschhelfer des
+# Selbst-Ersetzens (Contents/Helpers/update-swap) und NICHT den Szenen-Baustein
+# der Bildläufe (derselbe Wächter wie test_release_has_no_showcase, mit der festen
+# Prüfdatei als Gegenprobe; das Bildziel qtmux-bilder liegt in keinem Paket).
+DMG_FAIL=""
+[[ -x "$DMG_MP/QTmux.app/Contents/Helpers/update-swap" ]] \
+    || DMG_FAIL="Im DMG fehlt QTmux.app/Contents/Helpers/update-swap."
+if [[ -z "$DMG_FAIL" ]] && ! cmake -DAPP="$DMG_MP/QTmux.app/Contents/MacOS/qtmux" \
+        -DPROBE="$REPO/tests/fixtures/showcase-probe/probe.bin" \
+        -P "$REPO/tests/CheckNoShowcase.cmake"; then
+    DMG_FAIL="Die App im DMG enthält den Szenen-Baustein oder --update-picture (s. o.)."
+fi
 "$REPO/installer/macos/dmg-image.sh" eject "$DMG_MP"
 rmdir "$DMG_MP"
-echo "    QTmux.app und Link auf /Applications liegen in der Wurzel."
+if [[ -n "$DMG_FAIL" ]]; then
+    echo "FEHLER: $DMG_FAIL" >&2
+    exit 1
+fi
+echo "    Tauschhelfer im Bundle, kein Szenen-Baustein in der App."
 
 echo "Fertig: $DMG"
 du -h "$DMG" | cut -f1 | xargs -I{} echo "  Größe: {}"

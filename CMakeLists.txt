@@ -286,13 +286,17 @@ elseif(WIN32)
         OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/appicon/qtmux.ico")
 endif()
 
-qt_add_executable(qtmux
-    src/app/main.cpp
+# 🔑 Zwei Programme, EIN Satz Objekte: Alles außer main.cpp (QML-Modul, Rendering,
+# Viewmodels, MCP-Server, Update-Verdrahtung) steht in der statischen Bibliothek
+# qtmux_app. Die App `qtmux` linkt sie, das Bildziel `qtmux-bilder` (unten, Schalter
+# QTMUX_UPDATE_PICTURES) ebenso — so übersetzt der Bau nichts doppelt außer main.cpp.
+# Das QML-Modul „QTmux“ wird dadurch ein statisches Plugin: main.cpp holt es mit
+# Q_IMPORT_QML_PLUGIN(QTmuxPlugin) herein.
+qt_add_library(qtmux_app STATIC
     src/app/UpdateQuit.h
     src/app/UpdateQuit.cpp
     src/app/UpdateSelfTest.h
     src/app/UpdateSelfTest.cpp
-    ${qtmux_platform_icon}
 )
 
 # --- Editor-Unterstützung für QML (qmlls) ------------------------------------
@@ -308,9 +312,11 @@ set(QT_QML_GENERATE_QMLLS_INI ON)
 # (LNK1168, s. Windows-Kasten in CLAUDE.md). Der Editor soll lesen, nicht bauen.
 set(QT_QML_GENERATE_QMLLS_INI_NO_CMAKE_CALLS ON)
 
-qt_add_qml_module(qtmux
+qt_add_qml_module(qtmux_app
     URI QTmux
+    CLASS_NAME QTmuxPlugin
     VERSION 1.0
+    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/QTmux"
     QML_FILES
         qml/Main.qml
         qml/SplitNode.qml
@@ -375,16 +381,16 @@ qt_add_qml_module(qtmux
         src/server/AgentInboxClient.h
         src/server/AgentInboxClient.cpp
 )
-target_include_directories(qtmux PRIVATE src/terminal src/viewmodels src/server
-                                        "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(qtmux PRIVATE Qt6::Network Qt6::Svg qtmux_updater)
+target_include_directories(qtmux_app PUBLIC src/app src/terminal src/viewmodels src/server
+                                           "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_link_libraries(qtmux_app PUBLIC Qt6::Network Qt6::Svg qtmux_updater)
 # Ohne das kann der Header beim ersten Übersetzungslauf noch fehlen.
-add_dependencies(qtmux qtmux_buildid)
+add_dependencies(qtmux_app qtmux_buildid)
 
 # GPU-Glyph-Atlas (QTMUX-6): RHI-Shader für das Glyph-Material in .qsb kompilieren
 # und unter qrc:/shaders/ einbetten. BATCHABLE, damit das Material in der
 # Scene-Graph-Batch-Pipeline mitläuft. Liegt unter :/shaders/glyph.{vert,frag}.qsb.
-qt_add_shaders(qtmux "terminal_shaders"
+qt_add_shaders(qtmux_app "terminal_shaders"
     BATCHABLE
     PREFIX "/shaders"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/src/terminal/shaders"
@@ -442,13 +448,13 @@ set(QTMUX_ICON_FILES
         resources/icons/folder.svg
 )
 list(TRANSFORM QTMUX_ICON_FILES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
-qt_add_resources(qtmux "icons"
+qt_add_resources(qtmux_app "icons"
     PREFIX "/icons"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons"
     FILES ${QTMUX_ICON_FILES}
 )
 
-target_link_libraries(qtmux PRIVATE
+target_link_libraries(qtmux_app PUBLIC
     qtmux_core
     Qt6::Core
     Qt6::Gui
@@ -456,6 +462,44 @@ target_link_libraries(qtmux PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
 )
+
+# Die App: main.cpp und das Plattform-Icon, alles andere aus qtmux_app. Das
+# statische QML-Plugin (qtmux_appplugin) muss ausdrücklich mitgelinkt werden.
+qt_add_executable(qtmux
+    src/app/main.cpp
+    ${qtmux_platform_icon}
+)
+target_link_libraries(qtmux PRIVATE qtmux_app qtmux_appplugin)
+
+# Bildziel qtmux-bilder --------------------------------------------------------
+# Bilder der Update-Oberfläche in jedem Zustand (src/app/UpdatePicture.h), mit dem
+# Szenen-Baustein des Hubs: ein echter Ablauf mit Wegwerf-Schlüssel, Server auf
+# 127.0.0.1 und einem Installationsweg, der nie etwas startet. Er gehört NICHT in
+# die App: eigene Lib, eigenes Programm, in keinem Paket (die Paketskripte nehmen
+# nur qtmux). Dieselben Objekte wie qtmux (qtmux_app); neu übersetzt werden nur
+# main.cpp (mit QTMUX_UPDATE_PICTURES), UpdatePicture.cpp und UpdateShowcase.cpp.
+# Wächter: test_release_has_no_showcase (tests/CMakeLists.txt).
+option(QTMUX_UPDATE_PICTURES "Bildziel qtmux-bilder bauen (nie Teil eines Pakets)" ON)
+if(QTMUX_UPDATE_PICTURES)
+    add_library(qtmux_updater_showcase STATIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/UpdateShowcase.hpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/UpdateShowcase.cpp")
+    target_link_libraries(qtmux_updater_showcase PUBLIC qtmux_updater Qt6::Core Qt6::Network)
+    # Keine eigenen Sätze (die Szenen nehmen jeden Satz aus dem Ablauf).
+    set_target_properties(qtmux_updater_showcase PROPERTIES QT_EXCLUDE_FROM_TRANSLATION ON)
+
+    qt_add_executable(qtmux-bilder
+        src/app/main.cpp
+        src/app/UpdatePicture.h
+        src/app/UpdatePicture.cpp)
+    target_compile_definitions(qtmux-bilder PRIVATE QTMUX_UPDATE_PICTURES=1)
+    target_link_libraries(qtmux-bilder PRIVATE qtmux_app qtmux_appplugin qtmux_updater_showcase)
+    # Ein Werkzeug, keine App: kein Bundle, unter Windows ein Konsolenprogramm (die
+    # Meldungen gehen ohne Umweg über stderr). Es läuft aus dem Bauordner neben
+    # qtmux und nutzt dessen Qt-Laufzeit (windeployqt).
+    set_target_properties(qtmux-bilder PROPERTIES
+        MACOSX_BUNDLE FALSE WIN32_EXECUTABLE FALSE QT_EXCLUDE_FROM_TRANSLATION ON)
+endif()
 
 # Plugins (QTMUX-8) -----------------------------------------------------------
 # Demo-Plugin als Beweis der Plugin-Kette + Kopiervorlage; landet in <build>/plugins.
@@ -488,11 +532,14 @@ add_subdirectory(plugins/macpcan)
 # PCBUSB), darum bedingte Aufnahme — ein Build ohne Plugin darf nicht brechen.
 # Der vendierte Kern (plugins/macpcan/vendor/, Namespace mac_pcan) ist Qt-frei
 # und liefert konstruktionsbedingt keine tr()-Strings in die Kataloge.
-set(qtmux_i18n_source_targets qtmux qtmux_core)
+# qtmux_app trägt QML und den C++-Teil der Oberfläche, qtmux nur main.cpp; beide
+# werden gescannt. qtmux-bilder bringt keine eigenen Sätze und steht NICHT darin.
+# Die .qm hängen an qtmux_app, damit beide Programme dieselben Kataloge tragen.
+set(qtmux_i18n_source_targets qtmux_app qtmux qtmux_core)
 if(TARGET qtmux_macpcan_plugin)
     list(APPEND qtmux_i18n_source_targets qtmux_macpcan_plugin)
 endif()
-qt_add_translations(qtmux
+qt_add_translations(qtmux_app
     SOURCE_TARGETS
         ${qtmux_i18n_source_targets}
     TS_FILES
@@ -525,7 +572,7 @@ foreach(_lang de en)
 endforeach()
 if(_qtmux_qtbase_qm)
     # BASE schneidet den Installationspfad ab -> :/i18n/qtbase_de.qm
-    qt_add_resources(qtmux "qtmux_qt_translations"
+    qt_add_resources(qtmux_app "qtmux_qt_translations"
         PREFIX "/i18n"
         BASE "${QT_TRANSLATIONS_DIR}"
         FILES ${_qtmux_qtbase_qm}

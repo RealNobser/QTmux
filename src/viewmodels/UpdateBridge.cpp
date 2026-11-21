@@ -52,20 +52,27 @@ UpdateBridge::UpdateBridge(Wiring wiring, QObject *parent)
         qWarning("QTmux: Update-Texte fuer \"%s\" fehlen im Bau (Hub-Katalog).",
                  qPrintable(wiring.language));
 
-    m_flow = std::make_unique<Flow>(std::move(cfg), m_settings, nullptr);
-    // Installationsweg: Die Wahl trifft der Hub, einmal für jede App (macOS: die App
-    // ersetzt sich selbst; Windows: der Helfer um msiexec, sobald der Hub ihn
-    // freigibt; Linux: das AppImage wird an seinem Ort ersetzt). Die Helfer bettet
-    // appupdate_embed_install_helpers(qtmux) ein (CMakeLists.txt).
-    // Start-Bestätigung: die Vorgabe des Hubs (erster Lauf der Ereignisschleife nach
-    // start()). Hauptfenster, Sitzungen und PTYs entstehen synchron in
-    // engine.loadFromModule(), und start() läuft erst danach (src/app/main.cpp).
-    if (wiring.selfTest && wiring.selfTestSystemInstaller)
-        m_flow->setInstallBackend(appupdate::makeSystemInstallerBackend());
-    else
-        m_flow->setInstallBackend(appupdate::makeInstallBackendForThisSystem());
+    if (wiring.externalFlow) {
+        // Bildziel: Der Ablauf gehört dem Szenen-Baustein (eigene Einstellungen,
+        // eigener Installationsweg); die Bridge zeigt ihn nur.
+        m_flow = wiring.externalFlow;
+    } else {
+        m_ownFlow = std::make_unique<Flow>(std::move(cfg), m_settings, nullptr);
+        m_flow = m_ownFlow.get();
+        // Installationsweg: Die Wahl trifft der Hub, einmal für jede App (macOS: die
+        // App ersetzt sich selbst; Windows: der Helfer um msiexec, sobald der Hub ihn
+        // freigibt; Linux: das AppImage wird an seinem Ort ersetzt). Die Helfer bettet
+        // appupdate_embed_install_helpers(qtmux) ein (CMakeLists.txt).
+        // Start-Bestätigung: die Vorgabe des Hubs (erster Lauf der Ereignisschleife
+        // nach start()). Hauptfenster, Sitzungen und PTYs entstehen synchron in
+        // engine.loadFromModule(), und start() läuft erst danach (src/app/main.cpp).
+        if (wiring.selfTest && wiring.selfTestSystemInstaller)
+            m_flow->setInstallBackend(appupdate::makeSystemInstallerBackend());
+        else
+            m_flow->setInstallBackend(appupdate::makeInstallBackendForThisSystem());
+    }
 
-    if (wiring.selfTest && !wiring.selfTestDir.isEmpty()) {
+    if (!wiring.externalFlow && wiring.selfTest && !wiring.selfTestDir.isEmpty()) {
         QDir().mkpath(wiring.selfTestDir + QStringLiteral("/downloads"));
         QDir().mkpath(wiring.selfTestDir + QStringLiteral("/results"));
         m_flow->setDownloadDirForTests(wiring.selfTestDir + QStringLiteral("/downloads"));
@@ -73,15 +80,15 @@ UpdateBridge::UpdateBridge(Wiring wiring, QObject *parent)
     }
 
     // „Im Ordner zeigen“ ist Gui-Code und gehört darum nicht in den Kern.
-    connect(m_flow.get(), &Flow::revealFileRequested, this,
+    connect(m_flow, &Flow::revealFileRequested, this,
             [](const QString &path) { FileManagerReveal::reveal(path); });
-    connect(m_flow.get(), &Flow::viewChanged, this, &UpdateBridge::notesChanged);
+    connect(m_flow, &Flow::viewChanged, this, &UpdateBridge::notesChanged);
     // Zurücksetzen über den Ablauf: Die Seite liest ihre Werte neu.
-    connect(m_flow.get(), &Flow::settingsRestored, this, &UpdateBridge::settingsChanged);
-    connect(m_flow.get(), &Flow::settingsRestored, this, &UpdateBridge::sessionPasswordChanged);
+    connect(m_flow, &Flow::settingsRestored, this, &UpdateBridge::settingsChanged);
+    connect(m_flow, &Flow::settingsRestored, this, &UpdateBridge::sessionPasswordChanged);
     // Der Ablauf verwirft ein Sitzungspasswort auch selbst (nach einer Ablehnung):
     // Die Anzeige auf der Seite folgt dem Stand der Anmeldung.
-    connect(m_flow.get(), &Flow::proxyAuthChanged, this, &UpdateBridge::sessionPasswordChanged);
+    connect(m_flow, &Flow::proxyAuthChanged, this, &UpdateBridge::sessionPasswordChanged);
 }
 
 UpdateBridge::~UpdateBridge() = default;

@@ -119,6 +119,7 @@ CatPage {
                     }
                     TextField {
                         id: portField
+                        objectName: "updatesProxyPort"
                         // Ohne Validator: Ein Wert außerhalb des Bereichs bleibt sichtbar
                         // stehen und wird markiert, statt still verworfen zu werden.
                         readonly property int value: /^[0-9]{1,5}$/.test(text) ? parseInt(text) : -1
