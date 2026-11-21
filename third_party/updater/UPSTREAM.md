@@ -9,9 +9,15 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (Worker-Checkout `/Users/nobser/Projects/_ClaudeWorkspace/MacPCAN`) |
-| Commit | `d63de9a8f67bef5d11dbe06e1fe0bd3b0964d80b` |
+| Commit | `9533474314c802aa0c4bdc522f63de84ccd8da3c` (MacPCAN 0.8.0) |
 | Datum | 2026-11-21 |
-| Betreff | `update-v2 H2c S3: Selbst-Ersetzen unter Windows eingeschaltet (kWindowsSelfInstallMeasured)` |
+| Betreff | `Version 0.8.0 (Update-Vertrag V2, Selbst-Ersetzen, Einstellungen wirken sofort)` |
+
+Pin 2026-11-21 auf den Versions-Commit von MacPCAN 0.8.0. Er folgt direkt auf `d63de9a` und
+ändert nur `CMakeLists.txt` (Versionszeile) und `docs/HISTORY.md`; `git diff --quiet d63de9a
+9533474 -- src/update platform/windows platform/macos src/core src/drivers` Exit 0. Abgleich
+gegen einen Worktree auf `9533474` ohne `--update`: Exit 0 mit 46/8/5/1/1 verglichenen Dateien,
+`ls-tree` gegen `hash-object` 46/46 blob-gleich. Der Absatz darunter beschreibt den Inhalt.
 
 Abgleich 2026-11-21 (K2, Nachzug auf den Code-Stand von MacPCAN 0.8.0): `git log
 e463725..d63de9a -- src/update/` nennt **17** Commits; `d63de9a` ist zugleich der letzte, der
@@ -26,8 +32,7 @@ Bundle). Gemessen gegen einen eigenen Worktree auf `d63de9a`: vorher Exit 1, nac
 Exit 0 mit 46/8/5/1/1 verglichenen Dateien; `git ls-tree -r d63de9a src/update/` gegen
 `git hash-object` der vendierten Dateien blob-gleich (46/46). CMake: `UpdateShowcase.*` bleibt
 aus `qtmux_updater` heraus (eigene Lib nur für das Bildziel), unter Windows linkt die Lib
-`msi`. ⚠️ Vorläufig: Der endgültige Pin ist der Versions-Commit von MacPCAN 0.8.0 (code-gleich
-bis auf die Versionsnummer); dann diese Tabelle und den Abgleich einmal nachziehen.
+`msi`.
 
 Abgleich 2026-11-20 (K2, Vertrag V2 „Online-Update vereinheitlichen“): Zwischenstand gegen
 Hub-`main`. Ein zweiter Nachzug auf den Release-Stand des Hubs folgt (Naht, Selbst-Ersetzen
