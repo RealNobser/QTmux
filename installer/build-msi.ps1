@@ -189,7 +189,11 @@ $names = @()
 $wi = $null; $db = $null; $view = $null; $rec = $null; $readError = $null
 try {
     $wi = New-Object -ComObject WindowsInstaller.Installer
-    $db = $wi.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $wi, @($msi, 0))
+    # [string] ist Pflicht: Ohne die Umwandlung reicht PowerShell den Pfad als PSObject an
+    # COM weiter, und OpenDatabase scheitert mit DISP_E_TYPEMISMATCH (auf einem Windows-
+    # Bau gemessen; mit [string] liest derselbe Aufruf die File-Tabelle). So auch in
+    # msi-shortcut-icon-check.ps1.
+    $db = $wi.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $wi, @([string]$msi, 0))
     $view = $db.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $db, @("SELECT ``FileName`` FROM ``File``"))
     $null = $view.GetType().InvokeMember("Execute", "InvokeMethod", $null, $view, $null)
     while ($true) {
