@@ -270,6 +270,13 @@ private slots:
         qInfo("Installationsweg dieses Baus: %s%s", qPrintable(v.captured(1)),
               qPrintable(v.captured(2)));
         QCOMPARE(r.code == 3, v.captured(1) == QLatin1String("manual"));
+#if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
+        // Dort wählt der Hub das Selbst-Ersetzen („automatic“ oder „manual“), nie den
+        // Systeminstaller von Stufe 1. Stünde die Wahl des Hubs in der Bridge unter einer
+        // Bedingung, die den Selbsttest ausnimmt, fiele der Ablauf auf die Vorgabe des
+        // Kerns zurück, und hier stünde „system-installer“.
+        QVERIFY2(v.captured(1) != QLatin1String("system-installer"), qPrintable(r.out));
+#endif
         QVERIFY2(!r.out.contains(QLatin1String("carries no swap program")), qPrintable(r.out));
         QVERIFY2(!r.out.contains(QLatin1String("update-helper.exe is missing")), qPrintable(r.out));
     }
@@ -352,8 +359,10 @@ private slots:
         // Ein Selbsttest-Lauf schreibt Einstellungen (INI unter <ordner>/settings) und
         // den Verlauf der Sitzungen (unter <ordner>/data/history) in den Selbsttest-
         // Ordner. Im Home des Benutzers entsteht nichts: kein Datenordner des Profils,
-        // unter macOS keine Profil-Plist. Positivprobe: Der Verlauf liegt wirklich im
-        // Selbsttest-Ordner, sonst bewiese das Fehlen nichts.
+        // unter macOS keine Profil-Plist. Positivprobe: Der Verlaufsordner entstand
+        // wirklich im Selbsttest-Ordner (das Sichern beim Beenden legt ihn immer an;
+        // eine Datei darin nur, wenn die Shell schon etwas gezeichnet hatte — das
+        // wackelte, gemessen 3 von 6), sonst bewiese das Fehlen nichts.
         QTemporaryDir work;
         QVERIFY(work.isValid());
         const QString fixture =
@@ -373,9 +382,9 @@ private slots:
         QVERIFY2(!checked.isEmpty(), "keine Orte im Home bestimmt — die Probe misst nichts");
         QVERIFY2(leftovers.isEmpty(),
                  qPrintable(QStringLiteral("Im Home entstanden: %1").arg(leftovers.join(", "))));
-        const QDir history(work.filePath(QStringLiteral("data/history")));
-        QVERIFY2(!history.entryList(QDir::Files).isEmpty(),
-                 qPrintable(QStringLiteral("Kein Verlauf unter <ordner>/data/history:\n%1").arg(r.out)));
+        QVERIFY2(QFileInfo(work.filePath(QStringLiteral("data/history"))).isDir(),
+                 qPrintable(QStringLiteral("Kein Verlaufsordner unter <ordner>/data/history:\n%1")
+                                .arg(r.out)));
     }
 
     void theInstallerSwitchIsRefusedOutsideTheSelfTest_data()
@@ -383,14 +392,16 @@ private slots:
         QTest::addColumn<bool>("withSelfTest");
         QTest::addColumn<QStringList>("args");
         QTest::newRow("allein") << false
-                                << QStringList{QStringLiteral("--selftest-system-installer")};
+                                << QStringList{QStringLiteral("--selftest-system-installer"),
+                                               QStringLiteral("--no-update-check")};
         QTest::newRow("Selbsttest ohne Quelle")
             << true << QStringList{QStringLiteral("--selftest-system-installer"),
                                    QStringLiteral("--no-update-check")};
         QTest::newRow("Quelle ohne Selbsttest")
             << false << QStringList{QStringLiteral("--selftest-system-installer"),
                                     QStringLiteral("--update-base-url"),
-                                    QStringLiteral("file:///nirgends")};
+                                    QStringLiteral("file:///nirgends"),
+                                    QStringLiteral("--no-update-check")};
     }
 
     void theInstallerSwitchIsRefusedOutsideTheSelfTest()

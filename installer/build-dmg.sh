@@ -117,6 +117,11 @@ ln -s /Applications "$DMG_ROOT/Applications"
 # Das Skript ist aus MacPCAN vendiert (Kontrakt 5 im Sync-Wächter).
 "$REPO/installer/macos/dmg-image.sh" create "$DMG_ROOT" "QTmux $VERSION" "$DMG"
 rm -rf "$DMG_ROOT"
+# Ab hier gilt: Ein DMG, das nicht alle Prüfungen am eingehängten Image bestanden
+# hat, bleibt nicht in dist/ liegen, auch wenn das Skript unterwegs abbricht (etwa
+# weil das Aushängen scheitert; set -e beendet dann vor jedem eigenen rm).
+DMG_CHECKED=""
+trap '[[ -n "$DMG_CHECKED" ]] || rm -f "$DMG"' EXIT
 
 # Die App muss als QTmux.app in der Wurzel des Volumes liegen, neben dem Link
 # auf /Applications. diskutil legt den INHALT der Quelle ab; wer ihm die App
@@ -158,6 +163,7 @@ if [[ -n "$DMG_FAIL" ]]; then
     exit 1
 fi
 echo "    Tauschhelfer im Bundle, kein Szenen-Baustein in der App."
+DMG_CHECKED=1
 
 echo "Fertig: $DMG"
 du -h "$DMG" | cut -f1 | xargs -I{} echo "  Größe: {}"

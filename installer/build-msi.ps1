@@ -186,7 +186,7 @@ function Remove-BadMsi([string]$why) {
     throw "$why -- MSI geloescht"
 }
 $names = @()
-$wi = $null; $db = $null; $view = $null; $readError = $null
+$wi = $null; $db = $null; $view = $null; $rec = $null; $readError = $null
 try {
     $wi = New-Object -ComObject WindowsInstaller.Installer
     $db = $wi.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $wi, @($msi, 0))
@@ -198,15 +198,16 @@ try {
         $fn = $rec.GetType().InvokeMember("StringData", "GetProperty", $null, $rec, @(1))
         $names += ($fn -split '\|')[-1]
         $null = [System.Runtime.InteropServices.Marshal]::ReleaseComObject($rec)
+        $rec = $null
     }
     $null = $view.GetType().InvokeMember("Close", "InvokeMethod", $null, $view, $null)
 } catch {
     $readError = $_.Exception.Message
 } finally {
-    foreach ($o in @($view, $db, $wi)) {
+    foreach ($o in @($rec, $view, $db, $wi)) {
         if ($null -ne $o) { $null = [System.Runtime.InteropServices.Marshal]::ReleaseComObject($o) }
     }
-    $view = $null; $db = $null; $wi = $null
+    $rec = $null; $view = $null; $db = $null; $wi = $null
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
 }

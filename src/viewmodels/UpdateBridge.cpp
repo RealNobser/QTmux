@@ -65,7 +65,11 @@ UpdateBridge::UpdateBridge(Wiring wiring, QObject *parent)
         // Start-Bestätigung: die Vorgabe des Hubs (erster Lauf der Ereignisschleife
         // nach start()). Hauptfenster, Sitzungen und PTYs entstehen synchron in
         // engine.loadFromModule(), und start() läuft erst danach (src/app/main.cpp).
-        // Genau dieser eine Aufruf, ohne Bedingung: Wächter test_update_consumer_guard.
+        // Genau dieser eine Aufruf, ohne Bedingung. Wächter: Regel 5 von
+        // test_update_consumer_guard (Anzahl, Zeile allein, keine einzeilige Bedingung
+        // davor) und tst_updatequit theRealInstallWayFindsItsHelperInTheBuiltApp (der
+        // Selbsttest zeigt unter macOS/Windows den Weg des Hubs). Eine Bedingung als
+        // Klammerblock sieht keiner der beiden.
         m_flow->setInstallBackend(appupdate::makeInstallBackendForThisSystem());
     }
 

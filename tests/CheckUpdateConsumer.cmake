@@ -56,11 +56,14 @@ foreach(_dir IN LISTS SRC_DIRS)
         string(REPLACE "]" "<RB>" _text "${_text}")
         string(REPLACE "\n" ";" _lines "${_text}")
         set(_n 0)
+        set(_prev_code "")
         foreach(_line IN LISTS _lines)
             math(EXPR _n "${_n} + 1")
             # Kommentar abschneiden (// … und Zeilen, die mit * beginnen) und
             # #include-Zeilen überspringen.
-            string(REGEX REPLACE "//.*$" "" _code "${_line}")
+            # Nur ein // am Zeilenanfang oder nach Leerraum beginnt einen Kommentar: ein
+            # "file://…" im Code darf den Rest der Zeile nicht verstecken.
+            string(REGEX REPLACE "(^|[ \t])//.*$" "\\1" _code "${_line}")
             string(STRIP "${_code}" _code)
             if(_code STREQUAL "" OR _code MATCHES "^\\*" OR _code MATCHES "^#include")
                 continue()
@@ -84,9 +87,15 @@ foreach(_dir IN LISTS SRC_DIRS)
                 math(EXPR _hit_state "${_hit_state} + 1")
             endif()
             if(_code MATCHES "setInstallBackend|make[A-Za-z]*Backend\\(")
-                if(_code MATCHES "setInstallBackend\\(appupdate::makeInstallBackendForThisSystem\\(\\)\\)")
+                # Erlaubt nur als eigene Zeile, die NICHTS anderes tut, und in der Bridge
+                # ohne einzeilige Bedingung davor (if/else/for/while ohne Klammerblock).
+                if(_code MATCHES "^[A-Za-z_][A-Za-z0-9_]*(->|\\.)setInstallBackend\\(appupdate::makeInstallBackendForThisSystem\\(\\)\\)<SEMI>$")
                     if(_rel STREQUAL "src/viewmodels/UpdateBridge.cpp")
                         math(EXPR _bridge_hub_calls "${_bridge_hub_calls} + 1")
+                        if(_prev_code MATCHES "^(}[ \t]*)?(if|else|for|while)([ \t(]|$)" AND NOT _prev_code MATCHES "{$")
+                            list(APPEND _problems "${_rel}:${_n}: Wahl des Hubs steht unter einer Bedingung")
+                            math(EXPR _hit_backend "${_hit_backend} + 1")
+                        endif()
                     endif()
                 elseif(_rel STREQUAL "src/app/UpdateSelfTest.cpp"
                        AND _code MATCHES "setInstallBackend\\(appupdate::makeSystemInstallerBackend\\(\\)\\)")
@@ -98,6 +107,7 @@ foreach(_dir IN LISTS SRC_DIRS)
                     math(EXPR _hit_backend "${_hit_backend} + 1")
                 endif()
             endif()
+            set(_prev_code "${_code}")
         endforeach()
     endforeach()
 endforeach()
@@ -109,7 +119,7 @@ endif()
 
 if(EXPECT_ALL_RULES)
     if(_hit_checker GREATER 0 AND _hit_key GREATER 1 AND _hit_version GREATER 0
-       AND _hit_state GREATER 0 AND _hit_backend GREATER 0)
+       AND _hit_state GREATER 0 AND _hit_backend GREATER 3)
         message(STATUS "CheckUpdateConsumer (Gegenprobe): jede Regel schlug an "
                        "(Kern ${_hit_checker}, Schluessel ${_hit_key}, Version ${_hit_version}, "
                        "Zustand ${_hit_state}, Installationsweg ${_hit_backend}).")
@@ -117,7 +127,7 @@ if(EXPECT_ALL_RULES)
     endif()
     message(FATAL_ERROR "CheckUpdateConsumer (Gegenprobe): nicht jede Regel schlug an "
                         "(Kern ${_hit_checker}, Schluessel ${_hit_key} von 2, Version ${_hit_version}, "
-                        "Zustand ${_hit_state}, Installationsweg ${_hit_backend}).")
+                        "Zustand ${_hit_state}, Installationsweg ${_hit_backend} von 4).")
 endif()
 
 # Regel 5, Positivteil: Der normale Start setzt genau einmal die Wahl des Hubs.

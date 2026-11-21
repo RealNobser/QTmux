@@ -373,9 +373,11 @@ int main(int argc, char *argv[])
     // Sprachwechsel erfordert für DIESE Items einen Neustart. (Ein eingespeistes
     // -AppleLanguages-argv wirkt NICHT: NSUserDefaults liest das echte
     // OS-Prozess-argv, nicht Qts argv.)
-    // Nicht im Selbsttest und nicht im Bildziel: Beide laufen offscreen ohne native
-    // Menüleiste, und der Wert landete sonst in der echten App-Domain des Benutzers
-    // (bzw. als qtmux-bilder.plist), gemessen 2026-11-21.
+    // Nicht im Selbsttest und nicht im Bildziel (beide laufen mit --selftest-update):
+    // Der Wert landete sonst in der App-Domain des Bundles, die ein Profil NICHT trennt,
+    // also in der des Benutzers (bzw. als qtmux-bilder.plist), gemessen 2026-11-21. Das
+    // native App-Menü folgt in diesen Läufen dann der Systemsprache. Starts mit
+    // --screenshot ohne Selbsttest schreiben den Wert weiterhin (alter Befund).
     if (updateSelfTestDir.isEmpty()) {
         QSettings s;   // Default-Ctor: gleiche Domain wie der AppController
         const QString sys = QLocale::system().name().left(2);
