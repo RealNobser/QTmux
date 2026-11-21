@@ -92,10 +92,36 @@ QString selfTestSettingsFile(const QTemporaryDir &work, const QString &profile)
     return work.filePath(QStringLiteral("settings/QTmux/QTmux-%1.ini").arg(profile));
 }
 
-// `beforeStart(profil)` läuft, bevor der Kindprozess startet (Einstellungen vorbelegen).
+// Die Datenordner, die QTmux für ein Profil im Home anlegen würde (AppData, Cache,
+// Konfiguration), und unter macOS die native Einstellungsdatei der Profil-Domain.
+QStringList userPlacesOfProfile(const QString &profile)
+{
+    const QString app = QStringLiteral("QTmux-%1").arg(profile);
+    const QString before = QCoreApplication::applicationName();
+    const QString beforeOrg = QCoreApplication::organizationName();
+    QCoreApplication::setOrganizationName(QStringLiteral("QTmux"));
+    QCoreApplication::setApplicationName(app);
+    QStringList places;
+    for (auto loc : {QStandardPaths::AppDataLocation, QStandardPaths::AppLocalDataLocation,
+                     QStandardPaths::CacheLocation, QStandardPaths::AppConfigLocation}) {
+        const QString dir = QStandardPaths::writableLocation(loc);
+        if (dir.contains(app)) places << dir;
+    }
+    QCoreApplication::setApplicationName(before);
+    QCoreApplication::setOrganizationName(beforeOrg);
+#if defined(Q_OS_MACOS)
+    places << QDir::homePath() + QStringLiteral("/Library/Preferences/com.qtmux.%1.plist").arg(app);
+#endif
+    places.removeDuplicates();
+    return places;
+}
+
+// `beforeStart(profil)` läuft, bevor der Kindprozess startet (Einstellungen vorbelegen),
+// `afterRun(profil)` nach seinem Ende und VOR dem Abräumen des Profils.
 Run runSelfTest(const QTemporaryDir &work, const QStringList &extraArgs, int timeoutMs,
                 const std::function<void(const QString &profile)> &beforeStart = {},
-                bool withSelfTestArgument = true)
+                bool withSelfTestArgument = true,
+                const std::function<void(const QString &profile)> &afterRun = {})
 {
     static int counter = 0;
     const QString profile = QStringLiteral("update-selftest-%1-%2")
@@ -149,6 +175,7 @@ Run runSelfTest(const QTemporaryDir &work, const QStringList &extraArgs, int tim
     r.status = child.exitStatus();
     r.code = child.exitCode();
     r.out = QString::fromLocal8Bit(child.readAll());
+    if (afterRun) afterRun(profile);
     removeProfile(profile);
     return r;
 }
@@ -318,6 +345,37 @@ private slots:
         QVERIFY2(QDir(work.filePath(QStringLiteral("downloads")))
                      .isEmpty(QDir::Files | QDir::NoDotAndDotDot),
                  qPrintable(r.out));
+    }
+
+    void aSelfTestLeavesNothingInTheUserDataFolder()
+    {
+        // Ein Selbsttest-Lauf schreibt Einstellungen (INI unter <ordner>/settings) und
+        // den Verlauf der Sitzungen (unter <ordner>/data/history) in den Selbsttest-
+        // Ordner. Im Home des Benutzers entsteht nichts: kein Datenordner des Profils,
+        // unter macOS keine Profil-Plist. Positivprobe: Der Verlauf liegt wirklich im
+        // Selbsttest-Ordner, sonst bewiese das Fehlen nichts.
+        QTemporaryDir work;
+        QVERIFY(work.isValid());
+        const QString fixture =
+            QUrl::fromLocalFile(QStringLiteral(QTMUX_UPDATE_FIXTURE_DIR "/good")).toString();
+        QStringList leftovers;
+        QStringList checked;
+        const Run r = runSelfTest(
+            work,
+            {QStringLiteral("--update-base-url"), fixture,
+             QStringLiteral("--selftest-system-installer")},
+            120000, {}, true, [&](const QString &profile) {
+                checked = userPlacesOfProfile(profile);
+                for (const QString &p : checked)
+                    if (QFileInfo::exists(p)) leftovers << p;
+            });
+        QVERIFY2(r.finished && r.code == 0, qPrintable(r.out));
+        QVERIFY2(!checked.isEmpty(), "keine Orte im Home bestimmt — die Probe misst nichts");
+        QVERIFY2(leftovers.isEmpty(),
+                 qPrintable(QStringLiteral("Im Home entstanden: %1").arg(leftovers.join(", "))));
+        const QDir history(work.filePath(QStringLiteral("data/history")));
+        QVERIFY2(!history.entryList(QDir::Files).isEmpty(),
+                 qPrintable(QStringLiteral("Kein Verlauf unter <ordner>/data/history:\n%1").arg(r.out)));
     }
 
     void theInstallerSwitchIsRefusedOutsideTheSelfTest_data()

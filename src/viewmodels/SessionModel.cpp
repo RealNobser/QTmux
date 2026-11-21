@@ -669,7 +669,19 @@ int SessionModel::clearQueue(int row) {
     return (s && s->promptQueue()) ? s->promptQueue()->clear() : 0;
 }
 
+namespace {
+QString &dataDirOverride()
+{
+    static QString dir;
+    return dir;
+}
+} // namespace
+
+void SessionModel::setDataDirOverride(const QString &dir) { dataDirOverride() = dir; }
+
 QString SessionModel::historyDir() const {
+    if (!dataDirOverride().isEmpty())
+        return dataDirOverride() + QStringLiteral("/history");
     // AppDataLocation trägt den Profil-Suffix des App-Namens → per Profil getrennt.
     return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
            + QStringLiteral("/history");

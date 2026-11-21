@@ -261,6 +261,11 @@ public:
     void setAnnounceHyperlinks(bool on);
     /// Zusätzliche Umgebung einer lokalen Sitzung. Gui-frei und ohne Prozess prüfbar.
     static QStringList shellEnvironment(int sessionId, bool announceHyperlinks);
+    /// Nur Selbsttest und Bildziel (main.cpp, `--selftest-update <ordner>`): Der
+    /// Verlauf liegt dann unter `<dir>/history` statt im Datenordner des Benutzers,
+    /// damit ein Probelauf unter ~/Library (bzw. AppData) nichts hinterlässt. Vor dem
+    /// Laden des QML setzen; leer = Datenordner des Profils.
+    static void setDataDirOverride(const QString &dir);
 
     // --- Ruhezustand verhindern (QTMUX-89) ---------------------------------------
     /// Anwender-Schalter, **Vorgabe AUS**. Ist er an, hält QTmux das System wach,

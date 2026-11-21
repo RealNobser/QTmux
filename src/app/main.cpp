@@ -33,6 +33,7 @@
 #include "qtmux_version.h"   // generiert aus cmake/Version.h.in (PROJECT_VERSION)
 
 #include "AppController.h"
+#include "SessionModel.h"
 #include "AgentEventHub.h"
 #include "ShellIntegration.h"
 #include "ColorScheme.h"
@@ -342,6 +343,11 @@ int main(int argc, char *argv[])
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
                            updateSelfTestDir + QStringLiteral("/settings"));
+        // Ebenso der Verlauf der Sitzungen (der einzige Datenordner, den ein
+        // Selbsttest-Lauf beschreibt; gemessen): unter <ordner>/data, nie unter
+        // ~/Library bzw. AppData. Wächter: tst_updatequit
+        // aSelfTestLeavesNothingInTheUserDataFolder.
+        qtmux::SessionModel::setDataDirOverride(updateSelfTestDir + QStringLiteral("/data"));
     }
 #if defined(QTMUX_UPDATE_PICTURES)
     // Bildziel: Design und Sprache ins (eigene) Profil, BEVOR Theme und AppController
