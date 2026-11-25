@@ -653,3 +653,30 @@ add_test(NAME test_installer_self_update_contract_bites
         "-DMSI_SCRIPT=${qtmux_selfupdate_bad}/build-msi.ps1"
         "-DVERSION=${PROJECT_VERSION}" -DEXPECT_PROBLEMS=11
         -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckSelfUpdateBuild.cmake")
+
+# Build-ID im eingebetteten Helfer (Hub 0.8.1, MAC-132): update-swap bzw.
+# update-helper.exe trägt "<Präfix><QTMUX_BUILD_ID>" aus dem Kopf, den
+# qtmux_buildid bei jedem Bau nachführt — nicht „unknown“. Gegenprobe: derselbe
+# Wächter gegen den Kopf selbst als „Helfer“ (dort fehlt das Präfix) muss rot sein.
+if(APPLE)
+    set(_qtmux_helper "$<TARGET_BUNDLE_CONTENT_DIR:qtmux>/Helpers/update-swap")
+    set(_qtmux_helper_prefix "update-swap build ")
+elseif(WIN32)
+    set(_qtmux_helper "$<TARGET_FILE:update-helper>")
+    set(_qtmux_helper_prefix "update-helper build ")
+endif()
+if(DEFINED _qtmux_helper)
+    add_test(NAME test_update_helper_build_id
+        COMMAND ${CMAKE_COMMAND} "-DHELPER=${_qtmux_helper}"
+            "-DHEADER=${qtmux_buildid_header}" "-DPREFIX=${_qtmux_helper_prefix}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckHelperBuildId.cmake")
+    set_tests_properties(test_update_helper_build_id PROPERTIES
+        PASS_REGULAR_EXPRESSION "HELPER-BUILD-ID OK: "
+        FAIL_REGULAR_EXPRESSION "HELPER-BUILD-ID (FAIL|ERROR)")
+    add_test(NAME test_update_helper_build_id_bites
+        COMMAND ${CMAKE_COMMAND} "-DHELPER=${qtmux_buildid_header}"
+            "-DHEADER=${qtmux_buildid_header}" "-DPREFIX=${_qtmux_helper_prefix}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckHelperBuildId.cmake")
+    set_tests_properties(test_update_helper_build_id_bites PROPERTIES
+        PASS_REGULAR_EXPRESSION "HELPER-BUILD-ID FAIL: ")
+endif()

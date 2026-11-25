@@ -695,12 +695,20 @@ endif()
 # Linux braucht keinen. Ohne den Helfer bietet QTmux nur „von Hand“ an, und das
 # fiele bei einem Entwicklerbau nicht auf (dort greift zuerst ein anderer Grund).
 # Der Test vergleicht die eingebettete Kopie Byte für Byte mit dem gebauten Helfer.
+# BUILD_ID_*: Der Helfer trägt die Build-ID von QTmux (Hub 0.8.1, MAC-132), nicht
+# „unknown“. Der Kopf entsteht schon beim Konfigurieren (execute_process oben) und
+# wird vom Ziel qtmux_buildid bei jedem Bau nachgeführt; davon hängt der Helfer ab.
 include("${CMAKE_CURRENT_SOURCE_DIR}/third_party/updater/update/selfinstall-helpers.cmake")
+set(qtmux_helper_buildid
+    BUILD_ID_HEADER "${qtmux_buildid_header}"
+    BUILD_ID_MACRO QTMUX_BUILD_ID
+    BUILD_ID_DEPENDS qtmux_buildid)
 if(QTMUX_BUILD_TESTS)
     enable_testing()
-    appupdate_embed_install_helpers(qtmux CHECK_TEST test_update_helper_embedded)
+    appupdate_embed_install_helpers(qtmux CHECK_TEST test_update_helper_embedded
+        ${qtmux_helper_buildid})
 else()
-    appupdate_embed_install_helpers(qtmux)
+    appupdate_embed_install_helpers(qtmux ${qtmux_helper_buildid})
 endif()
 
 # Tests ----------------------------------------------------------------------
