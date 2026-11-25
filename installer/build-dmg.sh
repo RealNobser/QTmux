@@ -155,6 +155,28 @@ if [[ -z "$DMG_FAIL" ]] && ! cmake -DAPP="$DMG_MP/QTmux.app/Contents/MacOS/qtmux
         -P "$REPO/tests/CheckNoShowcase.cmake"; then
     DMG_FAIL="Die App im DMG enthält den Szenen-Baustein oder --update-picture (s. o.)."
 fi
+# macOS-Untergrenze am ausgelieferten Inhalt (tools/ci/dmg_minos.py, aus dem Hub
+# vendiert, Kontrakt 6): jedes eigene Mach-O (MacOS/, Helpers/, die zwei eigenen
+# Plugins) trägt genau die Untergrenze und NUR arm64 (Owner 2026-11-24: QTmux bleibt
+# bei Apple Silicon), jedes fremde (Qt, PCBUSB) verlangt höchstens sie, und die
+# Info.plist verspricht dieselbe. Der Wert kommt aus dem Bauordner und muss der
+# Quelle in CMakeLists.txt gleichen; ein Bauordner mit altem Cache-Eintrag ergäbe
+# sonst ein Release mit falscher Untergrenze, das gegen sich selbst grün misst.
+MIN_SOURCE="$(sed -n 's/^[[:space:]]*set(CMAKE_OSX_DEPLOYMENT_TARGET "\([0-9.]*\)" CACHE.*/\1/p' "$REPO/CMakeLists.txt" | head -1)"
+MIN_TARGET="$(sed -n 's/^CMAKE_OSX_DEPLOYMENT_TARGET:[A-Z]*=//p' "$BUILD_DIR/CMakeCache.txt" | head -1)"
+if [[ -z "$DMG_FAIL" ]]; then
+    if [[ -z "$MIN_SOURCE" || "$MIN_SOURCE" != "$MIN_TARGET" ]]; then
+        DMG_FAIL="Untergrenze im Bauordner '$MIN_TARGET' ≠ Quelle in CMakeLists.txt '$MIN_SOURCE'."
+    else
+        own=()
+        for p in "$DMG_MP/QTmux.app/Contents/PlugIns/"libqtmux_*.dylib; do
+            [[ -f "$p" ]] && own+=(--own "Contents/PlugIns/$(basename "$p")")
+        done
+        python3 -I "$REPO/tools/ci/dmg_minos.py" "$DMG_MP/QTmux.app" --expect "$MIN_TARGET" \
+                --archs arm64 ${own[@]+"${own[@]}"} \
+            || DMG_FAIL="macOS-Untergrenze bzw. Architektur im DMG falsch (dmg_minos.py, s. o.)."
+    fi
+fi
 "$REPO/installer/macos/dmg-image.sh" eject "$DMG_MP"
 rmdir "$DMG_MP"
 if [[ -n "$DMG_FAIL" ]]; then
@@ -162,7 +184,7 @@ if [[ -n "$DMG_FAIL" ]]; then
     echo "FEHLER: $DMG_FAIL DMG gelöscht." >&2
     exit 1
 fi
-echo "    Tauschhelfer im Bundle, kein Szenen-Baustein in der App."
+echo "    Tauschhelfer im Bundle, kein Szenen-Baustein in der App, Untergrenze macOS $MIN_TARGET (arm64)."
 DMG_CHECKED=1
 
 echo "Fertig: $DMG"

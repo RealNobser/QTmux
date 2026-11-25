@@ -573,6 +573,35 @@ if(NOT WIN32)
     endif()
 endif()
 
+# --- macOS-Untergrenze am Bau-Baum (Hub 0.8.1, MAC-131) ----------------------
+# Das Ziel steht vor project() in der obersten CMakeLists.txt; ob es beim Compiler
+# ankam, sagt nur die gebaute Datei: jede Scheibe von qtmux und des eingebetteten
+# update-swap muss genau dieses minos tragen, und die Info.plist des Bundles muss
+# dieselbe LSMinimumSystemVersion versprechen (1.10.0: minos 27.2, Eintrag leer).
+# tools/ci/macos_min_version.py ist aus dem Hub vendiert (Kontrakt 6 im
+# Sync-Wächter); --selftest baut Wegwerf-Binaries mit clang und prüft jedes Urteil.
+if(APPLE AND Python3_Interpreter_FOUND)
+    set(_qtmux_macos_min "${CMAKE_SOURCE_DIR}/tools/ci/macos_min_version.py")
+    add_test(NAME test_macos_min_version_selftest
+        COMMAND "${Python3_EXECUTABLE}" -I "${_qtmux_macos_min}" --selftest)
+    set_tests_properties(test_macos_min_version_selftest PROPERTIES
+        PASS_REGULAR_EXPRESSION "MACOS-MIN SELFTEST OK: 6/6 cases"
+        FAIL_REGULAR_EXPRESSION "MACOS-MIN (ERROR: selftest|SELFTEST WRONG)"
+        TIMEOUT 120)
+    add_test(NAME test_macos_min_version_app
+        COMMAND "${Python3_EXECUTABLE}" -I "${_qtmux_macos_min}" "$<TARGET_FILE:qtmux>"
+                --expect "${CMAKE_OSX_DEPLOYMENT_TARGET}"
+                --plist "$<TARGET_BUNDLE_CONTENT_DIR:qtmux>/Info.plist")
+    set_tests_properties(test_macos_min_version_app PROPERTIES
+        PASS_REGULAR_EXPRESSION "MACOS-MIN OK: " TIMEOUT 60)
+    add_test(NAME test_macos_min_version_swap_tool
+        COMMAND "${Python3_EXECUTABLE}" -I "${_qtmux_macos_min}"
+                "$<TARGET_BUNDLE_CONTENT_DIR:qtmux>/Helpers/update-swap"
+                --expect "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    set_tests_properties(test_macos_min_version_swap_tool PROPERTIES
+        PASS_REGULAR_EXPRESSION "MACOS-MIN OK: " TIMEOUT 60)
+endif()
+
 # --- Doku-Wächter (QTMUX-34) ------------------------------------------------
 # Findet doppelte Überschriften, wie sie entstehen, wenn beim Kompaktieren einer
 # langen Markdown-Datei ein Block eingefügt statt ersetzt wird. Reines CMake-Skript,

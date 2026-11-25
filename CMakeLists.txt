@@ -1,5 +1,25 @@
 cmake_minimum_required(VERSION 3.24)
 
+# macOS: die niedrigste Systemversion, auf der QTmux läuft — die EINE Stelle für
+# den Wert (Familienvorgabe 2026-11-24: 13.0; Muster MacPCAN docs/SHARED.md,
+# Konsumenten-Checkliste Punkt 10). Muss VOR project() stehen: Dort legt CMake
+# CMAKE_OSX_DEPLOYMENT_TARGET als leeren Cache-Eintrag an, und ein späteres
+# `set(... CACHE ...)` ohne FORCE wirkt nicht. Ohne diese Zeile trug jedes Release
+# still das SDK des Bau-Macs als Untergrenze (1.10.0: macOS 27.2), und Qts
+# Info.plist-Vorlage schrieb ein LEERES LSMinimumSystemVersion. Ein -D auf der
+# Kommandozeile gewinnt weiter; ein bestehender Bauordner mit leerem Eintrag
+# bekommt den Wert (FORCE nur bei leerem Eintrag). Die Info.plist liest dieselbe
+# Variable (Qts Vorlage macos/Info.plist.app.in). Wächter: ctest
+# test_macos_min_version (App, Info.plist, update-swap); am fertigen DMG prüft
+# installer/build-dmg.sh mit tools/ci/dmg_minos.py. Nur arm64 (Owner 2026-11-24):
+# CMAKE_OSX_ARCHITECTURES bleibt unbelegt, gebaut wird für den Bau-Mac.
+# ⚠️ Mit 13.0 übersetzt `std::to_chars` mit Gleitkomma nicht (erst ab 13.3), auch
+# nicht über std::format oder Testausgaben von chrono-Typen.
+if(CMAKE_HOST_APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING
+        "Lowest macOS QTmux runs on (Qt 6.10 itself needs 13.0)" FORCE)
+endif()
+
 project(QTmux
     VERSION 1.10.0
     DESCRIPTION "Cross-platform multi-AI-agent terminal manager"

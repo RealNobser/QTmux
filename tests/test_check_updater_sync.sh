@@ -28,7 +28,7 @@ trap 'chmod -R u+rwX "$root" 2>/dev/null; rm -rf "$root"' EXIT
 fehler=0
 faelle=0
 
-# Legt die Attrappe frisch an: identische Baeume in allen fuenf Kontrakten.
+# Legt die Attrappe frisch an: identische Baeume in allen sechs Kontrakten.
 attrappe() {
     rm -rf "$root/ws" && mkdir -p "$root/ws" || exit 2
     local q="$root/ws/QTmux" h="$root/ws/MacPCAN" d
@@ -62,6 +62,12 @@ attrappe() {
     for d in "$q/installer/macos" "$h/platform/macos"; do
         mkdir -p "$d" && printf '#!/bin/sh\necho sign\n' > "$d/sign-bundle.sh"
         printf '#!/bin/sh\necho dmg\n' > "$d/dmg-image.sh"
+    done
+    # Kontrakt 6: explizite Liste unter tools/ci/
+    for d in "$q/tools/ci" "$h/tools/ci"; do
+        mkdir -p "$d"
+        printf 'print("minos")\n' > "$d/dmg_minos.py"
+        printf 'print("min")\n' > "$d/macos_min_version.py"
     done
 }
 
@@ -106,6 +112,8 @@ fall "identisch, relativ aus Repo-Wurzel" 0 "macOS-Signatur, 1 Datei verglichen"
     lauf_in "$(Q)" MACPCAN_DIR=../MacPCAN --
 fall "identisch, Kontrakt 5 gemessen" 0 "macOS-DMG, 1 Datei verglichen" "WERKZEUGFEHLER" -- \
     lauf_in "$(Q)" --
+fall "identisch, Kontrakt 6 gemessen" 0 "macOS-Untergrenze, 2 Dateien verglichen" "WERKZEUGFEHLER" -- \
+    lauf_in "$(Q)" --
 
 # 3. Relativer MACPCAN_DIR aus einem ANDEREN Verzeichnis, mit Koeder-CDPATH
 mkdir -p "$root/koeder/MacPCAN/src/update"
@@ -133,7 +141,8 @@ fall "Standardort ohne Hub -> Banner" 0 "NICHTS GEPRUEFT" "byte-identisch" -- \
 # 7. Je Kontrakt eine verfaelschte Datei -> Abweichung
 for ziel in third_party/updater/update/Checker.hpp plugins/macpcan/vendor/core/Frame.hpp \
             installer/smoke/marker.txt installer/macos/sign-bundle.sh \
-            installer/macos/dmg-image.sh; do
+            installer/macos/dmg-image.sh tools/ci/dmg_minos.py \
+            tools/ci/macos_min_version.py; do
     attrappe
     printf 'verfaelscht\n' >> "$root/ws/QTmux/$ziel"
     fall "verfaelscht: $ziel" 1 "ABWEICHUNG" "byte-identisch" -- \
@@ -203,6 +212,21 @@ fall "--update uebernimmt dmg-image.sh" 0 "Dateien uebernommen" "" -- \
     lauf_in "$(Q)" -- --update
 fall "dmg-image.sh danach ausfuehrbar" 0 "^dmg$" "" -- \
     "$root/ws/QTmux/installer/macos/dmg-image.sh"
+
+# 16. Kontrakt 6: Hub ohne bzw. QTmux ohne eines der Untergrenzen-Skripte -> Drift;
+#     --update uebernimmt das fehlende, danach gruen mit 2 Dateien.
+attrappe
+rm "$root/ws/MacPCAN/tools/ci/dmg_minos.py"
+fall "Hub ohne dmg_minos.py -> Drift" 1 "MINOS NUR VENDIERT (upstream geloescht?): tools/ci/dmg_minos.py" "byte-identisch" -- \
+    lauf_in "$(Q)" --
+attrappe
+rm "$root/ws/QTmux/tools/ci/macos_min_version.py"
+fall "QTmux ohne macos_min_version.py -> Drift" 1 "MINOS FEHLT VENDIERT: *tools/ci/macos_min_version.py" "byte-identisch" -- \
+    lauf_in "$(Q)" --
+fall "--update uebernimmt macos_min_version.py" 0 "Dateien uebernommen" "" -- \
+    lauf_in "$(Q)" -- --update
+fall "danach Kontrakt 6 identisch" 0 "macOS-Untergrenze, 2 Dateien verglichen" "" -- \
+    lauf_in "$(Q)" --
 
 echo "----"
 echo "$((faelle - fehler))/$faelle Faelle bestanden"
