@@ -22,7 +22,7 @@ if(CMAKE_HOST_APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
 endif()
 
 project(QTmux
-    VERSION 1.10.0
+    VERSION 1.10.1
     DESCRIPTION "Cross-platform multi-AI-agent terminal manager"
     LANGUAGES C CXX)
 
