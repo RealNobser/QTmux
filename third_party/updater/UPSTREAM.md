@@ -154,7 +154,7 @@ eigener Parser lehnt so einen Pfad als **Fehler 1619** ab („Dieses
 Installationspaket konnte nicht geöffnet werden"), obwohl das MSI intakt ist.
 Der msi-Zweig zieht den Download-Pfad jetzt per `QDir::toNativeSeparators()`
 auf Backslashes — Argumente **und** description; dmg/appimage unverändert.
-Am echten msiexec auf RTZBLD01 bewiesen (Slash→Exit 1619, nativ→Exit 0).
+Am echten msiexec auf dem Windows-Bau-Rechner bewiesen (Slash→Exit 1619, nativ→Exit 0).
 Windows-Selbst-Update war damit seit der ersten Auslieferung tot.
 
 Mit dem vorigen Stand `58df9e4` (2026-08-07) kam die **Fehler-Klassifikation** herüber (MacPCAN `9952202`,
