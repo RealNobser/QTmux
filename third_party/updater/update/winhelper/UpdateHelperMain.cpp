@@ -173,8 +173,18 @@ void reportAndRestart(const Args& a, Outcome o)
 
 }  // namespace
 
+// The build id of the app this helper ships with, as in update_swap.c: handed
+// in by appupdate_embed_install_helpers(... BUILD_ID_HEADER ... BUILD_ID_MACRO
+// ...) as a forced include, "unknown" without. Read once below, so /OPT:REF
+// keeps it; nothing prints it.
+#ifndef APPUPDATE_HELPER_BUILD_ID
+#define APPUPDATE_HELPER_BUILD_ID "unknown"
+#endif
+static const char kHelperBuildId[] = "update-helper build " APPUPDATE_HELPER_BUILD_ID;
+
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
 {
+    (void)*static_cast<volatile const char*>(kHelperBuildId);
     // Every later DLL load only from System32 (the loads before main are
     // bound by /DEPENDENTLOADFLAG:0x800 at link time): the helper runs from a
     // copy, and nothing next to it may be loaded.

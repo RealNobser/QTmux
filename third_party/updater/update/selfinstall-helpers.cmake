@@ -2,7 +2,8 @@
 # and the one call that puts them into an app.
 #
 #   include(<this update folder>/selfinstall-helpers.cmake)
-#   appupdate_embed_install_helpers(<app target> [CHECK_TEST <test name>])
+#   appupdate_embed_install_helpers(<app target> [CHECK_TEST <test name>]
+#       [BUILD_ID_HEADER <header> BUILD_ID_MACRO <macro> [BUILD_ID_DEPENDS <target>]])
 #
 # CANONICAL: consumers that vendor this folder include this file themselves;
 # a consumer that adds the hub with add_subdirectory (also EXCLUDE_FROM_ALL)
@@ -27,9 +28,22 @@
 #     macOS <app>.app/Contents/Helpers/update-swap, Windows update-helper.exe
 #     next to the app's exe (the MSI must carry it there as well);
 #   - CHECK_TEST <name> adds a test that compares the embedded copy with the
-#     built helper byte for byte (it fails when the copy is missing). Where
-#     both are the same file (Windows, when the app and the helper are built
-#     into one folder) it only proves the helper is there;
+#     built helper byte for byte (it fails when the copy is missing). Testing
+#     must be enabled for the calling directory by the end of it
+#     (enable_testing() there, later in the same file, or in a parent BEFORE
+#     add_subdirectory); otherwise CMake drops the test without a word, and
+#     the configure step stops instead (checked at the end of the directory).
+#     Where both are the same file (Windows, when the app and the helper are
+#     built into one folder) it only proves the helper is there;
+#   - BUILD_ID_HEADER/BUILD_ID_MACRO give the helper the APP's build id: the
+#     header (the one the app's own build-id step writes, with
+#     `#define <macro> "<version>+<hash>[-dirty]"`) is included first into the
+#     helper's source (a forced include), and APPUPDATE_HELPER_BUILD_ID is
+#     defined as <macro>; BUILD_ID_DEPENDS names the target that refreshes the
+#     header, so the helper is rebuilt with every new commit. The id belongs to
+#     the app's tree, not to the folder this file lies in (a submodule has its
+#     own hash). One helper per build: a second app with another header stops
+#     the configure step. Without the options the helper says "unknown";
 #   - anything missing stops the configure step with FATAL_ERROR.
 # Without the helper the app still runs, but offers only "install by hand"
 # (HelperUnavailable) — easy to miss, because on a developer build another
@@ -86,8 +100,19 @@ if(WIN32 AND NOT TARGET update-helper)
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
+# Runs at the end of the directory that asked for a CHECK_TEST (deferred):
+# only then is it known whether enable_testing() came later in that file.
+function(_appupdate_require_testing app test)
+    if(NOT CMAKE_TESTING_ENABLED)
+        message(FATAL_ERROR
+            "appupdate_embed_install_helpers(${app} CHECK_TEST ${test}): testing is not enabled for "
+            "${CMAKE_CURRENT_SOURCE_DIR}, so CMake would drop the test silently. Call enable_testing() "
+            "in this directory (or in a parent before add_subdirectory), or leave CHECK_TEST out.")
+    endif()
+endfunction()
+
 function(appupdate_embed_install_helpers app)
-    cmake_parse_arguments(PARSE_ARGV 1 _ai "" "CHECK_TEST" "")
+    cmake_parse_arguments(PARSE_ARGV 1 _ai "" "CHECK_TEST;BUILD_ID_HEADER;BUILD_ID_MACRO;BUILD_ID_DEPENDS" "")
     if(_ai_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR
             "appupdate_embed_install_helpers(${app}): unknown arguments '${_ai_UNPARSED_ARGUMENTS}'")
@@ -112,6 +137,13 @@ function(appupdate_embed_install_helpers app)
         set(_helper update-swap)
         set(_dest "$<TARGET_BUNDLE_CONTENT_DIR:${app}>/Helpers/update-swap")
         add_dependencies(${app} update-swap)
+        # A dependency on the FILE, not only on the order: without it a build
+        # in which only update-swap changed does not link the app again, the
+        # POST_BUILD copy below does not run, and the bundle keeps the old
+        # helper (measured 2026-11-24; the hub's CHECK_TEST caught it, a
+        # consumer without one would ship it). LINK_DEPENDS makes the app link
+        # again whenever the helper is newer — rare, and then necessary.
+        set_property(TARGET ${app} APPEND PROPERTY LINK_DEPENDS "$<TARGET_FILE:update-swap>")
         add_custom_command(TARGET ${app} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:${app}>/Helpers"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:update-swap>" "${_dest}"
@@ -135,7 +167,49 @@ function(appupdate_embed_install_helpers app)
         return()
     endif()
 
+    if(_ai_BUILD_ID_HEADER OR _ai_BUILD_ID_MACRO OR _ai_BUILD_ID_DEPENDS)
+        if(NOT _ai_BUILD_ID_HEADER OR NOT _ai_BUILD_ID_MACRO)
+            message(FATAL_ERROR
+                "appupdate_embed_install_helpers(${app}): BUILD_ID_HEADER and BUILD_ID_MACRO go together")
+        endif()
+        if(NOT IS_ABSOLUTE "${_ai_BUILD_ID_HEADER}" OR NOT EXISTS "${_ai_BUILD_ID_HEADER}")
+            message(FATAL_ERROR
+                "appupdate_embed_install_helpers(${app}): BUILD_ID_HEADER '${_ai_BUILD_ID_HEADER}' is no "
+                "existing absolute path (the build-id step must write it at configure time)")
+        endif()
+        if(NOT _ai_BUILD_ID_MACRO MATCHES "^[A-Za-z_][A-Za-z0-9_]*$")
+            message(FATAL_ERROR
+                "appupdate_embed_install_helpers(${app}): BUILD_ID_MACRO '${_ai_BUILD_ID_MACRO}' is no macro name")
+        endif()
+        get_property(_prev GLOBAL PROPERTY APPUPDATE_HELPER_BUILD_ID_HEADER)
+        if(_prev AND NOT _prev STREQUAL _ai_BUILD_ID_HEADER)
+            message(FATAL_ERROR
+                "appupdate_embed_install_helpers(${app}): the helper ${_helper} already carries the build id of "
+                "'${_prev}'; one helper per build cannot carry two")
+        endif()
+        if(NOT _prev)
+            set_property(GLOBAL PROPERTY APPUPDATE_HELPER_BUILD_ID_HEADER "${_ai_BUILD_ID_HEADER}")
+            if(MSVC)
+                target_compile_options(${_helper} PRIVATE "/FI${_ai_BUILD_ID_HEADER}")
+            else()
+                target_compile_options(${_helper} PRIVATE "SHELL:-include \"${_ai_BUILD_ID_HEADER}\"")
+            endif()
+            target_compile_definitions(${_helper} PRIVATE "APPUPDATE_HELPER_BUILD_ID=${_ai_BUILD_ID_MACRO}")
+            if(_ai_BUILD_ID_DEPENDS)
+                if(NOT TARGET ${_ai_BUILD_ID_DEPENDS})
+                    message(FATAL_ERROR
+                        "appupdate_embed_install_helpers(${app}): BUILD_ID_DEPENDS '${_ai_BUILD_ID_DEPENDS}' is not a target")
+                endif()
+                add_dependencies(${_helper} ${_ai_BUILD_ID_DEPENDS})
+            endif()
+        endif()
+    endif()
+
     if(_ai_CHECK_TEST)
+        # The values are baked in now: a deferred call evaluates its
+        # arguments only when it runs, where these variables do not exist.
+        cmake_language(EVAL CODE
+            "cmake_language(DEFER CALL _appupdate_require_testing [==[${app}]==] [==[${_ai_CHECK_TEST}]==])")
         add_test(NAME ${_ai_CHECK_TEST}
             COMMAND ${CMAKE_COMMAND} -E compare_files "${_dest}" "$<TARGET_FILE:${_helper}>")
         set_tests_properties(${_ai_CHECK_TEST} PROPERTIES TIMEOUT 30)

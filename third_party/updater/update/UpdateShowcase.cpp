@@ -617,7 +617,7 @@ bool UpdateShowcase::enter(const QString& scene, std::function<void(bool)> done)
         makeFlow(installed);
         appupdate::ProxyConfig pc;
         pc.mode = appupdate::ProxyConfig::Mode::Manual;
-        pc.host = QStringLiteral("localhost");
+        pc.host = QStringLiteral("127.0.0.1");  // where the proxy listens (header)
         pc.port = proxy->port();
         pc.user = QStringLiteral("example-user");
         m_flow->setProxyConfig(pc);

@@ -23,8 +23,11 @@
 //     UpdateSettings, exactly as the flow itself writes it.
 //
 // No picture may show internal paths, machine or person names: the only
-// names here are the product's and the neutral sample user "example-user";
-// hostnames are "localhost" / 127.0.0.1.
+// names here are the product's and the neutral sample user "example-user".
+// Every server and proxy address is the literal 127.0.0.1 the scene servers
+// listen on, never a host name: a name may resolve to the IPv6 loopback
+// first, where nothing listens (a hosted macOS runner never reached scene 15
+// that way). Guard: UpdateShowcaseCore.TheSourcesNameNoHostThatCouldMeanIPv6.
 
 #include "update/UpdateFlow.hpp"
 

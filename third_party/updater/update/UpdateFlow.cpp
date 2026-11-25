@@ -1067,7 +1067,15 @@ void UpdateFlow::writeConfirmationNow()
 void UpdateFlow::evaluatePendingInstall()
 {
     const PendingInstall p = m_settings.pendingInstall();
-    if (!p.isValid()) return;
+    if (!p.isValid()) {
+        // Nothing pending: leftovers of an attempt that ended half way are
+        // still possible (an ended disk-image attach, a crash during
+        // prepare). Later, like the cleanup after an install.
+        QTimer::singleShot(m_cleanupDelayMs, this, [this] {
+            if (m_backend) m_backend->cleanupLeftovers(installContext(QString()));
+        });
+        return;
+    }
     const QVersionNumber running = QVersionNumber::fromString(m_cfg.version);
     const bool isNew = QVersionNumber::compare(running, QVersionNumber::fromString(p.toVersion)) == 0;
     const bool isOld = QVersionNumber::compare(running, QVersionNumber::fromString(p.fromVersion)) == 0;

@@ -9,6 +9,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QLoggingCategory>
 #include <QMetaObject>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -44,6 +45,8 @@
 namespace appupdate {
 
 namespace {
+
+Q_LOGGING_CATEGORY(lcSelfInstallMac, "appupdate.selfinstall")
 
 // ---- small CF helpers ------------------------------------------------------
 
@@ -170,6 +173,7 @@ bool satisfiesRequirement(const QString& bundle, const QString& requirement, QSt
 
 struct ToolResult {
     bool ok = false;
+    bool aborted = false;  // ended by us: deadline or cancel
     int exitCode = -1;
     QString output;
 };
@@ -178,15 +182,23 @@ struct ToolResult {
 // "Details"; a plist that is parsed needs its whole text (`hdiutil info`
 // grows with every attached image — cut at 2000 characters, the disk-image
 // check went blind as soon as a second image was attached; measured).
+// `stdoutOnly`: stderr goes nowhere, the output is stdout alone - for a plist
+// that is parsed (one stderr line in front of it, e.g. a deprecation note,
+// and the parser sees no plist at all).
 ToolResult runTool(const QString& program, const QStringList& args, int timeoutMs,
-                   const std::atomic<bool>* cancel, int maxOutput = 2000)
+                   const std::atomic<bool>* cancel, int maxOutput = 2000, bool stdoutOnly = false)
 {
     ToolResult r;
     QProcess p;
     p.setProgram(program);
     p.setArguments(args);
     p.setStandardInputFile(QProcess::nullDevice());
-    p.setProcessChannelMode(QProcess::MergedChannels);
+    if (stdoutOnly) {
+        p.setProcessChannelMode(QProcess::SeparateChannels);
+        p.setStandardErrorFile(QProcess::nullDevice());
+    } else {
+        p.setProcessChannelMode(QProcess::MergedChannels);
+    }
     QProcessEnvironment env;
     env.insert(QStringLiteral("PATH"), QStringLiteral("/usr/bin:/bin:/usr/sbin:/sbin"));
     env.insert(QStringLiteral("LC_ALL"), QStringLiteral("C"));
@@ -203,12 +215,13 @@ ToolResult runTool(const QString& program, const QStringList& args, int timeoutM
         if ((cancel && cancel->load()) || t.elapsed() > timeoutMs) {
             p.kill();
             p.waitForFinished(2000);
+            r.aborted = true;
             r.output = (cancel && cancel->load()) ? QStringLiteral("cancelled")
                                                   : QStringLiteral("%1 timed out").arg(program);
             return r;
         }
     }
-    r.output = QString::fromLocal8Bit(p.readAll()).left(maxOutput);
+    r.output = QString::fromLocal8Bit(stdoutOnly ? p.readAllStandardOutput() : p.readAll()).left(maxOutput);
     r.exitCode = p.exitCode();
     r.ok = p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
     return r;
@@ -226,9 +239,14 @@ struct AttachedImage {
 QList<AttachedImage> attachedImages(bool* ok = nullptr)
 {
     const ToolResult r = runTool(QStringLiteral("/usr/bin/hdiutil"),
-                                 {QStringLiteral("info"), QStringLiteral("-plist")}, 15000, nullptr, 1 << 20);
+                                 {QStringLiteral("info"), QStringLiteral("-plist")}, 15000, nullptr, 1 << 20,
+                                 /*stdoutOnly=*/true);
     QList<AttachedImage> out;
-    if (ok) *ok = r.ok;
+    // "ok" only for a list that was really read: a run that failed, or an
+    // output that is no plist with an "images" array, is NOT "nothing
+    // attached" (until 0.8.0 a stderr line in front of the plist made every
+    // detach and cleanup quietly do nothing).
+    if (ok) *ok = false;
     if (!r.ok) return out;
     const QByteArray bytes = r.output.toUtf8();
     CfRef<CFDataRef> data(CFDataCreate(kCFAllocatorDefault,
@@ -239,6 +257,7 @@ QList<AttachedImage> attachedImages(bool* ok = nullptr)
     const auto images = static_cast<CFArrayRef>(
         CFDictionaryGetValue(static_cast<CFDictionaryRef>(pl.ref), CFSTR("images")));
     if (!images || CFGetTypeID(images) != CFArrayGetTypeID()) return out;
+    if (ok) *ok = true;
     for (CFIndex i = 0; i < CFArrayGetCount(images); ++i) {
         const auto img = static_cast<CFDictionaryRef>(CFArrayGetValueAtIndex(images, i));
         if (!img || CFGetTypeID(img) != CFDictionaryGetTypeID()) continue;
@@ -381,6 +400,7 @@ struct Staging {
     QString staged;      // the copied bundle next to the target
     QString copyDir;     // our 0700 folder next to the target that ditto writes into
     QString swapDir;     // our 0700 folder with the checked copy of update-swap
+    bool attachEnded = false;  // `hdiutil attach` was ended by us (deadline, cancel)
 };
 
 void detachAndRemove(const QString& mountPoint)
@@ -571,12 +591,23 @@ PrepareResult prepareWork(const InstallOrder& order, const SelfInstallFacts& fac
         QStringLiteral("/usr/bin/hdiutil"),
         {QStringLiteral("attach"), QStringLiteral("-readonly"), QStringLiteral("-nobrowse"),
          QStringLiteral("-noautoopen"), QStringLiteral("-mountpoint"), staging->mountPoint, image},
-        90000, &cancel);
+        order.context.tuning.diskImageAttachTimeoutMs, &cancel);
     if (!attach.ok) {
         detachImageFile(image);  // an attach ended half way can leave the device attached
         QDir().rmdir(staging->mountPoint);
         staging->mountPoint.clear();
         res.error = QStringLiteral("cannot mount the disk image: %1").arg(attach.output.simplified());
+        if (attach.aborted) {
+            // Ending hdiutil ends only the client; the disk image service may
+            // still finish attaching. The worker detaches once more later.
+            staging->attachEnded = true;
+            res.error += QStringLiteral(" (attach ended; the private copy is detached again in %1 s and "
+                                        "on the next start)")
+                             .arg(order.context.tuning.diskImageReDetachDelayMs / 1000);
+            qCWarning(lcSelfInstallMac).noquote()
+                << "hdiutil attach was ended (" << attach.output << ") for" << image
+                << "- detached now, again in" << order.context.tuning.diskImageReDetachDelayMs << "ms";
+        }
         return res;
     }
 
@@ -751,9 +782,19 @@ void discardPrepared(const PreparedInstall& p, MacBackendShared* shared = nullpt
     if (shared) shared->release(p);
 }
 
-// The whole of cleanupAfterStart(), on a worker thread (hdiutil and codesign
-// may take seconds each; the GUI thread must not wait for them).
-void cleanupWork(const InstallContext& requested, MacBackendShared& shared)
+// Which start asks: after a judged install (a pending marker), or any other
+// start (cleanupLeftovers). The second may run while ANOTHER instance of the
+// same app holds a prepared install - "held" knows only this process. So it
+// leaves the two things such an install owns until it launches: the staged
+// bundle next to the target and the private copy of the swap program (a Ready
+// install may wait for hours). Images, mount points and copy folders live only
+// during a prepare (deadline kPrepareDeadlineMs, far below the 10-min age), so
+// both scopes clean them.
+enum class CleanupScope { AfterInstall, Leftovers };
+
+// The whole of cleanupAfterStart()/cleanupLeftovers(), on a worker thread
+// (hdiutil and codesign may take seconds each; the GUI thread must not wait).
+void cleanupWork(const InstallContext& requested, MacBackendShared& shared, CleanupScope scope)
 {
     if (requested.appLocation.isEmpty()) return;
     const InstallContext context = resolvedContext(requested);
@@ -767,6 +808,33 @@ void cleanupWork(const InstallContext& requested, MacBackendShared& shared)
     // running prepare.
     if (!temp.isEmpty()) {
         const QString dmgPrefix = slug + QStringLiteral("-update-dmg-");
+        // A private copy that is still attached although its folder is gone:
+        // an attach that we ended and that the disk image service finished
+        // afterwards (after the worker had removed the folder). No folder,
+        // no prepare that still runs - detach by device. Found nowhere else:
+        // the loops below start from folders.
+        {
+            bool listOk = false;
+            const QList<AttachedImage> all = attachedImages(&listOk);
+            if (!listOk)
+                qCWarning(lcSelfInstallMac) << "cleanup: the list of attached disk images could not be read";
+            for (const AttachedImage& a : all) {
+                if (shared.stopCleanup.load()) return;
+                const QFileInfo image(a.imagePath);
+                const QFileInfo folder(image.absolutePath());
+                const bool ours = image.fileName() == QLatin1String("update.dmg") &&
+                                  folder.fileName().startsWith(dmgPrefix) &&
+                                  QDir::cleanPath(folder.absolutePath()) == temp;
+                if (!ours || folder.exists() || folder.isSymLink() ||
+                    !a.wholeDisk.startsWith(QLatin1String("/dev/disk")))
+                    continue;
+                qCWarning(lcSelfInstallMac).noquote()
+                    << "cleanup: detaching an orphaned private copy" << a.imagePath << "at" << a.wholeDisk;
+                runTool(QStringLiteral("/usr/bin/hdiutil"),
+                        {QStringLiteral("detach"), a.wholeDisk, QStringLiteral("-force"), QStringLiteral("-quiet")},
+                        60000, nullptr);
+            }
+        }
         // The private copy of an image: detach it first (it may still be
         // attached), then the folder.
         for (const QFileInfo& fi : QDir(temp).entryInfoList({dmgPrefix + QLatin1Char('*')},
@@ -810,7 +878,9 @@ void cleanupWork(const InstallContext& requested, MacBackendShared& shared)
         // Private copies of the swap program: only old ones and none this
         // backend still holds. A helper that is still waiting for the
         // confirmation may need its copy for the way back; it removes it
-        // itself when it ends.
+        // itself when it ends. Not on a start without a marker: another
+        // instance's prepared install may own it (scope above).
+        if (scope == CleanupScope::AfterInstall)
         for (const QFileInfo& fi : QDir(temp).entryInfoList({slug + QStringLiteral("-update-swap-*")},
                                                             QDir::Dirs | QDir::NoDotAndDotDot)) {
             const QString dir = QDir::cleanPath(fi.absoluteFilePath());
@@ -833,6 +903,9 @@ void cleanupWork(const InstallContext& requested, MacBackendShared& shared)
             posixhelper::removeTreeNoFollow(QDir::cleanPath(fi.absoluteFilePath()));
         }
     }
+    // Not on a start without a marker: a staged bundle may be another
+    // instance's prepared install (scope above).
+    if (scope == CleanupScope::Leftovers) return;
     // After a swap the OLD bundle sits under a staging name until the new
     // one confirmed; staging names go only when what stands at the target
     // passes the check (signature + the running requirement) - a helper
@@ -931,6 +1004,24 @@ public:
                 }
                 done(res);
             }, Qt::QueuedConnection);
+            // An attach that we ended may still be finished by the disk image
+            // service after the detach above (the private copy is gone by
+            // now; hdiutil still names it by its path). Once more, later -
+            // at once when the backend goes away, never not at all.
+            if (staging.attachEnded && !staging.image.isEmpty()) {
+                QElapsedTimer waited;
+                waited.start();
+                while (waited.elapsed() < order.context.tuning.diskImageReDetachDelayMs && !shared->stopCleanup.load())
+                    QThread::msleep(50);
+                bool listed = false;
+                const QString want = QDir::cleanPath(staging.image);
+                for (const AttachedImage& a : attachedImages())
+                    listed = listed || a.imagePath == want;
+                detachImageFile(staging.image);
+                qCWarning(lcSelfInstallMac).noquote()
+                    << "detached again after the ended attach:" << staging.image
+                    << (listed ? "(it WAS attached again)" : "(nothing attached)");
+            }
         });
         QObject::connect(worker, &QThread::finished, worker, &QObject::deleteLater);
         addWorker(worker);
@@ -981,16 +1072,25 @@ public:
         discardPrepared(prepared, shared_.get());
     }
 
+    // A start without a pending install: the same work minus what another
+    // instance's prepared install may own (CleanupScope).
+    void cleanupLeftovers(const InstallContext& requested) override { startCleanup(requested, CleanupScope::Leftovers); }
+
     // Asynchronous: hdiutil and codesign may take seconds each. The worker
     // is waited for like a prepare() when the backend goes away.
     void cleanupAfterStart(const InstallContext& requested) override
     {
+        startCleanup(requested, CleanupScope::AfterInstall);
+    }
+
+    void startCleanup(const InstallContext& requested, CleanupScope scope)
+    {
         auto shared = shared_;
         auto finished = hooks_.cleanupFinishedForTests;
-        QThread* worker = QThread::create([requested, shared, finished]() {
+        QThread* worker = QThread::create([requested, shared, finished, scope]() {
             {
                 const std::lock_guard<std::timed_mutex> lock(shared->work);
-                cleanupWork(requested, *shared);
+                cleanupWork(requested, *shared, scope);
             }
             if (finished) finished();
         });

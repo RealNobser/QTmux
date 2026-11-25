@@ -9,11 +9,24 @@ Vendoring-Weg — dasselbe Muster wie bei `third_party/libvterm`.
 | | |
 |---|---|
 | Repository | `MacPCAN` (privat; abgeglichen gegen einen Checkout neben QTmux bzw. `MACPCAN_DIR`) |
-| Commit | `9533474314c802aa0c4bdc522f63de84ccd8da3c` (MacPCAN 0.8.0) |
-| Datum | 2026-11-21 |
-| Betreff | `Version 0.8.0 (Update-Vertrag V2, Selbst-Ersetzen, Einstellungen wirken sofort)` |
+| Commit | `8d060c3231c3edf798739ee27986e45b58ca8b87` (MacPCAN 0.8.1, Tag `v0.8.1`) |
+| Datum | 2026-11-25 |
+| Betreff | `Version 0.8.1 (macOS-Untergrenze 13.0, Haertungen des Selbst-Ersetzens)` |
 
-Pin 2026-11-21 auf den Versions-Commit von MacPCAN 0.8.0. Er folgt direkt auf `d63de9a` und
+Pin 2026-11-25 auf den Versions-Commit von MacPCAN 0.8.1 (QTmux 1.10.1). `git log
+9533474..8d060c3 -- src/update/` nennt **5** Commits (`faff4a6`, `9172074`, `7831b72`,
+`a1d5e1b`, `ee54c66`); keine neue Datei, geändert sind acht: `InstallBackend.hpp` (Aufräumen
+alter Reste auch beim normalen Start, `CleanupScope`), `SelfInstallMac.cpp`, `UpdateFlow.cpp`,
+`UpdateShowcase.{hpp,cpp}` (Szene 15 nimmt 127.0.0.1), `selfinstall-helpers.cmake`
+(`BUILD_ID_HEADER`/`BUILD_ID_MACRO`/`BUILD_ID_DEPENDS`, `LINK_DEPENDS` auf `update-swap`,
+`CHECK_TEST` verlangt Testing im aufrufenden Verzeichnis), `swaptool/update_swap.c` und
+`winhelper/UpdateHelperMain.cpp` (Build-ID der App im Helfer). Dazu Kontrakt 4:
+`sign-bundle.sh` verlangt jetzt `Contents/Helpers/update-swap` (sonst `--no-swap-tool`).
+Gemessen gegen einen Export von `8d060c3` (`src`, `platform`): vorher Exit 1 mit 9
+Abweichungen, nach `--update` Exit 0 mit 46/8/5/1/1 verglichenen Dateien; `git ls-tree -r
+8d060c3 src/update/` gegen `git hash-object` der vendierten Dateien blob-gleich (46/46).
+
+Davor: Pin 2026-11-21 auf den Versions-Commit von MacPCAN 0.8.0 (`9533474`). Er folgt direkt auf `d63de9a` und
 ändert nur `CMakeLists.txt` (Versionszeile) und `docs/HISTORY.md`; `git diff --quiet d63de9a
 9533474 -- src/update platform/windows platform/macos src/core src/drivers` Exit 0. Abgleich
 gegen einen Worktree auf `9533474` ohne `--update`: Exit 0 mit 46/8/5/1/1 verglichenen Dateien,

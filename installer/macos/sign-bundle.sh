@@ -43,8 +43,15 @@
 #
 # Aufruf:
 #   sign-bundle.sh [--entitlements <pfad-im-bundle>=<plist>]... \
-#                  [--app-entitlements <plist>] <Bundle.app>
+#                  [--app-entitlements <plist>] [--no-swap-tool] <Bundle.app>
 #   z. B. --entitlements Contents/PlugIns/EmbyThumbnail.appex=quicklook/x.entitlements
+#
+# Das Tauschprogramm der Selbst-Installation (Contents/Helpers/update-swap)
+# ist PFLICHT (seit 0.8.1, MAC-134): Fehlt es, bricht das Skript ab, statt nur
+# zu warnen — ein Release ohne es sähe grün aus und könnte sich nie selbst
+# ersetzen. Ein Bundle ohne Selbst-Installation (z. B. RAFTNGs PCM-Werkzeuge)
+# sagt das ausdrücklich mit --no-swap-tool; liegt dann doch eines bei, ist das
+# ebenfalls ein Fehler (der Aufruf widerspricht dem Bundle).
 #
 # Umgebung:
 #   FAMILY_CODESIGN           auto (Vorgabe) | require | adhoc
@@ -64,6 +71,7 @@ KC="${FAMILY_CODESIGN_KEYCHAIN:-$DIR/family-codesign.keychain-db}"
 PWFILE="${FAMILY_CODESIGN_PWFILE:-$DIR/keychain.pw}"
 WANT_ID="${FAMILY_CODESIGN_IDENTITY:-}"
 
+NO_SWAP=0
 ENT_PATHS=()   # bash 3.2 (macOS /bin/bash) kennt keine assoziativen Arrays
 ENT_FILES=()
 APP_ENT=""
@@ -74,6 +82,7 @@ while [[ $# -gt 0 ]]; do
             [[ "${2:-}" == *=* ]] || { echo "FEHLER: --entitlements <pfad>=<plist>" >&2; exit 2; }
             ENT_PATHS+=("${2%%=*}"); ENT_FILES+=("${2#*=}"); shift 2 ;;
         --app-entitlements) APP_ENT="${2:-}"; shift 2 ;;
+        --no-swap-tool) NO_SWAP=1; shift ;;
         -*) echo "FEHLER: unbekannte Option $1" >&2; exit 2 ;;
         *)  [[ -z "$APP" ]] || { echo "FEHLER: nur EIN Bundle je Aufruf" >&2; exit 2; }
             APP="$1"; shift ;;
@@ -86,6 +95,24 @@ APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/
 for f in ${ENT_FILES[@]+"${ENT_FILES[@]}"} ${APP_ENT:+"$APP_ENT"}; do
     [[ -f "$f" ]] || { echo "FEHLER: Entitlements-Datei fehlt: $f" >&2; exit 2; }
 done
+# update-swap vor jeder Signatur prüfen (ein Abbruch nach halber Signatur
+# ließe ein halb signiertes Bundle zurück). Muss eine echte Mach-O-Datei sein:
+# eine leere oder fremde Datei würde unten still nicht signiert und erst die
+# Identifier-Prüfung mit irreführendem Text scheitern lassen.
+SWAP_PRE="$APP/Contents/Helpers/update-swap"
+if [[ "$NO_SWAP" = 1 ]]; then
+    [[ ! -e "$SWAP_PRE" && ! -L "$SWAP_PRE" ]] || {
+        echo "FEHLER: --no-swap-tool, aber $SWAP_PRE liegt im Bundle." >&2; exit 2; }
+else
+    [[ -f "$SWAP_PRE" && ! -L "$SWAP_PRE" ]] || {
+        echo "FEHLER: Contents/Helpers/update-swap fehlt im Bundle — die App könnte sich nicht selbst ersetzen." >&2
+        echo "        (appupdate_embed_install_helpers im CMake des Produkts; ein Bundle ohne Selbst-Installation ruft mit --no-swap-tool.)" >&2
+        exit 1; }
+    case "$(head -c4 "$SWAP_PRE" 2>/dev/null | xxd -p)" in
+        feedface|feedfacf|cefaedfe|cffaedfe|cafebabe|bebafeca) ;;
+        *) echo "FEHLER: Contents/Helpers/update-swap ist keine Mach-O-Datei." >&2; exit 1 ;;
+    esac
+fi
 case "$MODE" in auto|require|adhoc) ;; *)
     echo "FEHLER: FAMILY_CODESIGN='$MODE' (erlaubt: auto|require|adhoc)" >&2; exit 2 ;;
 esac
@@ -301,7 +328,8 @@ if [[ -e "$SWAP" ]]; then
     fi
     echo "    update-swap: Identifier $swap_id"
 else
-    echo "    WARNUNG: kein Contents/Helpers/update-swap im Bundle — die App kann sich nicht selbst ersetzen." >&2
+    # Nur noch mit --no-swap-tool erreichbar (oben geprüft).
+    echo "    update-swap: keines (--no-swap-tool, Bundle ohne Selbst-Installation)"
 fi
 
 # Ad-hoc druckt die (implizite) Requirement als Kommentar: „# designated => cdhash …".

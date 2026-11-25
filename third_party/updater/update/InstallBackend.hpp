@@ -105,8 +105,16 @@ inline constexpr int kHelperWaitExitMs = 120'000;
 inline constexpr int kStartConfirmTimeoutMs = 60'000;
 // The flow gives prepare() this long; then cancelPrepare() and InstallFailed.
 inline constexpr int kPrepareDeadlineMs = 120'000;
-// The flow calls cleanupAfterStart() this long after start().
+// The flow calls cleanupAfterStart() (after an install) or cleanupLeftovers()
+// (on every other start) this long after start().
 inline constexpr int kCleanupDelayMs = 10'000;
+// macOS: how long prepare() lets `hdiutil attach` run before it ends it.
+inline constexpr int kDiskImageAttachTimeoutMs = 90'000;
+// macOS: an attach that was ended (deadline, cancel) only ends the hdiutil
+// client; the disk image service may still finish attaching afterwards. The
+// private copy is then detached once more, this long later (and again by the
+// cleanup of the next start).
+inline constexpr int kDiskImageReDetachDelayMs = 10'000;
 // When the OLD version runs after an Automatic install and the result file
 // is missing or unreadable, the flow reads it again for this long before it
 // judges - and then a missing result is "unknown", never "failed". The helper
@@ -196,6 +204,9 @@ struct InstallTuning {
     QString runningRequirementForTests;
     // Where prepare() stages; empty = next to the target (same volume).
     QString stagingDirForTests;
+    // macOS: kDiskImageAttachTimeoutMs and kDiskImageReDetachDelayMs.
+    int diskImageAttachTimeoutMs = kDiskImageAttachTimeoutMs;
+    int diskImageReDetachDelayMs = kDiskImageReDetachDelayMs;
 };
 
 // What the backend needs to know about the running app. The flow fills it
@@ -307,6 +318,12 @@ public:
 
     // Leftovers of an earlier attempt. Default: nothing to do.
     virtual void cleanupAfterStart(const InstallContext& context) { Q_UNUSED(context); }
+    // The same on a start WITHOUT a pending install (no marker), delayed
+    // like cleanupAfterStart(): what an attempt that ended half way left
+    // behind (macOS: a private copy of the disk image that stayed attached
+    // after an ended attach, or a crash during prepare). Default: nothing to
+    // do - a backend opts in (today only macOS).
+    virtual void cleanupLeftovers(const InstallContext& context) { Q_UNUSED(context); }
 };
 
 // The stage-1 backend: today's mechanics behind the new seam. dmg → `open`,

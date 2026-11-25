@@ -240,8 +240,22 @@ static int checkRunning(const char* pidText, const char* target, const char* req
 }
 #endif
 
+/* The build id of the app this helper ships with ("<version>+<hash>",
+ * "-dirty" for an uncommitted tree), the same string the app carries, so a
+ * tool can tell which build a helper in a package came from. The app's build
+ * hands it in: appupdate_embed_install_helpers(... BUILD_ID_HEADER <header>
+ * BUILD_ID_MACRO <name>) includes that header first (a forced include, no
+ * #include here) and defines APPUPDATE_HELPER_BUILD_ID as <name>. Without it:
+ * "unknown". Kept in the binary on purpose (used, and read once in main);
+ * nothing prints it - the helper takes no other options. */
+#ifndef APPUPDATE_HELPER_BUILD_ID
+#define APPUPDATE_HELPER_BUILD_ID "unknown"
+#endif
+__attribute__((used)) static const char kHelperBuildId[] = "update-swap build " APPUPDATE_HELPER_BUILD_ID;
+
 int main(int argc, char** argv)
 {
+    (void)*(volatile const char*)kHelperBuildId;
 #if defined(__APPLE__)
     if (argc == 6 && strcmp(argv[1], "--check-running") == 0) return checkRunning(argv[2], argv[3], argv[4], argv[5]);
 #endif
