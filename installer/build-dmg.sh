@@ -34,6 +34,7 @@ PRESET="macos-release"
 # deren Binary im Betrieb überschreiben und den Prozess mitsamt allen Terminal-
 # Sessions abreißen. Dann hierhin ausweichen, statt die laufende Arbeit zu verlieren:
 #   QTMUX_BUILD_DIR=build/macos-dmg installer/build-dmg.sh 1.10.0
+# Pflicht: QTMUX_QT_MAC=<Qt-Prefix> (offizielles Qt in der CI-Version, s. u.).
 BUILD_DIR="${QTMUX_BUILD_DIR:-$REPO/build/$PRESET}"
 [[ "$BUILD_DIR" = /* ]] || BUILD_DIR="$REPO/$BUILD_DIR"
 APP_SRC="$BUILD_DIR/qtmux.app"
@@ -41,13 +42,41 @@ STAGE="$REPO/dist/stage-mac"
 APP="$STAGE/QTmux.app"           # Anzeigename im Finder/Applications
 DMG="$REPO/dist/QTmux-$VERSION-macos.dmg"
 
-# macdeployqt aus dem Qt-Prefix auflösen (PATH oder Homebrew).
-MACDEPLOYQT="$(command -v macdeployqt || true)"
-if [[ -z "$MACDEPLOYQT" ]]; then
-    QT_PREFIX="$(brew --prefix qt 2>/dev/null || true)"
-    [[ -n "$QT_PREFIX" && -x "$QT_PREFIX/bin/macdeployqt" ]] && MACDEPLOYQT="$QT_PREFIX/bin/macdeployqt"
-fi
-[[ -n "$MACDEPLOYQT" ]] || { echo "FEHLER: macdeployqt nicht gefunden (Qt-bin im PATH?)." >&2; exit 1; }
+# Das Qt des Pakets: der offizielle Bau in der Version der CI (env.QT_VERSION in
+# .github/workflows/ci.yml, Familienregel „Qt 6.10.3 überall“), mit den Modulen,
+# die CMakeLists.txt verlangt (u. a. SerialPort, ShaderTools). Der Ort kommt NUR
+# über QTMUX_QT_MAC (Prefix mit lib/, bin/macdeployqt), nie aus dem Repo.
+# 🔑 Bis 1.10.0 bündelte das Skript Homebrew-Qt: 6.11 statt 6.10.3 und minos 14.0
+# — die macOS-Untergrenze des Pakets stand damit still über dem Ziel 13.0, und
+# CMake fand Qt über die Homebrew-Pfade des Presets. Darum drei Riegel, bevor
+# gebaut wird: Version = CI-Version, minos von QtCore ≤ Ziel, und nach dem
+# Konfigurieren muss Qt6_DIR im Bauordner unter diesem Prefix liegen (ein
+# Bauordner von früher behielte sonst still das alte Qt).
+QT_PREFIX="${QTMUX_QT_MAC:-}"
+[[ -n "$QT_PREFIX" && -d "$QT_PREFIX/lib" ]] \
+    || { echo "FEHLER: QTMUX_QT_MAC zeigt auf kein Qt (Prefix mit lib/ und bin/macdeployqt setzen)." >&2; exit 1; }
+QT_PREFIX="$(cd "$QT_PREFIX" && pwd -P)"
+MACDEPLOYQT="$QT_PREFIX/bin/macdeployqt"
+[[ -x "$MACDEPLOYQT" ]] || { echo "FEHLER: $MACDEPLOYQT fehlt." >&2; exit 1; }
+QT_WANT="$(sed -n 's/^[[:space:]]*QT_VERSION:[[:space:]]*\([0-9.]*\).*/\1/p' "$REPO/.github/workflows/ci.yml" | head -1)"
+# Je nach Qt steht die Version in der …Impl.cmake oder direkt in der …Version.cmake;
+# nur vorhandene Dateien lesen (ein sed-Fehler bräche unter pipefail STILL ab).
+QT_HAVE=""
+for f in "$QT_PREFIX/lib/cmake/Qt6Core/Qt6CoreConfigVersionImpl.cmake" \
+         "$QT_PREFIX/lib/cmake/Qt6Core/Qt6CoreConfigVersion.cmake"; do
+    if [[ -z "$QT_HAVE" && -f "$f" ]]; then
+        QT_HAVE="$(sed -n 's/^set(PACKAGE_VERSION "\([0-9.]*\)").*/\1/p' "$f" | head -1)"
+    fi
+done
+[[ -n "$QT_WANT" && "$QT_HAVE" == "$QT_WANT" ]] \
+    || { echo "FEHLER: Qt unter $QT_PREFIX ist '$QT_HAVE', erwartet die CI-Version '$QT_WANT'." >&2; exit 1; }
+MIN_SOURCE="$(sed -n 's/^[[:space:]]*set(CMAKE_OSX_DEPLOYMENT_TARGET "\([0-9.]*\)" CACHE.*/\1/p' "$REPO/CMakeLists.txt" | head -1)"
+QT_MINOS="$(vtool -show-build "$QT_PREFIX/lib/QtCore.framework/Versions/A/QtCore" 2>/dev/null | awk '$1=="minos"{print $2}' | sort -t. -k1,1n -k2,2n | tail -1 || true)"
+[[ -n "$MIN_SOURCE" && -n "$QT_MINOS" ]] \
+    || { echo "FEHLER: Untergrenze nicht lesbar (Quelle '$MIN_SOURCE', QtCore '$QT_MINOS')." >&2; exit 1; }
+[[ "$(printf '%s\n%s\n' "$QT_MINOS" "$MIN_SOURCE" | sort -t. -k1,1n -k2,2n | tail -1)" == "$MIN_SOURCE" ]] \
+    || { echo "FEHLER: QtCore unter $QT_PREFIX verlangt macOS $QT_MINOS, das Ziel ist $MIN_SOURCE." >&2; exit 1; }
+echo "    Qt $QT_HAVE (minos $QT_MINOS) aus QTMUX_QT_MAC"
 
 # Vendoring-Wächter VOR dem Release-Build: Das DMG entsteht ausschließlich auf
 # der Entwicklermaschine — der einzige Ort, an dem der MacPCAN-Hub daneben liegt,
@@ -62,7 +91,10 @@ echo "==> 1/4  Vendoring-Sync gegen MacPCAN prüfen"
 "$REPO/tools/check-updater-sync.sh"
 
 echo "==> 2/4  Release bauen ($PRESET -> $BUILD_DIR)"
-cmake --preset "$PRESET" -B "$BUILD_DIR" >/dev/null
+cmake --preset "$PRESET" -B "$BUILD_DIR" -DCMAKE_PREFIX_PATH="$QT_PREFIX" >/dev/null
+QT_DIR_USED="$(sed -n 's/^Qt6_DIR:[A-Z]*=//p' "$BUILD_DIR/CMakeCache.txt" | head -1)"
+[[ "$QT_DIR_USED" == "$QT_PREFIX"/* ]] \
+    || { echo "FEHLER: Der Bauordner nutzt Qt aus '$QT_DIR_USED', nicht aus $QT_PREFIX (frischen QTMUX_BUILD_DIR nehmen)." >&2; exit 1; }
 cmake --build "$BUILD_DIR"
 
 echo "==> 3/4  Bundle stagen + macdeployqt"
@@ -162,19 +194,26 @@ fi
 # Info.plist verspricht dieselbe. Der Wert kommt aus dem Bauordner und muss der
 # Quelle in CMakeLists.txt gleichen; ein Bauordner mit altem Cache-Eintrag ergäbe
 # sonst ein Release mit falscher Untergrenze, das gegen sich selbst grün misst.
-MIN_SOURCE="$(sed -n 's/^[[:space:]]*set(CMAKE_OSX_DEPLOYMENT_TARGET "\([0-9.]*\)" CACHE.*/\1/p' "$REPO/CMakeLists.txt" | head -1)"
 MIN_TARGET="$(sed -n 's/^CMAKE_OSX_DEPLOYMENT_TARGET:[A-Z]*=//p' "$BUILD_DIR/CMakeCache.txt" | head -1)"
 if [[ -z "$DMG_FAIL" ]]; then
     if [[ -z "$MIN_SOURCE" || "$MIN_SOURCE" != "$MIN_TARGET" ]]; then
         DMG_FAIL="Untergrenze im Bauordner '$MIN_TARGET' ≠ Quelle in CMakeLists.txt '$MIN_SOURCE'."
     else
+        # Eigene Plugins ausdrücklich als „eigen“ melden (sonst gälten sie als fremd:
+        # ohne Architektur-Prüfung, nur „höchstens“). Ein Release trägt genau zwei
+        # (Echo und CAN, s. o.); fehlt eines, ist das ein Befund, kein stilles Weniger.
         own=()
         for p in "$DMG_MP/QTmux.app/Contents/PlugIns/"libqtmux_*.dylib; do
-            [[ -f "$p" ]] && own+=(--own "Contents/PlugIns/$(basename "$p")")
+            if [[ -f "$p" ]]; then own+=(--own "Contents/PlugIns/$(basename "$p")"); fi
         done
-        python3 -I "$REPO/tools/ci/dmg_minos.py" "$DMG_MP/QTmux.app" --expect "$MIN_TARGET" \
-                --archs arm64 ${own[@]+"${own[@]}"} \
-            || DMG_FAIL="macOS-Untergrenze bzw. Architektur im DMG falsch (dmg_minos.py, s. o.)."
+        own_want=1
+        [[ "${FAMILY_CODESIGN:-}" == "require" ]] && own_want=2
+        if (( ${#own[@]} / 2 < own_want )); then
+            DMG_FAIL="Im DMG liegen $(( ${#own[@]} / 2 )) eigene Plugins (libqtmux_*.dylib), erwartet $own_want."
+        elif ! python3 -I "$REPO/tools/ci/dmg_minos.py" "$DMG_MP/QTmux.app" --expect "$MIN_TARGET" \
+                --archs arm64 "${own[@]}"; then
+            DMG_FAIL="macOS-Untergrenze bzw. Architektur im DMG falsch (dmg_minos.py, s. o.)."
+        fi
     fi
 fi
 "$REPO/installer/macos/dmg-image.sh" eject "$DMG_MP"

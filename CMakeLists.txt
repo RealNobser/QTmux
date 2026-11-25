@@ -7,8 +7,9 @@ cmake_minimum_required(VERSION 3.24)
 # `set(... CACHE ...)` ohne FORCE wirkt nicht. Ohne diese Zeile trug jedes Release
 # still das SDK des Bau-Macs als Untergrenze (1.10.0: macOS 27.2), und Qts
 # Info.plist-Vorlage schrieb ein LEERES LSMinimumSystemVersion. Ein -D auf der
-# Kommandozeile gewinnt weiter; ein bestehender Bauordner mit leerem Eintrag
-# bekommt den Wert (FORCE nur bei leerem Eintrag). Die Info.plist liest dieselbe
+# Kommandozeile gewinnt weiter, eine Umgebungsvariable MACOSX_DEPLOYMENT_TARGET
+# NICHT (der Eintrag ist vor project() leer, FORCE setzt 13.0); ein bestehender
+# Bauordner mit leerem Eintrag bekommt den Wert (FORCE nur bei leerem Eintrag). Die Info.plist liest dieselbe
 # Variable (Qts Vorlage macos/Info.plist.app.in). Wächter: ctest
 # test_macos_min_version (App, Info.plist, update-swap); am fertigen DMG prüft
 # installer/build-dmg.sh mit tools/ci/dmg_minos.py. Nur arm64 (Owner 2026-11-24):
