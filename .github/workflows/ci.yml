@@ -148,30 +148,6 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build --output-on-failure --timeout 120 -E '^test_pty$'
 
-      # Szene 15 (tests/Scene15Probe.h): ctest druckt die Ausgabe übersprungener und
-      # grüner Tests nicht, der Grund eines Aussetzens stünde also nirgends im Log.
-      # Dieser Schritt holt ihn aus dem ctest-Protokoll. Jeder Fall hat seine eigene
-      # Zeile (Protokoll fehlt / nichts gefunden / grep-Fehler), damit ein
-      # Werkzeugfehler nie wie „nichts ausgesetzt“ aussieht. Entfällt mit der Probe.
-      - name: Szene-15-Diagnose (Grund eines Aussetzens)
-        if: always()
-        shell: bash
-        run: |
-          log=build/Testing/Temporary/LastTest.log
-          if [ ! -f "$log" ]; then
-            echo "SZENE15-DIAGNOSE: Protokoll $log fehlt"
-            exit 0
-          fi
-          # Der Runner startet bash mit -e: rc ausdrücklich abfangen, sonst beendete
-          # „nichts gefunden“ (rc 1) den Schritt als Fehler.
-          rc=0
-          grep -e 'SZENE15-AUSGESETZT' -e 'DIAGNOSE szene15-probe' "$log" > "$RUNNER_TEMP/szene15.txt" || rc=$?
-          case $rc in
-            0) sed 's/^/SZENE15-DIAGNOSE: /' "$RUNNER_TEMP/szene15.txt" ;;
-            1) echo "SZENE15-DIAGNOSE: keine Zeile zur Szene 15 im Protokoll" ;;
-            *) echo "SZENE15-DIAGNOSE: grep-Fehler rc=$rc" ;;
-          esac
-
       # Linux-Installer: AppImage packen (QTMUX-10). Nutzt das bereits gebaute build/
       # (QTMUX_BUILD_DIR) statt neu zu bauen; linuxdeploy + Qt-Plugin holt das Skript.
       - name: AppImage packen (Linux)

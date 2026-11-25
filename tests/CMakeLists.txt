@@ -437,21 +437,6 @@ add_test(NAME test_release_has_no_showcase_bites
 set_tests_properties(test_release_has_no_showcase_bites PROPERTIES
     PASS_REGULAR_EXPRESSION "App: \"UpdateShowcase\" steht [0-9]+-mal.*App: \"--update-picture\" steht [0-9]+-mal")
 
-# Rücknahme-Wächter für das Aussetzen von Szene 15 (tests/Scene15Probe.h) und seine
-# Gegenprobe: rot, sobald der vendierte Szenen-Baustein kein "localhost" mehr setzt.
-add_test(NAME test_scene15_skip_retired
-    COMMAND ${CMAKE_COMMAND}
-        "-DSHOWCASE=${CMAKE_CURRENT_SOURCE_DIR}/../third_party/updater/update/UpdateShowcase.cpp"
-        "-DPROBE=${CMAKE_CURRENT_SOURCE_DIR}/Scene15Probe.h"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckScene15Skip.cmake")
-add_test(NAME test_scene15_skip_retired_bites
-    COMMAND ${CMAKE_COMMAND}
-        "-DSHOWCASE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/scene15-fixed/UpdateShowcase.cpp"
-        "-DPROBE=${CMAKE_CURRENT_SOURCE_DIR}/Scene15Probe.h"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/CheckScene15Skip.cmake")
-set_tests_properties(test_scene15_skip_retired_bites PROPERTIES
-    PASS_REGULAR_EXPRESSION "SKIP-RUECKNAHME-FAELLIG")
-
 # Das Bildziel (nur mit QTMUX_UPDATE_PICTURES): je Fläche eine Szene als Bild.
 if(TARGET qtmux-bilder)
     qt_add_executable(test_updatepictures tst_updatepictures.cpp)
@@ -469,36 +454,16 @@ if(TARGET qtmux-bilder)
             "-DQTEST_FILE=${CMAKE_CURRENT_BINARY_DIR}/test_updatepictures.qtest.txt"
             "-DLOGDIR=${qtmux_picture_logs}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/RunAndReport.cmake")
-    set_tests_properties(test_updatepictures PROPERTIES TIMEOUT 300
-        ENVIRONMENT "QTMUX_SCENE15_OWN_TEST=1")
-    # Szene 15 (Proxy-Anmeldung) als eigener Test: Nur er trägt den Skip-Ausdruck, damit
-    # hinter einem Treffer kein roter Fall eines anderen verschwindet (ctest wertet bei
-    # einem Treffer den GANZEN Test als „Skipped“). Bedingung und Rücknahme:
-    # tests/Scene15Probe.h. Kein „|“ im Ausdruck (cmd.exe).
-    add_test(NAME test_updatepictures_szene15
-        COMMAND ${CMAKE_COMMAND}
-            "-DTEST=$<TARGET_FILE:test_updatepictures>"
-            "-DARGS=proxySignInBecomesAPicture"
-            "-DQTEST_FILE=${CMAKE_CURRENT_BINARY_DIR}/test_updatepictures_szene15.qtest.txt"
-            "-DLOGDIR=${qtmux_picture_logs}_szene15"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/RunAndReport.cmake")
-    set_tests_properties(test_updatepictures_szene15 PROPERTIES TIMEOUT 300
-        ENVIRONMENT "QTMUX_PICTURE_LOG_DIR=${qtmux_picture_logs}_szene15"
-        SKIP_REGULAR_EXPRESSION "SZENE15-AUSGESETZT")
+    set_tests_properties(test_updatepictures PROPERTIES TIMEOUT 300)
 
     # Tastatur im Update-Dialog am geladenen QML, über alle Dialog-Szenen des Hubs:
     # Enter löst nur den Knopf mit dem Fokus aus, nie die Hauptaktion eines anderen.
     qt_add_executable(test_updatedialogkeys tst_updatedialogkeys.cpp)
     target_link_libraries(test_updatedialogkeys PRIVATE
-        qtmux_app qtmux_appplugin qtmux_updater_showcase Qt6::Test Qt6::Quick Qt6::Network)
+        qtmux_app qtmux_appplugin qtmux_updater_showcase Qt6::Test Qt6::Quick)
     add_test(NAME test_updatedialogkeys COMMAND test_updatedialogkeys)
     set_tests_properties(test_updatedialogkeys PROPERTIES TIMEOUT 300
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QTMUX_SCENE15_OWN_TEST=1")
-    add_test(NAME test_updatedialogkeys_szene15
-        COMMAND test_updatedialogkeys escapeCancelsTheProxySignIn)
-    set_tests_properties(test_updatedialogkeys_szene15 PROPERTIES TIMEOUT 300
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-        SKIP_REGULAR_EXPRESSION "SZENE15-AUSGESETZT")
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     if(WIN32)
         set_target_properties(test_updatedialogkeys PROPERTIES WIN32_EXECUTABLE FALSE)
     endif()

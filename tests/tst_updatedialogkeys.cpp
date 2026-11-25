@@ -26,8 +26,6 @@
 
 #include <memory>
 
-#include "Scene15Probe.h"
-
 Q_IMPORT_QML_PLUGIN(QTmuxPlugin)
 
 namespace {
@@ -187,11 +185,6 @@ private slots:
         // Download läuft), liegen zwei Dialoge mit Esc-Kurzbefehl im selben Fenster.
         // Esc gehört dann der obersten, der Anmeldung: Sie bricht ab, der Update-Dialog
         // darunter tut nichts.
-        // Eigener ctest-Test test_updatedialogkeys_szene15 (tests/Scene15Probe.h).
-        if (scene15::runsInItsOwnTest())
-            QSKIP("laeuft als eigener ctest-Test test_updatedialogkeys_szene15");
-        if (const QString &why = scene15::skipReasonHere(); !why.isEmpty())
-            QSKIP(qPrintable(why));
         QFETCH(bool, updateDialogOpen);
         QFETCH(bool, proxyDialogOpen);
         appupdate::UpdateShowcase::Options o;
