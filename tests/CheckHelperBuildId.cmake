@@ -2,11 +2,12 @@
 # Windows update-helper.exe) die Build-ID von QTmux trägt und nicht „unknown“
 # (Hub 0.8.1, MAC-132; appupdate_embed_install_helpers(... BUILD_ID_HEADER ...)).
 #
-#   cmake -DHELPER=<Helfer> -DHEADER=<qtmux_buildid.h> -DPREFIX=<"update-swap build "> -P CheckHelperBuildId.cmake
+#   cmake -DHELPER=<Helfer> -DHEADER=<qtmux_buildid.h> -DPREFIX=<update-swap|update-helper> -P CheckHelperBuildId.cmake
 #
-# Erwartet wird genau die Zeichenkette "<PREFIX><QTMUX_BUILD_ID>" aus dem Kopf,
+# Erwartet wird genau die Zeichenkette "<PREFIX> build <QTMUX_BUILD_ID>" aus dem Kopf,
 # den das Ziel qtmux_buildid bei jedem Bau nachführt. Fehlende Datei oder ein
-# Kopf ohne Makro ist ein Werkzeugfehler (rot), nie eine Entwarnung.
+# Kopf ohne Makro ist ein Werkzeugfehler (rot), nie eine Entwarnung. Das Präfix
+# kommt ohne Leerzeichen am Ende: CMake schneidet es bei -D ab (gemessen).
 foreach(_v HELPER HEADER PREFIX)
     if(NOT DEFINED ${_v} OR "${${_v}}" STREQUAL "")
         message(FATAL_ERROR "HELPER-BUILD-ID ERROR: -D${_v} fehlt")
@@ -24,8 +25,8 @@ if(NOT _def MATCHES "\"([^\"]+)\"")
 endif()
 set(_id "${CMAKE_MATCH_1}")
 
-file(STRINGS "${HELPER}" _hits REGEX "${PREFIX}")
-set(_want "${PREFIX}${_id}")
+file(STRINGS "${HELPER}" _hits REGEX "${PREFIX} build ")
+set(_want "${PREFIX} build ${_id}")
 foreach(_h IN LISTS _hits)
     string(FIND "${_h}" "${_want}" _pos)
     if(_pos GREATER_EQUAL 0)
