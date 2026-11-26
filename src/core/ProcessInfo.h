@@ -10,6 +10,14 @@ namespace qtmux::procinfo {
 /// nicht gefunden. Dient dazu, den per MCP verbundenen Agentenprozess zu finden.
 qint64 pidOfTcpClient(quint16 clientPort, quint16 serverPort);
 
+/// Gehört der lokale TCP-Client am Port `clientPort` (verbunden mit `serverPort`) zum
+/// Prozessbaum unter `rootPid` (die Wurzel eingeschlossen)? Dieselbe Frage wie
+/// `pidOfTcpClient` + `ancestorPids`, aber als PRÜFUNG gegen einen bekannten Besitzer:
+/// Unter macOS und Linux werden nur die Sockets der Nachfahren angesehen statt die aller
+/// Prozesse. Gedacht für Anfragen, die oft kommen (Abfragen eines MCP-Tasks alle paar
+/// Sekunden), und die im GUI-Thread laufen.
+bool tcpClientBelongsTo(qint64 rootPid, quint16 clientPort, quint16 serverPort);
+
 /// Vorfahrenkette von `pid` (inkl. `pid` selbst), aufsteigend bis zur Wurzel.
 /// Damit lässt sich ein verbundener Client-Prozess seiner QTmux-Session zuordnen
 /// (Client → … → Shell-PID der Session). Nötig, weil aktuelle macOS-Versionen das

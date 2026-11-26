@@ -161,6 +161,17 @@ add_dependencies(test_mcpmessage qtmux_buildid)
 target_link_libraries(test_mcpmessage PRIVATE qtmux_core Qt6::Test Qt6::Qml Qt6::Network)
 add_test(NAME test_mcpmessage COMMAND test_mcpmessage)
 
+# QTMUX-162: Speicher der MCP-Tasks (Kern, Gui-frei, gestellte Uhr).
+qt_add_executable(test_taskstore tst_taskstore.cpp)
+target_link_libraries(test_taskstore PRIVATE qtmux_core Qt6::Test)
+add_test(NAME test_taskstore COMMAND test_taskstore)
+
+# QTMUX-162: Besitzprüfung im Prozessbaum (procinfo::tcpClientBelongsTo) an einem echten
+# Kindprozess; das Testprogramm startet sich dafür selbst in einer Hilfsrolle.
+qt_add_executable(test_procowner tst_procowner.cpp)
+target_link_libraries(test_procowner PRIVATE qtmux_core Qt6::Test Qt6::Network)
+add_test(NAME test_procowner COMMAND test_procowner)
+
 # Nachrichten-Eingang eines Agenten: Rahmen (Kern) + Schreiben auf den Socket gegen einen
 # Eingang, den der Test selbst aufmacht. Der Client liegt bei seinem Nutzer in src/server
 # (qtmux_core bleibt Qt6::Core-only, hier braucht es QLocalSocket).
@@ -480,7 +491,7 @@ endif()
 # WIN32_EXECUTABLE (Konsolen-Vererbung an Kindshells) gilt hier nicht — keiner
 # dieser Tests startet eine Kindshell.
 if(WIN32)
-    set_target_properties(test_updater test_updatercatalogs test_updatebridge test_updatequit test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox
+    set_target_properties(test_updater test_updatercatalogs test_updatebridge test_updatequit test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox test_taskstore test_procowner
                           PROPERTIES WIN32_EXECUTABLE FALSE)
 endif()
 

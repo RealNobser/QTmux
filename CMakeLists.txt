@@ -108,6 +108,8 @@ add_library(qtmux_core STATIC
     src/core/AgentEventHub.cpp
     src/core/AgentInbox.h
     src/core/AgentInbox.cpp
+    src/core/TaskStore.h
+    src/core/TaskStore.cpp
     src/core/OwnerDraft.h
     src/core/OwnerDraft.cpp
     src/core/PromptQueue.h

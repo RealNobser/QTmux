@@ -39,29 +39,44 @@ static std::vector<pid_t> allPids() {
     return pids;
 }
 
-qint64 pidOfTcpClient(quint16 clientPort, quint16 serverPort) {
-    for (pid_t pid : allPids()) {
-        if (pid <= 0) continue;
-        int bufsz = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nullptr, 0);
-        if (bufsz <= 0) continue;
-        std::vector<proc_fdinfo> fds(bufsz / sizeof(proc_fdinfo) + 8);
-        bufsz = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fds.data(),
-                             static_cast<int>(fds.size() * sizeof(proc_fdinfo)));
-        const int fdcount = bufsz > 0 ? bufsz / static_cast<int>(sizeof(proc_fdinfo)) : 0;
-        for (int f = 0; f < fdcount; ++f) {
-            if (fds[f].proc_fdtype != PROX_FDTYPE_SOCKET) continue;
-            struct socket_fdinfo si {};
-            const int r = proc_pidfdinfo(pid, fds[f].proc_fd, PROC_PIDFDSOCKETINFO,
-                                         &si, sizeof(si));
-            if (r != sizeof(si)) continue;
-            if (si.psi.soi_kind != SOCKINFO_TCP) continue;
-            const auto &in = si.psi.soi_proto.pri_tcp.tcpsi_ini;
-            const quint16 lport = ntohs(static_cast<uint16_t>(in.insi_lport));
-            const quint16 fport = ntohs(static_cast<uint16_t>(in.insi_fport));
-            if (lport == clientPort && fport == serverPort) return pid;
-        }
+// Hält `pid` einen TCP-Socket mit lokalem Port `clientPort` und Gegenport `serverPort`?
+static bool pidHoldsTcp(pid_t pid, quint16 clientPort, quint16 serverPort) {
+    if (pid <= 0) return false;
+    int bufsz = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nullptr, 0);
+    if (bufsz <= 0) return false;
+    std::vector<proc_fdinfo> fds(bufsz / sizeof(proc_fdinfo) + 8);
+    bufsz = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fds.data(),
+                         static_cast<int>(fds.size() * sizeof(proc_fdinfo)));
+    const int fdcount = bufsz > 0 ? bufsz / static_cast<int>(sizeof(proc_fdinfo)) : 0;
+    for (int f = 0; f < fdcount; ++f) {
+        if (fds[f].proc_fdtype != PROX_FDTYPE_SOCKET) continue;
+        struct socket_fdinfo si {};
+        const int r = proc_pidfdinfo(pid, fds[f].proc_fd, PROC_PIDFDSOCKETINFO,
+                                     &si, sizeof(si));
+        if (r != sizeof(si)) continue;
+        if (si.psi.soi_kind != SOCKINFO_TCP) continue;
+        const auto &in = si.psi.soi_proto.pri_tcp.tcpsi_ini;
+        const quint16 lport = ntohs(static_cast<uint16_t>(in.insi_lport));
+        const quint16 fport = ntohs(static_cast<uint16_t>(in.insi_fport));
+        if (lport == clientPort && fport == serverPort) return true;
     }
+    return false;
+}
+
+qint64 pidOfTcpClient(quint16 clientPort, quint16 serverPort) {
+    for (pid_t pid : allPids())
+        if (pidHoldsTcp(pid, clientPort, serverPort)) return pid;
     return -1;
+}
+
+bool tcpClientBelongsTo(qint64 rootPid, quint16 clientPort, quint16 serverPort) {
+    if (rootPid <= 0) return false;
+    // Nur die Sockets des Baums ansehen: die Wurzel selbst und ihre Nachfahren.
+    // descendantPids liest je Prozess nur die Elternangabe, keine Deskriptoren.
+    if (pidHoldsTcp(static_cast<pid_t>(rootPid), clientPort, serverPort)) return true;
+    for (qint64 pid : descendantPids(rootPid))
+        if (pidHoldsTcp(static_cast<pid_t>(pid), clientPort, serverPort)) return true;
+    return false;
 }
 
 QList<qint64> ancestorPids(qint64 pid) {
@@ -114,8 +129,8 @@ static qint64 ppidOf(qint64 pid) {
     return rest.at(1).toLongLong();   // Feld 4 (ppid): state, ppid
 }
 
-qint64 pidOfTcpClient(quint16 clientPort, quint16 serverPort) {
-    // Inode der Verbindung 127.0.0.1:clientPort -> 127.0.0.1:serverPort suchen.
+// Inode der Verbindung 127.0.0.1:clientPort -> 127.0.0.1:serverPort (-1 = keine).
+static qint64 tcpInode(quint16 clientPort, quint16 serverPort) {
     auto findInode = [&](const QString &path) -> qint64 {
         QFile f(path);
         if (!f.open(QIODevice::ReadOnly)) return -1;
@@ -135,22 +150,41 @@ qint64 pidOfTcpClient(quint16 clientPort, quint16 serverPort) {
     };
     qint64 inode = findInode(QStringLiteral("/proc/net/tcp"));
     if (inode < 0) inode = findInode(QStringLiteral("/proc/net/tcp6"));
-    if (inode < 0) return -1;
+    return inode;
+}
 
+// Hält `pid` den Socket mit dieser Inode?
+static bool pidHoldsInode(qint64 pid, const QByteArray &needle) {
+    QDir fds(QStringLiteral("/proc/%1/fd").arg(pid));
+    for (const QString &fd : fds.entryList(QDir::NoDotAndDotDot)) {
+        if (QFile::symLinkTarget(fds.filePath(fd)).toLocal8Bit() == needle) return true;
+    }
+    return false;
+}
+
+qint64 pidOfTcpClient(quint16 clientPort, quint16 serverPort) {
+    const qint64 inode = tcpInode(clientPort, serverPort);
+    if (inode < 0) return -1;
     const QByteArray needle = "socket:[" + QByteArray::number(inode) + "]";
     QDir proc(QStringLiteral("/proc"));
     for (const QString &entry : proc.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
         bool isPid = false;
         const qint64 pid = entry.toLongLong(&isPid);
         if (!isPid) continue;
-        QDir fds(QStringLiteral("/proc/%1/fd").arg(pid));
-        for (const QString &fd : fds.entryList(QDir::NoDotAndDotDot)) {
-            const QByteArray target =
-                QFile::symLinkTarget(fds.filePath(fd)).toLocal8Bit();
-            if (target == needle) return pid;
-        }
+        if (pidHoldsInode(pid, needle)) return pid;
     }
     return -1;
+}
+
+bool tcpClientBelongsTo(qint64 rootPid, quint16 clientPort, quint16 serverPort) {
+    if (rootPid <= 0) return false;
+    const qint64 inode = tcpInode(clientPort, serverPort);
+    if (inode < 0) return false;
+    const QByteArray needle = "socket:[" + QByteArray::number(inode) + "]";
+    if (pidHoldsInode(rootPid, needle)) return true;
+    for (qint64 pid : descendantPids(rootPid))
+        if (pidHoldsInode(pid, needle)) return true;
+    return false;
 }
 
 QList<qint64> ancestorPids(qint64 pid) {
@@ -242,6 +276,13 @@ QList<qint64> ancestorPids(qint64 pid) {
     return chain;
 }
 
+bool tcpClientBelongsTo(qint64 rootPid, quint16 clientPort, quint16 serverPort) {
+    // Die TCP-Tabelle nennt den Besitzer direkt; das ist hier schon billig.
+    if (rootPid <= 0) return false;
+    const qint64 pid = pidOfTcpClient(clientPort, serverPort);
+    return pid > 0 && ancestorPids(pid).contains(rootPid);
+}
+
 QList<qint64> descendantPids(qint64 root) {
     const QHash<qint64, qint64> parentOf = parentMap();
     QList<qint64> out;
@@ -261,6 +302,7 @@ QList<qint64> descendantPids(qint64 root) {
 #else  // andere Plattformen: nicht implementiert
 
 qint64 pidOfTcpClient(quint16, quint16) { return -1; }
+bool tcpClientBelongsTo(qint64, quint16, quint16) { return false; }
 QList<qint64> ancestorPids(qint64) { return {}; }
 QList<qint64> descendantPids(qint64) { return {}; }
 
