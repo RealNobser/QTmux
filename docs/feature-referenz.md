@@ -1660,9 +1660,45 @@ Hubs; gültig sind sie für QTmux, weil der Abgleich den vendierten Stand byte-g
   Kommandozeile, `PtyBackend` zerlegt via `splitCommand`). AutoRun-Dedup: ist Clink per
   cmd-AutoRun aktiv, wird der redundante Eintrag ausgeblendet.
 
-### MCP-Server (42 Tools)
+### MCP-Server (43 Tools, in Fassung 2026-07-28 zusätzlich 2 Task-Werkzeuge)
 `src/server/McpServer.{h,cpp}`, HTTP/JSON-RPC, **Vorgabe** `127.0.0.1:7345`; Tool-Referenz in
 `docs/MCP.md`. Kernpunkte:
+- **Zwei Protokollfassungen, eine Weiche je Anfrage (QTMUX-162).** `mcphttp::classify`
+  ([src/server/McpHttp.h](src/server/McpHttp.h)) entscheidet anhand von `_meta` und der
+  Kopfzeile `MCP-Protocol-Version`; `initialize` wählt immer den alten Weg, und dessen Code
+  ist unverändert geblieben (Wächter: `legacyInitializeIsByteIdentical`,
+  `legacyToolsListOnlyJustifiedChanges` gegen Referenzdateien vom Stand 1.10.1 in
+  `tests/data/mcp/`). Die neue Fassung läuft in `McpServer::handleModern`.
+  🔑 **Tasks liegen Gui-frei in [src/core/TaskStore.h](src/core/TaskStore.h)** (Uhr
+  austauschbar, Test `test_taskstore`); der Server entscheidet nur, wann einer endet.
+  `await_events` endet **träge**: erst die nächste Abfrage sieht nach, ob Ereignisse
+  vorliegen (`advanceTask`) — der Hub braucht dafür keinen weiteren Zuhörer.
+  🔑 **Besitz wird bei JEDER Abfrage geprüft, nicht nur beim Anlegen:**
+  `procinfo::tcpClientBelongsTo` sieht nur die Sockets im Prozessbaum der Besitzer-Session
+  an (gemessen 2026-11-26 an 1040 Prozessen: rund 0,7 ms gegen 1,8–1,9 ms für die volle
+  Suche über alle Prozesse, Test `test_procowner`). Ein neuer Claude-Code-Prozess nach
+  `--resume` liegt wieder im Baum, darum gilt die Kennung prozessübergreifend.
+  🔑 **Lebendschwelle = 3 Abfragetakte** (6 s in der ersten Minute, danach 15 s), aus der
+  Messung abgeleitet: Claude Code fragte auch während eines langen Zugs und während
+  `/compact` im Takt nach (größter Abstand 2,04 s bzw. 5,01 s). Ein Posteingang ohne
+  Lebenszeichen bekommt keine Nachricht mehr; ein beendeter, den 3 Takte lang niemand
+  abholt, gibt seine Nachrichten an den Direktweg und trägt danach nur noch einen Hinweis
+  (kein zweites Exemplar nach einem späten `--resume`).
+  🔑 **Eine Verbindung, eine Anfrage** (`m_requestTaken`): Der Server antwortet mit
+  `Connection: close`; was danach auf derselben Verbindung eintrifft, wird verworfen. Vorher
+  konnten zwei `wait_for_events` auf einem Socket hängen, und das Aufräumen eines Polls
+  verschob die Indizes des anderen.
+  🔑 **Nach dem Senden den Puffer nicht mehr anfassen:** `sendHttpJson` trennt, und bei einer
+  lokalen Gegenstelle kann `disconnected` sofort feuern; der Handler entfernt den Eintrag
+  aus `m_buffers`. Die alten Pfade 401/413 schrieben danach noch in die Referenz (im Test
+  mit Client im selben Prozess als Heap-Fehler sichtbar, an der Release-Instanz 1.10.1 in
+  fünf Versuchen nicht ausgelöst).
+- **GET-Antwort 405 statt 200 am MCP-Pfad (QTMUX-162).** Ein MCP-Client fragt mit GET nach
+  einem Ereignisstrom; der alte Status-Abruf beantwortete das mit 200 und JSON, und
+  Claude Code 2.1.332 fragte darauf jede Sekunde neu (gemessen an 1.10.1, 90 GETs in 90 s
+  je Sitzung; mit 405 bleibt es bei einer Anfrage, mit der neuen Fassung kommt gar keins).
+  Der Status bleibt unter `GET /`, weil nur dieser Pfad dokumentiert und benutzt war
+  (`docs/MCP.md`, `tools/pf/README.md`, Abnahme-Rezept QTMUX-127).
 - **Netzzugang ist eine WAHL, und sie kostet ein Token (QTMUX-127).** Bind-Adresse:
   `QTMUX_MCP_BIND` > Einstellung `mcp/bindAddress` > `127.0.0.1`; Regeln Gui-frei in
   [src/server/McpAccess.h](src/server/McpAccess.h) (Test `test_mcpaccess`, 13 Fälle),

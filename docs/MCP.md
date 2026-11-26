@@ -6,6 +6,26 @@ externer KI-Agent die Anwendung fernsteuern kann — inklusive der einzelnen Ses
 ## Transport & Sicherheit
 
 - **HTTP / JSON-RPC 2.0** (MCP „Streamable HTTP"), Endpoint: `http://127.0.0.1:7345/mcp`
+- **Zwei Protokollfassungen nebeneinander** (QTMUX-162): Clients, die mit `initialize`
+  verbinden, bekommen das bisherige Verhalten (Fassung 2024-11-05); Anfragen der Revision
+  **2026-07-28** werden zustandslos bedient, samt **MCP-Tasks**. Einzelheiten im Abschnitt
+  [Zwei Fassungen und MCP-Tasks](#zwei-fassungen-und-mcp-tasks-qtmux-162).
+- **POST nur auf `/mcp` und `/`**, jeder andere Pfad antwortet 404 (seit QTMUX-162,
+  Owner-Entscheid 2026-11-26; vorher galt jeder Pfad).
+- **GET auf `/mcp`** (und jedes GET mit `Accept: text/event-stream`) antwortet **405**
+  mit `Allow: POST`. Der Status-Abruf liegt unter **`GET /`** und bleibt dort. Grund: Ein
+  MCP-Client fragt mit GET nach einem Ereignisstrom; bekam er 200 und JSON, fragte Claude
+  Code jede Sekunde erneut (gemessen an 1.10.1: 90 GETs in 90 s je Sitzung).
+- **Origin wird geprüft** (beide Fassungen, Spezifikation 2026-07-28): Fehlt die
+  Kopfzeile, ist alles wie bisher. Steht sie da, muss sie auf `localhost`, `127.0.0.1`
+  oder `[::1]` zeigen (Schema http/https, Port beliebig), sonst **403**. ⚠️ Für den
+  Netzzugang heißt das: Ein Client auf einem **anderen Rechner**, der eine
+  `Origin`-Kopfzeile mitschickt (typisch: ein Browser oder ein Web-Werkzeug), bekommt
+  403, auch mit gültigem Token. Kommandozeilen-Clients (curl, Claude Code) schicken
+  keine.
+- **Kopfteil begrenzt:** höchstens 16 KiB und 64 Kopfzeilen (sonst 431), keine
+  Steuerzeichen in Kopfzeilen, `Content-Length` genau einmal und nur Ziffern (sonst 400),
+  kein `Transfer-Encoding` (501), Rumpf höchstens 4 MiB (413).
 - Bindet **standardmäßig an `127.0.0.1`** (nur lokale Prozesse) — dort ist die
   Prozessgrenze die Zugriffskontrolle, und lokale Clients brauchen **kein** Token.
 - An/aus über das Menü **Agent-Steuerung → MCP-Server**. Standard: an, Port 7345.
@@ -246,11 +266,13 @@ keiner. Ein Aufruf von außerhalb jeder Session heißt `unbekannt`.
 ```
 
 `send_message` ist der Weg, einer anderen Session etwas zu **sagen** — im Unterschied zu
-`send_text`/`queue_text`, die etwas **eintippen**. Zwei Wege, die Antwort nennt den
-genommenen:
+`send_text`/`queue_text`, die etwas **eintippen**. Die Antwort nennt den genommenen Weg
+(`via`) und eine `messageId` für `message_status`. Rangfolge seit QTMUX-162:
 
 | `via` | Wann | Was beim Empfänger geschieht |
 |---|---|---|
+| `task` | die Ziel-Session hält einen **lebenden** Posteingangs-Task offen (`await_message`, zuletzt abgefragt vor höchstens 30 s) | die Nachricht beendet den Task; der Client weckt die Sitzung, auch wenn sie untätig ist (Abschnitt [MCP-Tasks](#zwei-fassungen-und-mcp-tasks-qtmux-162)) |
+| `task-buffer` | die Ziel-Session hatte in den letzten 60 s einen Posteingangs-Task, stellt ihn aber gerade neu | die Nachricht wartet bis zu 60 s und kommt mit dem nächsten `await_message`; kommt keiner, geht sie **in Reihenfolge** über die beiden Wege unten (`message_status` sagt dann `fell-back`) |
 | `inbox` | die Ziel-Session hat einen Nachrichten-Eingang gemeldet | die Nachricht erscheint als **eigene Zeile im Verlauf** („Message from @QTmux-…“), die Eingabezeile bleibt unberührt — auch während der Mensch tippt, der Agent arbeitet oder eine Rückfrage offen ist |
 | `queue` | kein Eingang gemeldet, oder die Zustellung scheiterte (`reason` sagt, warum) | wie `queue_text`, mit einer Kopfzeile „QTmux-Nachricht von Session …, nicht vom Menschen an diesem Terminal getippt“ — wartet also auf den Menschen |
 
@@ -334,8 +356,11 @@ Programm nicht von einer Eingabe des Menschen zu unterscheiden. Darum die Kopfze
   von `send_message` ein `note`; und die Probe in `docs/owner-abnahmen.md` (QTMUX-157)
   zeigt in einer Minute, ob eine Nachricht noch ankommt. Nach jedem Claude-Code-Update
   lohnt sie sich.
-* **Kein Zustellbeleg.** Hält der Empfänger die Nachricht zurück (`hold`) oder lehnt er
-  ab (`refuse`), sieht das nur sein Mensch.
+* **Kein Zustellbeleg auf dem Socket-Weg.** Hält der Empfänger die Nachricht zurück
+  (`hold`) oder lehnt er ab (`refuse`), sieht das nur sein Mensch. Auf dem Task-Weg gibt
+  es einen Beleg an den **Client**: `message_status` meldet `fetched`, sobald der Client
+  des Empfängers den Endzustand abgeholt hat. Das ist kein Lesebeleg; ob das Modell die
+  Nachricht gelesen hat, weiß QTmux nicht.
 * **Windows:** Dort ist der Eingang eine Named Pipe mit Anmeldepflicht — nicht gemessen
   und nicht gebaut. `send_message` nimmt unter Windows immer die Warteschlange.
 * **Andere Agenten** als Claude Code haben (noch) keinen Eingang: `send_message` nimmt die
@@ -726,6 +751,94 @@ Beim Schließen der Anwendung werden alle Sessions sauber beendet: QTmux erfasst
 den **gesamten Prozessbaum** (Shell + Kinder, z. B. ein laufender Agent) und beendet ihn
 (SIGHUP, dann SIGKILL). So bleiben keine verwaisten Prozesse zurück — auch nicht solche, die
 das PTY-Hangup ignorieren (`nohup` o. ä.).
+
+## Zwei Fassungen und MCP-Tasks (QTMUX-162)
+
+**Welche Fassung eine Anfrage spricht, entscheidet QTmux je Anfrage.** Trägt sie
+`params._meta["io.modelcontextprotocol/protocolVersion"]` oder eine Kopfzeile
+`MCP-Protocol-Version` ab 2026-07-28, gilt die neue Fassung; alles andere, insbesondere
+`initialize`, nimmt den alten Weg unverändert (Stapel, HTTP 200 auch bei unbekannter
+Methode, Long-Poll `wait_for_events`). Claude Code ab etwa 2.1.300 fragt zuerst per
+`server/discover` und nimmt die neue Fassung, sobald der Server sie anbietet;
+`MCP_PROTOCOL_NEGOTIATION=legacy` erzwingt den alten Weg.
+
+**Neue Fassung, was QTmux prüft** (Fehler mit HTTP-Status und Code nach Spezifikation):
+
+| Fall | HTTP | Code |
+|---|---|---|
+| `MCP-Protocol-Version` fehlt, steht doppelt oder weicht von `_meta` ab | 400 | `-32020` |
+| `Mcp-Method` fehlt oder ≠ `method`; `Mcp-Name` fehlt oder ≠ `params.name` (`tools/call`) bzw. `params.taskId` (`tasks/*`), Base64-Form `=?base64?…?=` wird dekodiert | 400 | `-32020` |
+| Fassung unbekannt (`data.supported` nennt `2026-07-28`) | 400 | `-32022` |
+| Stapel (JSON-Array) | 400 | `-32600` |
+| Task-Werkzeug oder `tasks/*` ohne die Client-Fähigkeit `io.modelcontextprotocol/tasks` | 400 | `-32021` |
+| unbekannte Methode (auch `ping`, `subscriptions/listen`) | 404 | `-32601` |
+| Task unbekannt, abgelaufen, fremd oder nach Neustart verloren | 200 | `-32602` |
+
+`server/discover` nennt `supportedVersions: ["2026-07-28"]`, `tools` und die
+Tasks-Erweiterung. Jedes Ergebnis trägt `resultType` und
+`_meta["io.modelcontextprotocol/serverInfo"]`; `server/discover` und `tools/list` dazu
+`ttlMs: 300000` und `cacheScope: "public"`. `listChanged` bietet QTmux nicht an (die
+Werkzeugliste ändert sich zur Laufzeit nicht), darum gibt es keinen Ereignisstrom.
+
+### Die Task-Werkzeuge
+
+Nur in der neuen Fassung gelistet; der alte Weg kennt sie nicht und antwortet mit einem
+Werkzeugfehler.
+
+| Werkzeug | Endet, wenn … | Ergebnis |
+|---|---|---|
+| `await_events` | für die eigene Session ein abonniertes Ereignis vorliegt (vorher `subscribe_events`) | dieselbe Form wie `wait_for_events` (`events`, `nextSeq`); danach mit `afterSeq` neu stellen. Keine 55-s-Grenze |
+| `await_message` | eine andere Session per `send_message` schreibt | je Nachricht ein Textblock „Nachricht von QTmux-Session #N Titel“, Text, Antwort-Hinweis; gepufferte kommen alle zusammen in Reihenfolge |
+
+Warum `await_events` ein eigenes Werkzeug ist und nicht die Task-Form von
+`wait_for_events`: Ein Client der neuen Fassung schickt die Tasks-Fähigkeit bei jedem
+Aufruf mit. Antwortete `wait_for_events` dann als Task, liefe jeder bestehende Ablauf
+„warten, dann handeln“ still im Hintergrund weiter, und `timeoutMs` liefe ins Leere.
+
+**Ablauf am Client** (Claude Code, gemessen 2026-11-26 mit 2.1.332): Der Aufruf kehrt
+sofort mit einem Task zurück, die Fußzeile zeigt „1 MCP task“, der Client fragt per
+`tasks/get` nach. Endet der Task, erscheint „MCP task … completed.“, und eine untätige
+Sitzung arbeitet von selbst weiter, ohne dass etwas in die Eingabezeile getippt wird.
+Endet er mitten in einem Zug, holt der Client das Ergebnis sofort ab; das Modell
+bearbeitet es nach dem Zug.
+
+**Abfragetakt:** `pollIntervalMs` 2000 in der ersten Minute nach dem Anlegen, danach 5000.
+
+**Wem ein Task gehört:** der Session des aufrufenden Prozesses. Jede Abfrage wird erneut
+geprüft: Der Client-Prozess muss im Prozessbaum dieser Session laufen. Nach
+`claude --resume` fragt ein neuer Prozess derselben Session nach, das gilt. Eine fremde
+Kennung bekommt dieselbe Antwort wie eine unbekannte (`-32602`). Kann QTmux den Anrufer
+keiner Session zuordnen, gilt das Argument `sessionId` nur für Verbindungen aus dem Netz
+(die das Token schon geprüft hat) und, wie bei `wait_for_events`, für `await_events`;
+den Posteingang einer fremden Session kann ein Prozess außerhalb jeder Session nicht
+übernehmen.
+
+**Grenzen:** höchstens 8 offene Tasks je Session (beim neunten muss der älteste ohne
+Abfrage in den letzten 30 s weichen, sonst Fehler), 256 insgesamt; je Session gilt nur
+der zuletzt gestellte Posteingang; abgeschlossene Tasks bleiben **1 h** abrufbar; ein
+offener Task ohne Abfrage seit 24 h wird abgebrochen; Puffer je Session 32 Nachrichten
+bzw. 256 KiB. Task-Kennungen sind 128 bit Systemzufall.
+
+**`tasks/cancel`** bricht einen offenen Task ab (ein beendeter bleibt, wie er ist);
+**`tasks/update`** wird quittiert (QTmux fragt nie zurück, `input_required` kommt nicht vor).
+
+⚠️ **Nach einem Neustart von QTmux sind alle Tasks fort.** Der Client bekommt auf seine
+nächste Abfrage `-32602`, fragt laut Messung noch 5 min weiter und meldet dann „outcome
+unknown“. Eine Nachricht, die in einem abgeschlossenen, noch nicht abgeholten Task lag,
+ist damit verloren (`message_status` hätte bis dahin `completed` statt `fetched`
+gezeigt), ebenso alle Belege für `message_status`.
+
+### `message_status`
+
+```json
+{"name":"message_status","arguments":{"messageId":"msg-…"}}
+```
+
+`state`: `buffered` · `completed` (im Task, vom Client noch nicht abgeholt) · `fetched`
+(abgeholt, mit `fetchedAt`) · `direct` bzw. `fell-back` (Sitzungs-Socket oder
+Warteschlange, Feld `via`) · `failed` (Feld `detail`) · `unknown` (älter als 1 h, nach
+einem Neustart, oder von einer anderen Session geschickt). Nur der Absender bekommt
+Auskunft. Gelistet auf beiden Wegen.
 
 ## Beispiel (curl)
 

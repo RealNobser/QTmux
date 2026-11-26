@@ -15,3 +15,34 @@
   eigenem Port — QTmux hält Terminal-Sessions.
   ⚠️ **Nebenbefund für Diagnosen:** Trotz 30 GB gab es **keinen** jetsam-Eintrag im
   macOS-Log. Wer einen Prozesstod mit „kein OOM laut Log" ausschließt, schließt zu früh aus.
+
+## Zwei Protokollfassungen und MCP-Tasks (QTMUX-162, 2026-11-26)
+
+Mechanik in [docs/feature-referenz.md](../../docs/feature-referenz.md), Abschnitt
+„MCP-Server“, Vertrag nach außen in [docs/MCP.md](../../docs/MCP.md). Hier die Fallen:
+
+- 🔴 **Den alten Weg nicht „mitmodernisieren“.** Claude Code erkennt einen alten Server
+  daran, dass `server/discover` mit HTTP 200 und `-32601` antwortet, und fällt dann auf
+  `initialize` zurück (Mitschnitt 2026-11-26). Wer auf dem alten Weg unbekannte Methoden auf
+  404 umstellt oder `resultType` einfügt, ändert, was alte Clients sehen. Wächter:
+  `legacyInitializeIsByteIdentical`, `legacyToolsListOnlyJustifiedChanges` in
+  `tests/tst_mcphttp.cpp` gegen `tests/data/mcp/*-61ddc5a.json`. Eine neue Zeile in der
+  alten Werkzeugliste gehört ausdrücklich in die Liste der begründeten Zusätze dort.
+- 🔴 **Nach `sendHttpJson` keine Referenz in `m_buffers` mehr benutzen** (Begründung im
+  Kommentar am Anfang von `onReadyRead`); Eintrag per Schlüssel entfernen.
+- ⚠️ **Ein Messaufbau, der den Prozessbaum bricht, misst die Besitzprüfung nicht.** QTmux
+  ordnet den Anrufer über den Prozess am Client-Port zu. Ein Mitschnitt-Proxy davor muss
+  darum **in** der Sitzung als Kind ihrer Shell laufen (`proxy … & claude …`). Mit
+  `( proxy & )` hängt er an launchd, und jeder Task endet mit „Keine eigene Session“ — das
+  sah am 2026-11-26 zuerst wie ein Fehler des Servers aus.
+- ⚠️ **Tests mit `QLocalServer` scheitern an einem langen `TMPDIR`** (`QLocalServer::listen:
+  Name error`, der Unix-Socket-Pfad ist auf gut 100 Zeichen begrenzt). Betroffen:
+  `test_mcpmessage`, `test_agentinbox`; mit 138 Zeichen rot an altem und neuem Stand, mit
+  kurzem `TMPDIR` grün. Kein Befund am Code.
+- 🔑 **Wann ein Task „lebt“, ist gemessen, nicht gewählt:** Claude Code folgt
+  `pollIntervalMs` aus jeder Antwort, auch während langer Züge und `/compact`. Wer den Takt
+  ändert, ändert damit die Lebendschwelle (3 Takte) und die Frist für den Rückfall nicht
+  abgeholter Posteingänge mit.
+- 🔑 **Ein Nachrichtenbeleg trägt den Text nur, solange er ihn braucht** (im Puffer bzw. bis
+  der Client abholt). Vorher blieben je abgelehnter 3,9-MB-Nachricht rund 16 MB eine
+  Stunde liegen (gemessen: +321 MB RSS nach 20 Aufrufen).

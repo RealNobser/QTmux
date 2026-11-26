@@ -10,6 +10,8 @@
 # Signatur über die Dateibytes geht, darf nie durch eine Zeilenenden-Umwandlung
 # laufen.
 tests/fixtures/update/** -text
+# Referenz-Antworten des MCP-Servers (QTMUX-162): der Test vergleicht Byte für Byte.
+tests/data/mcp/** -text
 
 # Signaturen und Binärartefakte ohnehin nie anfassen.
 *.sig binary

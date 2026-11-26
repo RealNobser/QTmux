@@ -5,6 +5,30 @@
 > nachgeführt. Die Absätze sind wörtlich übernommen. Wo eine Zeile fehlt, steht sie als Lehre an
 > anderer Stelle; der Hinweis steht dann in Klammern dabei.
 
+## QTMUX-162 — MCP-Revision 2026-07-28 und MCP-Tasks (2026-11-26, noch nicht ausgeliefert)
+
+**Inhalt:** Der MCP-Server spricht neben dem alten `initialize`-Weg die Revision 2026-07-28
+(zustandslos, `server/discover`, Fehler mit HTTP-Status und Code nach Spezifikation) und die
+Tasks-Erweiterung. Neue Werkzeuge `await_events`, `await_message` (nur neue Fassung) und
+`message_status` (beide). `send_message` nimmt zuerst einen lebenden Posteingangs-Task, mit
+60-s-Puffer zwischen zwei Tasks. HTTP: 405 auf `GET /mcp`, POST nur auf `/mcp` und `/`
+(Owner-Entscheid 2026-11-26), Origin-Prüfung, Kopfteil-Grenzen.
+
+**Gemessen vor der Änderung (Stand 1.10.1, eigene Testinstanz, Claude Code 2.1.332):** Nach
+dem Rückfall auf `initialize` fragte der Client einmal je Sekunde per `GET /mcp`
+(`Accept: text/event-stream`) an, 90 GETs von 23:13:12 bis 23:14:41, bis `/exit`.
+
+**Unabhängige Durchsicht** (lesend, Opus) fand vor dem ersten Commit: unbegrenzten Speicher
+durch Nachrichtenbelege (gemessen: +321 MB RSS nach 20 abgelehnten Nachrichten zu 3,9 MB),
+Nachrichten in einem Posteingang ohne Abholer, `tasks/cancel` als falschen Zustellbeleg, zwei
+Long-Polls auf einer Verbindung, Überholen bei vollem Puffer, Verdrängen eines gebundenen
+Posteingangs aus dem Netz, unbekanntes Werkzeug ohne `-32602`, Pflicht-Kopfzeilen bei
+Benachrichtigungen, absolute Zielform und Entwurfsfassungen auf dem alten Weg. Je ein Test
+war am Stand davor rot und ist jetzt grün. Ein Befund (abgelehntes Anlegen nimmt den alten
+Posteingang weg) ist widerlegt: Der ersetzte Task wird beim Ersetzen frei.
+
+**Teststand:** 73 auf macOS (vorher 70): `test_taskstore`, `test_mcphttp`, `test_procowner`.
+
 ## Release v1.10.1 (2026-11-26)
 
 **Inhalt:**
