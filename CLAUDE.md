@@ -81,7 +81,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/StallDetector.{h,cpp}` | Gui-frei: Stillstand-Erkennung (QTMUX-139) — Agent zeigt „arbeitet" (Merkmal `AgentInfo::workingMarkers`), Bildschirm steht seit N min still → `needsAttention`; Mechanik in der Feature-Referenz |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **69** ctest-Tests auf macOS (Stand 1.10.0). Die vollständige Liste der Test-Binaries und die Sonderfälle (`I18n.*`, `test_doc_duplicates`, `test_check_updater_sync`, `test_i18n`) stehen in [tests/CLAUDE.md](tests/CLAUDE.md). Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **70** ctest-Tests auf macOS (Stand 1.10.1). Die vollständige Liste der Test-Binaries und die Sonderfälle (`I18n.*`, `test_doc_duplicates`, `test_check_updater_sync`, `test_i18n`) stehen in [tests/CLAUDE.md](tests/CLAUDE.md). Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -102,7 +102,8 @@ QT_QPA_PLATFORM=offscreen ./build/macos/qtmux.app/Contents/MacOS/qtmux   # headl
 > ganze QSettings-Domain (sonst überschreibt die Testinstanz beim Beenden die Session-Liste
 > der produktiven), `QTMUX_MCP_PORT` den Port (vor der Einstellung `mcp/port`, sonst 7345).
 
-**DMG:** `installer/build-dmg.sh [version]`, Release-Bau immer mit `FAMILY_CODESIGN=require`.
+**DMG:** `installer/build-dmg.sh [version]`, Release-Bau immer mit `FAMILY_CODESIGN=require`
+und dem Qt der CI aus `QTMUX_QT_MAC` (seit 1.10.1, nie Homebrew).
 Ablauf (macdeployqt, PCBUSB, Re-Signatur, Designated Requirement), die `@rpath`-Falle der
 zweiten Qt-Kette und warum `QT_QPA_PLATFORM=offscreen` am Bundle scheitert:
 [installer/CLAUDE.md](installer/CLAUDE.md), Abschnitt „DMG“.
@@ -381,13 +382,13 @@ Standardweg für visuelle Abnahmen. ⚠️ Er setzt `QTMUX_NO_GPU=1` und fotogra
 **QPainter-Fallback**: Fehler im Glyph-Atlas (QTMUX-97) sind darauf **prinzipiell unsichtbar**.
 Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fallen, nicht hier.
 
-## Arbeitsstand & Wiedereinstieg (2026-11-24)
+## Arbeitsstand & Wiedereinstieg (2026-11-26)
 
 > Die EINE Stelle für den aktuellen Stand (Pflegeregeln 2–4 oben). Verlauf steht in
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.10.0** (2026-11-21, gemeinsamer Update-Ablauf nach Vertrag V2, QTMUX-160).
+**Ausgeliefert: v1.10.1** (2026-11-26, Hub 0.8.1, macOS ab 13 mit dem Qt der CI, QTMUX-161).
 Artefakte mit Größen und SHA256, CI-Läufe, Abnahme am Live-Manifest und die Release-Kette bis
 v1.9.0 stehen in [docs/HISTORY.md](docs/HISTORY.md). Den Stand nicht von hier ablesen, sondern
 messen (die Windows-Session pusht ebenfalls):
@@ -404,8 +405,8 @@ ctest --test-dir <build> -N | tail -1                 # Testzahl
 Jira: die höchste Nummer in **beiden** Systemen live holen (Abschnitt „Jira-Statuskonvention“
 unten); der zuletzt aufgeschriebene Zählstand steht in docs/HISTORY.md.
 
-**Teststände (1.10.0):** **69** auf macOS, **68** auf Linux (ohne `test_update_helper_embedded`) und
-Windows (ohne `test_check_updater_sync`); CI-Windows 67 (ohne `test_pty`). Der
+**Teststände (1.10.1):** **70** auf macOS, **64** auf Linux, **66** auf Windows (welche fehlen:
+[tests/CLAUDE.md](tests/CLAUDE.md)); CI-Windows 65 (ohne `test_pty`). Der
 Verlauf der Zahlen und der Grün-Messungen steht in [docs/HISTORY.md](docs/HISTORY.md),
 Fallzahlen einzelner Programme ebenso. Je Plattform: macOS
 lässt `test_pty` mitlaufen; Linux (Container des Bau-Servers) und Windows nehmen ihn per `-E` aus
@@ -560,8 +561,6 @@ Update-Wegs am lebenden Objekt belegen · QTMUX-127-Rest (Prefs-Sichtprüfung, p
    gehoben (DMG geladen 2026-10-11 11:12, Binary-ctime 11:13; s. „Zustand" unten). Offen
    bleibt nur die Frage, ob dabei die TCC-Ordnerdialoge ausblieben — das weiß allein der
    Owner (Erwartung: ja, die DR ist in 1.9.7 und 1.9.8 identisch gemessen).
-   (Der frühere Punkt „GitHub-Release v1.9.1 nachziehen?" ist erledigt: am 2026-08-18
-   nachgezogen, Historie lückenlos — s. „Ausgeliefert" oben.)
 
 #### Zustand, der nicht aus Code/Git hervorgeht
 

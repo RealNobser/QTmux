@@ -5,6 +5,73 @@
 > nachgeführt. Die Absätze sind wörtlich übernommen. Wo eine Zeile fehlt, steht sie als Lehre an
 > anderer Stelle; der Hinweis steht dann in Klammern dabei.
 
+## Release v1.10.1 (2026-11-26)
+
+**Inhalt:**
+- Update-Kern auf Hub-Stand MacPCAN 0.8.1 (`8d060c3`).
+- macOS-Ziel 13.0 vor `project()`; `LSMinimumSystemVersion` 13.0 (bisher leer).
+- Die Selbst-Ersetzen-Helfer tragen die Build-ID.
+- Eingehängte Update-Images werden beim Start aufgeräumt (Hub).
+- Szene 15 läuft wieder überall (QTMUX-161, Revert der drei Aussetz-Commits).
+- 🔑 **Das DMG bündelt das offizielle Qt 6.10.3 (Version der CI) statt Homebrew-Qt 6.11.2.**
+  Homebrew-Qt trägt `minos 14.0`; mit ihm wäre das Paket trotz Ziel 13.0 erst ab macOS 14
+  gelaufen. Owner-Entscheid: eigenes Qt, Paket echt ab macOS 13, weiter nur Apple Silicon.
+  `build-dmg.sh` nimmt Qt nur noch aus `QTMUX_QT_MAC` (Riegel in [installer/CLAUDE.md](../installer/CLAUDE.md)).
+
+**Commits:** Tag `v1.10.1` (annotiert) auf `6693d65` („Release 1.10.1“). Alle vier Artefakte
+stammen aus diesem Commit, je aus einem frischen Klon eines Bundles.
+
+| Artefakt | Bytes | SHA256 | Build-ID |
+|---|---|---|---|
+| `QTmux-1.10.1-macos.dmg` | 55 257 600 | `2a3c252d517dda0df2c6eb07dd2135a145623f14b9e22738bfadb9e57de2a6d1` | `1.10.1+6693d65` |
+| `QTmux-1.10.1-win64.msi` | 32 267 483 | `2542b720daa47965d13018e23e760713d39e011d74ac9aed6e545e98afbc1b5e` | `1.10.1+6693d65` |
+| `QTmux-1.10.1-win64-portable.zip` | 39 684 887 | `44b06f2962827814dcd535e1841baca32cab3c2da6a4f958be49a00808200a50` | `1.10.1+6693d65` |
+| `QTmux-1.10.1-x86_64.AppImage` | 45 255 160 | `aa8accbee7326ef11732e60fa7e46c8fcea8ae78e7030206534c4d1f73beb91c` | `1.10.1+6693d65` |
+
+**CI:**
+- Messlauf 45534833674 (`workflow_dispatch`, `e8786bb`); main-Läufe 45714242909 (`e8786bb`)
+  und 45717209779 (`6693d65`).
+- Je Job: macOS 70, Windows 65, Linux 64, 0 Skips. Szene 15 lief auf dem macOS-Runner (kein
+  `QSKIP` mehr im Baum).
+- Tag-Lauf 45718291677: Versuch 1 mit macOS und Linux grün; Windows hing im Schritt „Tests
+  (Windows, ohne test_pty)“ ab 23:12:23Z. Abbruch angefordert 23:45:29Z, Job beendet
+  (cancelled) 23:50:29Z, also rund 38 min bis zum Abbruch. GitHub hat für diesen Job **keinen
+  Log** gespeichert. **Die Ursache des Hängers ist UNBEKANNT.** Versuch 2 (`rerun --failed`):
+  Windows 65/65 grün, danach `linux-release` grün.
+
+**Wege:**
+- DMG am Mac, `FAMILY_CODESIGN=require`, Qt aus `QTMUX_QT_MAC`.
+- MSI und ZIP auf dem Windows-Bau-Rechner als `claude`, mit einer Kopie des Wrappers.
+- AppImage aus dem Tag-Lauf (Draft-Asset), per `gh release download` geholt.
+
+**Abnahme:**
+- DMG: `dmg_minos.py` OK (App und `update-swap` `minos 13.0`, nur arm64); 104/104 Mach-O
+  familien-signiert, 0 ad-hoc; DR unverändert (`certificate root`); `update-swap build
+  1.10.1+6693d65`. HTTPS-Abruf des Live-Manifests NUR mit dem Qt des Bundles: securetransport,
+  HTTP 200, keine Qt-Bibliothek von außerhalb geladen.
+- MSI: Build-ID in `qtmux.exe` und `update-helper.exe`; CRT zehn DLLs wie 1.10.0; 1424 Dateien
+  wie 1.10.0.
+- AppImage: Build-ID im entpackten `usr/bin/qtmux`; nur `libqxcb`, glibc höchstens 2.38; Start
+  unter xcb mit xvfb (Selbsttest rc 0, Hauptfenster geladen).
+- Größen über Dateilisten erklärt:
+  - DMG +6 491 136 B: das Qt der CI ist universal, das Bundle bleibt unausgedünnt (arm64-Ausdünnen
+    spart ~75 MB, Kandidat); Homebrew-Bibliotheken fallen weg.
+  - MSI −4 096 B, ZIP +315 B.
+  - AppImage ±0: das squashfs ist auf 4 KiB aufgefüllt; Dateiliste und Einzelgrößen gleich, im
+    Inhalt unterscheiden sich nur `usr/bin/qtmux` und das Echo-Plugin.
+
+**Live:**
+- serial `1795655722`, Publish 2026-11-26 02:16.
+- Index 12 Produkte, geändert nur qtmux; Signatur mit dem Client-Schlüssel gültig, Gegenprobe
+  ungültig; DMG, MSI und AppImage von live geladen und byte-gleich.
+- Die Notes, im Dialog des 1.10.0-Clients gerendert (de/en): nichts abgeschnitten.
+- Pflichtprobe aus dem Updater von 1.10.0: vor dem Publish rc 20 (Positivkontrolle Replay
+  rc 11), danach rc 0 mit dem macOS-Paket (55 257 600 B, `cmp`-gleich); Replay danach rc 11.
+- GitHub-Release `v1.10.1` mit vier Assets, je zurückgeladen und `cmp`-gleich, Latest.
+
+**Ungemessen:** der Start auf einem echten macOS 13 (belegt sind nur `minos` und plist) und das
+echte Selbst-Ersetzen von 1.10.0 auf 1.10.1 am Rechner.
+
 ## Release v1.10.0 (2026-11-21)
 
 **Inhalt:** gemeinsamer Update-Ablauf (Vertrag V2) mit QML-Oberfläche, Selbst-Ersetzen ab dem

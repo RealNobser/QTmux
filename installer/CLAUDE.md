@@ -49,6 +49,16 @@ mindestens 1.8.0 unverändert):
 > Plugins) oder den Homebrew-RPATH per `install_name_tool -delete_rpath` entfernen. Beides
 > gehört ins `build-dmg.sh` **vor** die Re-Signatur, sonst ist die Signatur wieder ungültig.
 
+🔑 **Seit 1.10.1 bündelt das DMG das offizielle Qt der CI-Version, nicht Homebrews.** Grund:
+Homebrew-Qt 6.11 trägt `minos 14.0`, die App lief also nie ab macOS 13, obwohl das Ziel 13.0
+war (1.10.0 hatte sogar `minos 27.2`). `build-dmg.sh` nimmt Qt nur aus **`QTMUX_QT_MAC`**
+(Prefix, Ort in `CLAUDE.local.md`) und bricht vor dem Bau laut ab, wenn die Version nicht
+`env.QT_VERSION` aus `ci.yml` ist, wenn QtCore ein höheres `minos` als das Ziel trägt oder
+wenn `Qt6_DIR` nach dem Konfigurieren außerhalb des Prefix liegt. Nach dem Bau prüft
+`tools/ci/dmg_minos.py` (aus dem Hub vendiert, Kontrakt 6) das eingehängte Image. Das offizielle
+Qt ist universal; das Bundle bleibt **unausgedünnt** (arm64-Ausdünnen spart ~75 MB, Kandidat).
+Die `@rpath`-Falle oben betrifft nur Homebrew-Qt; sie gilt für Release-DMGs ab 1.10.1 nicht mehr.
+
 > ⚠️ **`QT_QPA_PLATFORM=offscreen` funktioniert am DMG-Bundle NICHT** — macdeployqt bündelt
 > nur die gebrauchten Plattform-Plugins, im Bundle liegt allein `libqcocoa.dylib`. Ein
 > erzwungenes offscreen stirbt per `qFatal`, und das sieht wie ein kaputtes Paket aus,
