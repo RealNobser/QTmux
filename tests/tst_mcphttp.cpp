@@ -4,6 +4,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcess>
 #include <QSettings>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -32,8 +33,9 @@ public:
     void write(const QByteArray &d) override { captured += d; }
     void resize(int, int) override {}
     void terminate() override { setState(BackendState::Closed); }
-    qint64 processId() const override { return -1; }
+    qint64 processId() const override { return pid; }
     QByteArray captured;
+    qint64 pid = -1;
 };
 
 struct HttpReply {
@@ -61,6 +63,19 @@ class TestMcpHttp : public QObject {
     SessionModel *m_sessions = nullptr;
     McpServer *m_mcp = nullptr;
     QHash<int, HttpCaptureBackend *> m_backends;
+    QList<QProcess *> m_idle;
+
+    // Session, die wie eine Shell ohne laufendes Programm aussieht: ihr Prozess existiert
+    // (ein `sleep`) und hat keine Kinder. So greift die Regel „nackte Shell“ wie im Betrieb.
+    int addBareShellSession() {
+        const int id = addSession();
+        auto *p = new QProcess;
+        p->start(QStringLiteral("/bin/sleep"), {QStringLiteral("60")});
+        if (!p->waitForStarted(5000)) return -1;
+        m_idle.append(p);
+        m_backends.value(id)->pid = p->processId();
+        return id;
+    }
 
     int addSession() {
         const int row = m_sessions->createSerialSession(QStringLiteral("qtmux-test-kein-port"), 9600);
@@ -175,23 +190,28 @@ private slots:
 
     void init() {
         QSettings().clear();
-        // Freien Port bestimmen und per Umgebung setzen (setPort schriebe die Einstellung).
-        QTcpServer probe;
-        QVERIFY(probe.listen(QHostAddress::LocalHost, 0));
-        m_port = probe.serverPort();
-        probe.close();
-        qputenv("QTMUX_MCP_PORT", QByteArray::number(m_port));
         m_now = 1'800'000'000'000LL;
         m_caller = -1;
-        m_sessions = new SessionModel;
-        m_mcp = new McpServer;
-        m_mcp->setSessions(m_sessions);
-        m_mcp->m_callerResolverForTest = [this](const QTcpSocket *) { return m_caller; };
-        m_mcp->m_ownerCheckForTest = [this](const QTcpSocket *, int owner) { return owner == m_caller; };
-        m_mcp->m_peerIsNetworkForTest = [this](const QTcpSocket *) { return m_fromNetwork; };
-        m_mcp->m_taskStore = TaskStore(TaskStore::Limits{}, [this] { return m_now; });
         m_fromNetwork = false;
-        QVERIFY(m_mcp->start());
+        m_sessions = new SessionModel;
+        // Freien Port bestimmen und per Umgebung setzen (setPort schriebe die Einstellung).
+        // Zwischen Prüfen und Binden kann ihn ein anderer Prozess nehmen: dann neu würfeln.
+        for (int attempt = 0; attempt < 5 && !(m_mcp && m_mcp->listening()); ++attempt) {
+            delete m_mcp;
+            QTcpServer probe;
+            QVERIFY(probe.listen(QHostAddress::LocalHost, 0));
+            m_port = probe.serverPort();
+            probe.close();
+            qputenv("QTMUX_MCP_PORT", QByteArray::number(m_port));
+            m_mcp = new McpServer;
+            m_mcp->setSessions(m_sessions);
+            m_mcp->m_callerResolverForTest = [this](const QTcpSocket *) { return m_caller; };
+            m_mcp->m_ownerCheckForTest = [this](const QTcpSocket *, int owner) { return owner == m_caller; };
+            m_mcp->m_peerIsNetworkForTest = [this](const QTcpSocket *) { return m_fromNetwork; };
+            m_mcp->m_taskStore = TaskStore(TaskStore::Limits{}, [this] { return m_now; });
+            m_mcp->start();
+        }
+        QVERIFY(m_mcp->listening());
         QCOMPARE(m_mcp->port(), int(m_port));
     }
 
@@ -201,6 +221,8 @@ private slots:
         delete m_sessions;
         m_sessions = nullptr;
         m_backends.clear();
+        for (QProcess *p : m_idle) { p->kill(); p->waitForFinished(2000); delete p; }
+        m_idle.clear();
     }
 
     // --- alter Weg: unverändert -------------------------------------------------
@@ -679,9 +701,9 @@ private slots:
         AgentEventHub::instance()->unsubscribe(a);
     }
 
-    // --- Befunde der Durchsicht 2026-11-26 -----------------------------------------
+    // --- Zustellung: Ränder ----------------------------------------------------------
 
-    // Befund 2: Ein Posteingang, den nach dem Abschluss niemand abholt (Client weg), gibt
+    // Ein Posteingang, den nach dem Abschluss niemand abholt (Client weg), gibt
     // seine Nachricht nach 3 Takten an den Rückfall; holt der Client später doch ab, steht
     // dort nur der Hinweis, kein zweites Exemplar.
     void unfetchedInboxFallsBack() {
@@ -705,7 +727,7 @@ private slots:
         QVERIFY(text.contains(QStringLiteral("queue")));
     }
 
-    // Befund 3 über die Leitung: tasks/cancel ist kein Zustellbeleg.
+    // tasks/cancel ist kein Zustellbeleg.
     void cancelIsNoReceiptOverTheWire() {
         const int a = addSession();
         const int b = addSession();
@@ -722,31 +744,38 @@ private slots:
                  QStringLiteral("completed"));
     }
 
-    // Befund 4: Eine Verbindung trägt genau eine Anfrage (der Server antwortet mit
+    // Eine Verbindung trägt genau eine Anfrage (der Server antwortet mit
     // Connection: close). Weitere Bytes auf derselben Verbindung werden nicht bearbeitet.
     void oneRequestPerConnection() {
         const int a = addSession();
         m_caller = a;
         legacyTool(QStringLiteral("subscribe_events"), {});
-        const QByteArray one = httpPost("/mcp", R"({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wait_for_events","arguments":{"timeoutMs":1000}}})");
-        const QByteArray two = httpPost("/mcp", R"({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"wait_for_events","arguments":{"timeoutMs":1000}}})");
+        // Lange Wartezeit: Nur das Ereignis darf den Poll beenden, nicht sein Zeitablauf.
+        const QByteArray one = httpPost("/mcp", R"({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wait_for_events","arguments":{"timeoutMs":30000}}})");
+        const QByteArray two = httpPost("/mcp", R"({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"wait_for_events","arguments":{"timeoutMs":30000}}})");
         QTcpSocket sock;
         sock.connectToHost(QHostAddress::LocalHost, m_port);
         QVERIFY(sock.waitForConnected(2000));
         sock.write(one);
         sock.flush();
-        QTest::qWait(100);
+        // Die zweite Anfrage erst, wenn die erste nachweislich wartet: getrennte Lesevorgänge.
+        QTRY_COMPARE_WITH_TIMEOUT(m_mcp->m_pendingPolls.size(), 1, 3000);
         sock.write(two);
         sock.flush();
-        QTest::qWait(100);
+        QTest::qWait(300);
         QCOMPARE(m_mcp->m_pendingPolls.size(), 1);
+        QElapsedTimer t;
+        t.start();
         AgentEventHub::instance()->postEvent(addSession(), AgentEventHub::Kind::Done, QStringLiteral("x"));
         QTRY_VERIFY_WITH_TIMEOUT(sock.state() != QAbstractSocket::ConnectedState, 3000);
+        QVERIFY(t.elapsed() < 3000);
         QCOMPARE(m_mcp->m_pendingPolls.size(), 0);
+        QByteArray got = sock.readAll();
+        QCOMPARE(got.count("HTTP/1.1 "), 1);   // genau eine Antwort auf dieser Verbindung
         AgentEventHub::instance()->unsubscribe(a);
     }
 
-    // Befund 6: Ist der Puffer voll, überholt die neue Nachricht die gepufferten nicht.
+    // Ist der Puffer voll, überholt die neue Nachricht die gepufferten nicht.
     void fullBufferKeepsOrder() {
         const int a = addSession();
         const int b = addSession();
@@ -769,7 +798,7 @@ private slots:
         QVERIFY(got.indexOf("m32") < got.indexOf("m33"));
     }
 
-    // Befund 7: Ein Client aus dem Netz darf mit sessionId keinen gebundenen, lebenden
+    // Ein Client aus dem Netz darf mit sessionId keinen gebundenen, lebenden
     // Posteingang der echten Session verdrängen.
     void networkCannotReplaceABoundInbox() {
         const int a = addSession();
@@ -818,6 +847,174 @@ private slots:
                                          {{"MCP-Protocol-Version", "2025-12-01"}}));
         QCOMPARE(r.status, 200);
         QVERIFY(r.json().value("result").toObject().contains("tools"));
+    }
+
+    // --- Zustellung und Protokoll: weitere Ränder ------------------------------------
+
+    // Läuft beim Empfänger kein Programm mehr (nur die Shell), sagt send_message das
+    // sofort, statt die Nachricht als „gepuffert“ anzunehmen und später still scheitern zu
+    // lassen (Verhalten wie 1.10.1).
+    void bareShellIsNotBuffered() {
+#if !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
+        QSKIP("braucht /bin/sleep und eine lesbare Prozessliste");
+#endif
+        const int a = addBareShellSession();
+        const int b = addSession();
+        QVERIFY(a > 0);
+        m_caller = a;
+        const QString t1 = modernCall(QStringLiteral("await_message")).json().value("result").toObject()
+                               .value("taskId").toString();
+        m_caller = b;
+        legacyTool(QStringLiteral("send_message"), {{"id", a}, {"text", "eins"}});
+        m_caller = a;
+        taskGet(t1);   // abgeholt; danach beendet sich der Agent
+        m_caller = b;
+        const HttpReply r = legacy(QStringLiteral("tools/call"),
+                                   QJsonObject{{"name", "send_message"}, {"arguments", QJsonObject{{"id", a}, {"text", "zwei"}}}});
+        QVERIFY2(r.json().value("result").toObject().value("isError").toBool(), toolText(r).toUtf8().constData());
+        QVERIFY(toolText(r).contains(QStringLiteral("nur die Shell")));
+    }
+
+    // Ein beendeter, nicht abgeholter Posteingang, dessen Rückfall an der nackten Shell
+    // scheitert, behält seine Nachricht: Ein späteres --resume holt sie noch ab.
+    void unfetchedInboxKeepsMessageWhenFallbackIsImpossible() {
+#if !defined(Q_OS_MACOS) && !defined(Q_OS_LINUX)
+        QSKIP("braucht /bin/sleep und eine lesbare Prozessliste");
+#endif
+        const int a = addBareShellSession();
+        const int b = addSession();
+        m_caller = a;
+        const QString tid = modernCall(QStringLiteral("await_message")).json().value("result").toObject()
+                                .value("taskId").toString();
+        m_caller = b;
+        const QString mid = legacyTool(QStringLiteral("send_message"), {{"id", a}, {"text", "bleibt"}})
+                                .value("messageId").toString();
+        m_now += 6001;
+        m_mcp->onTaskTimer();
+        m_mcp->onTaskTimer();
+        const QJsonObject st = legacyTool(QStringLiteral("message_status"), {{"messageId", mid}});
+        QCOMPARE(st.value("state").toString(), QStringLiteral("completed"));
+        QVERIFY(!st.value("detail").toString().isEmpty());
+        m_caller = a;
+        const QString text = taskGet(tid).json().value("result").toObject().value("result").toObject()
+                                 .value("content").toArray().first().toObject().value("text").toString();
+        QVERIFY(text.contains(QStringLiteral("bleibt")));
+        m_caller = b;
+        QCOMPARE(legacyTool(QStringLiteral("message_status"), {{"messageId", mid}}).value("state").toString(),
+                 QStringLiteral("fetched"));
+    }
+
+    // Ein vom Client abgebrochener Posteingang hält keine Nachrichten zurück.
+    void cancelledInboxDoesNotBuffer() {
+        const int a = addSession();
+        const int b = addSession();
+        m_caller = a;
+        const QString tid = modernCall(QStringLiteral("await_message")).json().value("result").toObject()
+                                .value("taskId").toString();
+        taskGet(tid, QStringLiteral("tasks/cancel"));
+        m_caller = b;
+        QCOMPARE(legacyTool(QStringLiteral("send_message"), {{"id", a}, {"text", "direkt"}}).value("via").toString(),
+                 QStringLiteral("queue"));
+    }
+
+    // Auch eine für den Task zu große Nachricht überholt die gepufferten nicht.
+    void oversizedMessageKeepsOrder() {
+        const int a = addSession();
+        const int b = addSession();
+        m_caller = a;
+        const QString t1 = modernCall(QStringLiteral("await_message")).json().value("result").toObject()
+                               .value("taskId").toString();
+        m_caller = b;
+        legacyTool(QStringLiteral("send_message"), {{"id", a}, {"text", "m0"}});
+        m_caller = a;
+        taskGet(t1);
+        m_caller = b;
+        legacyTool(QStringLiteral("send_message"), {{"id", a}, {"text", "m1"}});
+        legacyTool(QStringLiteral("send_message"), {{"id", a}, {"text", "m2"}});
+        const QString big = QStringLiteral("GROSS") + QString(210000, QLatin1Char('x'));
+        const QJsonObject r = legacyTool(QStringLiteral("send_message"), {{"id", a}, {"text", big}});
+        QCOMPARE(r.value("via").toString(), QStringLiteral("queue"));
+        const QByteArray got = m_backends.value(a)->captured;
+        QVERIFY(got.contains("m1") && got.contains("m2") && got.contains("GROSS"));
+        QVERIFY(got.indexOf("m1") < got.indexOf("m2"));
+        QVERIFY(got.indexOf("m2") < got.indexOf("GROSS"));
+    }
+
+    // Ein Stapel (alter Weg) bestimmt seinen Aufrufer selbst, statt den der vorigen Anfrage
+    // zu erben — sonst trüge send_message einen fremden Absender, und message_status gäbe
+    // fremden Sitzungen Auskunft.
+    void batchResolvesItsOwnCaller() {
+        const int a = addSession();
+        const int b = addSession();
+        m_caller = b;
+        const QString mid = legacyTool(QStringLiteral("send_message"), {{"id", a}, {"text", "von b"}})
+                                .value("messageId").toString();
+        m_caller = -1;
+        const QJsonArray batch{
+            QJsonObject{{"jsonrpc", "2.0"}, {"id", 1}, {"method", "tools/call"},
+                        {"params", QJsonObject{{"name", "message_status"}, {"arguments", QJsonObject{{"messageId", mid}}}}}},
+            QJsonObject{{"jsonrpc", "2.0"}, {"id", 2}, {"method", "tools/call"},
+                        {"params", QJsonObject{{"name", "send_message"}, {"arguments", QJsonObject{{"id", a}, {"text", "aus dem Stapel"}}}}}}};
+        const HttpReply r = raw(httpPost("/mcp", QJsonDocument(batch).toJson(QJsonDocument::Compact)));
+        const QJsonArray out = r.jsonArray();
+        QCOMPARE(out.size(), 2);
+        auto text = [](const QJsonValue &v) {
+            return QJsonDocument::fromJson(v.toObject().value("result").toObject().value("content").toArray()
+                                               .first().toObject().value("text").toString().toUtf8()).object();
+        };
+        QCOMPARE(text(out.at(0)).value("state").toString(), QStringLiteral("unknown"));
+        QCOMPARE(text(out.at(1)).value("from").toString(), QStringLiteral("unbekannt"));
+    }
+
+    // Eine Kopfzeile MCP-Protocol-Version, die kein Datum ist, bleibt auf dem alten Weg.
+    void nonDateVersionHeaderStaysLegacy() {
+        for (const QByteArray &v : {QByteArray("draft"), QByteArray("next"), QByteArray("2026-7-28"), QByteArray("9999")}) {
+            const HttpReply r = raw(httpPost("/mcp", R"({"jsonrpc":"2.0","id":1,"method":"tools/list"})",
+                                             {{"MCP-Protocol-Version", v}}));
+            QCOMPARE(r.status, 200);
+            QVERIFY2(r.json().value("result").toObject().contains("tools"), v.constData());
+        }
+    }
+
+    // Springt die Uhr vor (Ruhezustand), gehen ältere Nachrichten zuerst hinaus: der nicht
+    // abgeholte Posteingang vor dem Puffer.
+    void olderUnfetchedGoesBeforeBuffer() {
+        const int a = addSession();
+        const int b = addSession();
+        m_caller = a;
+        modernCall(QStringLiteral("await_message"));
+        m_caller = b;
+        legacyTool(QStringLiteral("send_message"), {{"id", a}, {"text", "aelter"}});
+        QCOMPARE(legacyTool(QStringLiteral("send_message"), {{"id", a}, {"text", "juenger"}}).value("via").toString(),
+                 QStringLiteral("task-buffer"));
+        m_now += 61 * 1000;
+        m_mcp->onTaskTimer();
+        const QByteArray got = m_backends.value(a)->captured;
+        QVERIFY(got.contains("aelter") && got.contains("juenger"));
+        QVERIFY(got.indexOf("aelter") < got.indexOf("juenger"));
+    }
+
+    // afterSeq außerhalb des Wertebereichs: kein undefiniertes Verhalten, sondern Grenze.
+    void afterSeqOutOfRangeIsClamped() {
+        const int a = addSession();
+        m_caller = a;
+        legacyTool(QStringLiteral("subscribe_events"), {});
+        for (double v : {1e300, -5.0, 1e19}) {
+            const HttpReply r = legacy(QStringLiteral("tools/call"),
+                                       QJsonObject{{"name", "wait_for_events"},
+                                                   {"arguments", QJsonObject{{"afterSeq", v}, {"timeoutMs", 1000}}}});
+            QCOMPARE(r.status, 200);
+            const double next = toolJson(r).value("nextSeq").toDouble(-1);
+            QVERIFY2(next >= 0 && next <= 9007199254740992.0, QByteArray::number(next).constData());
+        }
+        AgentEventHub::instance()->unsubscribe(a);
+    }
+
+    // Spezifikation: Die ID einer Anfrage darf nicht null sein.
+    void modernNullIdIsInvalidRequest() {
+        const HttpReply r = modern(QStringLiteral("tools/list"), {}, true, {}, QJsonValue::Null);
+        QCOMPARE(r.status, 400);
+        QCOMPARE(r.json().value("error").toObject().value("code").toInt(), -32600);
     }
 
     void modernLongPollCarriesResultType() {

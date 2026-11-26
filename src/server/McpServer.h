@@ -230,6 +230,9 @@ private:
     /// Der Weg von send_message ohne Posteingangs-Task (Verhalten bis 1.10.1).
     DirectDelivery deliverDirect(Session *target, int targetId, const QString &body,
                                  const QString &from, int senderId);
+    /// Läuft in der Session nur noch die Shell (kein Kindprozess)? Dann wartet dort kein
+    /// Agent, und eine Nachricht über die Eingabezeile würde als Befehl ausgeführt.
+    static bool isBareShell(Session *target);
     /// Aufrufer-Session des Sockets (Test-Naht m_callerResolverForTest, sonst Heuristik).
     int callerSessionFor(const QTcpSocket *sock) const;
 

@@ -82,6 +82,8 @@ bool acceptsEventStream(const QByteArray &accept);
 /// `=?base64?<daten>?=` (UTF-8). nullopt bei ungültiger Form.
 std::optional<QString> decodeHeaderText(const QByteArray &value);
 
+/// Hat die Fassung die Form JJJJ-MM-TT?
+bool isDateVersion(const QByteArray &version);
 /// Ältere Fassungen, die über `initialize` laufen.
 bool isLegacyVersion(const QByteArray &version);
 

@@ -169,6 +169,14 @@ std::optional<QString> decodeHeaderText(const QByteArray &value) {
     return QString::fromLatin1(value);
 }
 
+bool isDateVersion(const QByteArray &v) {
+    // Fassungen sind Daten der Form JJJJ-MM-TT; nur dann trägt der Textvergleich.
+    if (v.size() != 10 || v.at(4) != '-' || v.at(7) != '-') return false;
+    for (int i : {0, 1, 2, 3, 5, 6, 8, 9})
+        if (v.at(i) < '0' || v.at(i) > '9') return false;
+    return true;
+}
+
 bool isLegacyVersion(const QByteArray &v) {
     return v == "2024-11-05" || v == "2025-03-26" || v == "2025-06-18" || v == "2025-11-25";
 }
@@ -197,11 +205,11 @@ Era classify(const Head &head, const QJsonDocument &doc, bool parsed) {
     // selects legacy semantics“).
     if (method == QLatin1String("initialize")) return e;
 
-    // Neue Fassung: _meta trägt eine Fassung, oder die Kopfzeile nennt eine ab 2026-07-28
-    // (Datumsform, darum genügt der Textvergleich). Ältere oder Entwurfsdaten in der
-    // Kopfzeile bleiben auf dem alten Weg, wie bisher.
+    // Neue Fassung: _meta trägt eine Fassung, oder die Kopfzeile nennt ein DATUM ab
+    // 2026-07-28 (nur bei JJJJ-MM-TT trägt der Textvergleich). Ältere Daten und alles, was
+    // kein Datum ist, bleiben auf dem alten Weg, wie bisher.
     const bool modern = !metaVersion.isUndefined()
-                        || (!hv.isEmpty() && !isLegacyVersion(hv) && hv >= QByteArray(kModernVersion));
+                        || (isDateVersion(hv) && !isLegacyVersion(hv) && hv >= QByteArray(kModernVersion));
     if (!modern) return e;   // alter Weg, unverändert
 
     if (!parsed) return reject(400, kParseError, QStringLiteral("Parse error"));

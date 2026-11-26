@@ -250,9 +250,9 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
     // entfernt dann den Eintrag, die Referenz zeigt ins Leere. Darum NACH jedem Senden
     // den Puffer nicht mehr anfassen, sondern den Eintrag per Schlüssel entfernen
     // (QTMUX-162; die alten 401/413-Pfade schrieben genau so ins Freigegebene).
-    // Eine Verbindung trägt genau eine Anfrage (Antwort mit Connection: close). Was danach
-    // noch eintrifft, wird verworfen — sonst entstünden z. B. zwei Long-Polls auf einem
-    // Socket (Befund der Durchsicht 2026-11-26).
+    // Regel: Eine Verbindung trägt genau eine Anfrage (Antwort mit Connection: close). Was
+    // danach noch eintrifft, wird verworfen — sonst entstünden z. B. zwei Long-Polls auf
+    // einem Socket, und das Aufräumen des einen verschöbe die Indizes des anderen.
     if (m_requestTaken.contains(sock)) { sock->readAll(); return; }
     QByteArray &buf = m_buffers[sock];
     buf += sock->readAll();
@@ -363,6 +363,12 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
             sendHttpJson(sock, QJsonDocument(resp).toJson(QJsonDocument::Compact));
         }
     } else if (doc.isArray()) {  // JSON-RPC-Batch (nur alter Weg)
+        // Regel: Jede Anfrage bestimmt ihren Aufrufer selbst — ein Stapel erbte sonst den
+        // der vorigen Anfrage (fremder Absender bei send_message, fremde Auskunft bei
+        // message_status).
+        m_callerSessionId = callerSessionFor(sock);
+        if (m_callerSessionId >= 0 && m_sessions)
+            if (Session *s = m_sessions->sessionById(m_callerSessionId)) s->setMcpController(true);
         QJsonArray out;
         for (const QJsonValue &v : doc.array()) {
             bool isNotification = false;
@@ -403,6 +409,17 @@ int McpServer::sessionIdForClient(const QTcpSocket *sock) const {
 }
 
 // --- Inter-Agenten-Benachrichtigung: Long-Poll ------------------------------
+
+// Cursor aus JSON: Eine Zahl außerhalb des Wertebereichs von quint64 in einen quint64 zu
+// wandeln, ist undefiniertes Verhalten. Darum begrenzen: nicht endlich oder negativ → 0,
+// über 2^53 (exakt darstellbar in double) → 2^53.
+static quint64 seqArgument(const QJsonValue &v) {
+    const double d = v.toDouble(0);
+    if (!(d > 0)) return 0;                      // auch NaN
+    constexpr double kMax = 9007199254740992.0;  // 2^53
+    if (d >= kMax) return static_cast<quint64>(kMax);
+    return static_cast<quint64>(d);
+}
 
 int McpServer::subscriberSessionId(const QJsonObject &args, const QTcpSocket *sock) const {
     // Primär: explizites sessionId-Argument (Agent liest $QTMUX_SESSION_ID).
@@ -469,9 +486,7 @@ void McpServer::beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId,
 
     // afterSeq: expliziter Cursor, sonst „ab jetzt" (nur künftige Ereignisse).
     const bool hasCursor = args.contains(QStringLiteral("afterSeq"));
-    const quint64 afterSeq = hasCursor
-        ? static_cast<quint64>(args.value("afterSeq").toDouble(0))
-        : hub->lastSeq();
+    const quint64 afterSeq = hasCursor ? seqArgument(args.value("afterSeq")) : hub->lastSeq();
 
     auto reply = [this, sock, rpcId, modern](const QJsonObject &result) {
         sendHttpJson(sock, toolResponse(rpcId, QString::fromUtf8(QJsonDocument(result).toJson(
@@ -1102,6 +1117,18 @@ QJsonObject McpServer::toolsList(bool modern) const {
 
 // --- send_message: Direktweg und Antwort-Hinweis -------------------------------
 
+bool McpServer::isBareShell(Session *target) {
+    // (Nur auf Plattformen, deren Prozessliste QTmux lesen kann — anderswo liefert
+    // descendantPids immer leer, und „leer“ wäre dort keine Messung.)
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    return target && target->type() == Session::Type::Shell && target->processId() > 0
+           && procinfo::descendantPids(target->processId()).isEmpty();
+#else
+    Q_UNUSED(target)
+    return false;
+#endif
+}
+
 // Hinweis für den Empfänger, wie er antwortet — als LETZTE Zeile, weil der Mensch
 // dort nur die erste Zeile als Vorschau sieht.
 // 🔑 Der Zusatz „nicht per SendMessage“ ist gemessen nötig (2026-11-15): Ohne ihn
@@ -1176,14 +1203,7 @@ McpServer::DirectDelivery McpServer::deliverDirect(Session *target, int targetId
     // Einreihen wie bei queue_text.
     // (Nur auf Plattformen, deren Prozessliste QTmux lesen kann — anderswo liefert
     // descendantPids immer leer, und „leer“ wäre dort keine Messung.)
-#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX) || defined(Q_OS_WIN)
-    const bool bareShell = target->type() == Session::Type::Shell
-                           && target->processId() > 0
-                           && procinfo::descendantPids(target->processId()).isEmpty();
-#else
-    const bool bareShell = false;
-#endif
-    if (bareShell) {
+    if (isBareShell(target)) {
         out.error = QStringLiteral(
                    "Nicht zugestellt. %1 Und in Session %2 läuft gerade kein Programm, "
                    "nur die Shell: Über die Eingabezeile würde die Nachricht dort als "
@@ -1500,19 +1520,23 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         const QString taskText = QStringLiteral("Nachricht von QTmux-Session %1:\n\n").arg(from)
                                  + body + QStringLiteral("\n\n") + replyHintFor(from, senderId);
         // Text nur behalten, wenn die Nachricht überhaupt in einen Task passt; sonst trägt
-        // der Beleg nur den Weg (Befund der Durchsicht 2026-11-26, Speicher).
+        // der Beleg nur den Weg (Regel: Belege halten keinen Text, den kein Weg mehr braucht).
         const bool fitsTask = body.toUtf8().size() <= agentinbox::kMaxTextBytes;
         const QString msgId = m_taskStore.recordMessage(senderId, targetId, fitsTask ? taskText : QString(),
                                                         fitsTask ? body : QString(), from);
         QJsonObject r{{"from", from}, {"messageId", msgId}};
 
         // (1) Posteingangs-Task (QTMUX-162). Nur ein LEBENDER Task zählt (zuletzt
-        // abgefragt vor höchstens 30 s): Nach /exit fragt niemand mehr, und eine Nachricht
-        // in einem Task, den keiner abholt, wäre schlechter als jeder Rückfall.
+        // abgefragt vor höchstens 3 Abfragetakten, TaskStore::isLive): Nach /exit fragt
+        // niemand mehr, und eine Nachricht in einem Task, den keiner abholt, wäre schlechter
+        // als jeder Rückfall.
         QString taskSkip;
         if (!fitsTask) {
             taskSkip = QStringLiteral("Die Nachricht ist für einen Task zu lang (mehr als %1 Bytes).")
                            .arg(agentinbox::kMaxTextBytes);
+            // Regel: Keine Nachricht überholt gepufferte; erst der Puffer in Reihenfolge.
+            if (m_taskStore.hasBuffered(targetId))
+                flushBuffered(targetId, QStringLiteral("Eine folgende Nachricht war für den Task zu lang."));
         } else {
             const QString live = m_taskStore.liveInboxOf(targetId);
             if (!live.isEmpty() && !m_taskStore.hasBuffered(targetId)) {
@@ -1527,8 +1551,12 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             }
             // (1b) Der Empfänger stellt seinen Posteingang gerade neu (oder ein Puffer
             // wartet schon): anhängen, damit die Reihenfolge bleibt.
-            if (!live.isEmpty() || m_taskStore.hasBuffered(targetId)
-                || m_taskStore.inboxRecentlySeen(targetId)) {
+            // Läuft beim Empfänger kein Programm mehr (nur die Shell), wartet dort niemand:
+            // dann nicht puffern, sondern gleich den Direktweg, der das ehrlich ablehnt —
+            // eine als „gepuffert“ angenommene Nachricht scheiterte sonst später still.
+            if ((!live.isEmpty() || m_taskStore.hasBuffered(targetId)
+                 || m_taskStore.inboxRecentlySeen(targetId))
+                && !(live.isEmpty() && isBareShell(target))) {
                 if (m_taskStore.buffer(msgId)) {
                     ensureTaskTimer();
                     r.insert("via", QStringLiteral("task-buffer"));
@@ -1580,8 +1608,8 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
         if (!m->detail.isEmpty()) o.insert("detail", m->detail);
         if (m->state == TaskStore::MessageState::Fetched) {
             if (const TaskStore::Task *t = m_taskStore.find(m->taskId))
-                o.insert("fetchedAt", QDateTime::fromMSecsSinceEpoch(t->fetchedAt, QTimeZone::UTC)
-                                          .toString(Qt::ISODate));
+                o.insert("fetchedAt", QDateTime::fromMSecsSinceEpoch(m_taskStore.wallMs(t->fetchedAt),
+                                                                     QTimeZone::UTC).toString(Qt::ISODate));
             o.insert("hinweis", QStringLiteral("Abgeholt heißt: Der Client des Empfängers hat das "
                                                "Ergebnis geholt. Ob das Modell sie gelesen hat, "
                                                "weiß QTmux nicht."));
@@ -2050,9 +2078,16 @@ void McpServer::handleModern(QTcpSocket *sock, const QJsonObject &req) {
     const QJsonValue id = req.value("id");
     const QJsonObject params = req.value("params").toObject();
 
+    // Spezifikation: Die ID einer Anfrage darf nicht null sein.
+    if (id.isNull()) {
+        sendHttpJson(sock, mcphttp::errorBody(QJsonValue::Null, mcphttp::kInvalidRequest,
+                                              QStringLiteral("Invalid Request: id darf nicht null sein")),
+                     400);
+        return;
+    }
     // Benachrichtigungen: Die Fassung definiert über HTTP keine vom Client; annehmen und
     // nichts tun (Spezifikation: 202 ohne Rumpf).
-    if (id.isUndefined() || id.isNull()) {
+    if (id.isUndefined()) {
         sendHttpJson(sock, QByteArray(), 202);
         return;
     }
@@ -2155,8 +2190,8 @@ void McpServer::createTask(QTcpSocket *sock, const QJsonValue &id, const QString
                                                         : (sock && !sock->peerAddress().isLoopback());
         if (explicitId > 0 && (fromNetwork || events) && m_sessions && m_sessions->sessionById(explicitId)) {
             owner = explicitId;
-            // Einen gebundenen, lebenden Posteingang der echten Session verdrängt ein
-            // ungebundener nicht (Befund der Durchsicht 2026-11-26).
+            // Regel: Einen gebundenen, lebenden Posteingang der echten Session verdrängt
+            // ein ungebundener (aus dem Netz, per sessionId) nicht.
             if (!events) {
                 const TaskStore::Task *cur = m_taskStore.find(m_taskStore.liveInboxOf(owner));
                 if (cur && cur->bound) {
@@ -2179,9 +2214,8 @@ void McpServer::createTask(QTcpSocket *sock, const QJsonValue &id, const QString
             toolError(QStringLiteral("Kein Abo für Session %1 — zuerst subscribe_events aufrufen.").arg(owner));
             return;
         }
-        afterSeq = args.contains(QStringLiteral("afterSeq"))
-                       ? static_cast<quint64>(qMax(0.0, args.value("afterSeq").toDouble(0)))
-                       : hub->lastSeq();
+        afterSeq = args.contains(QStringLiteral("afterSeq")) ? seqArgument(args.value("afterSeq"))
+                                                             : hub->lastSeq();
     }
 
     const TaskStore::CreateResult cr = m_taskStore.create(
@@ -2310,24 +2344,28 @@ void McpServer::onTaskTimer() {
     for (int owner : m_taskStore.owners())
         if (!m_sessions || !m_sessions->sessionById(owner)) m_taskStore.ownerClosed(owner);
 
-    // Abgelaufene Puffer: in Reihenfolge über den Direktweg, außer der Empfänger hat
-    // inzwischen wieder einen lebenden Posteingang (dann holt der sie bei seiner nächsten
-    // Abfrage, advanceTask).
-    for (int target : m_taskStore.expiredBuffers()) {
-        if (!m_taskStore.liveInboxOf(target).isEmpty()) continue;
-        flushBuffered(target, QStringLiteral("Kein Posteingangs-Task binnen %1 s.")
-                                  .arg(m_taskStore.limits().mailboxGraceMs / 1000));
-    }
+    // Reihenfolge der zwei Rückfälle: erst die nicht abgeholten Posteingänge (ihre
+    // Nachrichten sind älter), dann die Puffer. Fallen beide in einen Takt (Uhr- oder
+    // Ruhezustandssprung), überholt sonst die jüngere Nachricht die ältere.
 
     // Beendete Posteingänge, die niemand abholt (Client beendet, kurz nachdem er zuletzt
     // fragte): Nachrichten über den Direktweg, das Task-Ergebnis wird zum Hinweis — holt
-    // der Client nach einem --resume doch ab, kommt nichts doppelt.
+    // der Client nach einem --resume doch ab, kommt nichts doppelt. Läuft beim Empfänger
+    // kein Programm mehr (nur die Shell), ist der Direktweg zu; dann bleiben die
+    // Nachrichten im Task, und ein späteres --resume holt sie noch ab.
     for (const QString &tid : m_taskStore.unfetchedInboxes()) {
         const TaskStore::Task *t = m_taskStore.find(tid);
         if (!t) continue;
         const int target = t->owner;
         const QStringList mids = t->messageIds;
         Session *ts = m_sessions ? m_sessions->sessionById(target) : nullptr;
+        if (ts && isBareShell(ts)) {
+            m_taskStore.blockRelease(tid, QStringLiteral(
+                "Der Client holte den Posteingang nicht ab, und in der Ziel-Session läuft kein "
+                "Programm mehr. Die Nachricht wartet im Task (bis 1 h nach Abschluss) auf ein "
+                "--resume der Sitzung."));
+            continue;
+        }
         QStringList ways;
         for (const QString &mid : mids) {
             const TaskStore::Message *mp = m_taskStore.message(mid);
@@ -2350,6 +2388,15 @@ void McpServer::onTaskTimer() {
                 "inzwischen auf anderem Weg hinaus (%1); sie folgen hier nicht noch einmal.")
                 .arg(ways.isEmpty() ? QStringLiteral("keine zustellbar") : ways.join(QStringLiteral(", ")))}}}},
             {"isError", false}});
+    }
+
+    // Abgelaufene Puffer: in Reihenfolge über den Direktweg, außer der Empfänger hat
+    // inzwischen wieder einen lebenden Posteingang (dann holt der sie bei seiner nächsten
+    // Abfrage, advanceTask).
+    for (int target : m_taskStore.expiredBuffers()) {
+        if (!m_taskStore.liveInboxOf(target).isEmpty()) continue;
+        flushBuffered(target, QStringLiteral("Kein Posteingangs-Task binnen %1 s.")
+                                  .arg(m_taskStore.limits().mailboxGraceMs / 1000));
     }
     m_taskStore.sweep();
     if (m_taskStore.owners().isEmpty() && m_taskTimer) m_taskTimer->stop();

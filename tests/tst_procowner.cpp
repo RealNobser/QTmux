@@ -62,7 +62,11 @@ private slots:
         const quint16 clientPort = peer->peerPort();
         const qint64 clientPid = client->processId();
 
-        // Gegenprobe mit der alten Suche: dieselbe Verbindung, derselbe Prozess.
+        // Gegenprobe mit der alten Suche: dieselbe Verbindung, derselbe Prozess. Unabhängig
+        // ist dabei der Vergleich mit der PID, die QProcess meldet. ⚠️ Unter Windows ist
+        // tcpClientBelongsTo selbst aus pidOfTcpClient + ancestorPids gebaut; die Prüfungen
+        // im Baum sind dort also keine unabhängige Gegenprobe, sondern nur die
+        // Ja-/Nein-Fälle derselben Mechanik.
         QElapsedTimer t;
         t.start();
         QCOMPARE(qtmux::procinfo::pidOfTcpClient(clientPort, serverPort), clientPid);

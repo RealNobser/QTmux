@@ -45,6 +45,7 @@ public:
         quint64 afterSeq = 0;      ///< nur AwaitEvents: Cursor in den AgentEventHub
         QStringList messageIds;    ///< nur AwaitMessage: zugestellte Nachrichten
         bool released = false;     ///< Nachrichten nach Nicht-Abholen dem Rückfall übergeben
+        bool releaseBlocked = false; ///< Rückfall unmöglich (Ziel ohne Programm): Nachricht bleibt im Task
     };
 
     /// Zustand einer Nachricht aus Sicht des Absenders (`message_status`).
@@ -92,10 +93,14 @@ public:
         int slowPollMs = 5000;
     };
 
+    /// Millisekunden. `clock` misst alle Fristen und muss MONOTON sein (Vorgabe:
+    /// QElapsedTimer); `wall` liefert nur die Zeitstempel der Drahtform (Vorgabe:
+    /// Wanduhr). Ein Sprung der Wanduhr (Zeitabgleich, Ruhezustand) verschiebt so keine
+    /// Frist.
     using Clock = std::function<qint64()>;
 
     TaskStore();
-    TaskStore(Limits limits, Clock clock);
+    TaskStore(Limits limits, Clock clock, Clock wall = {});
 
     const Limits &limits() const { return m_limits; }
     qint64 now() const { return m_clock(); }
@@ -130,6 +135,11 @@ public:
     /// Ergebnis eines nicht abgeholten Posteingangs ersetzen, nachdem seine Nachrichten
     /// über den Rückfall gingen (holt der Client später doch ab, kommt nichts doppelt).
     void releaseUnfetched(const QString &id, const QJsonObject &replacement);
+    /// Rückfall gescheitert: Nachrichten bleiben im Task (ein späteres --resume holt sie),
+    /// der Task wird nicht mehr als „nicht abgeholt“ gemeldet.
+    void blockRelease(const QString &id, const QString &detail);
+    /// Wanduhr-Zeitpunkt (ms seit Epoche) zu einem Wert der monotonen Uhr.
+    qint64 wallMs(qint64 monotonicMs) const;
 
     /// Offener, lebender Posteingangs-Task der Session (letzte Abfrage höchstens
     /// `livePolls` Takte alt); leer = keiner.
@@ -183,6 +193,7 @@ private:
 
     Limits m_limits;
     Clock m_clock;
+    Clock m_wall;
     QHash<QString, Task> m_tasks;
     QList<QString> m_order;                 // Anlagereihenfolge (für Grenzen und Aufräumen)
     QHash<QString, Message> m_messages;

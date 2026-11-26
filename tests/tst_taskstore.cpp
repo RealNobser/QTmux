@@ -2,6 +2,8 @@
 #include <QJsonArray>
 #include <QRegularExpression>
 #include <QSet>
+#include <QDateTime>
+#include <QTimeZone>
 
 #include "TaskStore.h"
 
@@ -214,7 +216,7 @@ private slots:
         QVERIFY(!st.hasBuffered(4));
     }
 
-    // Durchsicht 2026-11-26, Befund 1: Ein Beleg trägt den Text nur, solange er ihn braucht
+    // Ein Beleg trägt den Text nur, solange er ihn braucht
     // (im Puffer). Sonst wüchse der Speicher mit jeder abgelehnten Riesen-Nachricht.
     void receiptsDropTheirTextOnceDecided() {
         TaskStore st = make();
@@ -234,7 +236,7 @@ private slots:
         QVERIFY(st.message(buffered)->text.isEmpty());   // steht jetzt im Task-Ergebnis
     }
 
-    // Befund 3: Ein Abbruch liefert keinen Endzustand aus, ist also kein Zustellbeleg.
+    // Ein Abbruch liefert keinen Endzustand aus, ist also kein Zustellbeleg.
     void cancelIsNoReceipt() {
         TaskStore st = make();
         const QString id = st.create(TaskStore::Kind::AwaitMessage, 2, true).id;
@@ -245,7 +247,7 @@ private slots:
         QCOMPARE(st.message(m)->state, TaskStore::MessageState::InTask);
     }
 
-    // Befund 5: Ein abgelehntes Anlegen darf den bestehenden Posteingang nicht wegnehmen.
+    // Ein abgelehntes Anlegen darf den bestehenden Posteingang nicht wegnehmen.
     void rejectedCreateKeepsTheOldInbox() {
         TaskStore::Limits l;
         l.maxTotal = 2;
@@ -281,7 +283,7 @@ private slots:
         QVERIFY(st.liveInboxOf(1).isEmpty());
     }
 
-    // Befund 2: Ein beendeter Posteingang, den binnen 3 Takten niemand abholt, gibt seine
+    // Ein beendeter Posteingang, den binnen 3 Takten niemand abholt, gibt seine
     // Nachrichten für den Rückfall frei.
     void unfetchedInboxIsReported() {
         TaskStore st = make();
@@ -293,6 +295,46 @@ private slots:
         QCOMPARE(st.unfetchedInboxes(), QStringList{id});
         st.notePolled(id, true);
         QVERIFY(st.unfetchedInboxes().isEmpty());
+    }
+
+    // Fristen hängen an einer monotonen Uhr, die Zeitstempel der Drahtform an der Wanduhr.
+    // Springt die Wanduhr zurück, lebt ein toter Posteingang nicht wieder auf.
+    void deadlinesIgnoreWallClockJumps() {
+        qint64 wall = 1'800'000'000'000LL;
+        TaskStore st(TaskStore::Limits{}, [this] { return m_now; }, [&wall] { return wall; });
+        const QString id = st.create(TaskStore::Kind::AwaitMessage, 1, true).id;
+        QCOMPARE(st.wire(*st.find(id)).value("createdAt").toString(),
+                 QDateTime::fromMSecsSinceEpoch(wall, QTimeZone::UTC).toString(Qt::ISODate));
+        advance(7000);
+        wall += 7000;
+        QVERIFY(st.liveInboxOf(1).isEmpty());
+        wall -= 3600 * 1000;   // Zeitabgleich stellt die Wanduhr eine Stunde zurück
+        QVERIFY(st.liveInboxOf(1).isEmpty());
+        // Der Zeitstempel folgt der Wanduhr: Anlage lag 7 s vor „jetzt“.
+        QCOMPARE(st.wire(*st.find(id)).value("createdAt").toString(),
+                 QDateTime::fromMSecsSinceEpoch(wall - 7000, QTimeZone::UTC).toString(Qt::ISODate));
+    }
+
+    // Grenzen verwerfen nie eine Nachricht, die noch niemand bekommen hat.
+    void limitsNeverDropUndeliveredMessages() {
+        TaskStore::Limits l;
+        l.maxTotal = 2;
+        l.maxMessages = 2;
+        TaskStore st = make(l);
+        const QString inbox = st.create(TaskStore::Kind::AwaitMessage, 1, true).id;
+        const QString m = st.recordMessage(5, 1, "t", "b", "f");
+        st.complete(inbox, {}, {}, {m});           // beendet, nicht abgeholt
+        const QString other = st.create(TaskStore::Kind::AwaitEvents, 2, true).id;
+        QVERIFY(!other.isEmpty());
+        // Gesamtgrenze: Der nicht abgeholte Posteingang darf nicht weichen.
+        QVERIFY(st.create(TaskStore::Kind::AwaitEvents, 3, true).id.isEmpty());
+        QVERIFY(st.find(inbox) != nullptr);
+        // Beleggrenze: Belege im Task bleiben, abgehakte gehen zuerst.
+        const QString done1 = st.recordMessage(5, 2, "t", "b", "f");
+        st.markDirect(done1, "queue", "queued", false);
+        st.recordMessage(5, 2, "t", "b", "f");
+        QVERIFY(st.message(m) != nullptr);
+        QCOMPARE(st.message(m)->state, TaskStore::MessageState::InTask);
     }
 
     void messageReceiptsExpire() {

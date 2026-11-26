@@ -1,6 +1,7 @@
 #include "TaskStore.h"
 
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QRandomGenerator>
 #include <QTimeZone>
 
@@ -17,13 +18,24 @@ constexpr int kMaxIdLength = 64;
 QString isoUtc(qint64 ms) {
     return QDateTime::fromMSecsSinceEpoch(ms, QTimeZone::UTC).toString(Qt::ISODate);
 }
+
+// Monotone Vorgabe-Uhr. +1, damit kein Zeitpunkt 0 ist (0 heißt „nicht gesetzt“).
+qint64 monotonicMs() {
+    static QElapsedTimer t = [] { QElapsedTimer e; e.start(); return e; }();
+    return t.elapsed() + 1;
+}
 } // namespace
 
 TaskStore::TaskStore() : TaskStore(Limits{}, Clock{}) {}
 
-TaskStore::TaskStore(Limits limits, Clock clock)
+TaskStore::TaskStore(Limits limits, Clock clock, Clock wall)
     : m_limits(limits),
-      m_clock(clock ? std::move(clock) : Clock([] { return QDateTime::currentMSecsSinceEpoch(); })) {}
+      m_clock(clock ? std::move(clock) : Clock(monotonicMs)),
+      m_wall(wall ? std::move(wall) : Clock([] { return QDateTime::currentMSecsSinceEpoch(); })) {}
+
+qint64 TaskStore::wallMs(qint64 monotonicMs) const {
+    return m_wall() - (m_clock() - monotonicMs);
+}
 
 bool TaskStore::isWellFormedId(const QString &id) {
     if (id.isEmpty() || id.size() > kMaxIdLength) return false;
@@ -107,9 +119,15 @@ TaskStore::CreateResult TaskStore::create(Kind kind, int owner, bool bound, quin
     }
 
     // Grenze insgesamt: Platz schaffen nur aus beendeten (oder gleich beendeten) Tasks.
+    // Ein beendeter Posteingang mit Nachrichten, die niemand abgeholt hat, zählt nicht
+    // als verwerfbar: Grenzen verwerfen nie eine noch nicht erhaltene Nachricht.
+    auto harmless = [](const Task &t) {
+        return t.status != Status::Working
+               && (t.fetchedAt != 0 || t.messageIds.isEmpty() || (t.released && !t.releaseBlocked));
+    };
     int removable = toReplace.size() + (victim.isEmpty() ? 0 : 1);
     for (const Task &t : m_tasks)
-        if (t.status != Status::Working) ++removable;
+        if (harmless(t)) ++removable;
     if (m_tasks.size() - removable >= m_limits.maxTotal) {
         r.error = QStringLiteral("Zu viele Tasks insgesamt (höchstens %1).").arg(m_limits.maxTotal);
         return r;
@@ -123,14 +141,10 @@ TaskStore::CreateResult TaskStore::create(Kind kind, int owner, bool bound, quin
                QStringLiteral("Abgebrochen: Grenze offener Tasks je Session erreicht."));
         r.evictedId = victim;
     }
-    // Verwerfen: zuerst beendete ohne offene Zustellung (abgeholt, ohne Nachrichten oder
-    // schon dem Rückfall übergeben), dann die übrigen beendeten; jeweils die ältesten.
-    auto evictOne = [this](bool onlyHarmless) {
+    // Verwerfen: nur beendete ohne offene Zustellung, die ältesten zuerst.
+    auto evictOne = [this, &harmless]() {
         for (int i = 0; i < m_order.size(); ++i) {
-            const Task &t = m_tasks[m_order.at(i)];
-            if (t.status == Status::Working) continue;
-            const bool harmless = t.fetchedAt != 0 || t.messageIds.isEmpty() || t.released;
-            if (onlyHarmless && !harmless) continue;
+            if (!harmless(m_tasks[m_order.at(i)])) continue;
             m_tasks.remove(m_order.at(i));
             m_order.removeAt(i);
             return true;
@@ -138,7 +152,7 @@ TaskStore::CreateResult TaskStore::create(Kind kind, int owner, bool bound, quin
         return false;
     };
     while (m_tasks.size() >= m_limits.maxTotal)
-        if (!evictOne(true) && !evictOne(false)) break;
+        if (!evictOne()) break;
 
     Task t;
     t.id = newId(QStringLiteral("qt-"));
@@ -197,7 +211,7 @@ QStringList TaskStore::unfetchedInboxes() const {
     for (const QString &id : m_order) {
         const Task &t = m_tasks[id];
         if (t.kind != Kind::AwaitMessage || t.status != Status::Completed || t.fetchedAt != 0
-            || t.released || t.messageIds.isEmpty())
+            || t.released || t.releaseBlocked || t.messageIds.isEmpty())
             continue;
         // Gleiche Schwelle wie „lebt“: so lange darf eine Abfrage höchstens ausbleiben.
         if (now - t.completedAt > qint64(m_limits.livePolls) * pollIntervalMs(t)) out << id;
@@ -211,6 +225,18 @@ void TaskStore::releaseUnfetched(const QString &id, const QJsonObject &replaceme
     t->result = replacement;
     t->released = true;
     t->lastUpdatedAt = m_clock();
+}
+
+void TaskStore::blockRelease(const QString &id, const QString &detail) {
+    Task *t = findMutable(id);
+    if (!t) return;
+    t->releaseBlocked = true;
+    for (const QString &mid : t->messageIds) {
+        auto it = m_messages.find(mid);
+        if (it == m_messages.end()) continue;
+        it->detail = detail;
+        it->changedAt = m_clock();
+    }
 }
 
 void TaskStore::notePolled(const QString &id, bool deliveredEndState) {
@@ -245,7 +271,11 @@ QString TaskStore::liveInboxOf(int owner) const {
 bool TaskStore::inboxRecentlySeen(int owner) const {
     const qint64 now = m_clock();
     for (const Task &t : m_tasks) {
-        if (t.owner != owner || t.kind != Kind::AwaitMessage) continue;
+        // Abgebrochene (vom Client, ersetzt, Session zu) zählen nicht: Dort stellt niemand
+        // gleich einen neuen Posteingang, eine Nachricht wartete umsonst.
+        if (t.owner != owner || t.kind != Kind::AwaitMessage
+            || (t.status != Status::Working && t.status != Status::Completed))
+            continue;
         const qint64 last = std::max(t.lastPolledAt, t.completedAt);
         if (now - last <= m_limits.mailboxGraceMs) return true;
     }
@@ -326,8 +356,8 @@ QJsonObject TaskStore::wire(const Task &t) const {
     QJsonObject o{
         {"taskId", t.id},
         {"status", statusName(t.status)},
-        {"createdAt", isoUtc(t.createdAt)},
-        {"lastUpdatedAt", isoUtc(t.lastUpdatedAt)},
+        {"createdAt", isoUtc(wallMs(t.createdAt))},
+        {"lastUpdatedAt", isoUtc(wallMs(t.lastUpdatedAt))},
         {"pollIntervalMs", pollIntervalMs(t)},
     };
     // ttlMs zählt ab Anlage. Offen: keine feste Frist (null); beendet: so lange, wie das
@@ -348,10 +378,12 @@ QJsonObject TaskStore::wire(const Task &t) const {
 QString TaskStore::recordMessage(int sender, int target, const QString &text, const QString &body,
                                  const QString &from) {
     sweep();
-    // Grenze der Belege: älteste nicht gepufferte zuerst verwerfen.
+    // Grenze der Belege: älteste erledigte zuerst verwerfen. Gepufferte und solche im Task
+    // bleiben (ihre Zahl begrenzen Puffer und Tasks schon).
     while (m_messages.size() >= m_limits.maxMessages) {
         auto it = std::find_if(m_messageOrder.begin(), m_messageOrder.end(), [this](const QString &id) {
-            return m_messages.value(id).state != MessageState::Buffered;
+            const MessageState st = m_messages.value(id).state;
+            return st != MessageState::Buffered && st != MessageState::InTask;
         });
         if (it == m_messageOrder.end()) break;
         m_messages.remove(*it);
@@ -382,8 +414,9 @@ void TaskStore::markDirect(const QString &id, const QString &via, const QString 
     auto it = m_messages.find(id);
     if (it == m_messages.end()) return;
     it->state = fellBack ? MessageState::FellBack : MessageState::Direct;
-    // Der Beleg braucht den Text nicht mehr (Befund der Durchsicht 2026-11-26: sonst blieben
-    // je abgelehnter Riesen-Nachricht zwei Kopien eine Stunde lang liegen).
+    // Der Beleg braucht den Text nicht mehr. Regel: Ein Beleg trägt den Text nur, solange
+    // ihn noch ein Weg braucht (Puffer, Rückfall); sonst bleiben je abgelehnter
+    // Riesen-Nachricht zwei Kopien eine Stunde lang liegen.
     it->text.clear();
     it->body.clear();
     it->via = via;
