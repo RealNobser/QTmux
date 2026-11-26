@@ -1684,6 +1684,14 @@ Hubs; gültig sind sie für QTmux, weil der Abgleich den vendierten Stand byte-g
   Lebenszeichen bekommt keine Nachricht mehr; ein beendeter, den 3 Takte lang niemand
   abholt, gibt seine Nachrichten an den Direktweg und trägt danach nur noch einen Hinweis
   (kein zweites Exemplar nach einem späten `--resume`).
+  🔑 **Fristen auf der monotonen Uhr, Zeitstempel von der Wanduhr** (`TaskStore` mit zwei
+  Uhren): Ein Zeitabgleich oder Ruhezustand verschiebt keine Frist. In `onTaskTimer` laufen
+  die nicht abgeholten Posteingänge vor den abgelaufenen Puffern, damit bei einem Sprung
+  die ältere Nachricht zuerst hinausgeht.
+  🔑 **Wo kein Programm mehr läuft, wartet niemand:** Steht die Ziel-Session an der nackten
+  Shell, puffert `send_message` nicht (der Direktweg lehnt sofort ab, wie bis 1.10.1), und
+  ein nicht abgeholter Posteingang behält seine Nachricht für ein späteres `--resume`, statt
+  sie an eine Shell-Eingabe zu geben.
   🔑 **Eine Verbindung, eine Anfrage** (`m_requestTaken`): Der Server antwortet mit
   `Connection: close`; was danach auf derselben Verbindung eintrifft, wird verworfen. Vorher
   konnten zwei `wait_for_events` auf einem Socket hängen, und das Aufräumen eines Polls

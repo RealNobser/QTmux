@@ -27,6 +27,15 @@ Benachrichtigungen, absolute Zielform und Entwurfsfassungen auf dem alten Weg. J
 war am Stand davor rot und ist jetzt grün. Ein Befund (abgelehntes Anlegen nimmt den alten
 Posteingang weg) ist widerlegt: Der ersetzte Task wird beim Ersetzen frei.
 
+**Zweite Durchsicht** (2026-11-27, lesend, Opus): Nachricht als „gepuffert“ angenommen und
+später still gescheitert, wenn beim Empfänger nur noch die Shell läuft; zu große Nachricht
+überholt gepufferte; Stapel erbt den Aufrufer der vorigen Anfrage (Absender und
+`message_status`); Doku nannte 30 s statt 3 Takten; Kopfzeile ohne Datumsform landete auf
+dem neuen Weg; Fristen an der Wanduhr; undefiniertes Verhalten bei `afterSeq` außerhalb des
+Wertebereichs; `"id": null` bekam 202; Grenzen konnten nicht abgeholte Nachrichten
+verwerfen; ein Test bewies wenig. Je ein Test war am Stand davor rot. Kein Änderungsbedarf:
+`resultType` im eingebetteten Task-Ergebnis (alle Beispiele der Erweiterung lassen ihn weg).
+
 **Teststand:** 73 auf macOS (vorher 70): `test_taskstore`, `test_mcphttp`, `test_procowner`.
 
 ## Release v1.10.1 (2026-11-26)

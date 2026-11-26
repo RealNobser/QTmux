@@ -271,8 +271,8 @@ keiner. Ein Aufruf von außerhalb jeder Session heißt `unbekannt`.
 
 | `via` | Wann | Was beim Empfänger geschieht |
 |---|---|---|
-| `task` | die Ziel-Session hält einen **lebenden** Posteingangs-Task offen (`await_message`, zuletzt abgefragt vor höchstens 30 s) | die Nachricht beendet den Task; der Client weckt die Sitzung, auch wenn sie untätig ist (Abschnitt [MCP-Tasks](#zwei-fassungen-und-mcp-tasks-qtmux-162)) |
-| `task-buffer` | die Ziel-Session hatte in den letzten 60 s einen Posteingangs-Task, stellt ihn aber gerade neu | die Nachricht wartet bis zu 60 s und kommt mit dem nächsten `await_message`; kommt keiner, geht sie **in Reihenfolge** über die beiden Wege unten (`message_status` sagt dann `fell-back`) |
+| `task` | die Ziel-Session hält einen **lebenden** Posteingangs-Task offen (`await_message`, zuletzt abgefragt vor höchstens 3 Abfragetakten: 6 s in der ersten Minute, danach 15 s) | die Nachricht beendet den Task; der Client weckt die Sitzung, auch wenn sie untätig ist (Abschnitt [MCP-Tasks](#zwei-fassungen-und-mcp-tasks-qtmux-162)) |
+| `task-buffer` | die Ziel-Session hatte in den letzten 60 s einen offenen oder beendeten Posteingangs-Task (ein abgebrochener zählt nicht), stellt ihn aber gerade neu, **und** dort läuft noch ein Programm | die Nachricht wartet bis zu 60 s und kommt mit dem nächsten `await_message`; kommt keiner, geht sie **in Reihenfolge** über die beiden Wege unten (`message_status` sagt dann `fell-back`). Läuft dort nur noch die Shell (Agent beendet), wird nicht gepuffert: Der Direktweg lehnt sofort ab, wie bis 1.10.1 |
 | `inbox` | die Ziel-Session hat einen Nachrichten-Eingang gemeldet | die Nachricht erscheint als **eigene Zeile im Verlauf** („Message from @QTmux-…“), die Eingabezeile bleibt unberührt — auch während der Mensch tippt, der Agent arbeitet oder eine Rückfrage offen ist |
 | `queue` | kein Eingang gemeldet, oder die Zustellung scheiterte (`reason` sagt, warum) | wie `queue_text`, mit einer Kopfzeile „QTmux-Nachricht von Session …, nicht vom Menschen an diesem Terminal getippt“ — wartet also auf den Menschen |
 
@@ -756,7 +756,7 @@ das PTY-Hangup ignorieren (`nohup` o. ä.).
 
 **Welche Fassung eine Anfrage spricht, entscheidet QTmux je Anfrage.** Trägt sie
 `params._meta["io.modelcontextprotocol/protocolVersion"]` oder eine Kopfzeile
-`MCP-Protocol-Version` ab 2026-07-28, gilt die neue Fassung; alles andere, insbesondere
+`MCP-Protocol-Version` mit einem Datum (JJJJ-MM-TT) ab 2026-07-28, gilt die neue Fassung; alles andere, insbesondere
 `initialize`, nimmt den alten Weg unverändert (Stapel, HTTP 200 auch bei unbekannter
 Methode, Long-Poll `wait_for_events`). Claude Code ab etwa 2.1.300 fragt zuerst per
 `server/discover` und nimmt die neue Fassung, sobald der Server sie anbietet;
@@ -771,6 +771,7 @@ Methode, Long-Poll `wait_for_events`). Claude Code ab etwa 2.1.300 fragt zuerst 
 | Fassung unbekannt (`data.supported` nennt `2026-07-28`) | 400 | `-32022` |
 | Stapel (JSON-Array) | 400 | `-32600` |
 | Task-Werkzeug oder `tasks/*` ohne die Client-Fähigkeit `io.modelcontextprotocol/tasks` | 400 | `-32021` |
+| `"id": null` (die Spezifikation verbietet sie) | 400 | `-32600` |
 | unbekannte Methode (auch `ping`, `subscriptions/listen`) | 404 | `-32601` |
 | Task unbekannt, abgelaufen, fremd oder nach Neustart verloren | 200 | `-32602` |
 
@@ -814,10 +815,19 @@ den Posteingang einer fremden Session kann ein Prozess außerhalb jeder Session 
 übernehmen.
 
 **Grenzen:** höchstens 8 offene Tasks je Session (beim neunten muss der älteste ohne
-Abfrage in den letzten 30 s weichen, sonst Fehler), 256 insgesamt; je Session gilt nur
+Abfrage in den letzten 3 Takten weichen, sonst Fehler), 256 insgesamt; je Session gilt nur
 der zuletzt gestellte Posteingang; abgeschlossene Tasks bleiben **1 h** abrufbar; ein
 offener Task ohne Abfrage seit 24 h wird abgebrochen; Puffer je Session 32 Nachrichten
-bzw. 256 KiB. Task-Kennungen sind 128 bit Systemzufall.
+bzw. 256 KiB. Grenzen verwerfen nie eine Nachricht, die noch niemand bekommen hat (ein
+beendeter, nicht abgeholter Posteingang weicht keiner Grenze; dann wird das Anlegen
+abgelehnt). Alle Fristen laufen auf einer monotonen Uhr; ein Sprung der Wanduhr
+(Zeitabgleich, Ruhezustand) verschiebt keine. Task-Kennungen sind 128 bit Systemzufall.
+
+**Nicht abgeholt:** Einen beendeten Posteingang, den der Client 3 Takte lang nicht abholt,
+übergibt QTmux dem Direktweg (Socket bzw. Warteschlange), und das Task-Ergebnis wird zum
+Hinweis. Läuft in der Ziel-Session nur noch die Shell, ist der Direktweg zu: Dann bleibt
+die Nachricht im Task (bis 1 h nach Abschluss), ein späteres `--resume` holt sie, und
+`message_status` sagt so lange `completed` mit einem `detail`.
 
 **`tasks/cancel`** bricht einen offenen Task ab (ein beendeter bleibt, wie er ist);
 **`tasks/update`** wird quittiert (QTmux fragt nie zurück, `input_required` kommt nicht vor).

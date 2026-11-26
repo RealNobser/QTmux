@@ -43,6 +43,14 @@ Mechanik in [docs/feature-referenz.md](../../docs/feature-referenz.md), Abschnit
   `pollIntervalMs` aus jeder Antwort, auch während langer Züge und `/compact`. Wer den Takt
   ändert, ändert damit die Lebendschwelle (3 Takte) und die Frist für den Rückfall nicht
   abgeholter Posteingänge mit.
+- 🔑 **Jede Anfrage bestimmt ihren Aufrufer selbst** (`m_callerSessionId`), auch ein
+  Stapel des alten Wegs. Ein veralteter Wert gab vorher einem Stapel den Absender und die
+  `message_status`-Auskunft der vorigen Anfrage.
+- ⚠️ **Zahlen aus JSON nie ungeprüft in `quint64` wandeln** (`seqArgument`): Ein `double`
+  außerhalb des Wertebereichs ist undefiniertes Verhalten; auf arm64 kam 1,84·10^19 heraus.
+- ⚠️ **Tests mit „nackter Shell“** brauchen einen echten Prozess ohne Kinder
+  (`addBareShellSession` in `tst_mcphttp.cpp` startet dafür `/bin/sleep`); eine
+  Mitschnitt-Sitzung mit PID −1 gilt nie als nackt.
 - 🔑 **Ein Nachrichtenbeleg trägt den Text nur, solange er ihn braucht** (im Puffer bzw. bis
   der Client abholt). Vorher blieben je abgelehnter 3,9-MB-Nachricht rund 16 MB eine
   Stunde liegen (gemessen: +321 MB RSS nach 20 Aufrufen).
