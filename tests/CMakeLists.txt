@@ -129,6 +129,7 @@ add_test(NAME test_mcpaccess COMMAND test_mcpaccess)
 qt_add_executable(test_mcpfocus tst_mcpfocus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpServer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpAccess.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpHttp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/AgentInboxClient.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/SessionModel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/Window.cpp
@@ -148,6 +149,7 @@ add_test(NAME test_mcpfocus COMMAND test_mcpfocus)
 qt_add_executable(test_mcpmessage tst_mcpmessage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpServer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpAccess.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpHttp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/AgentInboxClient.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/SessionModel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/Window.cpp
@@ -171,6 +173,25 @@ add_test(NAME test_taskstore COMMAND test_taskstore)
 qt_add_executable(test_procowner tst_procowner.cpp)
 target_link_libraries(test_procowner PRIVATE qtmux_core Qt6::Test Qt6::Network)
 add_test(NAME test_procowner COMMAND test_procowner)
+
+# QTMUX-162: der MCP-Server über die HTTP-Leitung (alter Weg und Revision 2026-07-28,
+# Tasks, Posteingang). Gleiche Bauart wie test_mcpmessage; der Client läuft im Test.
+qt_add_executable(test_mcphttp tst_mcphttp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpServer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpAccess.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/McpHttp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server/AgentInboxClient.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/SessionModel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/Window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels/WindowModel.cpp)
+target_include_directories(test_mcphttp PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/server
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/viewmodels
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/plugins
+    ${CMAKE_BINARY_DIR}/generated)
+add_dependencies(test_mcphttp qtmux_buildid)
+target_link_libraries(test_mcphttp PRIVATE qtmux_core Qt6::Test Qt6::Qml Qt6::Network)
+add_test(NAME test_mcphttp COMMAND test_mcphttp)
 
 # Nachrichten-Eingang eines Agenten: Rahmen (Kern) + Schreiben auf den Socket gegen einen
 # Eingang, den der Test selbst aufmacht. Der Client liegt bei seinem Nutzer in src/server
@@ -491,7 +512,7 @@ endif()
 # WIN32_EXECUTABLE (Konsolen-Vererbung an Kindshells) gilt hier nicht — keiner
 # dieser Tests startet eine Kindshell.
 if(WIN32)
-    set_target_properties(test_updater test_updatercatalogs test_updatebridge test_updatequit test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox test_taskstore test_procowner
+    set_target_properties(test_updater test_updatercatalogs test_updatebridge test_updatequit test_mcpaccess test_mcpfocus test_mcpmessage test_agentinbox test_taskstore test_mcphttp test_procowner
                           PROPERTIES WIN32_EXECUTABLE FALSE)
 endif()
 

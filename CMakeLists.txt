@@ -402,6 +402,8 @@ qt_add_qml_module(qtmux_app
         src/server/McpServer.cpp
         src/server/McpAccess.h
         src/server/McpAccess.cpp
+        src/server/McpHttp.h
+        src/server/McpHttp.cpp
         src/server/AgentInboxClient.h
         src/server/AgentInboxClient.cpp
 )

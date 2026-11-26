@@ -9,6 +9,7 @@
 #include "KeyEncoding.h"
 #include "AgentInbox.h"
 #include "AgentInboxClient.h"
+#include "McpHttp.h"
 
 #include "qtmux_version.h"   // generiert aus cmake/Version.h.in (PROJECT_VERSION)
 #include "qtmux_buildid.h"   // generiert bei jedem Build (cmake/BuildId.cmake)
@@ -26,6 +27,8 @@
 #include <QRegularExpression>
 #include <QSettings>
 #include <QUuid>
+#include <QDateTime>
+#include <QTimeZone>
 
 namespace qtmux {
 
@@ -209,6 +212,7 @@ bool McpServer::start() {
                 connect(sock, &QTcpSocket::readyRead, this, [this, sock]() { onReadyRead(sock); });
                 connect(sock, &QTcpSocket::disconnected, this, [this, sock]() {
                     m_buffers.remove(sock);
+                    m_requestTaken.remove(sock);
                     removePollsForSocket(sock);   // wartenden Long-Poll abräumen
                     sock->deleteLater();
                 });
@@ -241,57 +245,91 @@ void McpServer::stop() {
 }
 
 void McpServer::onReadyRead(QTcpSocket *sock) {
+    // 🔑 `buf` ist eine Referenz in m_buffers. sendHttpJson() trennt die Verbindung, und
+    // bei einer lokalen Gegenstelle kann `disconnected` sofort feuern — der Handler
+    // entfernt dann den Eintrag, die Referenz zeigt ins Leere. Darum NACH jedem Senden
+    // den Puffer nicht mehr anfassen, sondern den Eintrag per Schlüssel entfernen
+    // (QTMUX-162; die alten 401/413-Pfade schrieben genau so ins Freigegebene).
+    // Eine Verbindung trägt genau eine Anfrage (Antwort mit Connection: close). Was danach
+    // noch eintrifft, wird verworfen — sonst entstünden z. B. zwei Long-Polls auf einem
+    // Socket (Befund der Durchsicht 2026-11-26).
+    if (m_requestTaken.contains(sock)) { sock->readAll(); return; }
     QByteArray &buf = m_buffers[sock];
     buf += sock->readAll();
 
-    const int headerEnd = buf.indexOf("\r\n\r\n");
-    if (headerEnd < 0) {
-        // Kein Kopfende in Sicht und schon zu viel Material: abbrechen, statt weiter
-        // zu puffern (QTMUX-127 — vorher wuchs der Puffer unbegrenzt).
-        if (buf.size() > kMaxRequestBytes) {
-            sendHttpJson(sock, R"({"error":"Request too large"})", 413);
-            buf.clear();
-        }
+    // Kopfteil zerlegen und begrenzen (McpHttp.h). Unvollständig: weiter warten; ein
+    // überlanger Kopfteil endet mit 431, statt weiter zu puffern (QTMUX-127/162).
+    const mcphttp::HeadResult hr = mcphttp::parseHead(buf);
+    if (hr.state == mcphttp::HeadState::Incomplete) return;
+    if (hr.state == mcphttp::HeadState::Error) {
+        m_buffers.remove(sock);
+        sendHttpJson(sock, QJsonDocument(QJsonObject{{"error", QString::fromUtf8(hr.message)}})
+                               .toJson(QJsonDocument::Compact),
+                     hr.status);
         return;
     }
-
-    const QByteArray header = buf.left(headerEnd);
-    const bool isPost = header.startsWith("POST");
+    const mcphttp::Head &head = hr.head;
+    const bool isPost = head.method == "POST";
 
     // Token-Prüfung VOR allem anderen: Fehlt oder stimmt es nicht, wird der Rumpf
     // gar nicht erst angesehen. authorize() hat dann schon mit 401 geantwortet.
-    if (!authorize(sock, header)) { buf.clear(); return; }
+    if (!authorize(sock, head.rawHeader)) { m_buffers.remove(sock); return; }
 
-    // Content-Length ermitteln.
-    int contentLength = 0;
-    for (const QByteArray &line : header.split('\n')) {
-        const QByteArray l = line.trimmed().toLower();
-        if (l.startsWith("content-length:")) {
-            contentLength = l.mid(15).trimmed().toInt();
-            break;
-        }
-    }
-    if (contentLength < 0 || contentLength > kMaxRequestBytes) {
-        sendHttpJson(sock, R"({"error":"Request too large"})", 413);
-        buf.clear();
+    // Origin (Spezifikation 2026-07-28, „Security Warning“; gilt für BEIDE Fassungen):
+    // Ein Browser schickt ihn bei jeder fremden Anfrage mit. Ein vorhandener Origin, der
+    // nicht auf diesen Rechner zeigt, wird abgewiesen — Werkzeuge wie send_text sind
+    // faktisch Befehlsausführung. Kommandozeilen-Clients schicken keinen.
+    if (!mcphttp::originAllowed(head.value("origin"))) {
+        m_buffers.remove(sock);
+        sendHttpJson(sock, R"({"error":"forbidden","hinweis":"Origin nicht erlaubt."})", 403);
         return;
     }
 
-    const int bodyStart = headerEnd + 4;
-    if (buf.size() - bodyStart < contentLength) return;  // Body noch unvollständig
-
-    const QByteArray body = buf.mid(bodyStart, contentLength);
+    if (buf.size() - head.bodyStart < head.contentLength) return;  // Rumpf unvollständig
+    const QByteArray body = buf.mid(head.bodyStart, head.contentLength);
     buf.clear();
+    m_requestTaken.insert(sock);
 
     if (!isPost) {
-        // Schlichter Status-Endpunkt (GET) — dieselben Angaben wie das Tool
+        // 🔑 GET auf den MCP-Endpunkt ist bei MCP-Clients die Frage nach einem
+        // Ereignisstrom. Mit 200 und JSON beantwortet, fragte Claude Code (2.1.332, alter
+        // Weg) JEDE SEKUNDE erneut an, solange die Sitzung lief (gemessen 2026-11-26 am
+        // Stand 1.10.1: 90 GETs in 90 s); mit 405 bleibt es bei einer Anfrage. Der
+        // dokumentierte Status-Abruf liegt unter `/` und bleibt dort.
+        if (mcphttp::isMcpPath(head.path) || mcphttp::acceptsEventStream(head.value("accept"))) {
+            sendHttpJson(sock, R"({"error":"Method Not Allowed","hinweis":"MCP-Anfragen per POST."})",
+                         405, "Allow: POST\r\n");
+            return;
+        }
+        // Schlichter Status-Endpunkt (GET /) — dieselben Angaben wie das Tool
         // `get_server_info`, nur ohne MCP-Handshake. Das Token steht hier NICHT drin;
         // bei Netz-Bindung liegt ohnehin schon die 401-Prüfung davor.
         sendHttpJson(sock, QJsonDocument(serverInfo()).toJson(QJsonDocument::Compact));
         return;
     }
 
-    const QJsonDocument doc = QJsonDocument::fromJson(body);
+    // POST nur auf den MCP-Endpunkt und `/` (Owner-Entscheid 2026-11-26, QTMUX-162).
+    if (!mcphttp::isPostPath(head.path)) {
+        sendHttpJson(sock, R"({"error":"Not Found","hinweis":"MCP-Endpunkt ist /mcp."})", 404);
+        return;
+    }
+
+    QJsonParseError perr{};
+    const QJsonDocument doc = QJsonDocument::fromJson(body, &perr);
+    const bool parsed = perr.error == QJsonParseError::NoError;
+
+    // Fassung je Anfrage. Alles, was nicht ausdrücklich die neue Fassung spricht, nimmt
+    // den alten Weg unverändert.
+    const mcphttp::Era era = mcphttp::classify(head, doc, parsed);
+    if (era.kind == mcphttp::Era::Reject) {
+        sendHttpJson(sock, mcphttp::errorBody(era.id, era.code, era.message, era.data), era.httpStatus);
+        return;
+    }
+    if (era.kind == mcphttp::Era::Modern) {
+        handleModern(sock, doc.object());
+        return;
+    }
+
     if (doc.isObject()) {
         // Den verbindenden Agentenprozess seiner Session zuordnen — beim Handshake
         // UND bei Tool-Aufrufen (manche Clients halten/wechseln Verbindungen anders).
@@ -301,7 +339,7 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
         // Fallback für post_event/subscribe_events ohne explizites sessionId-Argument.
         m_callerSessionId = -1;
         if (m == QLatin1String("initialize") || m == QLatin1String("tools/call")) {
-            m_callerSessionId = sessionIdForClient(sock);
+            m_callerSessionId = callerSessionFor(sock);
             if (m_callerSessionId >= 0 && m_sessions)
                 if (Session *s = m_sessions->sessionById(m_callerSessionId))
                     s->setMcpController(true);
@@ -324,7 +362,7 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
         } else {
             sendHttpJson(sock, QJsonDocument(resp).toJson(QJsonDocument::Compact));
         }
-    } else if (doc.isArray()) {  // JSON-RPC-Batch
+    } else if (doc.isArray()) {  // JSON-RPC-Batch (nur alter Weg)
         QJsonArray out;
         for (const QJsonValue &v : doc.array()) {
             bool isNotification = false;
@@ -335,6 +373,11 @@ void McpServer::onReadyRead(QTcpSocket *sock) {
     } else {
         sendHttpJson(sock, R"({"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}})");
     }
+}
+
+int McpServer::callerSessionFor(const QTcpSocket *sock) const {
+    if (m_callerResolverForTest) return m_callerResolverForTest(sock);
+    return sessionIdForClient(sock);
 }
 
 int McpServer::sessionIdForClient(const QTcpSocket *sock) const {
@@ -368,7 +411,7 @@ int McpServer::subscriberSessionId(const QJsonObject &args, const QTcpSocket *so
     // Fallback: Vorfahrenketten-Heuristik über den verbindenden Client-Prozess.
     // Bei einem Peer aus dem Netz liefert sie -1 → der Aufrufer muss `sessionId`
     // mitgeben (die Antwort sagt das auch, s. beginLongPoll).
-    return sessionIdForClient(sock);
+    return callerSessionFor(sock);
 }
 
 QJsonObject McpServer::pollResult(int subscriberSessionId, quint64 afterSeq) const {
@@ -420,7 +463,7 @@ int McpServer::eventCapableSources(int subscriberSessionId) const {
 }
 
 void McpServer::beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId,
-                              const QJsonObject &args) {
+                              const QJsonObject &args, bool modern) {
     auto *hub = AgentEventHub::instance();
     const int subId = subscriberSessionId(args, sock);
 
@@ -430,13 +473,10 @@ void McpServer::beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId,
         ? static_cast<quint64>(args.value("afterSeq").toDouble(0))
         : hub->lastSeq();
 
-    auto reply = [this, sock, rpcId](const QJsonObject &result) {
-        const QJsonObject resp{{"jsonrpc", "2.0"}, {"id", rpcId},
-            {"result", QJsonObject{
-                {"content", QJsonArray{QJsonObject{{"type", "text"},
-                    {"text", QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))}}}},
-                {"isError", false}}}};
-        sendHttpJson(sock, QJsonDocument(resp).toJson(QJsonDocument::Compact));
+    auto reply = [this, sock, rpcId, modern](const QJsonObject &result) {
+        sendHttpJson(sock, toolResponse(rpcId, QString::fromUtf8(QJsonDocument(result).toJson(
+                                                   QJsonDocument::Compact)),
+                                        false, modern));
     };
 
     // Ohne gültige Subscriber-Session: leer + Fehlerhinweis (kein Warten).
@@ -471,6 +511,7 @@ void McpServer::beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId,
     poll.rpcId = rpcId;
     poll.subscriberSessionId = subId;
     poll.afterSeq = afterSeq;
+    poll.modern = modern;
     poll.deadline = new QTimer(this);
     poll.deadline->setSingleShot(true);
     poll.deadline->setInterval(timeoutMs);
@@ -498,13 +539,20 @@ void McpServer::completePoll(int index) {
     const PendingPoll p = m_pendingPolls.at(index);
     m_pendingPolls.removeAt(index);
     if (p.deadline) { p.deadline->stop(); p.deadline->deleteLater(); }
-    const QJsonObject resp{{"jsonrpc", "2.0"}, {"id", p.rpcId},
-        {"result", QJsonObject{
-            {"content", QJsonArray{QJsonObject{{"type", "text"},
-                {"text", QString::fromUtf8(QJsonDocument(
-                    pollResult(p.subscriberSessionId, p.afterSeq)).toJson(QJsonDocument::Compact))}}}},
-            {"isError", false}}}};
-    sendHttpJson(p.sock, QJsonDocument(resp).toJson(QJsonDocument::Compact));
+    sendHttpJson(p.sock, toolResponse(p.rpcId,
+                                      QString::fromUtf8(QJsonDocument(pollResult(
+                                          p.subscriberSessionId, p.afterSeq)).toJson(QJsonDocument::Compact)),
+                                      false, p.modern));
+}
+
+QByteArray McpServer::toolResponse(const QJsonValue &id, const QString &text, bool isError,
+                                   bool modern) {
+    QJsonObject result{
+        {"content", QJsonArray{QJsonObject{{"type", "text"}, {"text", text}}}},
+        {"isError", isError}};
+    if (modern) result = modernResult(result);
+    const QJsonObject resp{{"jsonrpc", "2.0"}, {"id", id}, {"result", result}};
+    return QJsonDocument(resp).toJson(QJsonDocument::Compact);
 }
 
 void McpServer::removePollsForSocket(QTcpSocket *sock) {
@@ -554,11 +602,7 @@ bool McpServer::authorize(QTcpSocket *sock, const QByteArray &headerBlock) {
 
 void McpServer::sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status,
                              const QByteArray &extraHeaders) {
-    const QByteArray reason = (status == 200) ? "OK"
-                            : (status == 202) ? "Accepted"
-                            : (status == 401) ? "Unauthorized"
-                            : (status == 413) ? "Payload Too Large"
-                                              : "Bad Request";
+    const QByteArray reason = mcphttp::reasonPhrase(status);
     QByteArray resp = "HTTP/1.1 " + QByteArray::number(status) + " " + reason + "\r\n";
     resp += "Content-Type: application/json\r\n";
     resp += "Content-Length: " + QByteArray::number(json.size()) + "\r\n";
@@ -607,7 +651,7 @@ QJsonObject McpServer::dispatchMethod(const QString &method, const QJsonObject &
         };
     }
     if (method == "tools/list") {
-        return toolsList();
+        return toolsList(false);
     }
     if (method == "tools/call") {
         const QString name = params.value("name").toString();
@@ -655,7 +699,7 @@ static QJsonObject tool(const QString &name, const QString &desc,
     };
 }
 
-QJsonObject McpServer::toolsList() const {
+QJsonObject McpServer::toolsList(bool modern) const {
     QJsonArray tools;
     tools.append(tool("list_sessions",
                       "Listet alle offenen Sessions mit Status (id, title, type, activity, "
@@ -789,16 +833,19 @@ QJsonObject McpServer::toolsList() const {
     tools.append(tool("send_message",
                       "Stellt einer anderen Session eine NACHRICHT zu, ohne ihre Eingabezeile "
                       "anzufassen — der Weg für Rückmeldungen und Aufträge zwischen Agenten. "
-                      "Hat die Ziel-Session einen Nachrichten-Eingang gemeldet (set_agent_inbox; "
-                      "bei Claude Code der Sitzungs-Socket), geht die Nachricht dorthin und "
-                      "erscheint dort als eigene Zeile im Verlauf, auch während der Mensch "
-                      "tippt oder eine Rückfrage offen ist. Sonst — oder wenn die Zustellung "
-                      "scheitert — kommt sie in die Warteschlange (wie queue_text, wartet also "
-                      "auf den Menschen). Die Antwort nennt den Weg: via 'inbox' oder 'queue', "
-                      "bei 'queue' mit reason. status 'handed-over' heißt übergeben, NICHT "
-                      "gelesen: ob der Empfänger die Nachricht annimmt oder zurückhält, meldet "
-                      "sein Eingang nicht. Den Absender setzt QTmux selbst aus dem aufrufenden "
-                      "Prozess; er lässt sich nicht angeben.",
+                      "Rangfolge: (1) Hält die Ziel-Session einen Posteingangs-Task offen "
+                      "(await_message, MCP-Fassung 2026-07-28), beendet die Nachricht ihn: via "
+                      "'task'. Stellt sie ihn gerade neu, wartet die Nachricht bis zu 60 s im "
+                      "Puffer: via 'task-buffer', danach weiter wie unten, Reihenfolge bleibt. "
+                      "(2) Hat die Ziel-Session einen Nachrichten-Eingang gemeldet "
+                      "(set_agent_inbox; bei Claude Code der Sitzungs-Socket), geht die "
+                      "Nachricht dorthin und erscheint dort als eigene Zeile im Verlauf, auch "
+                      "während der Mensch tippt oder eine Rückfrage offen ist. (3) Sonst — oder "
+                      "wenn die Zustellung scheitert — kommt sie in die Warteschlange (wie "
+                      "queue_text, wartet also auf den Menschen). Die Antwort nennt den Weg "
+                      "(via, bei 'queue' mit reason) und eine messageId für message_status. "
+                      "status 'handed-over' heißt übergeben, NICHT gelesen. Den Absender setzt "
+                      "QTmux selbst aus dem aufrufenden Prozess; er lässt sich nicht angeben.",
                       QJsonObject{{"id", intProp("Ziel-Session-ID")},
                                   {"text", strProp("Nachricht (die erste Zeile sieht der Mensch als Vorschau)")}},
                       QJsonArray{"id", "text"}));
@@ -1012,7 +1059,160 @@ QJsonObject McpServer::toolsList() const {
     tools.append(tool("list_subscriptions",
                       "Listet alle aktiven Ereignis-Abos ({subscriberSessionId, sources, kinds}).",
                       {}, {}));
+    // QTMUX-162: Zustellbeleg für send_message, auf beiden Wegen (Absender können alte
+    // Clients sein).
+    tools.append(tool("message_status",
+                      "Fragt nach, was aus einer mit send_message geschickten Nachricht wurde "
+                      "(messageId aus dessen Antwort; nur der Absender bekommt Auskunft). state: "
+                      "'buffered' (wartet auf den nächsten Posteingangs-Task), 'completed' (liegt "
+                      "im Task, vom Client des Empfängers noch NICHT abgeholt), 'fetched' (der "
+                      "Client hat sie abgeholt — Zustellbeleg an den Client, KEIN Lesebeleg), "
+                      "'direct' bzw. 'fell-back' (ging über Sitzungs-Socket oder Warteschlange, "
+                      "Feld via), 'failed' (nicht zugestellt, Feld detail), 'unknown' (älter als "
+                      "1 h oder QTmux wurde neu gestartet).",
+                      QJsonObject{{"messageId", strProp("Kennung aus der Antwort von send_message")}},
+                      QJsonArray{"messageId"}));
+    if (modern) {
+        // Nur in der Fassung 2026-07-28: Diese Werkzeuge antworten mit einem MCP-Task,
+        // den der alte Weg nicht kennt.
+        tools.append(tool("await_events",
+                          "MCP-Task: wartet im Hintergrund auf abonnierte Agenten-Ereignisse "
+                          "(Task-Form von wait_for_events, ohne 55-s-Grenze). Kehrt sofort mit "
+                          "einem Task zurück; der Client meldet das Ergebnis, sobald ein Ereignis "
+                          "vorliegt: {events:[{sourceSessionId, kind, text, timestamp, seq}], "
+                          "nextSeq}. Danach mit afterSeq=nextSeq neu aufrufen. Voraussetzung: "
+                          "subscribe_events. Es kommt nur an, was Quellen selbst melden "
+                          "(post_event, OSC 777;qtmux-event).",
+                          QJsonObject{{"sessionId", intProp("eigene Session-ID (nur nötig, wenn QTmux den aufrufenden Prozess keiner Session zuordnen kann)")},
+                                      {"afterSeq", intProp("nur Ereignisse mit seq > afterSeq (Standard: ab jetzt)")}},
+                          {}));
+        tools.append(tool("await_message",
+                          "MCP-Task: Posteingang IHRER Session. Kehrt sofort mit einem Task "
+                          "zurück; er endet mit der nächsten Nachricht, die eine andere Session "
+                          "per send_message an Sie schickt (gepufferte kommen alle zusammen, in "
+                          "Reihenfolge, je mit Absender). Nach JEDER Nachricht erneut aufrufen, "
+                          "sonst gehen weitere Nachrichten nach 60 s über den Sitzungs-Socket oder "
+                          "die Warteschlange. Je Session gilt nur der zuletzt gestellte "
+                          "Posteingang.",
+                          QJsonObject{{"sessionId", intProp("eigene Session-ID (nur bei Verbindung aus dem Netz)")}},
+                          {}));
+    }
     return QJsonObject{{"tools", tools}};
+}
+
+// --- send_message: Direktweg und Antwort-Hinweis -------------------------------
+
+// Hinweis für den Empfänger, wie er antwortet — als LETZTE Zeile, weil der Mensch
+// dort nur die erste Zeile als Vorschau sieht.
+// 🔑 Der Zusatz „nicht per SendMessage“ ist gemessen nötig (2026-11-15): Ohne ihn
+// suchte der Empfänger in seiner eigenen Sitzungsliste nach einem ähnlich
+// benannten Ziel — und fand dort fremde, echte Sitzungen.
+static QString replyHintFor(const QString &from, int senderId) {
+    return senderId > 0
+        ? QStringLiteral("[Zugestellt von QTmux, Absender ist QTmux-Session %1. Das ist "
+                         "keine Claude-Sitzung: nicht per SendMessage antworten und keine "
+                         "ähnlich benannte Sitzung anschreiben. Antworten geht mit dem "
+                         "QTmux-MCP-Werkzeug send_message, id %2.]")
+              .arg(from).arg(senderId)
+        : QStringLiteral("[Zugestellt von QTmux, Absender unbekannt (kein Prozess einer "
+                         "QTmux-Session). Nicht per SendMessage antworten.]");
+}
+
+McpServer::DirectDelivery McpServer::deliverDirect(Session *target, int targetId,
+                                                   const QString &body, const QString &from,
+                                                   int senderId) {
+    DirectDelivery out;
+    QJsonObject r;
+    QString reason;
+    if (!target->hasAgentInbox()) {
+        reason = QStringLiteral("Die Ziel-Session hat keinen Nachrichten-Eingang gemeldet "
+                                "(set_agent_inbox).");
+    } else if (body.toUtf8().size() > agentinbox::kMaxTextBytes) {
+        reason = QStringLiteral("Die Nachricht ist für den Eingang zu lang (mehr als %1 Bytes).")
+                     .arg(agentinbox::kMaxTextBytes);
+    } else {
+        const QByteArray frame = agentinbox::claudeCodeFrame(
+            body + QStringLiteral("\n\n") + replyHintFor(from, senderId),
+            QStringLiteral("QTmux ") + from,
+            QUuid::createUuid().toString(QUuid::WithoutBraces));
+        // An das Objekt binden: Am Socket muss ein Prozess aus dem Prozessbaum
+        // GENAU dieser Session lauschen.
+        const qint64 shellPid = target->processId();
+        const InboxDelivery d = deliverToInbox(
+            target->agentInboxAddress(), frame, [shellPid](qint64 peerPid) {
+                return shellPid > 0 && procinfo::ancestorPids(peerPid).contains(shellPid);
+            });
+        if (d.ok) {
+            target->noteMessageDelivered(from);
+            r.insert("via", QStringLiteral("inbox"));
+            r.insert("status", QStringLiteral("handed-over"));
+            const QString v = target->agentInboxVersion();
+            if (v.isEmpty()
+                || agentinbox::compareVersions(v, QLatin1String(agentinbox::kClaudeCodeVerifiedVersion)) != 0)
+                r.insert("note",
+                         QStringLiteral("Das Rahmenformat ist an Claude Code %1 belegt; die "
+                                        "Ziel-Sitzung meldet %2. Ob die Nachricht dort "
+                                        "ankommt, kann QTmux nicht prüfen.")
+                             .arg(QLatin1String(agentinbox::kClaudeCodeVerifiedVersion),
+                                  v.isEmpty() ? QStringLiteral("keine Fassung") : v));
+            out.ok = true;
+            out.fields = r;
+            return out;
+        }
+        reason = QStringLiteral("Zustellung an den Eingang gescheitert: %1").arg(d.error);
+        // Eine Gegenstelle, die nicht (mehr) trägt, nicht wieder versuchen — der
+        // Agent meldet sie beim nächsten Start neu.
+        target->clearAgentInbox();
+    }
+    // Rückfall: Warteschlange mit dem Schutz der Eingabe des Menschen. Der Text kommt
+    // dort als getippte Eingabe an — die Kopfzeile sagt dem Empfänger, dass sie nicht
+    // vom Menschen an seinem Terminal stammt.
+    //
+    // 🔑 Vorher eine Frage, die sich messen lässt: Läuft dort überhaupt ein Programm?
+    // Steht die Session an der nackten Shell (kein Kindprozess), würde die Nachricht
+    // als BEFEHL ausgeführt, Zeile für Zeile. Das ist genau der Fall „Agent beendet,
+    // Socket weg“ — eine Nachricht an einen Agenten darf dann nicht zur Shell-Eingabe
+    // werden. Wo QTmux es nicht messen kann (SSH, seriell, Plugin), bleibt es beim
+    // Einreihen wie bei queue_text.
+    // (Nur auf Plattformen, deren Prozessliste QTmux lesen kann — anderswo liefert
+    // descendantPids immer leer, und „leer“ wäre dort keine Messung.)
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    const bool bareShell = target->type() == Session::Type::Shell
+                           && target->processId() > 0
+                           && procinfo::descendantPids(target->processId()).isEmpty();
+#else
+    const bool bareShell = false;
+#endif
+    if (bareShell) {
+        out.error = QStringLiteral(
+                   "Nicht zugestellt. %1 Und in Session %2 läuft gerade kein Programm, "
+                   "nur die Shell: Über die Eingabezeile würde die Nachricht dort als "
+                   "Befehl ausgeführt. Starten Sie den Agenten (er meldet seinen Eingang "
+                   "dann selbst) oder nehmen Sie für eine Shell-Eingabe queue_text.")
+                   .arg(reason).arg(targetId);
+        return out;
+    }
+    const QString queuedText =
+        (senderId > 0 ? QStringLiteral("[QTmux-Nachricht von Session %1, nicht vom Menschen an "
+                                "diesem Terminal getippt. Antworten: QTmux-MCP-Werkzeug "
+                                "send_message mit id %2.]\n").arg(from).arg(senderId)
+               : QStringLiteral("[QTmux-Nachricht, Absender unbekannt, nicht vom Menschen "
+                                "an diesem Terminal getippt.]\n"))
+        + body;
+    const int before = target->queuedCount();
+    if (!target->queueText(queuedText, from)) {
+        out.error = QStringLiteral("Die Nachricht ließ sich nicht einreihen.");
+        return out;
+    }
+    r.insert("via", QStringLiteral("queue"));
+    r.insert("reason", reason);
+    r.insert("status", target->queuedCount() > before ? QStringLiteral("queued")
+                                                     : QStringLiteral("dispatched"));
+    r.insert("ownerTyping", target->ownerTyping());
+    r.insert("count", target->queuedCount());
+    out.ok = true;
+    out.fields = r;
+    return out;
 }
 
 QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
@@ -1294,111 +1494,111 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
             return {};
         }
         const QString from = callerLabel();
-        const bool known = m_callerSessionId > 0;
-        // Hinweis für den Empfänger, wie er antwortet — als LETZTE Zeile, weil der Mensch
-        // dort nur die erste Zeile als Vorschau sieht.
-        // 🔑 Der Zusatz „nicht per SendMessage“ ist gemessen nötig (2026-11-15): Ohne ihn
-        // suchte der Empfänger in seiner eigenen Sitzungsliste nach einem ähnlich
-        // benannten Ziel — und fand dort fremde, echte Sitzungen.
-        const QString replyHint = known
-            ? QStringLiteral("[Zugestellt von QTmux, Absender ist QTmux-Session %1. Das ist "
-                             "keine Claude-Sitzung: nicht per SendMessage antworten und keine "
-                             "ähnlich benannte Sitzung anschreiben. Antworten geht mit dem "
-                             "QTmux-MCP-Werkzeug send_message, id %2.]")
-                  .arg(from).arg(m_callerSessionId)
-            : QStringLiteral("[Zugestellt von QTmux, Absender unbekannt (kein Prozess einer "
-                             "QTmux-Session). Nicht per SendMessage antworten.]");
+        const int senderId = m_callerSessionId;
+        // Text für den Posteingangs-Task: Absender vorn, Antwort-Hinweis hinten (wie beim
+        // Sitzungs-Socket, dort trägt der Rahmen den Absender als Namen).
+        const QString taskText = QStringLiteral("Nachricht von QTmux-Session %1:\n\n").arg(from)
+                                 + body + QStringLiteral("\n\n") + replyHintFor(from, senderId);
+        // Text nur behalten, wenn die Nachricht überhaupt in einen Task passt; sonst trägt
+        // der Beleg nur den Weg (Befund der Durchsicht 2026-11-26, Speicher).
+        const bool fitsTask = body.toUtf8().size() <= agentinbox::kMaxTextBytes;
+        const QString msgId = m_taskStore.recordMessage(senderId, targetId, fitsTask ? taskText : QString(),
+                                                        fitsTask ? body : QString(), from);
+        QJsonObject r{{"from", from}, {"messageId", msgId}};
 
-        QJsonObject r{{"from", from}};
-        QString reason;
-        if (!target->hasAgentInbox()) {
-            reason = QStringLiteral("Die Ziel-Session hat keinen Nachrichten-Eingang gemeldet "
-                                    "(set_agent_inbox).");
-        } else if (body.toUtf8().size() > agentinbox::kMaxTextBytes) {
-            reason = QStringLiteral("Die Nachricht ist für den Eingang zu lang (mehr als %1 Bytes).")
-                         .arg(agentinbox::kMaxTextBytes);
+        // (1) Posteingangs-Task (QTMUX-162). Nur ein LEBENDER Task zählt (zuletzt
+        // abgefragt vor höchstens 30 s): Nach /exit fragt niemand mehr, und eine Nachricht
+        // in einem Task, den keiner abholt, wäre schlechter als jeder Rückfall.
+        QString taskSkip;
+        if (!fitsTask) {
+            taskSkip = QStringLiteral("Die Nachricht ist für einen Task zu lang (mehr als %1 Bytes).")
+                           .arg(agentinbox::kMaxTextBytes);
         } else {
-            const QByteArray frame = agentinbox::claudeCodeFrame(
-                body + QStringLiteral("\n\n") + replyHint,
-                QStringLiteral("QTmux ") + from,
-                QUuid::createUuid().toString(QUuid::WithoutBraces));
-            // An das Objekt binden: Am Socket muss ein Prozess aus dem Prozessbaum
-            // GENAU dieser Session lauschen.
-            const qint64 shellPid = target->processId();
-            const InboxDelivery d = deliverToInbox(
-                target->agentInboxAddress(), frame, [shellPid](qint64 peerPid) {
-                    return shellPid > 0 && procinfo::ancestorPids(peerPid).contains(shellPid);
-                });
-            if (d.ok) {
-                target->noteMessageDelivered(from);
-                r.insert("via", QStringLiteral("inbox"));
-                r.insert("status", QStringLiteral("handed-over"));
-                const QString v = target->agentInboxVersion();
-                if (v.isEmpty()
-                    || agentinbox::compareVersions(v, QLatin1String(agentinbox::kClaudeCodeVerifiedVersion)) != 0)
-                    r.insert("note",
-                             QStringLiteral("Das Rahmenformat ist an Claude Code %1 belegt; die "
-                                            "Ziel-Sitzung meldet %2. Ob die Nachricht dort "
-                                            "ankommt, kann QTmux nicht prüfen.")
-                                 .arg(QLatin1String(agentinbox::kClaudeCodeVerifiedVersion),
-                                      v.isEmpty() ? QStringLiteral("keine Fassung") : v));
+            const QString live = m_taskStore.liveInboxOf(targetId);
+            if (!live.isEmpty() && !m_taskStore.hasBuffered(targetId)) {
+                const TaskStore::Message *m = m_taskStore.message(msgId);
+                completeInbox(live, {*m});
+                r.insert("via", QStringLiteral("task"));
+                r.insert("status", QStringLiteral("completed"));
+                r.insert("note", QStringLiteral("Liegt im Posteingangs-Task der Ziel-Session. Ob ihr "
+                                                "Client sie abgeholt hat, sagt message_status."));
                 text = QString::fromUtf8(QJsonDocument(r).toJson(QJsonDocument::Compact));
                 return {};
             }
-            reason = QStringLiteral("Zustellung an den Eingang gescheitert: %1").arg(d.error);
-            // Eine Gegenstelle, die nicht (mehr) trägt, nicht wieder versuchen — der
-            // Agent meldet sie beim nächsten Start neu.
-            target->clearAgentInbox();
+            // (1b) Der Empfänger stellt seinen Posteingang gerade neu (oder ein Puffer
+            // wartet schon): anhängen, damit die Reihenfolge bleibt.
+            if (!live.isEmpty() || m_taskStore.hasBuffered(targetId)
+                || m_taskStore.inboxRecentlySeen(targetId)) {
+                if (m_taskStore.buffer(msgId)) {
+                    ensureTaskTimer();
+                    r.insert("via", QStringLiteral("task-buffer"));
+                    r.insert("status", QStringLiteral("buffered"));
+                    r.insert("graceMs", static_cast<double>(m_taskStore.limits().mailboxGraceMs));
+                    text = QString::fromUtf8(QJsonDocument(r).toJson(QJsonDocument::Compact));
+                    return {};
+                }
+                // Puffer voll: erst die gepufferten in Reihenfolge über den Direktweg, dann
+                // diese — sonst überholte sie bis zu 32 ältere.
+                taskSkip = QStringLiteral("Der Puffer der Ziel-Session ist voll; die gepufferten "
+                                          "Nachrichten gingen vorher in Reihenfolge hinaus.");
+                flushBuffered(targetId, QStringLiteral("Puffer voll."));
+            }
         }
-        // Rückfall: Warteschlange mit dem Schutz der Eingabe des Menschen. Der Text kommt
-        // dort als getippte Eingabe an — die Kopfzeile sagt dem Empfänger, dass sie nicht
-        // vom Menschen an seinem Terminal stammt.
-        //
-        // 🔑 Vorher eine Frage, die sich messen lässt: Läuft dort überhaupt ein Programm?
-        // Steht die Session an der nackten Shell (kein Kindprozess), würde die Nachricht
-        // als BEFEHL ausgeführt, Zeile für Zeile. Das ist genau der Fall „Agent beendet,
-        // Socket weg“ — eine Nachricht an einen Agenten darf dann nicht zur Shell-Eingabe
-        // werden. Wo QTmux es nicht messen kann (SSH, seriell, Plugin), bleibt es beim
-        // Einreihen wie bei queue_text.
-        // (Nur auf Plattformen, deren Prozessliste QTmux lesen kann — anderswo liefert
-        // descendantPids immer leer, und „leer“ wäre dort keine Messung.)
-#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX) || defined(Q_OS_WIN)
-        const bool bareShell = target->type() == Session::Type::Shell
-                               && target->processId() > 0
-                               && procinfo::descendantPids(target->processId()).isEmpty();
-#else
-        const bool bareShell = false;
-#endif
-        if (bareShell) {
+
+        // (2)/(3) Sitzungs-Socket, sonst Warteschlange (Verhalten bis 1.10.1).
+        const DirectDelivery d = deliverDirect(target, targetId, body, from, senderId);
+        if (!d.ok) {
+            m_taskStore.markFailed(msgId, d.error);
             isError = true;
-            text = QStringLiteral(
-                       "Nicht zugestellt. %1 Und in Session %2 läuft gerade kein Programm, "
-                       "nur die Shell: Über die Eingabezeile würde die Nachricht dort als "
-                       "Befehl ausgeführt. Starten Sie den Agenten (er meldet seinen Eingang "
-                       "dann selbst) oder nehmen Sie für eine Shell-Eingabe queue_text.")
-                       .arg(reason).arg(targetId);
+            text = d.error;
             return {};
         }
-        const QString queuedText =
-            (known ? QStringLiteral("[QTmux-Nachricht von Session %1, nicht vom Menschen an "
-                                    "diesem Terminal getippt. Antworten: QTmux-MCP-Werkzeug "
-                                    "send_message mit id %2.]\n").arg(from).arg(m_callerSessionId)
-                   : QStringLiteral("[QTmux-Nachricht, Absender unbekannt, nicht vom Menschen "
-                                    "an diesem Terminal getippt.]\n"))
-            + body;
-        const int before = target->queuedCount();
-        if (!target->queueText(queuedText, from)) {
-            isError = true;
-            text = QStringLiteral("Die Nachricht ließ sich nicht einreihen.");
-            return {};
-        }
-        r.insert("via", QStringLiteral("queue"));
-        r.insert("reason", reason);
-        r.insert("status", target->queuedCount() > before ? QStringLiteral("queued")
-                                                         : QStringLiteral("dispatched"));
-        r.insert("ownerTyping", target->ownerTyping());
-        r.insert("count", target->queuedCount());
+        for (auto it = d.fields.constBegin(); it != d.fields.constEnd(); ++it) r.insert(it.key(), it.value());
+        if (!taskSkip.isEmpty()) r.insert("taskPath", taskSkip);
+        m_taskStore.markDirect(msgId, d.fields.value("via").toString(), d.fields.value("status").toString(),
+                               false);
         text = QString::fromUtf8(QJsonDocument(r).toJson(QJsonDocument::Compact));
+        return {};
+    }
+
+    if (name == "message_status") {
+        const QString mid = args.value("messageId").toString();
+        const TaskStore::Message *m = m_taskStore.message(mid);
+        // Nur der Absender bekommt Auskunft; eine fremde Kennung sieht aus wie eine
+        // unbekannte (sie verrät nicht, dass es sie gibt).
+        if (!m || (m->sender > 0 && m->sender != m_callerSessionId)) {
+            text = QString::fromUtf8(QJsonDocument(QJsonObject{
+                {"messageId", mid.left(64)}, {"state", QStringLiteral("unknown")},
+                {"hinweis", QStringLiteral("Unbekannt: älter als 1 h, QTmux neu gestartet, oder nicht "
+                                           "von dieser Session geschickt.")}}).toJson(QJsonDocument::Compact));
+            return {};
+        }
+        QJsonObject o{{"messageId", m->id}, {"state", TaskStore::stateName(m->state)},
+                      {"targetSessionId", m->target}};
+        if (!m->via.isEmpty()) o.insert("via", m->via);
+        if (!m->status.isEmpty()) o.insert("status", m->status);
+        if (!m->detail.isEmpty()) o.insert("detail", m->detail);
+        if (m->state == TaskStore::MessageState::Fetched) {
+            if (const TaskStore::Task *t = m_taskStore.find(m->taskId))
+                o.insert("fetchedAt", QDateTime::fromMSecsSinceEpoch(t->fetchedAt, QTimeZone::UTC)
+                                          .toString(Qt::ISODate));
+            o.insert("hinweis", QStringLiteral("Abgeholt heißt: Der Client des Empfängers hat das "
+                                               "Ergebnis geholt. Ob das Modell sie gelesen hat, "
+                                               "weiß QTmux nicht."));
+        }
+        text = QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
+        return {};
+    }
+
+    if (name == "await_events" || name == "await_message") {
+        // Nur über die Fassung 2026-07-28 mit Tasks-Erweiterung erreichbar (handleModern
+        // zweigt vorher ab). Hier landet ein alter Client, der den Namen trotzdem ruft.
+        isError = true;
+        text = QStringLiteral("%1 braucht MCP-Tasks (Protokollfassung 2026-07-28 mit der "
+                              "Tasks-Erweiterung). Auf diesem Weg: %2.")
+                   .arg(name, name == QLatin1String("await_events")
+                                  ? QStringLiteral("wait_for_events")
+                                  : QStringLiteral("set_agent_inbox bzw. die Warteschlange"));
         return {};
     }
 
@@ -1808,6 +2008,351 @@ QJsonObject McpServer::callTool(const QString &name, const QJsonObject &args,
     isError = true;
     text = QStringLiteral("Unbekanntes Tool: %1").arg(name);
     return {};
+}
+
+// --- Revision 2026-07-28 (QTMUX-162) -------------------------------------------
+
+QJsonObject McpServer::modernResult(QJsonObject r) {
+    if (!r.contains(QStringLiteral("resultType"))) r.insert(QStringLiteral("resultType"), QStringLiteral("complete"));
+    QJsonObject meta = r.value(QStringLiteral("_meta")).toObject();
+    meta.insert(QLatin1String(mcphttp::kMetaServerInfo),
+                QJsonObject{{"name", "QTmux"}, {"version", QTMUX_VERSION_STRING}});
+    r.insert(QStringLiteral("_meta"), meta);
+    return r;
+}
+
+const QSet<QString> &McpServer::knownToolNames() const {
+    if (m_toolNames.isEmpty())
+        for (const QJsonValue &t : toolsList(true).value("tools").toArray())
+            m_toolNames.insert(t.toObject().value("name").toString());
+    return m_toolNames;
+}
+
+QJsonObject McpServer::discoverResult() const {
+    return QJsonObject{
+        {"supportedVersions", QJsonArray{QLatin1String(mcphttp::kModernVersion)}},
+        {"capabilities", QJsonObject{
+            {"tools", QJsonObject{}},
+            {"extensions", QJsonObject{{QLatin1String(mcphttp::kTasksExtension), QJsonObject{}}}}}},
+        {"instructions", QStringLiteral(
+            "QTmux: Terminal-Sitzungen steuern und zwischen Agenten-Sitzungen Nachrichten "
+            "austauschen. Warten auf Ereignisse: await_events (MCP-Task). Posteingang: "
+            "await_message (MCP-Task), nach jeder Nachricht neu aufrufen.")},
+        // Die Werkzeugliste ändert sich zur Laufzeit nicht und enthält nichts
+        // Benutzerbezogenes.
+        {"ttlMs", 300000},
+        {"cacheScope", QStringLiteral("public")},
+    };
+}
+
+void McpServer::handleModern(QTcpSocket *sock, const QJsonObject &req) {
+    const QString method = req.value("method").toString();
+    const QJsonValue id = req.value("id");
+    const QJsonObject params = req.value("params").toObject();
+
+    // Benachrichtigungen: Die Fassung definiert über HTTP keine vom Client; annehmen und
+    // nichts tun (Spezifikation: 202 ohne Rumpf).
+    if (id.isUndefined() || id.isNull()) {
+        sendHttpJson(sock, QByteArray(), 202);
+        return;
+    }
+    auto ok = [this, sock, &id](const QJsonObject &result) {
+        sendHttpJson(sock, QJsonDocument(QJsonObject{{"jsonrpc", "2.0"}, {"id", id},
+                                                     {"result", modernResult(result)}})
+                               .toJson(QJsonDocument::Compact));
+    };
+
+    if (method == QLatin1String("server/discover")) { ok(discoverResult()); return; }
+    if (method == QLatin1String("tools/list")) {
+        // Eine Seite; ein Cursor kann also nur ungültig sein.
+        if (params.contains(QStringLiteral("cursor"))) {
+            sendHttpJson(sock, mcphttp::errorBody(id, mcphttp::kInvalidParams, QStringLiteral("Invalid cursor")));
+            return;
+        }
+        QJsonObject r = toolsList(true);
+        r.insert("ttlMs", 300000);
+        r.insert("cacheScope", QStringLiteral("public"));
+        ok(r);
+        return;
+    }
+    if (method == QLatin1String("tools/call")) {
+        const QString name = params.value("name").toString();
+        const QJsonObject args = params.value("arguments").toObject();
+        m_callerSessionId = callerSessionFor(sock);
+        if (m_callerSessionId >= 0 && m_sessions)
+            if (Session *s = m_sessions->sessionById(m_callerSessionId)) s->setMcpController(true);
+        if (name == QLatin1String("wait_for_events")) {
+            beginLongPoll(sock, id, args, /*modern*/ true);
+            return;
+        }
+        if (name == QLatin1String("await_events") || name == QLatin1String("await_message")) {
+            createTask(sock, id, name, params);
+            return;
+        }
+        // Spezifikation 2026-07-28: unbekanntes Werkzeug ist ein Protokollfehler.
+        if (!knownToolNames().contains(name)) {
+            sendHttpJson(sock, mcphttp::errorBody(id, mcphttp::kInvalidParams,
+                                                  QStringLiteral("Unknown tool: %1").arg(name.left(64))));
+            return;
+        }
+        bool isError = false;
+        QString text;
+        callTool(name, args, isError, text);
+        sendHttpJson(sock, toolResponse(id, text, isError, true));
+        return;
+    }
+    if (method == QLatin1String("tasks/get") || method == QLatin1String("tasks/cancel")
+        || method == QLatin1String("tasks/update")) {
+        handleTaskMethod(sock, id, method, params);
+        return;
+    }
+    // Unbekannt (auch ping, logging/setLevel, subscriptions/listen: in dieser Fassung
+    // entfallen bzw. ohne angebotene Fähigkeit).
+    sendHttpJson(sock, mcphttp::errorBody(id, mcphttp::kMethodNotFound,
+                                          QStringLiteral("Method not found: %1").arg(method.left(64))),
+                 404);
+}
+
+static bool requestHasTasksExtension(const QJsonObject &params) {
+    return params.value(QStringLiteral("_meta")).toObject()
+        .value(QLatin1String(mcphttp::kMetaClientCapabilities)).toObject()
+        .value(QStringLiteral("extensions")).toObject()
+        .contains(QLatin1String(mcphttp::kTasksExtension));
+}
+
+static QByteArray missingTasksCapability(const QJsonValue &id) {
+    return mcphttp::errorBody(
+        id, mcphttp::kMissingClientCapability,
+        QStringLiteral("Dieser Aufruf braucht die Client-Fähigkeit %1.").arg(QLatin1String(mcphttp::kTasksExtension)),
+        QJsonObject{{"requiredCapabilities", QJsonObject{{"extensions", QJsonObject{
+            {QLatin1String(mcphttp::kTasksExtension), QJsonObject{}}}}}}});
+}
+
+void McpServer::createTask(QTcpSocket *sock, const QJsonValue &id, const QString &name,
+                           const QJsonObject &params) {
+    // Erweiterung: Ein Task nur, wenn die Anfrage die Fähigkeit trägt; ohne Task können
+    // diese Werkzeuge nichts → -32021 (Pflicht laut Erweiterung).
+    if (!requestHasTasksExtension(params)) {
+        sendHttpJson(sock, missingTasksCapability(id), 400);
+        return;
+    }
+    const QJsonObject args = params.value("arguments").toObject();
+    const bool events = name == QLatin1String("await_events");
+    auto toolError = [this, sock, &id](const QString &msg) {
+        sendHttpJson(sock, toolResponse(id, msg, true, true));
+    };
+
+    // Besitzer: die Session des aufrufenden Prozesses (gebunden, bei jeder Abfrage
+    // erneut geprüft). Kann QTmux ihn nicht zuordnen, gilt das sessionId-Argument nur
+    // für Verbindungen aus dem Netz (die hat das Token schon geprüft) und, wie bei
+    // wait_for_events, für Ereignisse. Den POSTEINGANG einer fremden Session darf ein
+    // lokaler Prozess außerhalb jeder Session nicht übernehmen.
+    int owner = m_callerSessionId;
+    bool bound = owner > 0;
+    if (!bound) {
+        const int explicitId = args.value("sessionId").toInt(0);
+        const bool fromNetwork = m_peerIsNetworkForTest ? m_peerIsNetworkForTest(sock)
+                                                        : (sock && !sock->peerAddress().isLoopback());
+        if (explicitId > 0 && (fromNetwork || events) && m_sessions && m_sessions->sessionById(explicitId)) {
+            owner = explicitId;
+            // Einen gebundenen, lebenden Posteingang der echten Session verdrängt ein
+            // ungebundener nicht (Befund der Durchsicht 2026-11-26).
+            if (!events) {
+                const TaskStore::Task *cur = m_taskStore.find(m_taskStore.liveInboxOf(owner));
+                if (cur && cur->bound) {
+                    toolError(QStringLiteral("Session %1 hält schon einen eigenen Posteingang.").arg(owner));
+                    return;
+                }
+            }
+        } else {
+            toolError(QStringLiteral("Keine eigene Session: QTmux ordnet den aufrufenden Prozess "
+                                     "keiner Session zu.%1")
+                          .arg(events ? QStringLiteral(" sessionId angeben.") : QString()));
+            return;
+        }
+    }
+
+    quint64 afterSeq = 0;
+    if (events) {
+        auto *hub = AgentEventHub::instance();
+        if (!hub->hasSubscription(owner)) {
+            toolError(QStringLiteral("Kein Abo für Session %1 — zuerst subscribe_events aufrufen.").arg(owner));
+            return;
+        }
+        afterSeq = args.contains(QStringLiteral("afterSeq"))
+                       ? static_cast<quint64>(qMax(0.0, args.value("afterSeq").toDouble(0)))
+                       : hub->lastSeq();
+    }
+
+    const TaskStore::CreateResult cr = m_taskStore.create(
+        events ? TaskStore::Kind::AwaitEvents : TaskStore::Kind::AwaitMessage, owner, bound, afterSeq);
+    if (cr.id.isEmpty()) { toolError(cr.error); return; }
+    ensureTaskTimer();
+    // Die Statusmeldung steht im Task selbst: Der Client zeigt die der LETZTEN Abfrage,
+    // eine Antwort ohne das Feld löscht sie.
+    m_taskStore.setStatusMessage(
+        cr.id, events ? (eventCapableSources(owner) == 0 ? QString::fromUtf8(kNoSourceHint)
+                                                         : QStringLiteral("Wartet auf Ereignisse."))
+                      : QStringLiteral("Wartet auf die nächste Nachricht."));
+    QJsonObject w = m_taskStore.wire(*m_taskStore.find(cr.id));
+    w.insert("resultType", QStringLiteral("task"));
+    sendHttpJson(sock, QJsonDocument(QJsonObject{{"jsonrpc", "2.0"}, {"id", id},
+                                                 {"result", modernResult(w)}})
+                           .toJson(QJsonDocument::Compact));
+}
+
+bool McpServer::callerOwns(const QTcpSocket *sock, const TaskStore::Task &t) const {
+    if (!t.bound) return true;
+    if (m_ownerCheckForTest) return m_ownerCheckForTest(sock, t.owner);
+    if (!sock || !sock->peerAddress().isLoopback() || !m_sessions) return false;
+    Session *s = m_sessions->sessionById(t.owner);
+    if (!s || s->processId() <= 0) return false;
+    // 🔑 Prüfen statt suchen: nur die Sockets im Prozessbaum der Besitzer-Session. Der
+    // Weg über pidOfTcpClient sähe sich bei JEDER Abfrage alle Prozesse samt Deskriptoren
+    // an — im GUI-Thread, alle paar Sekunden je Session.
+    return procinfo::tcpClientBelongsTo(s->processId(), static_cast<quint16>(sock->peerPort()),
+                                        static_cast<quint16>(m_port));
+}
+
+void McpServer::completeInbox(const QString &taskId, const QList<TaskStore::Message> &msgs) {
+    if (msgs.isEmpty()) return;
+    QJsonArray content;
+    QStringList ids;
+    for (const TaskStore::Message &m : msgs) {
+        content.append(QJsonObject{{"type", "text"}, {"text", m.text}});
+        ids << m.id;
+        if (m_sessions)
+            if (Session *t = m_sessions->sessionById(m.target)) t->noteMessageDelivered(m.from);
+    }
+    m_taskStore.complete(taskId, QJsonObject{{"content", content}, {"isError", false}},
+                         msgs.size() == 1 ? QStringLiteral("1 Nachricht")
+                                          : QStringLiteral("%1 Nachrichten").arg(msgs.size()),
+                         ids);
+}
+
+void McpServer::advanceTask(const QString &taskId) {
+    const TaskStore::Task *t = m_taskStore.find(taskId);
+    if (!t || t->status != TaskStore::Status::Working) return;
+    if (t->kind == TaskStore::Kind::AwaitMessage) {
+        if (m_taskStore.hasBuffered(t->owner)) completeInbox(taskId, m_taskStore.takeBuffered(t->owner));
+        return;
+    }
+    // AwaitEvents: gleiche Auswahl wie wait_for_events.
+    if (AgentEventHub::instance()->eventsFor(t->owner, t->afterSeq).isEmpty()) return;
+    const QJsonObject res = pollResult(t->owner, t->afterSeq);
+    m_taskStore.complete(taskId,
+                         QJsonObject{{"content", QJsonArray{QJsonObject{
+                                          {"type", "text"},
+                                          {"text", QString::fromUtf8(QJsonDocument(res).toJson(QJsonDocument::Compact))}}}},
+                                     {"isError", false}},
+                         QStringLiteral("Ereignisse liegen vor."));
+}
+
+void McpServer::handleTaskMethod(QTcpSocket *sock, const QJsonValue &id, const QString &method,
+                                 const QJsonObject &params) {
+    if (!requestHasTasksExtension(params)) {
+        sendHttpJson(sock, missingTasksCapability(id), 400);
+        return;
+    }
+    const QString taskId = params.value("taskId").toString();
+    const TaskStore::Task *t = m_taskStore.find(taskId);   // prüft die Form vor der Suche
+    // Unbekannt, abgelaufen, nach Neustart verloren ODER fremd: dieselbe Antwort, damit
+    // eine fremde Kennung nicht verrät, dass es sie gibt. Claude Code fragt darauf 5 min
+    // weiter und meldet dann „outcome unknown“ (gemessen 2026-11-26).
+    if (!t || !callerOwns(sock, *t)) {
+        sendHttpJson(sock, mcphttp::errorBody(id, mcphttp::kInvalidParams,
+                                              QStringLiteral("Failed to retrieve task: Task not found")));
+        return;
+    }
+    QJsonObject result;
+    if (method == QLatin1String("tasks/get")) {
+        advanceTask(taskId);
+        t = m_taskStore.find(taskId);
+        result = m_taskStore.wire(*t);
+        m_taskStore.notePolled(taskId);   // nach wire(): erst jetzt ist der Endzustand ausgeliefert
+    } else if (method == QLatin1String("tasks/cancel")) {
+        // Kooperativ: offen → abgebrochen; ein beendeter Task bleibt, wie er ist.
+        m_taskStore.cancel(taskId, QStringLiteral("Vom Client abgebrochen."));
+        m_taskStore.notePolled(taskId, /*deliveredEndState*/ false);
+    } else {
+        // tasks/update: QTmux stellt nie input_required; jede Antwort ist „nicht
+        // ausstehend“ und wird laut Erweiterung ignoriert. Leere Quittung.
+    }
+    sendHttpJson(sock, QJsonDocument(QJsonObject{{"jsonrpc", "2.0"}, {"id", id},
+                                                 {"result", modernResult(result)}})
+                           .toJson(QJsonDocument::Compact));
+}
+
+void McpServer::flushBuffered(int target, const QString &why) {
+    Session *ts = m_sessions ? m_sessions->sessionById(target) : nullptr;
+    for (const TaskStore::Message &m : m_taskStore.takeBuffered(target)) {
+        if (!ts) { m_taskStore.markFailed(m.id, QStringLiteral("Ziel-Session geschlossen.")); continue; }
+        const DirectDelivery d = deliverDirect(ts, target, m.body, m.from, m.sender);
+        if (d.ok)
+            m_taskStore.markDirect(m.id, d.fields.value("via").toString(),
+                                   d.fields.value("status").toString(), /*fellBack*/ true, why);
+        else
+            m_taskStore.markFailed(m.id, d.error);
+    }
+}
+
+void McpServer::ensureTaskTimer() {
+    if (!m_taskTimer) {
+        m_taskTimer = new QTimer(this);
+        m_taskTimer->setInterval(2000);
+        connect(m_taskTimer, &QTimer::timeout, this, &McpServer::onTaskTimer);
+    }
+    if (!m_taskTimer->isActive()) m_taskTimer->start();
+}
+
+void McpServer::onTaskTimer() {
+    // Besitzer, deren Session es nicht mehr gibt: Tasks abbrechen, Puffer verwerfen.
+    for (int owner : m_taskStore.owners())
+        if (!m_sessions || !m_sessions->sessionById(owner)) m_taskStore.ownerClosed(owner);
+
+    // Abgelaufene Puffer: in Reihenfolge über den Direktweg, außer der Empfänger hat
+    // inzwischen wieder einen lebenden Posteingang (dann holt der sie bei seiner nächsten
+    // Abfrage, advanceTask).
+    for (int target : m_taskStore.expiredBuffers()) {
+        if (!m_taskStore.liveInboxOf(target).isEmpty()) continue;
+        flushBuffered(target, QStringLiteral("Kein Posteingangs-Task binnen %1 s.")
+                                  .arg(m_taskStore.limits().mailboxGraceMs / 1000));
+    }
+
+    // Beendete Posteingänge, die niemand abholt (Client beendet, kurz nachdem er zuletzt
+    // fragte): Nachrichten über den Direktweg, das Task-Ergebnis wird zum Hinweis — holt
+    // der Client nach einem --resume doch ab, kommt nichts doppelt.
+    for (const QString &tid : m_taskStore.unfetchedInboxes()) {
+        const TaskStore::Task *t = m_taskStore.find(tid);
+        if (!t) continue;
+        const int target = t->owner;
+        const QStringList mids = t->messageIds;
+        Session *ts = m_sessions ? m_sessions->sessionById(target) : nullptr;
+        QStringList ways;
+        for (const QString &mid : mids) {
+            const TaskStore::Message *mp = m_taskStore.message(mid);
+            if (!mp) continue;
+            const TaskStore::Message m = *mp;
+            if (!ts) { m_taskStore.markFailed(m.id, QStringLiteral("Ziel-Session geschlossen.")); continue; }
+            const DirectDelivery d = deliverDirect(ts, target, m.body, m.from, m.sender);
+            if (d.ok) {
+                const QString via = d.fields.value("via").toString();
+                m_taskStore.markDirect(m.id, via, d.fields.value("status").toString(), true,
+                                       QStringLiteral("Der Client holte den Posteingang nicht ab."));
+                ways << QStringLiteral("%1 über %2").arg(m.from, via);
+            } else {
+                m_taskStore.markFailed(m.id, d.error);
+            }
+        }
+        m_taskStore.releaseUnfetched(tid, QJsonObject{
+            {"content", QJsonArray{QJsonObject{{"type", "text"}, {"text", QStringLiteral(
+                "Dieser Posteingang wurde nicht rechtzeitig abgeholt. Seine Nachrichten gingen "
+                "inzwischen auf anderem Weg hinaus (%1); sie folgen hier nicht noch einmal.")
+                .arg(ways.isEmpty() ? QStringLiteral("keine zustellbar") : ways.join(QStringLiteral(", ")))}}}},
+            {"isError", false}});
+    }
+    m_taskStore.sweep();
+    if (m_taskStore.owners().isEmpty() && m_taskTimer) m_taskTimer->stop();
 }
 
 } // namespace qtmux

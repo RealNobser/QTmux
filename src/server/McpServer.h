@@ -2,13 +2,17 @@
 
 #include <QObject>
 #include <QHash>
+#include <QSet>
 #include <QList>
 #include <QByteArray>
 #include <QJsonValue>
 #include <qqmlintegration.h>
 
+#include <functional>
+
 #include "SessionModel.h"   // vollständiger Typ für Q_PROPERTY(SessionModel*)
 #include "WindowModel.h"    // vollständiger Typ für Q_PROPERTY(WindowModel*)
+#include "TaskStore.h"
 
 class QTcpServer;
 class QTcpSocket;
@@ -29,6 +33,11 @@ namespace qtmux {
 ///
 /// Transport: MCP "Streamable HTTP" (POST /mcp mit JSON-RPC; Antwort als application/json).
 /// Läuft im GUI-Thread → Session-Aufrufe sind thread-sicher.
+///
+/// Zwei Protokollfassungen nebeneinander (QTMUX-162, Regeln in `McpHttp.h`): Clients,
+/// die mit `initialize` verbinden, bekommen das alte Verhalten unverändert; Anfragen der
+/// Revision 2026-07-28 werden zustandslos bedient, samt Tasks-Erweiterung
+/// (`await_events`, `await_message`, `tasks/get|cancel|update`, Speicher `TaskStore`).
 class McpServer : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -159,6 +168,7 @@ signals:
 private:
     friend class TestMcpFocus;   // tests/tst_mcpfocus.cpp ruft callTool direkt
     friend class TestMcpMessage; // tests/tst_mcpmessage.cpp: callTool + Aufrufer-Session
+    friend class TestMcpHttp;    // tests/tst_mcphttp.cpp: über die HTTP-Leitung
 
     void onReadyRead(QTcpSocket *sock);
     void sendHttpJson(QTcpSocket *sock, const QByteArray &json, int status = 200,
@@ -177,11 +187,56 @@ private:
                                bool &ok, QString &errMsg);
     QJsonObject callTool(const QString &name, const QJsonObject &args,
                          bool &isError, QString &text);
-    QJsonObject toolsList() const;
+    /// Werkzeugliste. `modern` = Revision 2026-07-28: zusätzlich die Task-Werkzeuge, die
+    /// der alte Weg nicht bedienen kann (dort bleibt die Liste bis auf begründete Zusätze
+    /// gleich, Wächter in tst_mcphttp).
+    QJsonObject toolsList(bool modern = false) const;
+
+    // --- Revision 2026-07-28 (QTMUX-162) ---
+    /// Bedient eine geprüfte Anfrage der neuen Fassung (classify() == Modern).
+    void handleModern(QTcpSocket *sock, const QJsonObject &req);
+    QJsonObject discoverResult() const;
+    /// Ergebnis der neuen Fassung: `resultType` (sofern nicht gesetzt) und serverInfo in `_meta`.
+    static QJsonObject modernResult(QJsonObject r);
+    /// Werkzeug-Antwort (CallToolResult) als JSON-RPC-Antwort, je nach Fassung.
+    static QByteArray toolResponse(const QJsonValue &id, const QString &text, bool isError, bool modern);
+    /// tools/call eines Task-Werkzeugs. Antwortet selbst (Task oder Werkzeugfehler).
+    void createTask(QTcpSocket *sock, const QJsonValue &id, const QString &name, const QJsonObject &args);
+    /// tasks/get, tasks/cancel, tasks/update. Antwortet selbst.
+    void handleTaskMethod(QTcpSocket *sock, const QJsonValue &id, const QString &method,
+                          const QJsonObject &params);
+    /// Darf dieser Anrufer den Task sehen? Gebundene Tasks: Client-Prozess im Prozessbaum
+    /// der Besitzer-Session. Ungebundene: Kennung genügt (unerratbar).
+    bool callerOwns(const QTcpSocket *sock, const TaskStore::Task &t) const;
+    /// Treibt einen offenen Task voran, falls sein Ende schon feststeht (Ereignisse liegen
+    /// vor, Nachrichten liegen im Puffer). Wird bei jeder Abfrage aufgerufen.
+    void advanceTask(const QString &taskId);
+    /// Schließt einen Posteingangs-Task mit diesen Nachrichten ab.
+    void completeInbox(const QString &taskId, const QList<TaskStore::Message> &msgs);
+    /// Takt für Puffer-Ablauf und Aufräumen (läuft nur, solange es etwas zu tun gibt).
+    void ensureTaskTimer();
+    void onTaskTimer();
+    /// Puffer der Ziel-Session in Reihenfolge über den Direktweg leeren.
+    void flushBuffered(int target, const QString &why);
+    /// Namen aller Werkzeuge der neuen Fassung (einmal gebaut, die Liste ist fest).
+    const QSet<QString> &knownToolNames() const;
+
+    /// Ergebnis eines Direktwegs für send_message (Sitzungs-Socket, sonst Warteschlange).
+    struct DirectDelivery {
+        bool ok = false;
+        QJsonObject fields;   ///< via, status, reason, note, ownerTyping, count
+        QString error;        ///< bei !ok: Klartext für den Absender
+    };
+    /// Der Weg von send_message ohne Posteingangs-Task (Verhalten bis 1.10.1).
+    DirectDelivery deliverDirect(Session *target, int targetId, const QString &body,
+                                 const QString &from, int senderId);
+    /// Aufrufer-Session des Sockets (Test-Naht m_callerResolverForTest, sonst Heuristik).
+    int callerSessionFor(const QTcpSocket *sock) const;
 
     // Inter-Agenten-Benachrichtigung: Long-Poll wait_for_events. Der Socket bleibt
     // offen, bis ein passendes Ereignis vorliegt oder der Timeout greift.
-    void beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId, const QJsonObject &args);
+    void beginLongPoll(QTcpSocket *sock, const QJsonValue &rpcId, const QJsonObject &args,
+                       bool modern = false);
     void onHubEvent();                       // ein Ereignis kam → wartende Polls prüfen
     void completePoll(int index);            // Poll[index] mit seinen Events beantworten
     void removePollsForSocket(QTcpSocket *sock);
@@ -205,6 +260,7 @@ private:
         int         subscriberSessionId = 0;
         quint64     afterSeq = 0;
         QTimer     *deadline = nullptr;
+        bool        modern = false;   // Antwort nach Revision 2026-07-28
     };
 
     /// Setzt die Ergebnis-Brücke zurück, feuert `emitter` (synchroner QML-Handler)
@@ -244,6 +300,17 @@ private:
     int m_callerSessionId = -1;
     QHash<QTcpSocket *, QByteArray> m_buffers;
     QList<PendingPoll> m_pendingPolls;
+
+    // --- Tasks (QTMUX-162) ---
+    TaskStore m_taskStore;
+    QTimer *m_taskTimer = nullptr;
+    mutable QSet<QString> m_toolNames;
+    QSet<QTcpSocket *> m_requestTaken;   // Verbindungen, deren eine Anfrage schon läuft
+    // Test-Nähte: Im Test läuft der Client im selben Prozess, die Heuristik fände keine
+    // Session. Ohne Belegung gilt der Betriebsweg.
+    std::function<int(const QTcpSocket *)> m_callerResolverForTest;
+    std::function<bool(const QTcpSocket *, int ownerSessionId)> m_ownerCheckForTest;
+    std::function<bool(const QTcpSocket *)> m_peerIsNetworkForTest;
 };
 
 } // namespace qtmux
