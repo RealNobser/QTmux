@@ -5,7 +5,35 @@
 > nachgeführt. Die Absätze sind wörtlich übernommen. Wo eine Zeile fehlt, steht sie als Lehre an
 > anderer Stelle; der Hinweis steht dann in Klammern dabei.
 
-## QTMUX-162 — MCP-Revision 2026-07-28 und MCP-Tasks (2026-11-26, noch nicht ausgeliefert)
+## Release v1.11.0 (2026-11-28)
+
+**Inhalt:** QTMUX-162 (Abschnitt darunter).
+- Der MCP-Server spricht zusätzlich die Revision 2026-07-28 und die Tasks-Erweiterung; der alte
+  `initialize`-Weg bleibt und ist durch Referenzdateien von 1.10.1 bewacht.
+- Neue Werkzeuge `await_events`, `await_message` und `message_status`.
+- MCP-Anfragen nur noch auf `/mcp` und `/` (sonst 404), `GET /mcp` liefert 405, Origin-Prüfung,
+  strengere Kopfteil-Prüfung.
+- Unter Linux werden lokale MCP-Aufrufer wieder ihrer Sitzung zugeordnet (der Code war in
+  1.10.1 derselbe; an 1.10.1 selbst nicht gemessen).
+- Update-Kern unverändert auf Hub-Stand MacPCAN 0.8.1; macOS weiter Apple Silicon ab macOS 13
+  mit dem Qt der CI (6.10.3).
+
+**Commits:** Stapel QTMUX-162 per Fast-Forward nach `main` (`61ddc5a..a6561af`, sechs Commits),
+darauf der Versions-Commit „Release 1.11.0“; Tag `v1.11.0` (annotiert) auf diesem Commit.
+
+**CI vor dem Release:**
+- Messlauf 46050880608 (`workflow_dispatch`, Messzweig auf `6417575`): Linux rot in
+  `test_procowner` (Abschnitt darunter).
+- Messlauf 46060385666 (`workflow_dispatch`, Messzweig auf `a6561af`): macOS 73/73,
+  Linux 67/67, Windows 68/68. Die drei neuen Testprogramme direkt aufgerufen: unter macOS und
+  Linux 24/53/5 Fälle, je 0 übersprungen; unter Windows je Exit-Code 0, die Fallbilanz kam
+  nicht im Log an (unbelegt, welche Fälle sich dort überspringen).
+- main-Lauf 46081196961 (`a6561af`).
+
+**Wege:** wie 1.10.1 — DMG am Mac (`FAMILY_CODESIGN=require`, Qt aus `QTMUX_QT_MAC`), MSI und
+ZIP auf dem Windows-Bau-Rechner aus einem frischen Klon, AppImage aus dem Tag-Lauf (Draft-Asset).
+
+## QTMUX-162 — MCP-Revision 2026-07-28 und MCP-Tasks (2026-11-26, ausgeliefert mit 1.11.0)
 
 **Inhalt:** Der MCP-Server spricht neben dem alten `initialize`-Weg die Revision 2026-07-28
 (zustandslos, `server/discover`, Fehler mit HTTP-Status und Code nach Spezifikation) und die
@@ -43,8 +71,11 @@ liefert nichts, und `QFile::symLinkTarget` macht aus `socket:[n]` einen Pfad. Be
 Mac an einem nachgebauten Verzeichnis gemessen; jetzt `readdir`/`readlink`, die
 Kernel-Tabelle per `read` bis zum Ende statt `QFile::atEnd()`. Folge vorher: Unter Linux
 blieb jeder lokale MCP-Aufrufer ohne Session (kein Absender, kein Posteingang als Task).
+Der zweite Messlauf mit dem Fix war unter Linux grün; die Diagnose des Tests zeigte dort die
+Client-Zeile der Kernel-Tabelle und denselben Inode im fd-Eintrag des Kindprozesses.
 
 **Teststand:** 73 auf macOS (vorher 70): `test_taskstore`, `test_mcphttp`, `test_procowner`.
+In der CI 67 unter Linux und 68 unter Windows (Messlauf 46060385666).
 
 ## Release v1.10.1 (2026-11-26)
 
