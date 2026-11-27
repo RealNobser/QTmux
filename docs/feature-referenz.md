@@ -1676,7 +1676,12 @@ Hubs; gültig sind sie für QTmux, weil der Abgleich den vendierten Stand byte-g
   🔑 **Besitz wird bei JEDER Abfrage geprüft, nicht nur beim Anlegen:**
   `procinfo::tcpClientBelongsTo` sieht nur die Sockets im Prozessbaum der Besitzer-Session
   an (gemessen 2026-11-26 an 1040 Prozessen: rund 0,7 ms gegen 1,8–1,9 ms für die volle
-  Suche über alle Prozesse, Test `test_procowner`). Ein neuer Claude-Code-Prozess nach
+  Suche über alle Prozesse, Test `test_procowner`). ⚠️ **Unter Linux liest QTmux
+  `/proc/<pid>/fd` mit `readdir`/`readlink`, nicht mit `QDir`/`QFile`:** `entryList` ohne
+  Typ-Filter liefert nichts, Links ohne existierendes Ziel (`socket:[n]`) fehlen auch mit
+  Filter, und `symLinkTarget` macht daraus einen Pfad. Bis 2026-11-27 fand die Suche dort
+  darum nie einen Client (der erste CI-Lauf auf Linux zeigte es); lokale Aufrufer blieben
+  ohne Session, also abgelehnt statt fremd zugeordnet. Ein neuer Claude-Code-Prozess nach
   `--resume` liegt wieder im Baum, darum gilt die Kennung prozessübergreifend.
   🔑 **Lebendschwelle = 3 Abfragetakte** (6 s in der ersten Minute, danach 15 s), aus der
   Messung abgeleitet: Claude Code fragte auch während eines langen Zugs und während

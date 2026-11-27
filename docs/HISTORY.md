@@ -36,6 +36,14 @@ Wertebereichs; `"id": null` bekam 202; Grenzen konnten nicht abgeholte Nachricht
 verwerfen; ein Test bewies wenig. Je ein Test war am Stand davor rot. Kein Änderungsbedarf:
 `resultType` im eingebetteten Task-Ergebnis (alle Beispiele der Erweiterung lassen ihn weg).
 
+**Erster CI-Lauf auf drei Systemen** (Messzweig, 2026-11-27): macOS grün; Windows ctest grün;
+Linux rot in `test_procowner`. Die Suche nach dem TCP-Client fand unter Linux nie einen
+Prozess, schon vor dieser Arbeit (der Code war gleich): `QDir::entryList` ohne Typ-Filter
+liefert nichts, und `QFile::symLinkTarget` macht aus `socket:[n]` einen Pfad. Beides am
+Mac an einem nachgebauten Verzeichnis gemessen; jetzt `readdir`/`readlink`, die
+Kernel-Tabelle per `read` bis zum Ende statt `QFile::atEnd()`. Folge vorher: Unter Linux
+blieb jeder lokale MCP-Aufrufer ohne Session (kein Absender, kein Posteingang als Task).
+
 **Teststand:** 73 auf macOS (vorher 70): `test_taskstore`, `test_mcphttp`, `test_procowner`.
 
 ## Release v1.10.1 (2026-11-26)

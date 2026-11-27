@@ -23,8 +23,60 @@
 #  include <tlhelp32.h>
 #  include <iphlpapi.h>
 #endif
+#if defined(Q_OS_UNIX)
+#  include <dirent.h>
+#  include <fcntl.h>
+#  include <unistd.h>
+#endif
 
 namespace qtmux::procinfo {
+
+namespace detail {
+
+qint64 tcpTableInode(const QByteArray &table, quint16 clientPort, quint16 serverPort) {
+    const QList<QByteArray> lines = table.split('\n');
+    for (qsizetype i = 1; i < lines.size(); ++i) {   // Zeile 0 ist die Kopfzeile
+        const QList<QByteArray> col = lines.at(i).simplified().split(' ');
+        if (col.size() < 10) continue;
+        const QList<QByteArray> local = col.at(1).split(':');
+        const QList<QByteArray> rem = col.at(2).split(':');
+        if (local.size() != 2 || rem.size() != 2) continue;
+        const quint16 lport = local.at(1).toUShort(nullptr, 16);
+        const quint16 rport = rem.at(1).toUShort(nullptr, 16);
+        if (lport == clientPort && rport == serverPort) return col.at(9).toLongLong();   // inode
+    }
+    return -1;
+}
+
+bool dirHasLinkTo(const QByteArray &dir, const QByteArray &target) {
+#if defined(Q_OS_UNIX)
+    // 🔑 Nicht über QDir/QFile: entryList ohne Typ-Filter liefert nichts, und auch mit
+    // Filter fehlen Links ohne existierendes Ziel (ein Socket-Eintrag ist so einer);
+    // symLinkTarget macht aus „socket:[n]“ einen Pfad im Verzeichnis. Beides am
+    // nachgebauten Verzeichnis gemessen (tst_procowner).
+    DIR *d = ::opendir(dir.constData());
+    if (!d) return false;
+    bool found = false;
+    char buf[256];
+    while (dirent *e = ::readdir(d)) {
+        if (e->d_name[0] == '.') continue;
+        const QByteArray path = dir + '/' + e->d_name;
+        const ssize_t n = ::readlink(path.constData(), buf, sizeof(buf));
+        if (n > 0 && n < static_cast<ssize_t>(sizeof(buf)) && QByteArray(buf, n) == target) {
+            found = true;
+            break;
+        }
+    }
+    ::closedir(d);
+    return found;
+#else
+    Q_UNUSED(dir);
+    Q_UNUSED(target);
+    return false;
+#endif
+}
+
+} // namespace detail
 
 #if defined(Q_OS_MACOS)
 
@@ -129,37 +181,35 @@ static qint64 ppidOf(qint64 pid) {
     return rest.at(1).toLongLong();   // Feld 4 (ppid): state, ppid
 }
 
+// Kernel-Tabelle ganz lesen. 🔑 Nicht mit QFile::atEnd(): Dateien unter /proc melden
+// Größe 0, und laut Qt-Doku zu QIODevice::atEnd kann atEnd() dort true liefern, obwohl
+// noch Daten kommen — Verbindungen weiter hinten fehlten dann still (nicht gemessen).
+// Gelesen wird, bis read() 0 liefert, höchstens kMaxTable Bytes.
+static QByteArray readProcTable(const char *path) {
+    constexpr qsizetype kMaxTable = 16 * 1024 * 1024;
+    QByteArray out;
+    const int fd = ::open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return out;
+    char buf[65536];
+    while (out.size() < kMaxTable) {
+        const ssize_t n = ::read(fd, buf, sizeof(buf));
+        if (n <= 0) break;
+        out.append(buf, n);
+    }
+    ::close(fd);
+    return out;
+}
+
 // Inode der Verbindung 127.0.0.1:clientPort -> 127.0.0.1:serverPort (-1 = keine).
 static qint64 tcpInode(quint16 clientPort, quint16 serverPort) {
-    auto findInode = [&](const QString &path) -> qint64 {
-        QFile f(path);
-        if (!f.open(QIODevice::ReadOnly)) return -1;
-        f.readLine();  // Kopfzeile
-        while (!f.atEnd()) {
-            const QList<QByteArray> col = f.readLine().simplified().split(' ');
-            if (col.size() < 10) continue;
-            const QList<QByteArray> local = col.at(1).split(':');
-            const QList<QByteArray> rem = col.at(2).split(':');
-            if (local.size() != 2 || rem.size() != 2) continue;
-            const quint16 lport = local.at(1).toUShort(nullptr, 16);
-            const quint16 rport = rem.at(1).toUShort(nullptr, 16);
-            if (lport == clientPort && rport == serverPort)
-                return col.at(9).toLongLong();   // inode
-        }
-        return -1;
-    };
-    qint64 inode = findInode(QStringLiteral("/proc/net/tcp"));
-    if (inode < 0) inode = findInode(QStringLiteral("/proc/net/tcp6"));
+    qint64 inode = detail::tcpTableInode(readProcTable("/proc/net/tcp"), clientPort, serverPort);
+    if (inode < 0) inode = detail::tcpTableInode(readProcTable("/proc/net/tcp6"), clientPort, serverPort);
     return inode;
 }
 
 // Hält `pid` den Socket mit dieser Inode?
 static bool pidHoldsInode(qint64 pid, const QByteArray &needle) {
-    QDir fds(QStringLiteral("/proc/%1/fd").arg(pid));
-    for (const QString &fd : fds.entryList(QDir::NoDotAndDotDot)) {
-        if (QFile::symLinkTarget(fds.filePath(fd)).toLocal8Bit() == needle) return true;
-    }
-    return false;
+    return detail::dirHasLinkTo("/proc/" + QByteArray::number(pid) + "/fd", needle);
 }
 
 qint64 pidOfTcpClient(quint16 clientPort, quint16 serverPort) {
