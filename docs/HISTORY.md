@@ -19,7 +19,16 @@
   mit dem Qt der CI (6.10.3).
 
 **Commits:** Stapel QTMUX-162 per Fast-Forward nach `main` (`61ddc5a..a6561af`, sechs Commits),
-darauf der Versions-Commit „Release 1.11.0“; Tag `v1.11.0` (annotiert) auf diesem Commit.
+darauf der Versions-Commit `7d8f0d9` („Release 1.11.0“); Tag `v1.11.0` (annotiert) auf diesem
+Commit. Alle vier Artefakte stammen aus diesem Commit, DMG, MSI und ZIP je aus einem frischen
+Klon eines Bundles.
+
+| Artefakt | Bytes | SHA256 | Build-ID |
+|---|---|---|---|
+| `QTmux-1.11.0-macos.dmg` | 55 340 032 | `ffb7cf5f66805c6ae581b81756014453aa6c241d26ab84a2041e2dd0261317c3` | `1.11.0+7d8f0d9` |
+| `QTmux-1.11.0-win64.msi` | 32 316 635 | `86ce6a04be9740838bf8caf8bd00999c9167cf1d0e585f662fb821936ffdb375` | `1.11.0+7d8f0d9` |
+| `QTmux-1.11.0-win64-portable.zip` | 39 737 029 | `fd0e078d707ad3c5a8aadb2a7778776d6f0fb265d34062adf7823575510df89a` | `1.11.0+7d8f0d9` |
+| `QTmux-1.11.0-x86_64.AppImage` | 45 328 888 | `3fb6cc562fa1ff64230b4ba506c7e76d270414d58b7168b78d13f9c4b3aef2bc` | `1.11.0+7d8f0d9` |
 
 **CI vor dem Release:**
 - Messlauf 46050880608 (`workflow_dispatch`, Messzweig auf `6417575`): Linux rot in
@@ -28,10 +37,56 @@ darauf der Versions-Commit „Release 1.11.0“; Tag `v1.11.0` (annotiert) auf d
   Linux 67/67, Windows 68/68. Die drei neuen Testprogramme direkt aufgerufen: unter macOS und
   Linux 24/53/5 Fälle, je 0 übersprungen; unter Windows je Exit-Code 0, die Fallbilanz kam
   nicht im Log an (unbelegt, welche Fälle sich dort überspringen).
-- main-Lauf 46081196961 (`a6561af`).
+- main-Läufe 46081196961 (`a6561af`) und 46082581198 (`7d8f0d9`): je macOS 73/73,
+  Windows 68/68, Linux 67/67, 0 Skips.
+- Tag-Lauf 46083447588: Versuch 1 mit Linux grün; macOS rot nur in `test_updatebridge`, Fall
+  `aRememberedProxyPasswordNeverReachesTheSettingsFile` („requests >= 2“ nach 20 s, der Test
+  brauchte 94,62 s statt sonst unter 1 s; direkt davor eine Warnung, der Schlüsselbund liefere
+  keine Anmeldedaten); Windows rot ab `test_updatequit` (ohne Ausgabe), danach starteten alle
+  16 folgenden Programme mit `0xc0000142`. Gewertet als Runner-Umgebung: derselbe Commit war im
+  main-Lauf davor auf allen drei Systemen grün, und die betroffenen Tests sind seit `v1.10.1`
+  unverändert. Versuch 2 (`rerun --failed`): macOS 73/73, Windows 68/68, danach
+  `linux-release` grün. ⚠️ Auch bei 1.10.1 scheiterte Versuch 1 des Tag-Laufs unter Windows
+  (N=2, Ursache unbekannt).
 
 **Wege:** wie 1.10.1 — DMG am Mac (`FAMILY_CODESIGN=require`, Qt aus `QTMUX_QT_MAC`), MSI und
 ZIP auf dem Windows-Bau-Rechner aus einem frischen Klon, AppImage aus dem Tag-Lauf (Draft-Asset).
+
+**Abnahme:**
+- DMG: `dmg_minos.py` OK (App und `update-swap` `minos 13.0`, nur arm64); 104/104 Mach-O
+  familien-signiert, 0 ad-hoc; DR unverändert (`certificate root`), vom 1.10.1-Bundle aus
+  erfüllt (`codesign --verify -R`, Gegenprobe mit falschem Hash scheitert); `update-swap build
+  1.11.0+7d8f0d9`. HTTPS-Abruf des Live-Manifests NUR mit dem Qt des Bundles: securetransport,
+  HTTP 200, keine Qt-Bibliothek von außerhalb geladen.
+- MSI: Build-ID in `qtmux.exe` und `update-helper.exe`; CRT zehn DLLs wie 1.10.1; 1424 Dateien
+  wie 1.10.1, ZIP 1457 wie 1.10.1.
+- AppImage: am Mac per `unsquashfs` am ELF-Ende entpackt, Build-ID in `usr/bin/qtmux`; nur
+  `libqxcb`, glibc höchstens 2.38. Nicht gestartet.
+- Größen über Dateilisten erklärt (keine Datei neu oder weg):
+  - DMG +82 432 B: `qtmux` +141 600 B, macpcan-Plugin +17 600 B, Echo-Plugin +1 216 B (beide
+    Plugins linken `qtmux_core` statisch, der Kern hat `TaskStore` und ein geändertes
+    `ProcessInfo`).
+  - MSI +49 152 B, ZIP +52 142 B: nur `qtmux.exe` +128 512 B.
+  - AppImage +73 728 B (18 × 4 KiB): `usr/bin/qtmux` +167 936 B, Echo-Plugin +4 744 B.
+
+**Live:**
+- serial `1795824541`, Publish 2026-11-28 01:09 (der Manifest-Vergleich von `publish.py`
+  brauchte Versuch 2 von 3).
+- Index 12 Produkte, geändert nur qtmux; DMG, MSI und AppImage mit Größe und SHA256 wie oben.
+- Die Notes, im Dialog des 1.10.1-Clients gerendert (de/en, offscreen): nichts abgeschnitten.
+  Die Code-Auszeichnung erschien dort nicht in Mono; ob das echte Fenster Mono zeigt, ist nicht
+  gesehen.
+- Pflichtprobe aus dem Updater von 1.10.1: vor dem Publish rc 20 (Positivkontrolle Replay
+  rc 11), danach rc 0 mit dem macOS-Paket (55 340 032 B, `cmp`-gleich); Replay danach rc 11.
+- GitHub-Release `v1.11.0` mit vier Assets, je zurückgeladen und `cmp`-gleich, Latest.
+
+**Ungemessen:**
+- Unter Windows die Fallbilanz der drei neuen Testprogramme (welche Fälle übersprungen werden).
+- Mit echtem Claude Code unter Linux die Zuordnung zur Sitzung (gemessen ist sie im CI-Test).
+- Zehn echte Claude-Code-Sitzungen gleichzeitig, Stunden- oder Tageslaufzeit, die
+  Rechte-Rückfrage statt des Auswahldialogs.
+- Der Start auf einem echten macOS 13 und der Start des AppImage unter Linux.
+- Das echte Selbst-Ersetzen von 1.10.1 auf 1.11.0 am Rechner.
 
 ## QTMUX-162 — MCP-Revision 2026-07-28 und MCP-Tasks (2026-11-26, ausgeliefert mit 1.11.0)
 
