@@ -70,7 +70,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `src/viewmodels/SftpClient.{h,cpp}` | SFTP-Browser (treibt System-`sftp` interaktiv im PTY) |
 | `src/core/{AgentRegistry,ShellRegistry,ColorScheme,HotkeyRegistry,ConnectionProfile,SecretsVault,AgentEventHub,GlobalHotkey,ProcessInfo,KeyEncoding}.{h,cpp}` | Gui-freie Registries/Helfer (Details: Feature-Referenz) |
 | `src/plugins/QTmuxPlugin.h` / `PluginHost.{h,cpp}` | Plugin-SDK (IID `com.qtmux.PluginInterface/1.0`) + Loader |
-| `src/server/McpServer.{h,cpp}` + `McpAccess.{h,cpp}` | Eingebetteter MCP-Server (42 Tools; Doku `docs/MCP.md`) + dessen Gui-freie **Zugriffsregeln** (Bind-Adresse, Token-Pflicht, QTMUX-127) |
+| `src/server/McpServer.{h,cpp}` + `McpAccess.{h,cpp}` | Eingebetteter MCP-Server (43 Tools, in der Fassung 2026-07-28 zusätzlich die Tasks `await_events`/`await_message`, also 45; Doku `docs/MCP.md`) + dessen Gui-freie **Zugriffsregeln** (Bind-Adresse, Token-Pflicht, QTMUX-127) |
 | `third_party/updater/update/` + `src/viewmodels/UpdateBridge.{h,cpp}` + `qml/dialogs/UpdateDialog.qml` | Online-Update (QTMUX-125, seit 1.10.0 Hub-Ablauf `UpdateFlow`, QTMUX-160): vendierter Kern (Target `qtmux_updater`) + Verdrahtung/QML; Abgleich `tools/check-updater-sync.sh`, Herkunft `third_party/updater/UPSTREAM.md` |
 | `src/terminal/TerminalItem.{h,cpp}` / `GlyphAtlas.{h,cpp}` | Rendering (GPU-Atlas + Fallback), Selektion, Copy/Paste, Maus-Reporting |
 | `qml/Main.qml` / `qml/SplitNode.qml` | App-Shell + rekursiver Split-Layout-Baum |
@@ -81,7 +81,7 @@ identisch, weil alles über `ITerminalBackend` läuft.
 | `shell-integration/qtmux.{bash,zsh,ps1}`, `qtmux-event.cmd`, `qtmux-emit.{sh,ps1,cmd}`, `qtmux-wait.{sh,ps1,cmd}` | OSC-133-Marker, `qtmux-notify`/`qtmux-event`, Hook-Helfer zum **Senden** (HTTP, QTMUX-30) und zum **Warten** (Hintergrund-Wächter, QTMUX-37). Stecken seit QTMUX-38 als **Ressource im Binary** — `src/core/ShellIntegration.*` schreibt sie per `qtmux --install-shell-integration` heraus |
 | `src/core/StallDetector.{h,cpp}` | Gui-frei: Stillstand-Erkennung (QTMUX-139) — Agent zeigt „arbeitet" (Merkmal `AgentInfo::workingMarkers`), Bildschirm steht seit N min still → `needsAttention`; Mechanik in der Feature-Referenz |
 | `src/core/{GitInfo,ProjectCommands,PromptQueue}.{h,cpp}` | Gui-freie Kerne (QTMUX-58/96/90): Branch aus `.git/HEAD` ohne git-Prozess · Scanner für `.claude/commands`, `.claude/skills`, `.gemini/commands`, `.junie/commands`, `.agents/skills` (+ `filterForAgent`) · FIFO-Warteschlange + `mayDispatchNext`. Alle drei sind angebunden (Kachel, Palette, Session/MCP) |
-| `tests/` | **70** ctest-Tests auf macOS (Stand 1.10.1). Die vollständige Liste der Test-Binaries und die Sonderfälle (`I18n.*`, `test_doc_duplicates`, `test_check_updater_sync`, `test_i18n`) stehen in [tests/CLAUDE.md](tests/CLAUDE.md). Zahl per `ctest -N` gegenprüfen, nicht schätzen |
+| `tests/` | **73** ctest-Tests auf macOS (Stand 1.11.0). Die vollständige Liste der Test-Binaries und die Sonderfälle (`I18n.*`, `test_doc_duplicates`, `test_check_updater_sync`, `test_i18n`) stehen in [tests/CLAUDE.md](tests/CLAUDE.md). Zahl per `ctest -N` gegenprüfen, nicht schätzen |
 
 ## Build & Test (macOS)
 
@@ -365,7 +365,7 @@ Arbeitsbeginn → „In Progress" (on-prem 31) / „In Arbeit" (Cloud 21); ferti
 Plugins + MacPCAN, Installer), dazu **Online-Update** (QTMUX-125) und die **GUI-Auffrischung
 Design 1a/2a** (einklappbare Seitenleiste + Flyout, Statusleiste, sechs Menüs, neugestaltetes
 Einstellungsfenster, Reset/Import/Export — Details im Abschnitt „Design 1a/2a" unten).
-**42 MCP-Tools** (GUI-MCP-Parität für den geplanten AI-Companion), i18n finalisiert,
+**43 MCP-Tools, 45 mit Tasks** (GUI-MCP-Parität für den geplanten AI-Companion), i18n finalisiert,
 Installer für alle drei Plattformen (DMG/MSI+ZIP/AppImage).
 
 **Window-Modell (QTMUX-83, seit v1.7.0):** Kein globales Split-Layout mehr, sondern das
@@ -382,13 +382,16 @@ Standardweg für visuelle Abnahmen. ⚠️ Er setzt `QTMUX_NO_GPU=1` und fotogra
 **QPainter-Fallback**: Fehler im Glyph-Atlas (QTMUX-97) sind darauf **prinzipiell unsichtbar**.
 Plattform-Eigenheiten und die teuer erkauften Fallen dazu stehen in den E2E-Fallen, nicht hier.
 
-## Arbeitsstand & Wiedereinstieg (2026-11-26)
+## Arbeitsstand & Wiedereinstieg (2026-11-28)
 
 > Die EINE Stelle für den aktuellen Stand (Pflegeregeln 2–4 oben). Verlauf steht in
 > Git/Jira/Confluence; Feature-Mechanik in der Feature-Referenz; Abnahme-Rezepte in
 > [docs/owner-abnahmen.md](docs/owner-abnahmen.md).
 
-**Ausgeliefert: v1.10.1** (2026-11-26, Hub 0.8.1, macOS ab 13 mit dem Qt der CI, QTMUX-161).
+**Ausgeliefert: v1.11.0** (2026-11-28, QTMUX-162): Der MCP-Server spricht zusätzlich die
+Fassung 2026-07-28 mit Tasks (`await_events`, `await_message`; dazu `message_status` auf beiden
+Wegen), MCP-Anfragen nur noch per POST auf `/mcp` und `/`. Davor v1.10.1 (Hub 0.8.1, macOS ab
+13 mit dem Qt der CI, QTMUX-161).
 Artefakte mit Größen und SHA256, CI-Läufe, Abnahme am Live-Manifest und die Release-Kette bis
 v1.9.0 stehen in [docs/HISTORY.md](docs/HISTORY.md). Den Stand nicht von hier ablesen, sondern
 messen (die Windows-Session pusht ebenfalls):
@@ -405,8 +408,9 @@ ctest --test-dir <build> -N | tail -1                 # Testzahl
 Jira: die höchste Nummer in **beiden** Systemen live holen (Abschnitt „Jira-Statuskonvention“
 unten); der zuletzt aufgeschriebene Zählstand steht in docs/HISTORY.md.
 
-**Teststände (1.10.1):** **70** auf macOS, **64** auf Linux, **66** auf Windows (welche fehlen:
-[tests/CLAUDE.md](tests/CLAUDE.md)); CI-Windows 65 (ohne `test_pty`). Der
+**Teststände (1.11.0):** **73** auf macOS, CI-Linux **67**, CI-Windows **68** (ohne `test_pty`;
+welche fehlen: [tests/CLAUDE.md](tests/CLAUDE.md)); im Linux-Container und auf Windows lokal
+mit 1.11.0 nicht gemessen. Der
 Verlauf der Zahlen und der Grün-Messungen steht in [docs/HISTORY.md](docs/HISTORY.md),
 Fallzahlen einzelner Programme ebenso. Je Plattform: macOS
 lässt `test_pty` mitlaufen; Linux (Container des Bau-Servers) und Windows nehmen ihn per `-E` aus
